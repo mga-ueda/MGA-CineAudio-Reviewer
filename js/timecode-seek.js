@@ -78,6 +78,68 @@
 
     let firstFramePrimedForUrl = '';
 
+    /** セッション復元: 動画メタデータが揃ってから Ex 音声を復元する */
+    function waitForVideoReadyForSessionRestore(timeoutMs) {
+        const ms = timeoutMs > 0 ? timeoutMs : 15000;
+        return new Promise((resolve) => {
+            if (typeof videoReady === 'function' && videoReady()) {
+                resolve(true);
+                return;
+            }
+            let settled = false;
+            const finish = (ok) => {
+                if (settled) return;
+                settled = true;
+                videoMain.removeEventListener('loadedmetadata', onReady);
+                videoMain.removeEventListener('loadeddata', onReady);
+                videoMain.removeEventListener('durationchange', onReady);
+                videoMain.removeEventListener('error', onErr);
+                clearTimeout(timer);
+                resolve(!!ok);
+            };
+            const onReady = () => {
+                finish(typeof videoReady === 'function' && videoReady());
+            };
+            const onErr = () => finish(false);
+            videoMain.addEventListener('loadedmetadata', onReady);
+            videoMain.addEventListener('loadeddata', onReady);
+            videoMain.addEventListener('durationchange', onReady);
+            videoMain.addEventListener('error', onErr, { once: true });
+            const timer = setTimeout(
+                () => finish(typeof videoReady === 'function' && videoReady()),
+                ms,
+            );
+        });
+    }
+
+    window.waitForVideoReadyForSessionRestore = waitForVideoReadyForSessionRestore;
+
+    /** セッション復元後は常に先頭（シーク位置は記憶しない） */
+    function applySessionTransportAtHead() {
+        pendingRestoreTime = null;
+        if (typeof resetTransportPlaybackClock === 'function') resetTransportPlaybackClock();
+        if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
+        if (typeof setTransportSec === 'function') setTransportSec(0);
+        if (seekBar) seekBar.value = '0';
+        if (currentTimeEl) currentTimeEl.textContent = formatTimecodeForTransport(0);
+        if (videoMain && videoReady()) {
+            videoMain.pause();
+            if (typeof applyTimeToVideoIfNeeded === 'function') {
+                applyTimeToVideoIfNeeded(0);
+            } else {
+                try {
+                    videoMain.currentTime = 0;
+                } catch (_) {}
+            }
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+    }
+    window.applySessionTransportAtHead = applySessionTransportAtHead;
+
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {
         if (!videoMain || !videoReady()) return;
@@ -798,6 +860,9 @@
     }
 
     function loadVideoFile(f, opt) {
+        if (typeof prepareReviewMixForNewVideoLoad === 'function') {
+            prepareReviewMixForNewVideoLoad();
+        }
         revokeAll();
         firstFramePrimedForUrl = '';
         pendingRestoreTime = null;

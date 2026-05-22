@@ -40,6 +40,9 @@
     window.VIDEO_AUDIO_SLOT_LABEL = VIDEO_AUDIO_SLOT_LABEL;
     window.refreshVideoAudioLaneFileName = refreshVideoAudioLaneFileName;
     const EXTRA_AUDIO_DECODE_MAX_BYTES = 1024 * 1024 * 1024;
+    const EXTRA_AUDIO_DECODE_TIMEOUT_MS = 90000;
+    const EXTRA_WAVEFORM_LAYOUT_MIN_CSS = 32;
+    let extraWaveformEnsureGen = 0;
     /** Shared schedule lead for BufferSource.start (seconds). */
     const EXTRA_AUDIO_SCHEDULE_AHEAD_SEC = 0.05;
     /** Re-start extra sources when drift from master transport exceeds this (seconds). */
@@ -69,6 +72,8 @@
             file: null,
             buffer: null,
             peaks: null,
+            persistBlob: null,
+            restoreDurationHint: 0,
             muted: false,
             solo: false,
             volLinear: 1,
@@ -81,6 +86,8 @@
             file: null,
             buffer: null,
             peaks: null,
+            persistBlob: null,
+            restoreDurationHint: 0,
             muted: false,
             solo: false,
             volLinear: 1,
@@ -734,19 +741,226 @@
         return map[ext] || 'application/octet-stream';
     }
 
+    function cacheExtraTrackPersistBlob(tr, file, ab) {
+        if (!tr || !file || !ab || ab.byteLength < 1) {
+            if (tr) tr.persistBlob = null;
+            return null;
+        }
+        const type =
+            file.type ||
+            (typeof mimeTypeHintForAudioFileName === 'function'
+                ? mimeTypeHintForAudioFileName(file.name)
+                : 'application/octet-stream');
+        tr.persistBlob = new Blob([ab.slice(0)], { type });
+        return tr.persistBlob;
+    }
+
+    function getExtraTrackPersistEntry(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.file || !tr.buffer || !tr.persistBlob || tr.persistBlob.size < 1) {
+            return null;
+        }
+        const peaks = clonePeaksForPersist(tr.peaks);
+        return {
+            slot,
+            name: tr.file.name,
+            lastModified: tr.file.lastModified,
+            blob: tr.persistBlob,
+            byteLength: tr.persistBlob.size,
+            duration: tr.buffer.duration,
+            peaks,
+        };
+    }
+
+    /** Web Audio を使わず WAV から peaks のみ構築（復元時のデコード待ち回避） */
+    function buildPeaksPreviewFromWavArrayBuffer(ab, barCount) {
+        if (!ab || ab.byteLength < 44) return null;
+        const view = new DataView(ab);
+        const sig = String.fromCharCode(
+            view.getUint8(0),
+            view.getUint8(1),
+            view.getUint8(2),
+            view.getUint8(3),
+        );
+        if (sig !== 'RIFF') return null;
+        let offset = 12;
+        let numChannels = 0;
+        let sampleRate = 0;
+        let bitsPerSample = 0;
+        let dataOffset = 0;
+        let dataLen = 0;
+        while (offset + 8 <= ab.byteLength) {
+            const id = String.fromCharCode(
+                view.getUint8(offset),
+                view.getUint8(offset + 1),
+                view.getUint8(offset + 2),
+                view.getUint8(offset + 3),
+            );
+            const size = view.getUint32(offset + 4, true);
+            if (id === 'fmt ') {
+                numChannels = view.getUint16(offset + 10, true);
+                sampleRate = view.getUint32(offset + 12, true);
+                bitsPerSample = view.getUint16(offset + 22, true);
+            } else if (id === 'data') {
+                dataOffset = offset + 8;
+                dataLen = size;
+                break;
+            }
+            offset += 8 + size + (size & 1);
+        }
+        if (!dataOffset || !numChannels || !sampleRate || !bitsPerSample) return null;
+        const bytesPerSample = bitsPerSample / 8;
+        const frameSize = bytesPerSample * numChannels;
+        if (frameSize < 1) return null;
+        const totalFrames = Math.floor(dataLen / frameSize);
+        if (totalFrames < 1) return null;
+        const duration = totalFrames / sampleRate;
+        const bars = Math.max(1, barCount | 0);
+        const block = Math.max(1, Math.floor(totalFrames / bars));
+        const peaks = new Array(bars);
+        for (let i = 0; i < bars; i++) {
+            let min = 0;
+            let max = 0;
+            const start = i * block;
+            const end = Math.min(totalFrames, start + block);
+            for (let f = start; f < end; f++) {
+                const pos = dataOffset + f * frameSize;
+                if (pos + bytesPerSample > ab.byteLength) break;
+                let v = 0;
+                if (bitsPerSample === 16) {
+                    v = view.getInt16(pos, true) / 32768;
+                } else if (bitsPerSample === 24) {
+                    let sample = view.getUint8(pos) | (view.getUint8(pos + 1) << 8);
+                    const hi = view.getInt8(pos + 2);
+                    sample |= hi << 16;
+                    v = sample / 8388608;
+                } else if (bitsPerSample === 32) {
+                    v = view.getFloat32(pos, true);
+                    if (!Number.isFinite(v)) {
+                        v = view.getInt32(pos, true) / 2147483648;
+                    }
+                } else {
+                    return null;
+                }
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            peaks[i] = { min, max };
+        }
+        return { peaks, duration };
+    }
+
+    async function buildExtraTrackPeaksPreviewFromWavBlob(slot, entry) {
+        if (!entry || !entry.blob) return false;
+        const name = entry.name || '';
+        if (!/\.wav$/i.test(name) && !/\.wave$/i.test(name)) return false;
+        try {
+            const ab = await entry.blob.arrayBuffer();
+            const w =
+                typeof rawMasterTimelineWidthCss === 'function'
+                    ? rawMasterTimelineWidthCss()
+                    : 0;
+            const barCount = Math.min(4096, Math.max(200, w > 0 ? w : 1200));
+            const built = buildPeaksPreviewFromWavArrayBuffer(ab, barCount);
+            if (!built || !built.peaks || !built.peaks.length) return false;
+            return applyExtraTrackPeaksPreview(slot, {
+                slot,
+                name: entry.name,
+                lastModified: entry.lastModified,
+                duration: built.duration,
+                peaks: built.peaks,
+            });
+        } catch (e) {
+            writeLog(
+                'Extra audio ' +
+                    (slot + 1) +
+                    ': WAV preview failed — ' +
+                    (e && e.message ? e.message : String(e)),
+            );
+            return false;
+        }
+    }
+
+    /** セッション復元: デコード完了前に保存済み peaks で波形だけ先に描画 */
+    function applyExtraTrackPeaksPreview(slot, entry) {
+        if (!entry || !(Number(entry.duration) > 0) || !entry.peaks || !entry.peaks.length) {
+            return false;
+        }
+        const tr = extraTrackBySlot(slot);
+        const ui = getExtraUi(slot);
+        if (!tr || !ui) return false;
+        setExtraTrackLaneUiOpen(slot, true);
+        tr.peaks = entry.peaks;
+        tr.restoreDurationHint = entry.duration;
+        tr.file = {
+            name: entry.name || 'audio.wav',
+            lastModified:
+                typeof entry.lastModified === 'number' ? entry.lastModified : Date.now(),
+        };
+        setExtraTrackStatus(slot, 'Restoring…');
+        if (ui.meta) ui.meta.classList.add('loaded');
+        refreshExtraTrackUi(slot);
+        scheduleExtraTrackWaveformRedraw(slot);
+        writeLog(
+            'Extra audio ' +
+                (slot + 1) +
+                ': waveform preview restored (' +
+                entry.peaks.length +
+                ' bars)',
+        );
+        return true;
+    }
+
+    /** ページ終了時も即座に使える同期スナップショット（persistBlob キャッシュ） */
     function getExtraTracksPersistSnapshot() {
         const out = [];
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
-            const tr = extraTrackBySlot(i);
-            if (!tr || !tr.file || !tr.buffer) continue;
-            out.push({
-                slot: i,
-                name: tr.file.name,
-                lastModified: tr.file.lastModified,
-                blob: tr.file,
-            });
+            const entry = getExtraTrackPersistEntry(i);
+            if (entry) out.push(entry);
         }
         return out.length ? out : null;
+    }
+
+    function schedulePersistExtraTrackSlot(slot) {
+        const entry = getExtraTrackPersistEntry(slot);
+        if (!entry) return;
+        if (typeof persistExtraTrackEntryToSession === 'function') {
+            void persistExtraTrackEntryToSession(entry).catch((e) => {
+                writeLog(
+                    'Session: extra ' +
+                        (slot + 1) +
+                        ' save failed — ' +
+                        (e && e.message ? e.message : String(e)),
+                );
+            });
+        } else if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+    }
+
+    function prepareReviewMixForNewVideoLoad() {
+        reviewMixVideoWireFailed = false;
+    }
+
+    async function finalizeReviewMixAfterSessionRestore() {
+        if (typeof ensureReviewMixVideoRouting === 'function') {
+            ensureReviewMixVideoRouting();
+        }
+        const ctx = ensureReviewMixCtx();
+        if (ctx && ctx.state === 'suspended') {
+            try {
+                await ctx.resume();
+            } catch (_) {}
+        }
+        if (typeof applyVideoMixFromSessionRestore === 'function') {
+            applyVideoMixFromSessionRestore();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
+            ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 40 });
+        }
     }
 
     function startExtraTrackSource(slot, offsetSec, opt) {
@@ -850,13 +1064,175 @@
     function decodeArrayBufferToAudioBuffer(ctx, ab) {
         if (!ctx || !ab) throw new Error('decodeAudioData: no context or data');
         const copy = ab.slice(0);
-        const decoded = ctx.decodeAudioData(copy);
-        if (decoded && typeof decoded.then === 'function') {
-            return decoded;
+        let decoded = ctx.decodeAudioData(copy);
+        if (!decoded || typeof decoded.then !== 'function') {
+            decoded = new Promise((resolve, reject) => {
+                ctx.decodeAudioData(copy, resolve, reject);
+            });
         }
-        return new Promise((resolve, reject) => {
-            ctx.decodeAudioData(copy, resolve, reject);
-        });
+        return Promise.race([
+            decoded,
+            new Promise((_, reject) => {
+                setTimeout(
+                    () => reject(new Error('decodeAudioData timeout')),
+                    EXTRA_AUDIO_DECODE_TIMEOUT_MS,
+                );
+            }),
+        ]);
+    }
+
+    function extraTrackContentDurationSec(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return 0;
+        if (tr.buffer && tr.buffer.duration > 0) return tr.buffer.duration;
+        const hint = Number(tr.restoreDurationHint);
+        return Number.isFinite(hint) && hint > 0 ? hint : 0;
+    }
+
+    function hasExtraTrackWaveformPeaks(slot) {
+        const tr = extraTrackBySlot(slot);
+        return !!(tr && tr.peaks && tr.peaks.length > 0);
+    }
+
+    function clonePeaksForPersist(peaks) {
+        if (!peaks || !peaks.length) return null;
+        const out = new Array(peaks.length);
+        for (let i = 0; i < peaks.length; i++) {
+            const p = peaks[i];
+            out[i] = {
+                min: p && Number.isFinite(p.min) ? p.min : 0,
+                max: p && Number.isFinite(p.max) ? p.max : 0,
+            };
+        }
+        return out;
+    }
+
+    /** 再生用 reviewMixCtx とは別コンテキストでデコード（リロード直後のハング回避） */
+    async function decodeExtraFileArrayBuffer(ab) {
+        if (!ab || ab.byteLength < 1) throw new Error('empty file');
+        const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (OfflineCtx) {
+            try {
+                const offline = new OfflineCtx(2, 2, 44100);
+                return await decodeArrayBufferToAudioBuffer(offline, ab);
+            } catch (err) {
+                writeLog(
+                    'Extra audio decode: OfflineAudioContext failed — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        }
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) throw new Error('AudioContext unavailable');
+        const decodeCtx = new Ctx();
+        try {
+            if (decodeCtx.state === 'suspended') {
+                try {
+                    await decodeCtx.resume();
+                } catch (_) {}
+            }
+            return await decodeArrayBufferToAudioBuffer(decodeCtx, ab);
+        } finally {
+            if (decodeCtx.close) {
+                try {
+                    await decodeCtx.close();
+                } catch (_) {}
+            }
+        }
+    }
+
+    function rawMasterTimelineWidthCss() {
+        const el =
+            typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                ? audioWaveformLanesTracks
+                : null;
+        if (el) return el.clientWidth | 0;
+        if (typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack) {
+            return audioWaveformTrack.clientWidth | 0;
+        }
+        return 0;
+    }
+
+    function rebuildExtraTrackPeaksIfNeeded(slot) {
+        const tr = extraTrackBySlot(slot);
+        const ui = getExtraUi(slot);
+        if (!tr || !ui || !ui.track) return false;
+        if (!tr.buffer) return hasExtraTrackWaveformPeaks(slot);
+        if (rawMasterTimelineWidthCss() < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
+        const sized = syncExtraCanvasSize(ui);
+        if (!sized) return false;
+        if (!tr.peaks || tr.peaks.length !== sized.barCount) {
+            tr.peaks = peaksFromBuffer(tr.buffer, sized.barCount);
+        }
+        return !!(tr.peaks && tr.peaks.length > 0);
+    }
+
+    function extraTrackWaveformDrawReady(slot) {
+        if (!hasExtraTrackWaveformPeaks(slot) || !isExtraTrackLaneShown(slot)) return true;
+        const tr = extraTrackBySlot(slot);
+        const ui = getExtraUi(slot);
+        if (!tr || !ui || !ui.canvas) return false;
+        if (!tr.peaks || tr.peaks.length < 1) return false;
+        const laneW = rawMasterTimelineWidthCss();
+        if (laneW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
+        const styleW = parseFloat(ui.canvas.style.width) || 0;
+        return styleW >= EXTRA_WAVEFORM_LAYOUT_MIN_CSS;
+    }
+
+    /** レイアウト未確定時は rAF で再試行し、peaks 欠落時は再生成する。 */
+    function ensureExtraTrackWaveformsDrawn(opt) {
+        const gen = ++extraWaveformEnsureGen;
+        const maxFrames = opt && opt.maxFrames > 0 ? opt.maxFrames : 28;
+        const slots =
+            opt && Array.isArray(opt.slots) && opt.slots.length
+                ? opt.slots.filter((s) => s >= 0 && s < EXTRA_TRACK_COUNT)
+                : null;
+        let frame = 0;
+
+        const targets = () => {
+            const out = [];
+            for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+                if (slots && slots.indexOf(i) < 0) continue;
+                if (isExtraTrackLoaded(i) || hasExtraTrackWaveformPeaks(i)) out.push(i);
+            }
+            return out;
+        };
+
+        const paintSlot = (slot) => {
+            if (rawMasterTimelineWidthCss() < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return;
+            if (!rebuildExtraTrackPeaksIfNeeded(slot)) return;
+            drawExtraTrackWaveform(slot);
+        };
+
+        const step = () => {
+            if (gen !== extraWaveformEnsureGen) return;
+            frame += 1;
+            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                refreshWaveformCompositeLaneLayout();
+            }
+            const list = targets();
+            let pending = false;
+            for (let j = 0; j < list.length; j++) {
+                const slot = list[j];
+                if (!extraTrackWaveformDrawReady(slot)) {
+                    pending = true;
+                    paintSlot(slot);
+                }
+            }
+            if (pending && frame < maxFrames) {
+                requestAnimationFrame(step);
+                return;
+            }
+            if (pending && frame >= maxFrames) {
+                writeLog('Extra audio: waveform layout retry limit (redrawing anyway)');
+                for (let j = 0; j < list.length; j++) paintSlot(list[j]);
+            }
+            if (opt && opt.notifyMaster && typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+        };
+
+        requestAnimationFrame(step);
     }
 
     function peaksFromBuffer(buffer, barCount) {
@@ -904,10 +1280,13 @@
         const ui = getExtraUi(slot);
         const tr = extraTrackBySlot(slot);
         if (!ui || !ui.canvas) return;
+        if (tr && tr.buffer && (!tr.peaks || tr.peaks.length < 1)) {
+            rebuildExtraTrackPeaksIfNeeded(slot);
+        }
         const sized = syncExtraCanvasSize(ui);
         if (!sized || !sized.ctx) return;
         const { ctx, wCss, hCss } = sized;
-        const contentDur = tr && tr.buffer ? tr.buffer.duration : 0;
+        const contentDur = extraTrackContentDurationSec(slot);
         const audible =
             typeof isExtraTrackAudible === 'function' ? isExtraTrackAudible(slot) : true;
         const grad =
@@ -925,19 +1304,16 @@
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) drawExtraTrackWaveform(i);
     }
 
-    /** レーン表示直後は clientWidth が 0 のことがあるため、レイアウト確定後に再描画する。 */
-    function scheduleExtraTrackWaveformRedraw(slot) {
-        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-            refreshWaveformCompositeLaneLayout();
-        }
-        const redraw = () => {
-            if (slot >= 0 && slot < EXTRA_TRACK_COUNT) drawExtraTrackWaveform(slot);
-            else redrawAllExtraTrackWaveforms();
-            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-                refreshWaveformCompositeLaneLayout();
-            }
+    /** レーン表示直後は clientWidth が 0 のことがあるため、レイアウト確定まで再試行する。 */
+    function scheduleExtraTrackWaveformRedraw(slot, opt) {
+        const ensureOpt = {
+            notifyMaster: !!(opt && opt.notifyMaster),
+            maxFrames: opt && opt.maxFrames > 0 ? opt.maxFrames : undefined,
         };
-        requestAnimationFrame(() => requestAnimationFrame(redraw));
+        if (slot >= 0 && slot < EXTRA_TRACK_COUNT) {
+            ensureOpt.slots = [slot];
+        }
+        ensureExtraTrackWaveformsDrawn(ensureOpt);
     }
 
     function setExtraTrackStatus(slot, text) {
@@ -1124,8 +1500,16 @@
     }
 
     window.restoreExtraTrackLanesForNewVideo = restoreExtraTrackLanesForNewVideo;
+    window.extraTrackBufferDuration = extraTrackBufferDuration;
+    window.isExtraTrackLoaded = isExtraTrackLoaded;
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
+    window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
+    window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;
+    window.finalizeReviewMixAfterSessionRestore = finalizeReviewMixAfterSessionRestore;
+    window.prepareReviewMixForNewVideoLoad = prepareReviewMixForNewVideoLoad;
+    window.applyExtraTrackPeaksPreview = applyExtraTrackPeaksPreview;
+    window.buildExtraTrackPeaksPreviewFromWavBlob = buildExtraTrackPeaksPreviewFromWavBlob;
     window.refreshAllExtraTrackLaneVisibility = refreshAllExtraTrackLaneVisibility;
 
     function refreshExtraTrackUi(slot) {
@@ -1187,6 +1571,8 @@
         tr.file = null;
         tr.buffer = null;
         tr.peaks = null;
+        tr.persistBlob = null;
+        tr.restoreDurationHint = 0;
         tr.muted = false;
         tr.solo = false;
         tr.volLinear = 1;
@@ -1204,7 +1590,11 @@
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        if (typeof removeExtraTrackFromSession === 'function') {
+            void removeExtraTrackFromSession(slot);
+        } else if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
     }
 
     function clearAllExtraTracks() {
@@ -1225,7 +1615,7 @@
         refreshReviewMixUi();
     }
 
-    async function loadExtraTrackFile(slot, file) {
+    async function loadExtraTrackFile(slot, file, opt) {
         if (slot < 0 || slot >= EXTRA_TRACK_COUNT || !file) return;
         setExtraTrackLaneUiOpen(slot, true);
         const tr = extraTrackBySlot(slot);
@@ -1247,34 +1637,61 @@
             }
             return;
         }
-        const ctx = ensureReviewMixCtx();
-        if (!ctx) {
-            setExtraTrackStatus(slot, 'AudioContext unavailable');
-            return;
-        }
         setExtraTrackStatus(slot, 'Decoding…');
         let buffer = null;
         try {
-            if (ctx.state === 'suspended') {
-                try {
-                    await ctx.resume();
-                } catch (_) {}
-            }
             const ab = await file.arrayBuffer();
-            if (gen !== tr.loadGen) return;
+            if (gen !== tr.loadGen) {
+                if (opt && opt.fromSessionRestore) {
+                    writeLog('Extra audio ' + (slot + 1) + ': restore aborted (superseded)');
+                }
+                return;
+            }
             if (!ab || ab.byteLength < 1) {
                 throw new Error('empty file');
             }
-            buffer = await decodeArrayBufferToAudioBuffer(ctx, ab);
-            if (gen !== tr.loadGen) return;
+            cacheExtraTrackPersistBlob(tr, file, ab);
+            writeLog(
+                'Extra audio ' +
+                    (slot + 1) +
+                    ': decoding ' +
+                    (file.name || 'audio') +
+                    ' (' +
+                    Math.round(ab.byteLength / 1024) +
+                    ' KB)…',
+            );
+            let decodeProgressTimer = 0;
+            decodeProgressTimer = setInterval(() => {
+                writeLog('Extra audio ' + (slot + 1) + ': still decoding…');
+            }, 4000);
+            try {
+                buffer = await decodeExtraFileArrayBuffer(ab);
+            } finally {
+                if (decodeProgressTimer) clearInterval(decodeProgressTimer);
+            }
+            if (gen !== tr.loadGen) {
+                if (opt && opt.fromSessionRestore) {
+                    writeLog('Extra audio ' + (slot + 1) + ': restore aborted after decode');
+                }
+                return;
+            }
             if (!buffer || !(buffer.duration > 0)) {
                 throw new Error('decode returned no audio');
             }
         } catch (err) {
-            if (gen !== tr.loadGen) return;
+            if (gen !== tr.loadGen) {
+                writeLog(
+                    'Extra audio ' +
+                        (slot + 1) +
+                        ': decode aborted (superseded) — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+                return;
+            }
             tr.file = null;
             tr.buffer = null;
             tr.peaks = null;
+            tr.persistBlob = null;
             setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
             setExtraTrackStatus(slot, 'Decode failed');
             refreshExtraTrackUi(slot);
@@ -1292,12 +1709,20 @@
 
         tr.file = file;
         tr.buffer = buffer;
+        tr.restoreDurationHint = 0;
         tr.muted = false;
         tr.solo = false;
 
         try {
             await new Promise((resolve) => requestAnimationFrame(resolve));
-            if (gen !== tr.loadGen) return;
+            if (gen !== tr.loadGen) {
+                writeLog('Extra audio ' + (slot + 1) + ': load superseded (skipped waveform)');
+                tr.file = null;
+                tr.buffer = null;
+                tr.peaks = null;
+                tr.persistBlob = null;
+                return;
+            }
             const ui = getExtraUi(slot);
             const sized = ui && ui.track ? syncExtraCanvasSize(ui) : null;
             const barCount = sized ? sized.barCount : 1200;
@@ -1327,8 +1752,11 @@
             if (typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            if (typeof schedulePersistSession === 'function') schedulePersistSession();
-            scheduleExtraTrackWaveformRedraw(slot);
+            schedulePersistExtraTrackSlot(slot);
+            if (!(opt && opt.fromSessionRestore) && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+            scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
         } catch (err) {
             if (gen !== tr.loadGen) return;
             writeLog(
@@ -1338,9 +1766,7 @@
                     (err && err.message ? err.message : String(err))
             );
             refreshExtraTrackUi(slot);
-            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-                refreshWaveformCompositeLaneLayout();
-            }
+            scheduleExtraTrackWaveformRedraw(slot);
         }
     }
 
@@ -1504,19 +1930,17 @@
         }
 
         if (typeof ResizeObserver !== 'undefined') {
-            const obs = new ResizeObserver(() => {
+            const onLaneResize = () => {
                 for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
-                    const tr = extraTrackBySlot(i);
-                    if (tr && tr.buffer) {
-                        const ui = getExtraUi(i);
-                        const sized = ui ? syncExtraCanvasSize(ui) : null;
-                        if (sized && tr.buffer) {
-                            tr.peaks = peaksFromBuffer(tr.buffer, sized.barCount);
-                        }
-                        drawExtraTrackWaveform(i);
-                    }
+                    if (!isExtraTrackLoaded(i)) continue;
+                    rebuildExtraTrackPeaksIfNeeded(i);
+                    drawExtraTrackWaveform(i);
                 }
-            });
+            };
+            const obs = new ResizeObserver(onLaneResize);
+            if (typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks) {
+                obs.observe(audioWaveformLanesTracks);
+            }
             for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
                 const ui = getExtraUi(i);
                 if (ui && ui.track) obs.observe(ui.track);

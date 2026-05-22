@@ -7,7 +7,7 @@
      * - 焼き込み TC（映像オーバーレイ）: video.currentTime 基準のため動画尺を超えて増えない（意図した仕様）。
      * - トランスポート欄の現在時刻（#currentTime）: マスター長に合わせて進む（動画終端以降も表示可能）。
      * - シーク: マスター全長へ移動できるが、映像は終端付近にパークしたまま（音声のみ続く区間）。
-     * - 波形: 動画尺以降を赤黒グラデで「範囲外」と示す。動画終端の位置には明るい赤の縦線（3レーン共通）。
+     * - 波形: 動画尺以降をグレーの横グラデで「範囲外」と示す（3レーン共通）。
      */
     let transportPlaybackSec = 0;
     let transportPlaybackLastTs = 0;
@@ -708,23 +708,6 @@
         if (master <= videoEndSec + eps) return;
         ctx.fillStyle = timelineBeyondVideoFillGradient(ctx, videoEndW, wCss, hCss);
         ctx.fillRect(videoEndW, 0, wCss - videoEndW, hCss);
-        drawTimelineVideoEndLine(ctx, wCss, hCss, videoEndW);
-    }
-
-    /** Bright red hairline at the video end (drawn on each lane canvas). */
-    function drawTimelineVideoEndLine(ctx, wCss, hCss, videoEndW) {
-        if (!ctx || !hCss || !(videoEndW > 0)) return;
-        const dpr = typeof window !== 'undefined' && window.devicePixelRatio > 0 ? window.devicePixelRatio : 1;
-        const x = Math.round(videoEndW * dpr) / dpr + 0.5 / dpr;
-        if (x < 0.25 || x > wCss - 0.25) return;
-        ctx.save();
-        ctx.strokeStyle = '#ff5c6e';
-        ctx.lineWidth = 1 / dpr;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, hCss);
-        ctx.stroke();
-        ctx.restore();
     }
 
     function getVideoTimelineEndSecForWaveform() {
@@ -932,7 +915,6 @@
         drawSeekPlaybackTrail();
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.setAttribute('aria-valuenow', String(Math.round(pct)));
-        updateVideoEndTimelineLine();
     }
 
     function hasAnyExtraTrackLoaded() {
@@ -994,38 +976,11 @@
         el.hidden = true;
     }
 
-    function updateVideoEndTimelineLine() {
-        const el =
-            typeof audioWaveformVideoEndLine !== 'undefined' && audioWaveformVideoEndLine
-                ? audioWaveformVideoEndLine
-                : document.getElementById('audioWaveformVideoEndLine');
-        if (!el) return;
-        const master = getMasterTransportDurationSec();
-        const videoEndSec = getVideoTimelineEndSecForWaveform();
-        const eps = masterTransportTailEpsilonSec();
-        const show =
-            master > 0 &&
-            videoEndSec > 0 &&
-            master > videoEndSec + eps;
-        if (!show) {
-            el.hidden = true;
-            return;
-        }
-        const pct = transportSecToTimelineLeftPercent(videoEndSec);
-        if (pct <= 0.01 || pct >= 99.99) {
-            el.hidden = true;
-            return;
-        }
-        el.style.left = pct + '%';
-        el.hidden = false;
-    }
-
     function updateLaneContentEndMarkers() {
         setLaneContentEndMarker(document.getElementById('audioWaveformContentEnd'), 0);
         for (let i = 0; i < 2; i++) {
             setLaneContentEndMarker(document.getElementById('extraAudioContentEnd' + i), 0);
         }
-        updateVideoEndTimelineLine();
     }
 
     function updateAudioWaveformPlayhead() {

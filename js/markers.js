@@ -4,6 +4,8 @@
     let pendingRangeStartSec = null;
     let activeMarkerId = null;
     let markerIdSeq = 0;
+    /** renderMarkerList 直後など、ホバーシークが誤って元位置へ戻すのを防ぐ */
+    let suppressMarkerRowHoverSeekUntil = 0;
     const MARKER_COMMENT_POINT_HOLD_SEC = 1;
 
     function nextMarkerId() {
@@ -713,6 +715,23 @@
         return null;
     }
 
+    /** 範囲マーカーの Out TC を削除し、同じ In 位置の点マーカーに戻す */
+    function clearMarkerOutTc(markerId, opt) {
+        const m = currentMarkers.find((x) => x.id === markerId);
+        if (!m || m.type !== 'range') return false;
+        const t = clampMarkerSec(m.startSec);
+        m.type = 'point';
+        m.timeSec = t;
+        delete m.startSec;
+        delete m.endSec;
+        sortMarkersInPlace();
+        activeMarkerId = m.id;
+        persistMarkersAfterChange(opt);
+        writeLog('Marker: Out TC cleared -> point at ' + tcLabelForSec(t));
+        flashSeekHint('Marker', 'Out cleared', 'notice');
+        return true;
+    }
+
     function applyMarkerTcEdit(markerId, edge, sec, opt) {
         const m = currentMarkers.find((x) => x.id === markerId);
         if (!m) return false;
@@ -832,10 +851,24 @@
         return false;
     }
 
+    function focusMarkerTcInput(markerId, edge) {
+        if (!markerTableBody) return;
+        const input = markerTableBody.querySelector(
+            '.marker-table__tc-input[data-marker-for="' +
+                markerId +
+                '"][data-marker-tc-edge="' +
+                edge +
+                '"]',
+        );
+        if (input && input.focus) input.focus();
+    }
+
     function createMarkerTcInput(m, edge) {
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'marker-table__tc-input';
+        input.dataset.markerFor = m.id;
+        input.dataset.markerTcEdge = edge;
         input.readOnly = true;
         input.spellcheck = false;
         input.autocomplete = 'off';
@@ -851,7 +884,7 @@
             input.value = m.type === 'range' ? tcLabelForSec(m.endSec) : '';
             input.title =
                 m.type === 'range'
-                    ? 'Out TC: [+][-] ±1f · [Shift][+][-] ±1s (Enter/Esc to finish)'
+                    ? 'Out TC: [+][-] ±1f · [Shift][+][-] ±1s · [Del] clear Out (Enter/Esc to finish)'
                     : 'Out TC: [+][-] sets range Out (±1f / Shift ±1s)';
         }
         const restoreDisplayedTc = () => {
@@ -882,6 +915,24 @@
         };
         input.addEventListener('keydown', (ev) => {
             if (handleMarkerTcInputNudgeKey(ev, input, m, edge)) return;
+            if (
+                edge === 'out' &&
+                (ev.key === 'Delete' || ev.code === 'Delete') &&
+                !ev.ctrlKey &&
+                !ev.altKey &&
+                !ev.metaKey &&
+                !ev.shiftKey
+            ) {
+                if (clearMarkerOutTc(m.id)) {
+                    ev.preventDefault();
+                    tcEditRevert = null;
+                    const t = commitMarkerTransportSeek(clampMarkerSec(m.timeSec));
+                    syncMarkerSeekTransportUi(t);
+                    updateMarkerCommentOverlay();
+                    requestAnimationFrame(() => focusMarkerTcInput(m.id, 'out'));
+                }
+                return;
+            }
             if (ev.key === 'Enter') {
                 ev.preventDefault();
                 tcEditRevert = null;
@@ -977,6 +1028,14 @@
         return ta.dataset.markerComment !== targetMarkerId;
     }
 
+    function suppressMarkerRowHoverSeek(ms) {
+        suppressMarkerRowHoverSeekUntil = performance.now() + (ms > 0 ? ms : 200);
+    }
+
+    function isMarkerRowHoverSeekSuppressed() {
+        return performance.now() < suppressMarkerRowHoverSeekUntil;
+    }
+
     /** 再生中は MARKERS 行ホバーでのジャンプを無効（停止時のみ） */
     function isMarkerRowHoverSeekBlocked() {
         if (typeof isTransportPlaying === 'function') return isTransportPlaying();
@@ -1044,6 +1103,7 @@
     function syncSeekToMarkerRow(m, opt) {
         if (!videoReady() || !m || !opt) return;
         if (!opt.seekIn && !opt.seekEnd) return;
+        if (opt.fromRowHover && isMarkerRowHoverSeekSuppressed()) return;
         if (opt.fromRowHover && isMarkerRowHoverSeekBlocked()) return;
         if (opt.seekEnd && !markerHasOutTc(m)) return;
         const quiet = !!(opt && opt.quiet);
@@ -1165,8 +1225,8 @@
             Number.isFinite(maxPx) && ta.scrollHeight > maxPx + 1 ? 'auto' : 'hidden';
     }
 
-    function focusMarkerCommentField(id) {
-        requestAnimationFrame(() => {
+    function focusMarkerCommentField(id, opt) {
+        const run = () => {
             const ta =
                 markerTableBody &&
                 markerTableBody.querySelector('[data-marker-comment="' + id + '"]');
@@ -1176,7 +1236,9 @@
             if (row && row.scrollIntoView) {
                 row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             }
-        });
+        };
+        if (opt && opt.sync) run();
+        else requestAnimationFrame(run);
     }
 
     function seekToMarker(m, opt) {
@@ -1212,9 +1274,8 @@
         const t = commitMarkerTransportSeek(target);
         syncMarkerSeekTransportUi(t);
         activeMarkerId = m.id;
-        renderMarkerList();
-        renderSeekBarMarkers();
         updateMarkerRowActiveClass(m.id);
+        renderSeekBarMarkers();
         schedulePersistSession();
         const hintTc = tcLabelForSec(t);
         const hintSuffix =
@@ -1241,10 +1302,8 @@
             }
         }
         if (focusComment) {
-            requestAnimationFrame(() => {
-                updateMarkerRowActiveClass(m.id);
-                focusMarkerCommentField(m.id);
-            });
+            suppressMarkerRowHoverSeek(300);
+            focusMarkerCommentField(m.id, { sync: true });
         }
     }
 
@@ -1324,6 +1383,7 @@
         if (e.altKey && !e.shiftKey) {
             const dir = e.code === 'ArrowUp' ? -1 : 1;
             e.preventDefault();
+            suppressMarkerRowHoverSeek(300);
             jumpToAdjacentMarker(dir, { focusComment: true });
             return true;
         }

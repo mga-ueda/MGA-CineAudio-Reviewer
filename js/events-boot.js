@@ -58,6 +58,16 @@
         if (typeof showFirstVideoFrame === 'function') {
             showFirstVideoFrame();
         }
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        if (
+            typeof isExtraTrackLoaded === 'function' &&
+            (isExtraTrackLoaded(0) || isExtraTrackLoaded(1)) &&
+            typeof ensureExtraTrackWaveformsDrawn === 'function'
+        ) {
+            ensureExtraTrackWaveformsDrawn({ notifyMaster: true });
+        }
         onVideoMediaReady();
     }
 
@@ -481,14 +491,21 @@
 
     function persistOnPageExit() {
         writePrefs();
-        persistSessionToStorage().catch(() => {});
+        if (typeof flushPersistSessionNow === 'function') {
+            flushPersistSessionNow().catch(() => {});
+        } else {
+            persistSessionToStorage().catch(() => {});
+        }
     }
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
-            persistOnPageExit();
-            persistSessionToStorage()
-                .then(() => writeLog('Session: persisted (tab hidden)'))
+            writePrefs();
+            const p =
+                typeof flushPersistSessionNow === 'function'
+                    ? flushPersistSessionNow()
+                    : persistSessionToStorage();
+            p.then(() => writeLog('Session: persisted (tab hidden)'))
                 .catch((err) =>
                     writeLog(
                         'Session: persist failed — ' +
@@ -524,4 +541,7 @@
         syncSeekMax();
         updateControlsEnabled();
         onVideoMediaReady();
+        if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
+            await finalizeReviewMixAfterSessionRestore();
+        }
     })();

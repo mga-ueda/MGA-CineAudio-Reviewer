@@ -1590,16 +1590,6 @@
         .audio-waveform-composite__lanes--range-loop-drag {
             cursor: crosshair;
         }
-        .audio-waveform-composite__video-end-line {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 0.5px;
-            transform: translateX(-0.25px);
-            background: #ff5c6e;
-            pointer-events: none;
-            z-index: 7;
-        }
         .audio-waveform-composite__hover-playhead {
             position: absolute;
             top: 0;
@@ -1654,9 +1644,10 @@
         }
         .transport-bar {
             --transport-bar-inset-y: 10px;
-            --transport-bar-row-gap: 10px;
+            --transport-bar-inset-bottom: 10px;
+            --transport-bar-row-gap: 4px;
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
-            padding: var(--transport-bar-inset-y) 14px;
+            padding: var(--transport-bar-inset-y) 14px var(--transport-bar-inset-bottom) 14px;
             border-radius: 14px;
             margin-bottom: 14px;
             display: flex;
@@ -1678,10 +1669,17 @@
         .transport-bar__row--primary,
         .transport-bar__row--secondary {
             flex-wrap: nowrap;
-            overflow-x: auto;
-            overflow-y: visible;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: thin;
+            /* overflow-x:auto だと overflow-y が auto になり発光が上下で切れる */
+            overflow: visible;
+            contain: none;
+        }
+        .transport-bar__row--primary {
+            position: relative;
+            z-index: 0;
+        }
+        .transport-bar__row--secondary {
+            position: relative;
+            z-index: 1;
         }
         .transport-bar__row #playStopBtn {
             flex-shrink: 0;
@@ -2335,7 +2333,7 @@
             background: rgba(0, 0, 0, 0.28);
             border: var(--transport-frame-border) solid rgba(255, 255, 255, 0.08);
             font-size: var(--transport-opt-font-size);
-            transition: border-color 0.35s ease-out, box-shadow 0.35s ease-out;
+            transition: box-shadow 0.2s ease, border-color 0.2s ease;
         }
         .transport-bar .transport-opt-chip,
         .transport-bar .transport-opt-box.transport-opt-chip {
@@ -2361,6 +2359,7 @@
                 0 0 0 1px rgba(220, 40, 40, 0.55),
                 0 0 18px rgba(255, 50, 50, 0.55),
                 0 0 38px rgba(200, 30, 40, 0.42);
+            transition: none;
             animation: gainReduceGlowPulse 0.85s ease-in-out 1;
         }
         @keyframes gainReduceGlowPulse {
@@ -2381,24 +2380,30 @@
             }
         }
         @keyframes transportOptGlowPulse {
-            0% {
-                border-color: rgba(255, 255, 255, 0.08);
-                box-shadow: 0 0 0 0 rgba(255, 120, 40, 0);
-            }
-            28% {
-                border-color: rgba(255, 170, 90, 0.55);
-                box-shadow:
-                    0 0 0 1px rgba(255, 140, 60, 0.4),
-                    0 0 16px rgba(255, 130, 40, 0.55),
-                    0 0 28px rgba(255, 95, 20, 0.38);
-            }
+            0%,
             100% {
-                border-color: rgba(255, 255, 255, 0.08);
-                box-shadow: 0 0 0 0 rgba(255, 120, 40, 0);
+                border-color: rgba(255, 140, 60, 0.55);
+                box-shadow:
+                    0 0 0 1px rgba(255, 120, 40, 0.5),
+                    0 0 14px rgba(255, 130, 40, 0.42),
+                    0 0 26px rgba(255, 95, 20, 0.28);
+            }
+            50% {
+                border-color: rgba(255, 190, 110, 0.92);
+                box-shadow:
+                    0 0 0 1px rgba(255, 160, 70, 0.65),
+                    0 0 28px rgba(255, 140, 50, 0.62),
+                    0 0 52px rgba(255, 100, 25, 0.45);
             }
         }
         .transport-opt-box.transport-opt-box--glow {
-            animation: transportOptGlowPulse 0.88s ease-out forwards;
+            border-color: rgba(255, 140, 60, 0.72);
+            box-shadow:
+                0 0 0 1px rgba(255, 120, 40, 0.55),
+                0 0 18px rgba(255, 130, 40, 0.55),
+                0 0 38px rgba(255, 95, 20, 0.42);
+            transition: none;
+            animation: transportOptGlowPulse 0.85s ease-in-out 1;
         }
         .export-pip-btn {
             box-sizing: border-box;

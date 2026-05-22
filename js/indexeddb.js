@@ -51,6 +51,58 @@
         }, 450);
     }
 
+    async function flushPersistSessionNow() {
+        clearTimeout(persistSessionTimer);
+        persistSessionTimer = null;
+        await persistSessionToStorage();
+    }
+
+    window.flushPersistSessionNow = flushPersistSessionNow;
+    window.isSessionRestoreInProgress = function () {
+        return !!sessionRestoreInProgress;
+    };
+
+    /** Ex トラック1本を即時マージ保存（リロード直前の欠落防止） */
+    async function persistExtraTrackEntryToSession(entry) {
+        if (!window.indexedDB || !entry || entry.slot < 0 || entry.slot >= 2) return;
+        if (!entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
+        let row;
+        try {
+            row = await idbGet(IDB_KEY_LAST);
+        } catch (e) {
+            throw e;
+        }
+        if (!row || !row.mBlob) return;
+        if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
+        row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
+        row.extraTracks.push(entry);
+        row.v = typeof row.v === 'number' ? row.v : 4;
+        await idbPut(IDB_KEY_LAST, row);
+        writeLog(
+            'Session: extra audio ' +
+                (entry.slot + 1) +
+                ' saved (' +
+                (entry.byteLength || entry.blob.size || 0) +
+                ' bytes)',
+        );
+    }
+
+    async function removeExtraTrackFromSession(slot) {
+        if (!window.indexedDB || slot < 0 || slot >= 2) return;
+        let row;
+        try {
+            row = await idbGet(IDB_KEY_LAST);
+        } catch (_) {
+            return;
+        }
+        if (!row || !Array.isArray(row.extraTracks)) return;
+        row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== slot);
+        await idbPut(IDB_KEY_LAST, row);
+    }
+
+    window.persistExtraTrackEntryToSession = persistExtraTrackEntryToSession;
+    window.removeExtraTrackFromSession = removeExtraTrackFromSession;
+
     async function persistSessionToStorage() {
         writePrefs();
         if (!window.indexedDB) return;
@@ -75,7 +127,16 @@
             }
             if (typeof getExtraTracksPersistSnapshot === 'function') {
                 const extra = getExtraTracksPersistSnapshot();
-                if (extra) row.extraTracks = extra;
+                if (extra && extra.length > 0) {
+                    row.extraTracks = extra;
+                } else if (sessionRestoreInProgress) {
+                    try {
+                        const prev = await idbGet(IDB_KEY_LAST);
+                        if (prev && Array.isArray(prev.extraTracks) && prev.extraTracks.length > 0) {
+                            row.extraTracks = prev.extraTracks;
+                        }
+                    } catch (_) {}
+                }
             }
         }
         if (!row.mBlob) {
@@ -95,105 +156,184 @@
 
     async function restoreSessionFromStorage() {
         sessionRestoreListenersArmed = false;
-        const prefs = readPrefs();
-        applySavedLoopPlayback(prefs.loopPlayback);
-
-        if (!window.indexedDB) {
-            writeLog('IndexedDB unavailable; skipped video blob restore.');
-            return;
-        }
-        let row;
+        sessionRestoreInProgress = true;
         try {
-            row = await idbGet(IDB_KEY_LAST);
-        } catch (e) {
-            writeLog('Session read failed: ' + (e && e.message ? e.message : String(e)));
-            return;
-        }
-        if (!row || !row.mBlob) {
-            writeLog('No stored video session (playback prefs may still apply).');
-            return;
-        }
+            const prefs = readPrefs();
+            applySavedLoopPlayback(prefs.loopPlayback);
 
-        if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
-        if (typeof setSessionMixRestore === 'function') {
-            setSessionMixRestore(row.mix);
-        }
-        pendingLaneUiRestore =
-            row.laneUi && typeof row.laneUi === 'object' ? row.laneUi : null;
-        if (Array.isArray(row.extraTracks) && row.extraTracks.length > 0) {
-            if (!pendingLaneUiRestore || typeof pendingLaneUiRestore !== 'object') {
-                pendingLaneUiRestore = { videoLaneOpen: true, extraLanesOpen: [false, false] };
+            if (!window.indexedDB) {
+                writeLog('IndexedDB unavailable; skipped video blob restore.');
+                return;
             }
-            if (!Array.isArray(pendingLaneUiRestore.extraLanesOpen)) {
-                pendingLaneUiRestore.extraLanesOpen = [false, false];
-            }
-            for (const entry of row.extraTracks) {
-                if (entry && entry.slot >= 0 && entry.slot < 2) {
-                    pendingLaneUiRestore.extraLanesOpen[entry.slot] = true;
-                }
-            }
-        }
-
-        const f = new File([row.mBlob], row.mName || 'video.mp4', {
-            type: mimeTypeHintForVideoFileName(row.mName || 'video.mp4'),
-            lastModified: typeof row.mLastModified === 'number' ? row.mLastModified : Date.now(),
-        });
-        loadVideoFile(f, {
-            skipPersist: true,
-            markers: Array.isArray(row.markers) ? row.markers : undefined,
-            rangeLoop:
-                row.rangeLoop &&
-                Number.isFinite(row.rangeLoop.inSec) &&
-                Number.isFinite(row.rangeLoop.outSec)
-                    ? row.rangeLoop
-                    : undefined,
-        });
-        pendingRestoreTime = 0;
-        writeLog('Restored video: ' + f.name + ' (transport at head)');
-        if (Array.isArray(row.extraTracks) && row.extraTracks.length > 0) {
-            writeLog('Restoring ' + row.extraTracks.length + ' extra audio track(s)...');
-            const restoreJobs = [];
-            for (const entry of row.extraTracks) {
-                if (
-                    !entry ||
-                    !entry.blob ||
-                    entry.slot < 0 ||
-                    entry.slot >= 2 ||
-                    typeof loadExtraTrackFile !== 'function'
-                ) {
-                    continue;
-                }
-                const af = new File([entry.blob], entry.name || 'audio.wav', {
-                    type:
-                        typeof mimeTypeHintForAudioFileName === 'function'
-                            ? mimeTypeHintForAudioFileName(entry.name || 'audio.wav')
-                            : 'application/octet-stream',
-                    lastModified:
-                        typeof entry.lastModified === 'number' ? entry.lastModified : Date.now(),
-                });
-                restoreJobs.push(loadExtraTrackFile(entry.slot, af));
-            }
+            let row;
             try {
-                await Promise.all(restoreJobs);
+                row = await idbGet(IDB_KEY_LAST);
             } catch (e) {
-                writeLog(
-                    'Extra audio restore: ' + (e && e.message ? e.message : String(e)),
-                );
+                writeLog('Session read failed: ' + (e && e.message ? e.message : String(e)));
+                return;
             }
-            if (typeof refreshAllExtraTrackLaneVisibility === 'function') {
-                refreshAllExtraTrackLaneVisibility();
+            if (!row || !row.mBlob) {
+                writeLog('No stored video session (playback prefs may still apply).');
+                return;
             }
-            if (typeof redrawAllExtraTrackWaveforms === 'function') {
-                redrawAllExtraTrackWaveforms();
+
+            const storedExtraCount = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
+            writeLog(
+                storedExtraCount > 0
+                    ? 'Session data: ' + storedExtraCount + ' stored extra track(s) in IndexedDB'
+                    : 'Session data: no stored extra tracks (Ex audio was not saved before reload)',
+            );
+
+            if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
+            if (typeof setSessionMixRestore === 'function') {
+                setSessionMixRestore(row.mix);
             }
-            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-                refreshWaveformCompositeLaneLayout();
+            pendingLaneUiRestore =
+                row.laneUi && typeof row.laneUi === 'object' ? row.laneUi : null;
+            if (Array.isArray(row.extraTracks) && row.extraTracks.length > 0) {
+                if (!pendingLaneUiRestore || typeof pendingLaneUiRestore !== 'object') {
+                    pendingLaneUiRestore = { videoLaneOpen: true, extraLanesOpen: [false, false] };
+                }
+                if (!Array.isArray(pendingLaneUiRestore.extraLanesOpen)) {
+                    pendingLaneUiRestore.extraLanesOpen = [false, false];
+                }
+                for (const entry of row.extraTracks) {
+                    if (entry && entry.slot >= 0 && entry.slot < 2) {
+                        pendingLaneUiRestore.extraLanesOpen[entry.slot] = true;
+                    }
+                }
             }
-            if (typeof notifyMasterTransportDurationChanged === 'function') {
-                notifyMasterTransportDurationChanged();
+
+            const f = new File([row.mBlob], row.mName || 'video.mp4', {
+                type: mimeTypeHintForVideoFileName(row.mName || 'video.mp4'),
+                lastModified:
+                    typeof row.mLastModified === 'number' ? row.mLastModified : Date.now(),
+            });
+            loadVideoFile(f, {
+                skipPersist: true,
+                markers: Array.isArray(row.markers) ? row.markers : undefined,
+                rangeLoop:
+                    row.rangeLoop &&
+                    Number.isFinite(row.rangeLoop.inSec) &&
+                    Number.isFinite(row.rangeLoop.outSec)
+                        ? row.rangeLoop
+                        : undefined,
+            });
+            writeLog('Restored video: ' + f.name + ' (transport at head)');
+            if (typeof waitForVideoReadyForSessionRestore === 'function') {
+                const metaOk = await waitForVideoReadyForSessionRestore();
+                if (!metaOk) {
+                    writeLog('Session restore: video metadata not ready (extra tracks deferred)');
+                }
             }
-        }
-        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-            ensureAtLeastOneWaveformLaneVisible();
+            if (Array.isArray(row.extraTracks) && row.extraTracks.length > 0) {
+                writeLog('Restoring ' + row.extraTracks.length + ' extra audio track(s)...');
+                if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                    refreshWaveformCompositeLaneLayout();
+                }
+                if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
+                    ensureExtraTrackWaveformsDrawn({ maxFrames: 8 });
+                }
+                let restoredCount = 0;
+                for (const entry of row.extraTracks) {
+                    if (!entry || entry.slot < 0 || entry.slot >= 2) continue;
+                    const blobBytes =
+                        typeof entry.byteLength === 'number'
+                            ? entry.byteLength
+                            : entry.blob
+                              ? entry.blob.size || 0
+                              : 0;
+                    if (!entry.blob || blobBytes < 1) {
+                        writeLog(
+                            'Extra audio ' +
+                                (entry.slot + 1) +
+                                ': restore skipped (missing or empty stored audio, ' +
+                                blobBytes +
+                                ' bytes)',
+                        );
+                        continue;
+                    }
+                    if (typeof loadExtraTrackFile !== 'function') continue;
+                    let previewOk = false;
+                    if (typeof applyExtraTrackPeaksPreview === 'function') {
+                        previewOk = applyExtraTrackPeaksPreview(entry.slot, entry);
+                    }
+                    if (
+                        !previewOk &&
+                        typeof buildExtraTrackPeaksPreviewFromWavBlob === 'function'
+                    ) {
+                        previewOk = await buildExtraTrackPeaksPreviewFromWavBlob(
+                            entry.slot,
+                            entry,
+                        );
+                    }
+                    const af = new File([entry.blob], entry.name || 'audio.wav', {
+                        type:
+                            typeof mimeTypeHintForAudioFileName === 'function'
+                                ? mimeTypeHintForAudioFileName(entry.name || 'audio.wav')
+                                : 'application/octet-stream',
+                        lastModified:
+                            typeof entry.lastModified === 'number'
+                                ? entry.lastModified
+                                : Date.now(),
+                    });
+                    try {
+                        writeLog(
+                            'Extra audio ' + (entry.slot + 1) + ': restore decode start',
+                        );
+                        await loadExtraTrackFile(entry.slot, af, { fromSessionRestore: true });
+                        if (
+                            typeof isExtraTrackLoaded === 'function' &&
+                            isExtraTrackLoaded(entry.slot)
+                        ) {
+                            restoredCount += 1;
+                        } else {
+                            writeLog(
+                                'Extra audio ' +
+                                    (entry.slot + 1) +
+                                    ': restore finished without audio buffer',
+                            );
+                        }
+                    } catch (e) {
+                        writeLog(
+                            'Extra audio ' +
+                                (entry.slot + 1) +
+                                ': restore failed — ' +
+                                (e && e.message ? e.message : String(e)),
+                        );
+                    }
+                }
+                if (restoredCount === 0) {
+                    writeLog(
+                        'Extra audio restore: no tracks loaded — load Ex audio again, then check for "Session: extra audio N saved" in log before reload',
+                    );
+                } else {
+                    writeLog('Extra audio restore: ' + restoredCount + ' track(s) decoded');
+                }
+                if (typeof refreshAllExtraTrackLaneVisibility === 'function') {
+                    refreshAllExtraTrackLaneVisibility();
+                }
+                if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                    refreshWaveformCompositeLaneLayout();
+                }
+                if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
+                    await finalizeReviewMixAfterSessionRestore();
+                } else if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
+                    ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 40 });
+                }
+                if (typeof schedulePersistSession === 'function') {
+                    schedulePersistSession();
+                }
+            } else if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
+                await finalizeReviewMixAfterSessionRestore();
+            }
+            if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
+                ensureAtLeastOneWaveformLaneVisible();
+            }
+            if (typeof applySessionTransportAtHead === 'function') {
+                applySessionTransportAtHead();
+            }
+        } finally {
+            sessionRestoreInProgress = false;
         }
     }

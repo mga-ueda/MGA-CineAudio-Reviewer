@@ -20,6 +20,7 @@
     let pendingLaneUiRestore = null;
     let persistSessionTimer = null;
     let sessionRestoreListenersArmed = false;
+    let sessionRestoreInProgress = false;
 
     const DISPLAY_FPS = 60;
     let masterFrameSec = 1 / DISPLAY_FPS;
