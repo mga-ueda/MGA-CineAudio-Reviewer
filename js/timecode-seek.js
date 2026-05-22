@@ -139,6 +139,9 @@
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
     }
     window.applySessionTransportAtHead = applySessionTransportAtHead;
+    window.primePendingRestoreTransportUi = primePendingRestoreTransportUi;
+    window.applyPendingTransportRestore = applyPendingTransportRestore;
+    window.getTransportSec = getTransportSec;
 
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {

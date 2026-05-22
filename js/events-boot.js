@@ -1,4 +1,4 @@
-    function scheduleSessionTransportRestoreRetry() {
+    window.scheduleSessionTransportRestoreRetry = function scheduleSessionTransportRestoreRetry() {
         if (sessionRestoreListenersArmed) return;
         sessionRestoreListenersArmed = true;
         let tries = 0;

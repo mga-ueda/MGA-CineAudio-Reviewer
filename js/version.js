@@ -1,7 +1,14 @@
-    const APP_VERSION = '1.00';
+    const APP_VERSION = '1.01';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '1.01',
+            date: '2026年5月23日',
+            items: [
+                '設定のエクスポート／インポート（.mgacr）— 動画・追加音声・ファイル名・マーカー・ミックス・再生位置・表示設定を1ファイルで共有',
+            ],
+        },
         {
             version: '1.00',
             date: '2026年5月21日',

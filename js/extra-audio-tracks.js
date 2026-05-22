@@ -440,6 +440,9 @@
     }
 
     function removeExtraSlotFromSessionMixRestore(slot) {
+        if (typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) {
+            return;
+        }
         if (!sessionMixRestore || !Array.isArray(sessionMixRestore.extra)) return;
         sessionMixRestore.extra = sessionMixRestore.extra.filter((e) => !e || e.slot !== slot);
     }
@@ -459,7 +462,11 @@
         videoMix.muted = false;
         videoMix.solo = false;
         videoMix.volLinear = 1;
-        if (sessionMixRestore && sessionMixRestore.video) {
+        if (
+            sessionMixRestore &&
+            sessionMixRestore.video &&
+            !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress())
+        ) {
             sessionMixRestore.video = {
                 muted: false,
                 solo: false,
@@ -1165,6 +1172,10 @@
         if (typeof applyVideoMixFromSessionRestore === 'function') {
             applyVideoMixFromSessionRestore();
         }
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            applyExtraSlotMixFromSessionRestore(i);
+        }
+        refreshReviewMixUi();
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
@@ -1951,9 +1962,11 @@
         } else {
             tr.timelineStartSec = 0;
         }
-        tr.muted = false;
-        tr.solo = false;
-        tr.volLinear = 1;
+        if (!(opt && opt.fromSessionRestore)) {
+            tr.muted = false;
+            tr.solo = false;
+            tr.volLinear = 1;
+        }
 
         try {
             await new Promise((resolve) => requestAnimationFrame(resolve));

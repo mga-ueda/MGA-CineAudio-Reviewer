@@ -483,6 +483,40 @@
         }
     }
 
+    function getTimecodeOverlayPersistSnapshot() {
+        return {
+            xRatio: tcOverlaySharedPos.xRatio,
+            bottomRatio: tcOverlaySharedPos.bottomRatio,
+            snapX: !!tcOverlaySharedPos.snapX,
+            snapY: !!tcOverlaySharedPos.snapY,
+            scale: getTcOverlayUserScale(),
+        };
+    }
+
+    function applyTimecodeOverlayPersistSnapshot(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        const xRatio = Number(snap.xRatio);
+        const bottomRatio = Number(snap.bottomRatio);
+        if (!Number.isFinite(xRatio) || !Number.isFinite(bottomRatio)) return;
+        delete tcOverlaySharedPos._pendingDefaultSeed;
+        tcOverlaySharedPos.xRatio = Math.max(0, Math.min(1, xRatio));
+        tcOverlaySharedPos.bottomRatio = Math.max(0, Math.min(1, bottomRatio));
+        tcOverlaySharedPos.snapX = !!snap.snapX;
+        tcOverlaySharedPos.snapY = !!snap.snapY;
+        if (Number.isFinite(Number(snap.scale))) {
+            tcOverlaySharedPos.scale = clampTcOverlayScale(snap.scale);
+        }
+        saveTcOverlayPosition();
+        invalidateTcOverlayBaseMetrics();
+        captureTcOverlayBaseMetrics();
+        applyTcOverlayAppearance();
+        applyTcOverlayPosition();
+        refreshTimecodeOverlayInteractive();
+    }
+
+    window.getTimecodeOverlayPersistSnapshot = getTimecodeOverlayPersistSnapshot;
+    window.applyTimecodeOverlayPersistSnapshot = applyTimecodeOverlayPersistSnapshot;
+
     function initTimecodeOverlay() {
         loadTcOverlayPosition();
         if (frameMain) ensureTcCenterGuides(frameMain);

@@ -2954,6 +2954,38 @@
             outline: 2px solid var(--accent-ink);
             outline-offset: 2px;
         }
+        .transport-bar .session-io.transport-opt-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .transport-bar .session-io-btn {
+            height: var(--transport-opt-control-h);
+            min-height: var(--transport-opt-control-h);
+            padding: 0 10px;
+            border-radius: 8px;
+            border: var(--transport-frame-border) solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.35);
+            color: var(--accent-ink);
+            font-size: var(--transport-opt-font-size);
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+        .transport-bar .session-io-btn:hover:not(:disabled) {
+            background: rgba(196, 30, 58, 0.18);
+            border-color: var(--accent-border);
+        }
+        .transport-bar .session-io-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .transport-bar .session-io-btn:focus-visible {
+            outline: 2px solid var(--accent-ink);
+            outline-offset: 2px;
+        }
 
         /* Spectrum + level meters (controls live in transport bar) */
         .review-mix-monitor {

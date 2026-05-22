@@ -61,6 +61,38 @@
         ? DEFAULT_METER_FLOOR_DB
         : -50;
     
+    function getMonitorUiPersistSnapshot() {
+        return {
+            spectrumFloor: spectrumDisplayDbMin,
+            meterFloor: meterDisplayDbMin,
+            masterVol: readMasterVolSliderLinear(),
+        };
+    }
+
+    function applyMonitorUiPersistSnapshot(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        if (
+            typeof snap.spectrumFloor === 'number' &&
+            DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.spectrumFloor)
+        ) {
+            spectrumDisplayDbMin = snap.spectrumFloor;
+        }
+        if (typeof snap.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.meterFloor)) {
+            meterDisplayDbMin = snap.meterFloor;
+        }
+        const specSel = document.getElementById('spectrumFloorDbSelect');
+        const metSel = document.getElementById('meterFloorDbSelect');
+        if (specSel) specSel.value = String(spectrumDisplayDbMin);
+        if (metSel) metSel.value = String(meterDisplayDbMin);
+        if (typeof snap.masterVol === 'number' && isFinite(snap.masterVol)) {
+            applyMasterVolToMix(Math.max(0, Math.min(2, snap.masterVol)), false);
+        }
+        saveUiPrefsToLocalStorage();
+    }
+
+    window.getMonitorUiPersistSnapshot = getMonitorUiPersistSnapshot;
+    window.applyMonitorUiPersistSnapshot = applyMonitorUiPersistSnapshot;
+
     function saveUiPrefsToLocalStorage() {
         try {
             localStorage.setItem(
@@ -68,12 +100,14 @@
                 JSON.stringify({
                     spectrumFloor: spectrumDisplayDbMin,
                     meterFloor: meterDisplayDbMin,
+                    masterVol: readMasterVolSliderLinear(),
                 }),
             );
         } catch (_) {}
     }
     
     (function syncInitialTransportAndMonitorControls() {
+        let loadedMasterVolFromStorage = false;
         try {
             const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY);
             if (raw) {
@@ -85,6 +119,10 @@
                     if (typeof o.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(o.meterFloor)) {
                         meterDisplayDbMin = o.meterFloor;
                     }
+                    if (typeof o.masterVol === 'number' && isFinite(o.masterVol)) {
+                        applyMasterVolToMix(Math.max(0, Math.min(2, o.masterVol)), false);
+                        loadedMasterVolFromStorage = true;
+                    }
                 }
             }
         } catch (_) {}
@@ -92,7 +130,9 @@
         const metSel = document.getElementById('meterFloorDbSelect');
         if (specSel) specSel.value = String(spectrumDisplayDbMin);
         if (metSel) metSel.value = String(meterDisplayDbMin);
-        applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, false);
+        if (!loadedMasterVolFromStorage) {
+            applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, false);
+        }
     })();
 
     let masterAnalyser = null;

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
@@ -281,6 +281,10 @@
                 class="transport-shortcuts-link transport-opt-chip"
                 title="Open Keyboard Shortcuts in a new window"
             >Keyboard Shortcuts</a>
+            <div class="session-io transport-opt-chip" role="group" aria-label="Import and export review">
+                <button type="button" id="sessionImportBtn" class="session-io-btn" title="Restore a review from a .mgacr file">Import Review</button>
+                <button type="button" id="sessionExportBtn" class="session-io-btn" title="Save video, extra audio, markers, mix, and display settings to one file">Export Review</button>
+            </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap">
@@ -392,6 +396,7 @@
         accept="video/*,.mp4,.m4v,.webm,.mov,.mkv,.avi,.wmv,.flv,.ogv,.mpeg,.mpg,.m1v,.m2v,.ts,.mts,.m2ts,.3gp,.3g2,.asf,.f4v,audio/*,.wav,.wave,.flac,.ogg,.mp3,.m4a,.aac,.aiff,.aif,.wma,.opus"
         hidden
     >
+    <input type="file" id="sessionImportFile" accept=".mgacr,application/octet-stream" hidden>
 
     <script src="js/version.js"></script>
     <script src="js/dom-refs.js"></script>
@@ -414,6 +419,7 @@
     <script src="js/drop-files.js"></script>
     <script src="js/view-layout.js"></script>
     <script src="js/indexeddb.js"></script>
+    <script src="js/session-export-import.js"></script>
     <script src="js/init-prefs.js"></script>
     <script src="js/events-boot.js"></script>
 </body>
