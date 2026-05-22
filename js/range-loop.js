@@ -12,11 +12,21 @@
     let loopRangeRightPressStartX = 0;
     let loopRangeRightPressStartY = 0;
     let loopRangeRightPressDidDrag = false;
-    /** 右ドラッグで範囲ループを確定した直後の contextmenu で解除しない */
-    let suppressRangeLoopContextMenuDismiss = false;
+    /** 右ドラッグ確定直後の contextmenu（lanes / composite 両方）で解除しない */
+    const RANGE_LOOP_CONTEXT_MENU_SUPPRESS_MS = 600;
+    let suppressRangeLoopContextMenuUntil = 0;
 
     const RANGE_LOOP_MIN_SEC = 0.05;
     const RANGE_LOOP_CLICK_MOVE_PX = 5;
+
+    function armRangeLoopContextMenuSuppress() {
+        suppressRangeLoopContextMenuUntil =
+            performance.now() + RANGE_LOOP_CONTEXT_MENU_SUPPRESS_MS;
+    }
+
+    function shouldSuppressRangeLoopContextMenuDismiss() {
+        return performance.now() < suppressRangeLoopContextMenuUntil;
+    }
     let pendingRangeLoopRestore = null;
 
     function isRangeLoopPlaybackActive() {
@@ -201,8 +211,7 @@
             return;
         }
         ev.preventDefault();
-        if (suppressRangeLoopContextMenuDismiss) {
-            suppressRangeLoopContextMenuDismiss = false;
+        if (shouldSuppressRangeLoopContextMenuDismiss()) {
             return;
         }
         dismissRangeLoopLikeEscape();
@@ -498,7 +507,7 @@
             endRangeLoopDrag();
             if (loopRangeRightPressDidDrag) {
                 if (activateRangeLoopPlayback(loopRangeDragStartSec, loopRangeDragEndSec)) {
-                    suppressRangeLoopContextMenuDismiss = true;
+                    armRangeLoopContextMenuSuppress();
                     const resume =
                         typeof isTransportPlaying === 'function'
                             ? isTransportPlaying()

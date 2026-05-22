@@ -7,6 +7,16 @@
     let waveformScrubPointerId = null;
     let waveformScrubDocMove = null;
     let waveformScrubDocUp = null;
+    let waveformOffsetDragActive = false;
+    let waveformOffsetDragSlot = -1;
+    let waveformOffsetDragPointerId = null;
+    let waveformOffsetDragStartClientX = 0;
+    let waveformOffsetDragStartTimelineSec = 0;
+    let waveformOffsetDragDocMove = null;
+    let waveformOffsetDragDocUp = null;
+    let waveformAltModifierHeld = false;
+    let waveformLanesLastPointerX = null;
+    let waveformLanesLastPointerY = null;
     let waveformBuildTimer = 0;
     let waveformPauseBuildListener = null;
     /** MP4 は先頭スライスでは decode できないため、フルファイルのみ（上限あり） */
@@ -118,6 +128,9 @@
         abortWaveformBuildInFlight();
         waveformPeaks = null;
         waveformAudioBuffer = null;
+        if (typeof resetVideoTrackMixToDefault === 'function') {
+            resetVideoTrackMixToDefault();
+        }
         refreshVideoAudioLaneVisibility();
         if (typeof refreshVideoAudioLaneFileName === 'function') {
             refreshVideoAudioLaneFileName();
@@ -139,12 +152,16 @@
     window.getVideoLaneUiOpen = getVideoLaneUiOpen;
     window.setVideoLaneUiOpenFromPersist = setVideoLaneUiOpenFromPersist;
 
+    function extraTrackSlotCount() {
+        const n = window.EXTRA_TRACK_COUNT;
+        return typeof n === 'number' && n > 0 ? n : 3;
+    }
+
     function countVisibleWaveformLanes() {
-        const metas = [
-            audioWaveformPanel,
-            document.getElementById('extraAudioMeta0'),
-            document.getElementById('extraAudioMeta1'),
-        ];
+        const metas = [audioWaveformPanel];
+        for (let i = 0; i < extraTrackSlotCount(); i++) {
+            metas.push(document.getElementById('extraAudioMeta' + i));
+        }
         let count = 0;
         for (let i = 0; i < metas.length; i++) {
             if (metas[i] && !metas[i].hidden) count += 1;
@@ -153,7 +170,7 @@
     }
 
     function hasAnyVisibleExtraWaveformLane() {
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < extraTrackSlotCount(); i++) {
             const meta = document.getElementById('extraAudioMeta' + i);
             if (meta && !meta.hidden) return true;
         }
@@ -209,53 +226,54 @@
     }
 
     /**
-     * 映像のみ（Video Audio 非表示）時、表示中の Ex レーンに 1 から連番の grid-row を割り当てる。
-     * CSS の固定 row（Ex1=1, Ex2=2）のまま Ex1 だけ閉じるとグリッドが 1 行になり Ex2 が画面外になる。
+     * 表示中のレーン（Video + Ex）に 1 から連番の grid-row を割り当てる。
+     * 固定 CSS（Ex1=1, Ex2=2…）のまま途中スロットを閉じると行数とずれて波形が画面外になる。
      */
-    function syncNoVideoAudioExtraGridRows() {
+    function syncVisibleWaveformLaneGridRows() {
         if (!audioWaveformComposite) return;
-        const noVideoAudio = audioWaveformComposite.classList.contains(
-            'audio-waveform-composite--no-video-audio',
-        );
         let row = 1;
-        for (let slot = 0; slot < 2; slot++) {
+        const assignRow = (meta, lane, show) => {
+            const rowStr = show ? String(row) : '';
+            if (meta) meta.style.gridRow = rowStr;
+            if (lane) lane.style.gridRow = rowStr;
+            if (show) row += 1;
+        };
+        assignRow(
+            audioWaveformPanel,
+            audioWaveformLaneVideo,
+            !!(audioWaveformPanel && !audioWaveformPanel.hidden),
+        );
+        for (let slot = 0; slot < extraTrackSlotCount(); slot++) {
             const meta = document.getElementById('extraAudioMeta' + slot);
             const lane = document.getElementById('extraAudioLane' + slot);
-            const show = !!(meta && !meta.hidden);
-            if (noVideoAudio && show) {
-                const rowStr = String(row);
-                meta.style.gridRow = rowStr;
-                if (lane) lane.style.gridRow = rowStr;
-                row += 1;
-            } else {
-                if (meta) meta.style.gridRow = '';
-                if (lane) lane.style.gridRow = '';
-            }
+            assignRow(meta, lane, !!(meta && !meta.hidden));
         }
     }
 
     /** 表示中のレーン数に合わせてグリッド高さとコメントラベル帯位置を更新 */
     function refreshWaveformCompositeLaneLayout() {
         if (!audioWaveformComposite) return;
-        const metas = [
-            audioWaveformPanel,
-            document.getElementById('extraAudioMeta0'),
-            document.getElementById('extraAudioMeta1'),
-        ];
+        const metas = [audioWaveformPanel];
+        for (let i = 0; i < extraTrackSlotCount(); i++) {
+            metas.push(document.getElementById('extraAudioMeta' + i));
+        }
         let count = 0;
         for (let i = 0; i < metas.length; i++) {
             if (metas[i] && !metas[i].hidden) count += 1;
         }
         const laneCount = Math.max(1, count);
         audioWaveformComposite.style.setProperty('--wave-lane-count', String(laneCount));
-        syncNoVideoAudioExtraGridRows();
+        syncVisibleWaveformLaneGridRows();
 
         requestAnimationFrame(() => {
             const laneH =
                 parseFloat(
                     getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
                 ) || 92;
-            const laneIds = ['audioWaveformLaneVideo', 'extraAudioLane0', 'extraAudioLane1'];
+            const laneIds = ['audioWaveformLaneVideo'];
+            for (let i = 0; i < extraTrackSlotCount(); i++) {
+                laneIds.push('extraAudioLane' + i);
+            }
             let firstTop = 0;
             for (let i = 0; i < laneIds.length; i++) {
                 const lane = document.getElementById(laneIds[i]);
@@ -273,6 +291,10 @@
                 renderAudioWaveformMarkers();
             }
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+            if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+            if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                redrawAllExtraTrackWaveforms();
+            }
         });
     }
 
@@ -314,7 +336,245 @@
         }
     }
 
+    function detachWaveformOffsetDragDocListeners() {
+        if (waveformOffsetDragDocMove) {
+            document.removeEventListener('pointermove', waveformOffsetDragDocMove);
+            waveformOffsetDragDocMove = null;
+        }
+        if (waveformOffsetDragDocUp) {
+            document.removeEventListener('pointerup', waveformOffsetDragDocUp);
+            document.removeEventListener('pointercancel', waveformOffsetDragDocUp);
+            waveformOffsetDragDocUp = null;
+        }
+    }
+
+    function clearWaveformAltCursorClasses() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return;
+        lanes.classList.remove('audio-waveform-composite__lanes--alt-offset-ready');
+        lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
+    }
+
+    function syncWaveformAltModifierFromPointerEvent(ev) {
+        if (ev && 'altKey' in ev) {
+            waveformAltModifierHeld = !!ev.altKey;
+        }
+    }
+
+    function endWaveformTrackOffsetDrag(opt) {
+        if (!waveformOffsetDragActive && !(opt && opt.force)) return;
+        detachWaveformOffsetDragDocListeners();
+        waveformOffsetDragActive = false;
+        waveformOffsetDragSlot = -1;
+        waveformOffsetDragPointerId = null;
+        const lanes = waveformScrubTargetEl();
+        if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
+        syncWaveformAltModifierFromPointerEvent(opt && opt.event);
+        const ev = opt && opt.event;
+        updateWaveformAltOffsetCursor(
+            ev && Number.isFinite(ev.clientX) ? ev.clientX : waveformLanesLastPointerX,
+            ev && Number.isFinite(ev.clientY) ? ev.clientY : waveformLanesLastPointerY,
+        );
+    }
+
+    function updateWaveformAltOffsetCursor(clientX, clientY) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return;
+        if (waveformOffsetDragActive) {
+            lanes.classList.remove('audio-waveform-composite__lanes--alt-offset-ready');
+            return;
+        }
+        if (!waveformAltModifierHeld) {
+            lanes.classList.remove('audio-waveform-composite__lanes--alt-offset-ready');
+            return;
+        }
+        let show = false;
+        if (waveformAltModifierHeld) {
+            const x =
+                Number.isFinite(clientX) ? clientX : waveformLanesLastPointerX;
+            const y =
+                Number.isFinite(clientY) ? clientY : waveformLanesLastPointerY;
+            if (Number.isFinite(x) && Number.isFinite(y)) {
+                const lr = lanes.getBoundingClientRect();
+                if (
+                    x >= lr.left &&
+                    x <= lr.right &&
+                    y >= lr.top &&
+                    y <= lr.bottom
+                ) {
+                    const slot = waveformExtraLaneSlotFromClientY(y);
+                    show = canDragWaveformTrackTimelineStart(slot);
+                }
+            }
+        }
+        lanes.classList.toggle('audio-waveform-composite__lanes--alt-offset-ready', show);
+    }
+
+    function setWaveformAltModifierHeld(down) {
+        waveformAltModifierHeld = !!down;
+        if (!waveformAltModifierHeld) {
+            clearWaveformAltCursorClasses();
+            return;
+        }
+        updateWaveformAltOffsetCursor(waveformLanesLastPointerX, waveformLanesLastPointerY);
+    }
+
+    function bindWaveformAltOffsetCursorUi(lanes) {
+        if (!lanes || lanes.dataset.altOffsetCursorBound === '1') return;
+        lanes.dataset.altOffsetCursorBound = '1';
+
+        const isAltKeyEvent = (ev) =>
+            ev &&
+            (ev.key === 'Alt' || ev.code === 'AltLeft' || ev.code === 'AltRight');
+
+        document.addEventListener(
+            'keydown',
+            (ev) => {
+                if (!isAltKeyEvent(ev) || waveformAltModifierHeld) return;
+                setWaveformAltModifierHeld(true);
+            },
+            true,
+        );
+        document.addEventListener(
+            'keyup',
+            (ev) => {
+                if (!isAltKeyEvent(ev)) return;
+                setWaveformAltModifierHeld(false);
+            },
+            true,
+        );
+        window.addEventListener('blur', () => setWaveformAltModifierHeld(false));
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') setWaveformAltModifierHeld(false);
+        });
+
+        document.addEventListener(
+            'pointermove',
+            (ev) => {
+                if (waveformOffsetDragActive) return;
+                if (!ev.altKey) {
+                    if (waveformAltModifierHeld) {
+                        waveformAltModifierHeld = false;
+                        clearWaveformAltCursorClasses();
+                    }
+                    return;
+                }
+                waveformAltModifierHeld = true;
+                const lr = lanes.getBoundingClientRect();
+                if (
+                    ev.clientX < lr.left ||
+                    ev.clientX > lr.right ||
+                    ev.clientY < lr.top ||
+                    ev.clientY > lr.bottom
+                ) {
+                    lanes.classList.remove('audio-waveform-composite__lanes--alt-offset-ready');
+                    return;
+                }
+                waveformLanesLastPointerX = ev.clientX;
+                waveformLanesLastPointerY = ev.clientY;
+                updateWaveformAltOffsetCursor(ev.clientX, ev.clientY);
+            },
+            true,
+        );
+        document.addEventListener(
+            'pointerup',
+            (ev) => {
+                if (waveformOffsetDragActive) return;
+                syncWaveformAltModifierFromPointerEvent(ev);
+                updateWaveformAltOffsetCursor(ev.clientX, ev.clientY);
+            },
+            true,
+        );
+    }
+
+    function waveformExtraLaneSlotFromTarget(target) {
+        if (!target || !target.closest) return -1;
+        const lane = target.closest('.audio-waveform-lane--extra');
+        if (!lane || !lane.id) return -1;
+        const m = /^extraAudioLane(\d+)$/.exec(lane.id);
+        return m ? parseInt(m[1], 10) : -1;
+    }
+
+    function waveformExtraLaneSlotFromClientY(clientY) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || !Number.isFinite(clientY)) return -1;
+        const laneEls = lanes.querySelectorAll('.audio-waveform-lane--extra');
+        for (let i = 0; i < laneEls.length; i++) {
+            const lane = laneEls[i];
+            if (lane.hidden) continue;
+            const rect = lane.getBoundingClientRect();
+            if (clientY >= rect.top && clientY <= rect.bottom) {
+                const m = /^extraAudioLane(\d+)$/.exec(lane.id);
+                if (m) return parseInt(m[1], 10);
+            }
+        }
+        return -1;
+    }
+
+    /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
+    function waveformExtraLaneSlotFromPointer(ev) {
+        if (!ev) return -1;
+        const slot = waveformExtraLaneSlotFromTarget(ev.target);
+        if (slot >= 0) return slot;
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || !ev.target || !lanes.contains(ev.target)) return -1;
+        return waveformExtraLaneSlotFromClientY(ev.clientY);
+    }
+
+    function canDragWaveformTrackTimelineStart(slot) {
+        return (
+            slot >= 0 &&
+            typeof isExtraTrackLoaded === 'function' &&
+            isExtraTrackLoaded(slot) &&
+            typeof setExtraTrackTimelineStartSec === 'function'
+        );
+    }
+
+    function timelineSecDeltaFromClientXDelta(clientX, startClientX) {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const el = typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        const m =
+            typeof waveformTimelineMetrics === 'function' ? waveformTimelineMetrics(el) : null;
+        if (!master || !m || !m.contentW) return 0;
+        return ((clientX - startClientX) / m.contentW) * master;
+    }
+
+    function waveformMarkerSnapThresholdSec() {
+        const step =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 24;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const el = typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        const m =
+            typeof waveformTimelineMetrics === 'function' ? waveformTimelineMetrics(el) : null;
+        if (!master || !m || !m.contentW) {
+            return Math.max(step * 6, 0.05);
+        }
+        const SNAP_PX = 14;
+        return Math.max(step, (SNAP_PX / m.contentW) * master);
+    }
+
+    function snapWaveformTimelineStartSec(sec) {
+        if (typeof snapSecToMarkerInOut !== 'function') return sec;
+        return snapSecToMarkerInOut(sec, { thresholdSec: waveformMarkerSnapThresholdSec() });
+    }
+
+    function applyWaveformTimelineStartFromDrag(slot, sec, opt) {
+        const snapped = snapWaveformTimelineStartSec(sec);
+        if (typeof setExtraTrackTimelineStartSec === 'function') {
+            setExtraTrackTimelineStartSec(slot, snapped, opt);
+        }
+    }
+
     function endAudioWaveformScrub(opt) {
+        endWaveformTrackOffsetDrag(opt);
         if (!waveformScrubActive && !(opt && opt.force)) return;
         detachWaveformScrubDocListeners();
         waveformScrubActive = false;
@@ -452,7 +712,74 @@
         }
     }
 
+    function onWaveformTrackOffsetPointerDown(ev, slot) {
+        endAudioWaveformScrub({ force: true });
+        waveformOffsetDragActive = true;
+        waveformOffsetDragSlot = slot;
+        waveformOffsetDragPointerId = ev.pointerId;
+        waveformOffsetDragStartClientX = ev.clientX;
+        waveformOffsetDragStartTimelineSec =
+            typeof getExtraTrackTimelineStartSec === 'function'
+                ? getExtraTrackTimelineStartSec(slot)
+                : 0;
+        hideHoverPlayhead();
+        const lanes = waveformScrubTargetEl();
+        if (lanes) lanes.classList.add('audio-waveform-composite__lanes--offset-drag');
+        writeLog('Waveform: Alt+drag track offset start (Ex ' + (slot + 1) + ')');
+
+        waveformOffsetDragDocMove = (e) => {
+            if (!waveformOffsetDragActive || e.pointerId !== waveformOffsetDragPointerId) return;
+            const delta = timelineSecDeltaFromClientXDelta(
+                e.clientX,
+                waveformOffsetDragStartClientX,
+            );
+            const next = waveformOffsetDragStartTimelineSec + delta;
+            applyWaveformTimelineStartFromDrag(slot, next, { skipPersist: true });
+        };
+        waveformOffsetDragDocUp = (e) => {
+            if (!waveformOffsetDragActive || e.pointerId !== waveformOffsetDragPointerId) return;
+            const delta = timelineSecDeltaFromClientXDelta(
+                e.clientX,
+                waveformOffsetDragStartClientX,
+            );
+            const next = waveformOffsetDragStartTimelineSec + delta;
+            applyWaveformTimelineStartFromDrag(slot, next);
+            const t =
+                typeof getExtraTrackTimelineStartSec === 'function'
+                    ? getExtraTrackTimelineStartSec(slot)
+                    : 0;
+            endWaveformTrackOffsetDrag({ force: true, event: e });
+            setHoverPlayheadAtClientX(e.clientX);
+            const tc =
+                typeof formatTimecodeForTransport === 'function'
+                    ? formatTimecodeForTransport(t)
+                    : t.toFixed(2) + ' s';
+            writeLog('Waveform: Ex ' + (slot + 1) + ' audio start at ' + tc);
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Audio start', tc);
+            }
+            if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        };
+        document.addEventListener('pointermove', waveformOffsetDragDocMove);
+        document.addEventListener('pointerup', waveformOffsetDragDocUp);
+        document.addEventListener('pointercancel', waveformOffsetDragDocUp);
+    }
+
+    function onWaveformAltOffsetPointerDownCapture(ev) {
+        if (!ev.altKey || ev.button !== 0) return;
+        const ready =
+            (typeof videoReady === 'function' && videoReady()) ||
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
+        if (!ready) return;
+        const slot = waveformExtraLaneSlotFromPointer(ev);
+        if (!canDragWaveformTrackTimelineStart(slot)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        onWaveformTrackOffsetPointerDown(ev, slot);
+    }
+
     function onWaveformScrubPointerDown(ev) {
+        if (ev.altKey) return;
         const ready =
             (typeof videoReady === 'function' && videoReady()) ||
             (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
@@ -494,7 +821,7 @@
     }
 
     function onWaveformPointerMove(ev) {
-        if (waveformScrubActive) return;
+        if (waveformScrubActive || waveformOffsetDragActive || waveformAltModifierHeld) return;
         setHoverPlayheadAtClientX(ev.clientX);
     }
 
@@ -831,9 +1158,23 @@
             });
         }
 
+        lanes.addEventListener('pointerdown', onWaveformAltOffsetPointerDownCapture, true);
         lanes.addEventListener('pointerdown', onWaveformScrubPointerDown);
-        lanes.addEventListener('pointermove', onWaveformPointerMove);
+        bindWaveformAltOffsetCursorUi(lanes);
+
+        lanes.addEventListener('pointermove', (ev) => {
+            waveformLanesLastPointerX = ev.clientX;
+            waveformLanesLastPointerY = ev.clientY;
+            if (waveformAltModifierHeld || ev.altKey) {
+                if (ev.altKey) waveformAltModifierHeld = true;
+                updateWaveformAltOffsetCursor(ev.clientX, ev.clientY);
+            }
+            onWaveformPointerMove(ev);
+        });
         lanes.addEventListener('pointerleave', () => {
+            waveformLanesLastPointerX = null;
+            waveformLanesLastPointerY = null;
+            updateWaveformAltOffsetCursor();
             if (!waveformScrubActive) hideHoverPlayhead();
         });
 

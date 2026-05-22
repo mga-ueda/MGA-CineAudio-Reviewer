@@ -54,6 +54,41 @@
         return Array.from(fileList).filter(isUsableVideoFile);
     }
 
+    const AUDIO_FILE_EXT = new Set([
+        '.wav',
+        '.wave',
+        '.flac',
+        '.ogg',
+        '.oga',
+        '.mp3',
+        '.m4a',
+        '.aac',
+        '.aif',
+        '.aiff',
+        '.wma',
+        '.opus',
+        '.webm',
+    ]);
+
+    function isUsableAudioFile(f) {
+        const type = (f.type || '').toLowerCase();
+        if (type.startsWith('audio/')) return true;
+        const ext = fileExtLower(f.name);
+        if (ext && AUDIO_FILE_EXT.has(ext)) return true;
+        if (
+            !type ||
+            type === 'application/octet-stream' ||
+            type.startsWith('application/')
+        ) {
+            return !!(ext && AUDIO_FILE_EXT.has(ext));
+        }
+        return false;
+    }
+
+    function pickAudioFiles(fileList) {
+        return Array.from(fileList).filter(isUsableAudioFile);
+    }
+
     function formatFileDateEn(ms) {
         try {
             return new Date(ms).toLocaleString('en-CA', {

@@ -15,24 +15,24 @@
 
     function assignAudioFiles(files, dropTarget) {
         const list = files ? Array.from(files) : [];
-        const audios =
-            typeof pickAudioFiles === 'function' ? pickAudioFiles(list) : [];
+        const audios = pickAudioFiles(list);
         if (audios.length === 0) {
             writeLog('Drop (waveform area): no playable audio in selection');
             return;
         }
-        if (typeof assignExtraAudioFilesFromDrop === 'function') {
-            assignExtraAudioFilesFromDrop(audios, dropTarget);
-        } else if (typeof assignExtraAudioFiles === 'function') {
-            assignExtraAudioFiles(audios);
+        if (typeof window.assignExtraAudioFilesFromDrop === 'function') {
+            window.assignExtraAudioFilesFromDrop(audios, dropTarget);
+        } else if (typeof window.assignExtraAudioFiles === 'function') {
+            window.assignExtraAudioFiles(audios);
+        } else {
+            writeLog('Drop (waveform area): extra audio module not ready');
         }
     }
 
     function assignFiles(files) {
         const list = files ? Array.from(files) : [];
         const videos = pickVideoFiles(list);
-        const audios =
-            typeof pickAudioFiles === 'function' ? pickAudioFiles(list) : [];
+        const audios = pickAudioFiles(list);
 
         if (videos.length === 0 && audios.length === 0) {
             writeLog('Open files: no playable video or audio in selection (ignored)');
@@ -137,7 +137,9 @@
             logLabel: 'Video audio lane',
         });
     }
-    for (let slot = 0; slot < 2; slot++) {
+    const extraCount =
+        typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+    for (let slot = 0; slot < extraCount; slot++) {
         const track = document.getElementById('extraAudioTrack' + slot);
         const meta = document.getElementById('extraAudioMeta' + slot);
         if (track) {

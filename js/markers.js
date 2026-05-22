@@ -1264,6 +1264,54 @@
         return Math.max(masterFrameSec > 0 ? masterFrameSec : 1 / 24, 0.001);
     }
 
+    function appendVideoEndSnapStop(stops) {
+        if (typeof videoReady === 'function' && !videoReady()) return;
+        let end = 0;
+        if (typeof getVideoTimelineEndSecForWaveform === 'function') {
+            end = getVideoTimelineEndSecForWaveform();
+        } else if (typeof getVideoPlaybackEndSec === 'function') {
+            end = getVideoPlaybackEndSec();
+        } else if (typeof getVideoTransportDurationSec === 'function') {
+            end = getVideoTransportDurationSec();
+        }
+        if (Number.isFinite(end) && end > 0) {
+            stops.push(end);
+        }
+    }
+
+    /** マーカー In/Out・点・動画終端（波形オフセット Alt+ドラッグ用） */
+    function snapSecToMarkerInOut(sec, opt) {
+        const n = Number(sec);
+        if (!Number.isFinite(n)) return 0;
+        const stops = [];
+        for (const m of currentMarkers) {
+            if (m.type === 'range') {
+                if (Number.isFinite(m.startSec)) stops.push(m.startSec);
+                if (markerHasOutTc(m) && Number.isFinite(m.endSec)) stops.push(m.endSec);
+            } else if (Number.isFinite(m.timeSec)) {
+                stops.push(m.timeSec);
+            }
+        }
+        appendVideoEndSnapStop(stops);
+        if (!stops.length) return n;
+        const threshold =
+            opt && Number.isFinite(opt.thresholdSec) && opt.thresholdSec > 0
+                ? opt.thresholdSec
+                : markerNavStopEpsilonSec();
+        let best = n;
+        let bestDist = threshold + 1;
+        for (let i = 0; i < stops.length; i++) {
+            const d = Math.abs(stops[i] - n);
+            if (d <= threshold && d < bestDist) {
+                bestDist = d;
+                best = stops[i];
+            }
+        }
+        return best;
+    }
+
+    window.snapSecToMarkerInOut = snapSecToMarkerInOut;
+
     function markerNavStopIndexForCurrent(stops) {
         if (!stops || stops.length === 0) return -1;
         const t = currentTransportSec();

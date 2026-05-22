@@ -63,7 +63,7 @@
         }
         if (
             typeof isExtraTrackLoaded === 'function' &&
-            (isExtraTrackLoaded(0) || isExtraTrackLoaded(1)) &&
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded()) &&
             typeof ensureExtraTrackWaveformsDrawn === 'function'
         ) {
             ensureExtraTrackWaveformsDrawn({ notifyMaster: true });
@@ -332,15 +332,20 @@
                 e.code === 'Digit1' ||
                 e.code === 'Digit2' ||
                 e.code === 'Digit3' ||
+                e.code === 'Digit4' ||
                 e.code === 'KeyQ' ||
                 e.code === 'KeyW' ||
                 e.code === 'KeyE' ||
+                e.code === 'KeyR' ||
                 e.code === 'KeyS' ||
                 e.code === 'KeyD' ||
+                e.code === 'KeyF' ||
                 e.code === 'KeyZ' ||
                 e.code === 'KeyX' ||
                 e.code === 'KeyC' ||
-                e.code === 'KeyR' ||
+                e.code === 'KeyV' ||
+                e.code === 'IntlYen' ||
+                e.code === 'Backslash' ||
                 e.code === 'Equal' ||
                 e.code === 'Minus' ||
                 e.code === 'NumpadAdd' ||
@@ -362,15 +367,20 @@
                 e.code === 'Digit1' ||
                 e.code === 'Digit2' ||
                 e.code === 'Digit3' ||
+                e.code === 'Digit4' ||
                 e.code === 'KeyQ' ||
                 e.code === 'KeyW' ||
                 e.code === 'KeyE' ||
+                e.code === 'KeyR' ||
                 e.code === 'KeyS' ||
                 e.code === 'KeyD' ||
+                e.code === 'KeyF' ||
                 e.code === 'KeyZ' ||
                 e.code === 'KeyX' ||
                 e.code === 'KeyC' ||
-                e.code === 'KeyR' ||
+                e.code === 'KeyV' ||
+                e.code === 'IntlYen' ||
+                e.code === 'Backslash' ||
                 e.code === 'Equal' ||
                 e.code === 'Minus' ||
                 e.code === 'NumpadAdd' ||
@@ -403,11 +413,13 @@
                 KeyA: 0,
                 KeyS: 1,
                 KeyD: 2,
+                KeyF: 3,
             };
             const mixVolDownByKey = {
                 KeyZ: 0,
                 KeyX: 1,
                 KeyC: 2,
+                KeyV: 3,
             };
             if (Object.prototype.hasOwnProperty.call(mixVolUpByKey, e.code)) {
                 handleMixVolKeydown(e, mixVolUpByKey[e.code], 1);
@@ -423,11 +435,13 @@
                     Digit1: 0,
                     Digit2: 1,
                     Digit3: 2,
+                    Digit4: 3,
                 };
                 const mixMuteByKey = {
                     KeyQ: 0,
                     KeyW: 1,
                     KeyE: 2,
+                    KeyR: 3,
                 };
                 if (Object.prototype.hasOwnProperty.call(mixSoloByDigit, e.code)) {
                     e.preventDefault();

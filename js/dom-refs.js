@@ -1,3 +1,5 @@
+    window.EXTRA_TRACK_COUNT = 3;
+
     const dropZone = document.getElementById('main-drop-zone');
     const filePicker = document.getElementById('filePicker');
     const videoMain = document.getElementById('videoMain');

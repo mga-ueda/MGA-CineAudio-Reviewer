@@ -1122,20 +1122,12 @@
             pointer-events: none;
             display: block;
         }
-        /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex1 / Ex2 を 1・2 行目に揃える */
+        /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex レーンを上から連番（JS でも再割当） */
         .audio-waveform-composite--no-video-audio .audio-waveform-lane-meta--video,
         .audio-waveform-composite--no-video-audio .audio-waveform-lane--video,
         .audio-waveform-composite--no-video-audio #audioWaveformPanel,
         .audio-waveform-composite--no-video-audio #audioWaveformLaneVideo {
             display: none !important;
-        }
-        .audio-waveform-composite--no-video-audio #extraAudioMeta0,
-        .audio-waveform-composite--no-video-audio #extraAudioLane0 {
-            grid-row: 1;
-        }
-        .audio-waveform-composite--no-video-audio #extraAudioMeta1,
-        .audio-waveform-composite--no-video-audio #extraAudioLane1 {
-            grid-row: 2;
         }
         :root {
             --wave-lane-h: 92px;
@@ -1651,6 +1643,27 @@
             filter: none;
         }
         .audio-waveform-composite__lanes--scrubbing .audio-waveform-composite__hover-playhead {
+            display: none !important;
+        }
+        .audio-waveform-composite__lanes--offset-drag {
+            cursor: ew-resize;
+        }
+        .audio-waveform-composite__lanes--offset-drag .audio-waveform-composite__hover-playhead {
+            display: none !important;
+        }
+        .audio-waveform-composite__lanes--alt-offset-ready .audio-waveform-lane--extra,
+        .audio-waveform-composite__lanes--alt-offset-ready
+            .audio-waveform-lane--extra
+            .audio-waveform-lane__track,
+        .audio-waveform-composite__lanes--alt-offset-ready
+            .audio-waveform-lane--extra
+            .audio-waveform-lane__canvas,
+        .audio-waveform-composite__lanes--alt-offset-ready .seek-bar-marker,
+        .audio-waveform-composite__lanes--alt-offset-ready .seek-bar-marker__handle {
+            cursor: ew-resize !important;
+        }
+        .audio-waveform-composite__lanes--alt-offset-ready
+            .audio-waveform-composite__hover-playhead {
             display: none !important;
         }
         .transport-bar {

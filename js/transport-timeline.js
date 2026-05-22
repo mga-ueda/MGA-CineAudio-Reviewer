@@ -378,6 +378,10 @@
     }
 
     function getExtraTrackDurationSec(slot) {
+        if (typeof extraTrackTimelineEndSec === 'function') {
+            const end = extraTrackTimelineEndSec(slot);
+            if (end > 0) return end;
+        }
         if (typeof extraTrackBufferDuration === 'function') {
             return extraTrackBufferDuration(slot);
         }
@@ -393,7 +397,9 @@
         let m = 0;
         const vd = getVideoTransportDurationSec();
         if (vd > 0) m = vd;
-        for (let i = 0; i < 2; i++) {
+        const extraCount =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        for (let i = 0; i < extraCount; i++) {
             const ed = getExtraTrackDurationSec(i);
             if (ed > m) m = ed;
         }
@@ -577,19 +583,7 @@
         ) {
             const fromMix = getTransportSecFromActiveExtraMix(ctx);
             if (fromMix != null && Number.isFinite(fromMix)) {
-                transportPlaybackSec = fromMix;
-                transportPlaybackLastTs = performance.now();
-                if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
-                    snapRangeLoopPlaybackIfNeeded();
-                }
-                if (typeof applyReviewMixVideoGain === 'function') {
-                    applyReviewMixVideoGain();
-                }
-                if (transportPlaybackSec >= master - 0.0005) {
-                    if (typeof handleMasterTransportEndReached === 'function') {
-                        void handleMasterTransportEndReached();
-                    }
-                }
+                applyTransportPlaybackSecFromExtraMix(fromMix, master);
                 return;
             }
         }
@@ -613,6 +607,39 @@
         }
     }
 
+    function applyTransportPlaybackSecFromExtraMix(fromMix, master) {
+        const drift =
+            typeof EXTRA_AUDIO_RESYNC_DRIFT_SEC === 'number'
+                ? EXTRA_AUDIO_RESYNC_DRIFT_SEC
+                : 0.045;
+        if (fromMix + drift < transportPlaybackSec) {
+            return;
+        }
+        transportPlaybackSec = fromMix;
+        transportPlaybackLastTs = performance.now();
+        if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
+            snapRangeLoopPlaybackIfNeeded();
+        }
+        if (typeof applyReviewMixVideoGain === 'function') {
+            applyReviewMixVideoGain();
+        }
+        if (master > 0 && transportPlaybackSec >= master - 0.0005) {
+            if (typeof handleMasterTransportEndReached === 'function') {
+                void handleMasterTransportEndReached();
+            }
+        }
+    }
+
+    function syncReviewMixPlaybackIfNeeded() {
+        if (
+            typeof reviewMixNeedsPlaybackSync === 'function' &&
+            reviewMixNeedsPlaybackSync() &&
+            typeof syncExtraAudioToTransport === 'function'
+        ) {
+            syncExtraAudioToTransport();
+        }
+    }
+
     /** 音声マスター: 再生中は壁時計（またはミックス／テール）で transportPlaybackSec を進める。 */
     function syncTransportPlaybackClockFromAudio() {
         if (!isTransportUiClockActive()) return;
@@ -622,12 +649,14 @@
             (videoMain && videoMain.ended && hasMasterTransportTailBeyondVideo());
         if (inTail) {
             advanceTransportTailPlaybackClock(master);
+            syncReviewMixPlaybackIfNeeded();
             return;
         }
         if (
             typeof advanceRangeLoopPlaybackClock === 'function' &&
             advanceRangeLoopPlaybackClock()
         ) {
+            syncReviewMixPlaybackIfNeeded();
             return;
         }
         const ctx =
@@ -638,16 +667,8 @@
         ) {
             const fromMix = getTransportSecFromActiveExtraMix(ctx);
             if (fromMix != null && Number.isFinite(fromMix)) {
-                transportPlaybackSec = fromMix;
-                transportPlaybackLastTs = performance.now();
-                if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
-                    snapRangeLoopPlaybackIfNeeded();
-                }
-                if (transportPlaybackSec >= master - 0.0005) {
-                    if (typeof handleMasterTransportEndReached === 'function') {
-                        void handleMasterTransportEndReached();
-                    }
-                }
+                applyTransportPlaybackSecFromExtraMix(fromMix, master);
+                syncReviewMixPlaybackIfNeeded();
                 return;
             }
         }
@@ -664,6 +685,7 @@
                 void handleMasterTransportEndReached();
             }
         }
+        syncReviewMixPlaybackIfNeeded();
     }
 
     function syncTransportPlaybackClockFromVideo() {
@@ -693,24 +715,37 @@
     /** 動画尺以降マスター上の「範囲外」帯（グレーの横グラデーション）。 */
     function timelineBeyondVideoFillGradient(ctx, x0, x1, hCss) {
         const grad = ctx.createLinearGradient(x0, 0, x1, 0);
-        grad.addColorStop(0, 'rgba(62, 66, 74, 0.94)');
-        grad.addColorStop(0.42, 'rgba(40, 44, 50, 0.9)');
-        grad.addColorStop(1, 'rgba(22, 24, 28, 0.86)');
+        grad.addColorStop(0, 'rgba(40, 42, 48, 0.96)');
+        grad.addColorStop(0.42, 'rgba(24, 26, 30, 0.95)');
+        grad.addColorStop(1, 'rgba(14, 15, 18, 0.94)');
         void hCss;
         return grad;
     }
 
-    /** 3レーン共通: 動画の実効終端〜マスター終端をグレーで塗る（波形の有無は問わない）。 */
-    function drawTimelineBeyondVideoBand(ctx, wCss, hCss) {
+    /** Ex オフセット: 波形開始（timelineStart）より前のマスター区間 */
+    function drawTimelinePreAudioStartBand(ctx, wCss, hCss, startX) {
+        if (!startX || startX < 0.5 || !wCss || !hCss) return;
+        const x1 = Math.min(startX, wCss);
+        const grad = ctx.createLinearGradient(0, 0, x1, 0);
+        grad.addColorStop(0, 'rgba(20, 3, 6, 0.97)');
+        grad.addColorStop(0.55, 'rgba(32, 6, 10, 0.96)');
+        grad.addColorStop(1, 'rgba(42, 9, 14, 0.95)');
+        void hCss;
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, x1, hCss);
+    }
+
+    /** レーンごと: 当該トラックのタイムライン終端〜マスター終端をグレーで塗る。 */
+    function drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec) {
         const master = getMasterTransportDurationSec();
-        const videoEndSec = getVideoTimelineEndSecForWaveform();
-        if (!master || !videoEndSec || !wCss) return;
-        const videoEndW = masterTimelineContentWidth(wCss, videoEndSec);
+        const endSec = Number(trackEndSec);
+        if (!master || !wCss || !Number.isFinite(endSec) || endSec <= 0) return;
+        const trackEndW = masterTimelineContentWidth(wCss, endSec);
         const eps = masterTransportTailEpsilonSec();
-        if (videoEndW <= 0 || videoEndW >= wCss - 0.5) return;
-        if (master <= videoEndSec + eps) return;
-        ctx.fillStyle = timelineBeyondVideoFillGradient(ctx, videoEndW, wCss, hCss);
-        ctx.fillRect(videoEndW, 0, wCss - videoEndW, hCss);
+        if (trackEndW <= 0 || trackEndW >= wCss - 0.5) return;
+        if (master <= endSec + eps) return;
+        ctx.fillStyle = timelineBeyondVideoFillGradient(ctx, trackEndW, wCss, hCss);
+        ctx.fillRect(trackEndW, 0, wCss - trackEndW, hCss);
     }
 
     function getVideoTimelineEndSecForWaveform() {
@@ -719,6 +754,23 @@
             if (end > 0) return end;
         }
         return getVideoTransportDurationSec();
+    }
+
+    /** 全波形レーン共通: 動画終端の極細・明るい赤の縦線 */
+    function drawTimelineVideoEndMarkerLine(ctx, wCss, hCss) {
+        const videoEndSec = getVideoTimelineEndSecForWaveform();
+        if (!videoEndSec || videoEndSec <= 0 || !wCss || !hCss) return;
+        const x = masterTimelineContentWidth(wCss, videoEndSec);
+        if (x < 0.5 || x > wCss - 0.5) return;
+        const xi = Math.round(x) + 0.5;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 0, 0, 0.98)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xi, 0);
+        ctx.lineTo(xi, hCss);
+        ctx.stroke();
+        ctx.restore();
     }
 
     /** @deprecated 赤線は廃止。互換のため空オブジェクトのみ返す。 */
@@ -1001,7 +1053,11 @@
 
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
 
-        if (!e.shiftKey && !e.repeat && e.code === 'KeyR') {
+        if (
+            !e.shiftKey &&
+            !e.repeat &&
+            (e.code === 'IntlYen' || e.code === 'Backslash')
+        ) {
             e.preventDefault();
             resetWaveformTimelineZoom();
             return true;
@@ -1195,8 +1251,15 @@
     }
 
     function hasAnyExtraTrackLoaded() {
+        if (typeof window.hasAnyExtraTrackLoaded === 'function') {
+            return window.hasAnyExtraTrackLoaded();
+        }
         if (typeof isExtraTrackLoaded !== 'function') return false;
-        return isExtraTrackLoaded(0) || isExtraTrackLoaded(1);
+        const n = typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        for (let i = 0; i < n; i++) {
+            if (isExtraTrackLoaded(i)) return true;
+        }
+        return false;
     }
 
     function masterTimelineContentWidth(wCss, contentDurSec) {
@@ -1211,6 +1274,18 @@
         ctx.fillStyle = 'rgba(8, 6, 10, 0.92)';
         ctx.fillRect(0, 0, wCss, hCss);
 
+        const timelineStartSec =
+            drawOpt && Number.isFinite(drawOpt.timelineStartSec) && drawOpt.timelineStartSec > 0
+                ? drawOpt.timelineStartSec
+                : 0;
+        const startX = masterTimelineContentWidth(wCss, timelineStartSec);
+        if (startX > 0.5) {
+            drawTimelinePreAudioStartBand(ctx, wCss, hCss, startX);
+        }
+
+        const trackEndSec =
+            timelineStartSec + (Number(contentDurSec) > 0 ? Number(contentDurSec) : 0);
+
         if (!peaks || peaks.length === 0) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.lineWidth = 1;
@@ -1218,7 +1293,8 @@
             ctx.moveTo(0, mid);
             ctx.lineTo(wCss, mid);
             ctx.stroke();
-            drawTimelineBeyondVideoBand(ctx, wCss, hCss);
+            drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec);
+            drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
             return;
         }
 
@@ -1229,16 +1305,14 @@
 
         for (let i = 0; i < peaks.length; i++) {
             const p = peaks[i];
-            const x = i * barW;
+            const x = startX + i * barW;
             const top = mid - Math.max(0.5, p.max * (mid - 2));
             const bot = mid - Math.min(-0.5, p.min * (mid - 2));
             const h = Math.max(1, bot - top);
             ctx.fillRect(x, top, Math.max(1, barW + 0.5), h);
         }
 
-        drawTimelineBeyondVideoBand(ctx, wCss, hCss);
-
-        void drawOpt;
+        drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
@@ -1246,6 +1320,8 @@
         ctx.moveTo(0, mid);
         ctx.lineTo(wCss, mid);
         ctx.stroke();
+
+        drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
     }
 
     function setLaneContentEndMarker(el, _contentDurSec) {
@@ -1255,7 +1331,9 @@
 
     function updateLaneContentEndMarkers() {
         setLaneContentEndMarker(document.getElementById('audioWaveformContentEnd'), 0);
-        for (let i = 0; i < 2; i++) {
+        const extraCount =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        for (let i = 0; i < extraCount; i++) {
             setLaneContentEndMarker(document.getElementById('extraAudioContentEnd' + i), 0);
         }
     }

@@ -21,6 +21,12 @@
                 fader: document.getElementById('trackLaneFader1'),
                 faderDb: document.getElementById('trackLaneFaderDb1'),
             },
+            {
+                meterBar: document.getElementById('trackLaneMeter2'),
+                meterDb: document.getElementById('trackLaneMeterDb2'),
+                fader: document.getElementById('trackLaneFader2'),
+                faderDb: document.getElementById('trackLaneFaderDb2'),
+            },
         ],
     };
 

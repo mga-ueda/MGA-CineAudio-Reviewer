@@ -32,7 +32,7 @@
     <div id="main-drop-zone" tabindex="0" role="button" aria-label="動画・追加音声ファイルをドロップして読み込み">
         <strong class="drop-zone-title">レビューする動画・追加音声（WAV 等）をドロップ（またはクリックで選択）</strong>
         <p class="drop-zone-note drop-zone-note--targets">動画 → 上の枠・<strong>映像エリア</strong>　／　音声 → 上の枠・<strong>波形表示枠</strong></p>
-        <p class="drop-zone-note">動画は<strong>ブラウザが再生できる形式</strong>、追加音声は <strong>WAV / FLAC / MP3 等</strong>（最大2トラック）。Google Chrome の利用を推奨します。</p>
+        <p class="drop-zone-note">動画は<strong>ブラウザが再生できる形式</strong>、追加音声は <strong>WAV / FLAC / MP3 等</strong>（最大3トラック）。Google Chrome の利用を推奨します。</p>
         <p class="drop-zone-note drop-zone-note--privacy">動画は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。映像・動画音声・追加音声は同一の Web Audio でミックスされ、同期再生されます。</p>
     </div>
     </div>
@@ -155,6 +155,29 @@
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="extraAudioStatus1" hidden></span>
                 </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta2" hidden>
+                    <div class="audio-waveform-lane-meta__row">
+                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle2">Ex 3 Track</span>
+                        <div class="track-mix-actions">
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn2" disabled title="Solo" aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn2" disabled title="Mute" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn2" title="Clear (hide lane)">×</button>
+                        </div>
+                    </div>
+                    <div class="track-lane-controls">
+                        <div class="track-lane-meter-row">
+                            <div class="track-lane-meter" aria-hidden="true">
+                                <div class="track-lane-meter__bar" id="trackLaneMeter2"></div>
+                            </div>
+                            <span class="track-lane-meter-db" id="trackLaneMeterDb2" aria-hidden="true">-96.0 dB</span>
+                        </div>
+                        <div class="track-lane-fader-row">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader2" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 3 volume">
+                            <span class="track-lane-fader-db" id="trackLaneFaderDb2">0.0 dB</span>
+                        </div>
+                    </div>
+                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus2" hidden></span>
+                </div>
             </div>
             <div
                 class="audio-waveform-composite__lanes"
@@ -186,6 +209,14 @@
                         <canvas id="extraAudioCanvas1" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
                         <span class="audio-waveform-lane__file-name" id="extraAudioFileName1" hidden aria-hidden="true"></span>
                         <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd1" hidden aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane2" hidden>
+                    <div class="audio-waveform-lane__track" id="extraAudioTrack2" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas id="extraAudioCanvas2" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
+                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName2" hidden aria-hidden="true"></span>
+                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd2" hidden aria-hidden="true"></div>
                     </div>
                 </div>
                 <div
@@ -352,7 +383,7 @@
                     <span class="shortcut-sheet__chip">Fast zoom 3× [Ctl+Wheel on waveform]</span>
                     <span class="shortcut-sheet__chip">Zoom in/out [+][−]</span>
                     <span class="shortcut-sheet__chip">Fast zoom 3× [Sft+=][Sft+−]</span>
-                    <span class="shortcut-sheet__chip">Reset zoom [R]</span>
+                    <span class="shortcut-sheet__chip">Reset zoom [￥]</span>
                     <span class="shortcut-sheet__chip">Scroll timeline [Sft+Wheel on waveform]</span>
                     <span class="shortcut-sheet__chip">Fast scroll 3× [Sft+Ctl+Wheel on waveform]</span>
                     <span class="shortcut-sheet__chip">Scroll timeline [PgUp][PgDn]</span>
@@ -373,10 +404,10 @@
                 </div>
                 <div class="shortcut-sheet__cat">Mix</div>
                 <div class="shortcut-sheet__items">
-                    <span class="shortcut-sheet__chip">Solo lane 1 / 2 / 3 (visible order) [1] [2] [3]</span>
-                    <span class="shortcut-sheet__chip">Mute lane 1 / 2 / 3 (visible order) [Q] [W] [E]</span>
-                    <span class="shortcut-sheet__chip">Vol +1 dB lane 1 / 2 / 3 (hold; repeat stops at 0 dB until release) [A] [S] [D]</span>
-                    <span class="shortcut-sheet__chip">Vol −1 dB lane 1 / 2 / 3 (hold; repeat stops at 0 dB until release) [Z] [X] [C]</span>
+                    <span class="shortcut-sheet__chip">Solo lane 1–4 (visible order) [1] [2] [3] [4]</span>
+                    <span class="shortcut-sheet__chip">Mute lane 1–4 (visible order) [Q] [W] [E] [R]</span>
+                    <span class="shortcut-sheet__chip">Vol +1 dB lane 1–4 (hold; repeat stops at 0 dB until release) [A] [S] [D] [F]</span>
+                    <span class="shortcut-sheet__chip">Vol −1 dB lane 1–4 (hold; repeat stops at 0 dB until release) [Z] [X] [C] [V]</span>
                 </div>
                 <div class="shortcut-sheet__cat">Markers</div>
                 <div class="shortcut-sheet__items">

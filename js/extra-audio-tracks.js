@@ -1,6 +1,7 @@
-    const EXTRA_TRACK_COUNT = 2;
+    const EXTRA_TRACK_COUNT =
+        typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
     const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio Track';
-    const EXTRA_TRACK_DEFAULT_LABELS = ['Ex 1 Track', 'Ex 2 Track'];
+    const EXTRA_TRACK_DEFAULT_LABELS = ['Ex 1 Track', 'Ex 2 Track', 'Ex 3 Track'];
 
     function setLaneWaveformFileNameEl(el, name, tip) {
         if (!el) return;
@@ -48,25 +49,9 @@
     /** Re-start extra sources when drift from master transport exceeds this (seconds). */
     const EXTRA_AUDIO_RESYNC_DRIFT_SEC = 0.045;
 
-    const EXTRA_AUDIO_FILE_EXT = new Set([
-        '.wav',
-        '.wave',
-        '.flac',
-        '.ogg',
-        '.oga',
-        '.mp3',
-        '.m4a',
-        '.aac',
-        '.aif',
-        '.aiff',
-        '.wma',
-        '.opus',
-        '.webm',
-    ]);
-
     const extraTrackUi = [];
     /** クリアで閉じる／新規動画・ドロップで開く空き Ex レーン枠 */
-    const extraLaneUiOpen = [false, false];
+    const extraLaneUiOpen = [false, false, false];
     const extraTracks = [
         {
             file: null,
@@ -81,6 +66,7 @@
             gainNode: null,
             analyser: null,
             loadGen: 0,
+            timelineStartSec: 0,
         },
         {
             file: null,
@@ -95,6 +81,22 @@
             gainNode: null,
             analyser: null,
             loadGen: 0,
+            timelineStartSec: 0,
+        },
+        {
+            file: null,
+            buffer: null,
+            peaks: null,
+            persistBlob: null,
+            restoreDurationHint: 0,
+            muted: false,
+            solo: false,
+            volLinear: 1,
+            source: null,
+            gainNode: null,
+            analyser: null,
+            loadGen: 0,
+            timelineStartSec: 0,
         },
     ];
 
@@ -437,6 +439,38 @@
         return true;
     }
 
+    function removeExtraSlotFromSessionMixRestore(slot) {
+        if (!sessionMixRestore || !Array.isArray(sessionMixRestore.extra)) return;
+        sessionMixRestore.extra = sessionMixRestore.extra.filter((e) => !e || e.slot !== slot);
+    }
+
+    /** レーン削除時: フェーダーを 0 dB（線形 1）に戻し、復元用ミックス状態からも除外 */
+    function resetExtraTrackMixToDefault(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return;
+        tr.muted = false;
+        tr.solo = false;
+        tr.volLinear = 1;
+        removeExtraSlotFromSessionMixRestore(slot);
+        applyExtraTrackLaneGain(slot);
+    }
+
+    function resetVideoTrackMixToDefault() {
+        videoMix.muted = false;
+        videoMix.solo = false;
+        videoMix.volLinear = 1;
+        if (sessionMixRestore && sessionMixRestore.video) {
+            sessionMixRestore.video = {
+                muted: false,
+                solo: false,
+                vol: 1,
+            };
+        }
+        refreshReviewMixUi();
+    }
+
+    window.resetVideoTrackMixToDefault = resetVideoTrackMixToDefault;
+
     function applyExtraSlotMixFromSessionRestore(slot) {
         if (!sessionMixRestore || !Array.isArray(sessionMixRestore.extra)) return;
         const entry = sessionMixRestore.extra.find((e) => e && e.slot === slot);
@@ -495,7 +529,7 @@
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
-    /** 画面上に表示されているレーンだけ、上から 1・2・3 番目（Video は枠表示中なら常に 1 枠目）。 */
+    /** 画面上に表示されているレーンだけ、上から 1〜4 番目（Video は枠表示中なら常に 1 枠目）。 */
     function getVisibleMixLaneTargets() {
         const out = [];
         if (typeof isVideoAudioLaneShown === 'function' && isVideoAudioLaneShown()) {
@@ -580,19 +614,6 @@
         return stoppedAtUnity;
     }
 
-    function isUsableAudioFile(f) {
-        const type = (f.type || '').toLowerCase();
-        if (type.startsWith('audio/')) return true;
-        const name = String(f.name || '').toLowerCase();
-        const dot = name.lastIndexOf('.');
-        const ext = dot >= 0 ? name.slice(dot) : '';
-        return EXTRA_AUDIO_FILE_EXT.has(ext);
-    }
-
-    function pickAudioFiles(fileList) {
-        return Array.from(fileList).filter(isUsableAudioFile);
-    }
-
     function ensureReviewMixCtx() {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return null;
@@ -607,6 +628,58 @@
     function extraTrackBySlot(slot) {
         return extraTracks[slot] || null;
     }
+
+    function clampExtraTrackTimelineStartSec(slot, sec) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return 0;
+        const n = Number(sec);
+        if (!Number.isFinite(n)) return 0;
+        const step =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 24;
+        return Math.max(0, Math.round(n / step) * step);
+    }
+
+    function getExtraTrackTimelineStartSec(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return 0;
+        const n = Number(tr.timelineStartSec);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+
+    function extraTrackTimelineEndSec(slot) {
+        const start = getExtraTrackTimelineStartSec(slot);
+        const dur = extraTrackBufferDuration(slot);
+        return start + (dur > 0 ? dur : 0);
+    }
+
+    function setExtraTrackTimelineStartSec(slot, sec, opt) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.buffer) return;
+        const next = clampExtraTrackTimelineStartSec(slot, sec);
+        if (Math.abs(next - getExtraTrackTimelineStartSec(slot)) < 0.0005) return;
+        tr.timelineStartSec = next;
+        if (opt && opt.skipRedraw) return;
+        if (typeof drawExtraTrackWaveform === 'function') drawExtraTrackWaveform(slot);
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (!(opt && opt.skipPersist)) {
+            if (typeof schedulePersistExtraTrackSlot === 'function') {
+                schedulePersistExtraTrackSlot(slot);
+            } else if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        }
+    }
+
+    window.getExtraTrackTimelineStartSec = getExtraTrackTimelineStartSec;
+    window.setExtraTrackTimelineStartSec = setExtraTrackTimelineStartSec;
+    window.extraTrackTimelineEndSec = extraTrackTimelineEndSec;
 
     function getExtraUi(slot) {
         return extraTrackUi[slot] || null;
@@ -648,7 +721,7 @@
         return 0;
     }
 
-    function expectedTransportSecForTrack(tr, ctx) {
+    function expectedTransportSecForTrack(tr, ctx, slot) {
         if (
             !tr ||
             tr.source == null ||
@@ -657,28 +730,102 @@
         ) {
             return null;
         }
-        return tr.playbackAnchorTransportSec + (ctx.currentTime - tr.playbackAnchorCtxTime);
+        let expected;
+        if (ctx.currentTime < tr.playbackAnchorCtxTime) {
+            expected = tr.playbackAnchorTransportSec;
+        } else {
+            expected =
+                tr.playbackAnchorTransportSec + (ctx.currentTime - tr.playbackAnchorCtxTime);
+        }
+        if (slot >= 0 && slot < EXTRA_TRACK_COUNT) {
+            const end = extraTrackPlayableTransportEndSec(slot);
+            if (Number.isFinite(end) && end > 0) {
+                expected = Math.min(expected, end);
+            }
+        }
+        return expected;
+    }
+
+    function isExtraTrackSourceAudibleOnCtx(tr, ctx) {
+        if (!tr || tr.source == null || !Number.isFinite(tr.playbackAnchorCtxTime)) {
+            return false;
+        }
+        return ctx.currentTime >= tr.playbackAnchorCtxTime - 0.0005;
+    }
+
+    function extraTrackPlayableTransportEndSec(slot) {
+        return getExtraTrackTimelineStartSec(slot) + extraTrackBufferDuration(slot);
+    }
+
+    function isExtraTrackWithinPlayableTimeline(slot, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        const start = getExtraTrackTimelineStartSec(slot);
+        const end = extraTrackPlayableTransportEndSec(slot);
+        return t >= start - 0.0005 && t < end - 0.002;
+    }
+
+    function shouldExtraTrackSourceBePlaying(slot) {
+        if (!isExtraTrackAudible(slot)) return false;
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.buffer) return false;
+        if (!isTransportPlayingForExtra()) return false;
+        const audioT = getAudioSyncTransportSec();
+        if (!isExtraTrackWithinPlayableTimeline(slot, audioT)) {
+            return false;
+        }
+        const ctx = ensureReviewMixCtx();
+        if (tr.source && ctx && !isExtraTrackSourceAudibleOnCtx(tr, ctx)) {
+            return true;
+        }
+        return true;
+    }
+
+    function stopExtraTrackSourceIfPastPlayableEnd(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.source) return;
+        const audioT = getAudioSyncTransportSec();
+        if (!isExtraTrackWithinPlayableTimeline(slot, audioT)) {
+            stopExtraTrackSource(slot);
+        }
     }
 
     function extraTrackRoutingMismatch() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
-            const shouldPlay = isExtraTrackAudible(i) && tr && tr.buffer;
+            const shouldPlay = shouldExtraTrackSourceBePlaying(i);
             const playing = !!(tr && tr.source);
-            if (shouldPlay !== playing) return true;
+            if (shouldPlay === playing) continue;
+            if (!shouldPlay && playing) {
+                stopExtraTrackSourceIfPastPlayableEnd(i);
+                if (!tr || !tr.source) continue;
+            }
+            return true;
         }
         return false;
     }
 
+    /** 再生中に Ex ソースの開始／停止がトランスポートとずれている */
+    function reviewMixNeedsPlaybackSync() {
+        if (!isTransportPlayingForExtra()) return false;
+        return extraTrackRoutingMismatch();
+    }
+
+    window.reviewMixNeedsPlaybackSync = reviewMixNeedsPlaybackSync;
+
     function extraTracksNeedResync(targetSec, ctx) {
         if (extraTrackRoutingMismatch()) return true;
-        let anyAudible = false;
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             if (!isExtraTrackAudible(i)) continue;
-            anyAudible = true;
+            if (!shouldExtraTrackSourceBePlaying(i)) {
+                const tr = extraTrackBySlot(i);
+                if (tr && tr.source) return true;
+                continue;
+            }
             const tr = extraTrackBySlot(i);
             if (!tr || !tr.source) return true;
-            const expected = expectedTransportSecForTrack(tr, ctx);
+            if (!isExtraTrackSourceAudibleOnCtx(tr, ctx)) continue;
+            const expected = expectedTransportSecForTrack(tr, ctx, i);
             if (
                 expected == null ||
                 Math.abs(expected - targetSec) > EXTRA_AUDIO_RESYNC_DRIFT_SEC
@@ -686,7 +833,7 @@
                 return true;
             }
         }
-        return !anyAudible;
+        return false;
     }
 
     function acquireExtraMixScheduleTime(ctx, opt) {
@@ -730,17 +877,19 @@
     /** Transport position implied by running extra BufferSources (AudioContext clock). */
     function getTransportSecFromActiveExtraMix(ctx) {
         let best = null;
-        let anyAudible = false;
+        let anyActive = false;
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             if (!isExtraTrackAudible(i)) continue;
-            anyAudible = true;
+            if (!shouldExtraTrackSourceBePlaying(i)) continue;
             const tr = extraTrackBySlot(i);
-            if (!tr || !tr.source) return null;
-            const expected = expectedTransportSecForTrack(tr, ctx);
+            if (!tr || !tr.source) continue;
+            if (!isExtraTrackSourceAudibleOnCtx(tr, ctx)) continue;
+            anyActive = true;
+            const expected = expectedTransportSecForTrack(tr, ctx, i);
             if (expected == null || !Number.isFinite(expected)) return null;
             if (best == null || expected > best) best = expected;
         }
-        return anyAudible ? best : null;
+        return anyActive ? best : null;
     }
 
     /**
@@ -816,6 +965,7 @@
             return null;
         }
         const peaks = clonePeaksForPersist(tr.peaks);
+        const timelineStart = getExtraTrackTimelineStartSec(slot);
         return {
             slot,
             name: tr.file.name,
@@ -824,6 +974,7 @@
             byteLength: tr.persistBlob.size,
             duration: tr.buffer.duration,
             peaks,
+            timelineStartSec: timelineStart > 0 ? timelineStart : 0,
         };
     }
 
@@ -947,6 +1098,10 @@
         setExtraTrackLaneUiOpen(slot, true);
         tr.peaks = entry.peaks;
         tr.restoreDurationHint = entry.duration;
+        tr.timelineStartSec =
+            Number.isFinite(entry.timelineStartSec) && entry.timelineStartSec > 0
+                ? clampExtraTrackTimelineStartSec(slot, entry.timelineStartSec)
+                : 0;
         tr.file = {
             name: entry.name || 'audio.wav',
             lastModified:
@@ -1092,10 +1247,29 @@
             return;
         }
         resetExtraMixScheduleTime();
-        stopAllExtraTrackSources();
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
-            startExtraTrackSource(i, audioT, {
+            stopExtraTrackSourceIfPastPlayableEnd(i);
+            const tr = extraTrackBySlot(i);
+            if (!shouldExtraTrackSourceBePlaying(i)) {
+                stopExtraTrackSource(i);
+                continue;
+            }
+            const timelineStart = getExtraTrackTimelineStartSec(i);
+            const bufferOff = audioT - timelineStart;
+            if (!tr || !tr.buffer || bufferOff < 0 || bufferOff >= tr.buffer.duration - 0.002) {
+                stopExtraTrackSource(i);
+                continue;
+            }
+            let needsStart = force || !tr.source;
+            if (!needsStart && tr.source && isExtraTrackSourceAudibleOnCtx(tr, ctx)) {
+                const expected = expectedTransportSecForTrack(tr, ctx, i);
+                needsStart =
+                    expected == null ||
+                    Math.abs(expected - masterT) > EXTRA_AUDIO_RESYNC_DRIFT_SEC;
+            }
+            if (!needsStart) continue;
+            startExtraTrackSource(i, bufferOff, {
                 when: scheduleWhen,
                 transportSec: masterT,
             });
@@ -1348,10 +1522,9 @@
             typeof timelineWaveformFillGradient === 'function'
                 ? timelineWaveformFillGradient(ctx, hCss, 'extra', audible)
                 : null;
-        const endDrawOpt =
-            typeof timelineContentEndDrawOpt === 'function'
-                ? timelineContentEndDrawOpt()
-                : null;
+        const endDrawOpt = {
+            timelineStartSec: getExtraTrackTimelineStartSec(slot),
+        };
         drawPeaksForMasterTimeline(ctx, tr ? tr.peaks : null, wCss, hCss, contentDur, grad, endDrawOpt);
     }
 
@@ -1557,6 +1730,8 @@
     window.restoreExtraTrackLanesForNewVideo = restoreExtraTrackLanesForNewVideo;
     window.extraTrackBufferDuration = extraTrackBufferDuration;
     window.isExtraTrackLoaded = isExtraTrackLoaded;
+    window.hasAnyExtraTrackLoaded = hasAnyExtraTrackLoaded;
+    window.EXTRA_TRACK_COUNT = EXTRA_TRACK_COUNT;
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
     window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
@@ -1610,9 +1785,13 @@
         const tr = extraTrackBySlot(slot);
         if (!tr) return;
         if (!tr.buffer) {
+            resetExtraTrackMixToDefault(slot);
             setExtraTrackLaneUiOpen(slot, false, { deferLayout: true });
             setExtraTrackStatus(slot, 'Not Loaded');
             refreshExtraTrackUi(slot);
+            if (typeof refreshTrackLaneControlsUi === 'function') {
+                refreshTrackLaneControlsUi();
+            }
             if (typeof refreshWaveformCompositeLaneLayout === 'function') {
                 refreshWaveformCompositeLaneLayout();
             }
@@ -1628,9 +1807,8 @@
         tr.peaks = null;
         tr.persistBlob = null;
         tr.restoreDurationHint = 0;
-        tr.muted = false;
-        tr.solo = false;
-        tr.volLinear = 1;
+        tr.timelineStartSec = 0;
+        resetExtraTrackMixToDefault(slot);
         try {
             if (tr.analyser) tr.analyser.disconnect();
         } catch (_) {}
@@ -1639,6 +1817,9 @@
         setExtraTrackLoaded(slot, false);
         setExtraTrackStatus(slot, 'Not Loaded');
         refreshExtraTrackUi(slot);
+        if (typeof refreshTrackLaneControlsUi === 'function') {
+            refreshTrackLaneControlsUi();
+        }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -1765,8 +1946,14 @@
         tr.file = file;
         tr.buffer = buffer;
         tr.restoreDurationHint = 0;
+        if (opt && opt.fromSessionRestore && Number.isFinite(opt.timelineStartSec)) {
+            tr.timelineStartSec = clampExtraTrackTimelineStartSec(slot, opt.timelineStartSec);
+        } else {
+            tr.timelineStartSec = 0;
+        }
         tr.muted = false;
         tr.solo = false;
+        tr.volLinear = 1;
 
         try {
             await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1795,7 +1982,13 @@
             );
             setExtraTrackLoaded(slot, true, { skipLayoutRefresh: true });
             refreshExtraTrackUi(slot);
-            applyExtraSlotMixFromSessionRestore(slot);
+            if (opt && opt.fromSessionRestore) {
+                applyExtraSlotMixFromSessionRestore(slot);
+            } else {
+                removeExtraSlotFromSessionMixRestore(slot);
+                applyExtraTrackLaneGain(slot);
+                refreshReviewMixUi();
+            }
             writeLog(
                 'Extra audio ' +
                     (slot + 1) +
@@ -1843,7 +2036,7 @@
                 ? startSlot
                 : firstEmptyExtraSlot();
         if (slot < 0) {
-            writeLog('Extra audio: Ex 1 and Ex 2 are full — drop ignored');
+            writeLog('Extra audio: all Ex slots are full — drop ignored');
             return;
         }
         let ignored = 0;
@@ -1861,7 +2054,7 @@
         }
         if (ignored > 0) {
             writeLog(
-                'Extra audio: Ex 1 and Ex 2 are full — ' +
+                'Extra audio: all Ex slots are full — ' +
                     ignored +
                     ' file(s) ignored',
             );
@@ -1874,6 +2067,8 @@
         if (lane0) return 0;
         const lane1 = target.closest('#extraAudioLane1, #extraAudioMeta1');
         if (lane1) return 1;
+        const lane2 = target.closest('#extraAudioLane2, #extraAudioMeta2');
+        if (lane2) return 2;
         return -1;
     }
 
@@ -1889,7 +2084,17 @@
         if (typeof isVideoAudioLaneShown === 'function' && isVideoAudioLaneShown()) {
             return true;
         }
-        return isExtraTrackLoaded(0) || isExtraTrackLoaded(1);
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (isExtraTrackLoaded(i)) return true;
+        }
+        return false;
+    }
+
+    function hasAnyExtraTrackLoaded() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (isExtraTrackLoaded(i)) return true;
+        }
+        return false;
     }
 
     function resolveExtraSlotForAudioDrop(target) {
@@ -1926,11 +2131,14 @@
         }
         const slot = resolveExtraSlotForAudioDrop(dropTarget);
         if (slot < 0) {
-            writeLog('Extra audio: Ex 1 and Ex 2 are full — drop ignored');
+            writeLog('Extra audio: all Ex slots are full — drop ignored');
             return;
         }
         assignExtraAudioFiles(audios, slot);
     }
+
+    window.assignExtraAudioFiles = assignExtraAudioFiles;
+    window.assignExtraAudioFilesFromDrop = assignExtraAudioFilesFromDrop;
 
     function initExtraAudioTracksUi() {
         videoAudioSoloBtn = document.getElementById('videoAudioSoloBtn');

@@ -64,7 +64,9 @@
 
     /** Ex トラック1本を即時マージ保存（リロード直前の欠落防止） */
     async function persistExtraTrackEntryToSession(entry) {
-        if (!window.indexedDB || !entry || entry.slot < 0 || entry.slot >= 2) return;
+        const maxExtra =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        if (!window.indexedDB || !entry || entry.slot < 0 || entry.slot >= maxExtra) return;
         if (!entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
         let row;
         try {
@@ -88,7 +90,9 @@
     }
 
     async function removeExtraTrackFromSession(slot) {
-        if (!window.indexedDB || slot < 0 || slot >= 2) return;
+        const maxExtra =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        if (!window.indexedDB || slot < 0 || slot >= maxExtra) return;
         let row;
         try {
             row = await idbGet(IDB_KEY_LAST);
@@ -191,14 +195,28 @@
             pendingLaneUiRestore =
                 row.laneUi && typeof row.laneUi === 'object' ? row.laneUi : null;
             if (Array.isArray(row.extraTracks) && row.extraTracks.length > 0) {
+                const defaultExtraLaneOpen = () => {
+                    const n =
+                        typeof window.EXTRA_TRACK_COUNT === 'number'
+                            ? window.EXTRA_TRACK_COUNT
+                            : 3;
+                    return Array(n).fill(false);
+                };
                 if (!pendingLaneUiRestore || typeof pendingLaneUiRestore !== 'object') {
-                    pendingLaneUiRestore = { videoLaneOpen: true, extraLanesOpen: [false, false] };
+                    pendingLaneUiRestore = {
+                        videoLaneOpen: true,
+                        extraLanesOpen: defaultExtraLaneOpen(),
+                    };
                 }
                 if (!Array.isArray(pendingLaneUiRestore.extraLanesOpen)) {
-                    pendingLaneUiRestore.extraLanesOpen = [false, false];
+                    pendingLaneUiRestore.extraLanesOpen = defaultExtraLaneOpen();
                 }
                 for (const entry of row.extraTracks) {
-                    if (entry && entry.slot >= 0 && entry.slot < 2) {
+                    const maxExtra =
+                        typeof window.EXTRA_TRACK_COUNT === 'number'
+                            ? window.EXTRA_TRACK_COUNT
+                            : 3;
+                    if (entry && entry.slot >= 0 && entry.slot < maxExtra) {
                         pendingLaneUiRestore.extraLanesOpen[entry.slot] = true;
                     }
                 }
@@ -236,7 +254,11 @@
                 }
                 let restoredCount = 0;
                 for (const entry of row.extraTracks) {
-                    if (!entry || entry.slot < 0 || entry.slot >= 2) continue;
+                    const maxExtraRestore =
+                        typeof window.EXTRA_TRACK_COUNT === 'number'
+                            ? window.EXTRA_TRACK_COUNT
+                            : 3;
+                    if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) continue;
                     const blobBytes =
                         typeof entry.byteLength === 'number'
                             ? entry.byteLength
@@ -281,7 +303,10 @@
                         writeLog(
                             'Extra audio ' + (entry.slot + 1) + ': restore decode start',
                         );
-                        await loadExtraTrackFile(entry.slot, af, { fromSessionRestore: true });
+                        await loadExtraTrackFile(entry.slot, af, {
+                            fromSessionRestore: true,
+                            timelineStartSec: entry.timelineStartSec,
+                        });
                         if (
                             typeof isExtraTrackLoaded === 'function' &&
                             isExtraTrackLoaded(entry.slot)
