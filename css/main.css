@@ -1180,7 +1180,7 @@
         }
         .audio-waveform-lane-meta__row {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 22px 22px 24px;
+            grid-template-columns: minmax(0, 1fr) 22px 22px 22px;
             column-gap: 4px;
             align-items: center;
             min-height: 0;
@@ -1446,7 +1446,6 @@
         }
         .track-mix-btn--clear:not(.track-mix-btn--spacer) {
             font-weight: 400;
-            min-width: 24px;
             color: #ff8a8a;
             border-color: rgba(220, 70, 85, 0.75);
             background: rgba(160, 32, 48, 0.42);
