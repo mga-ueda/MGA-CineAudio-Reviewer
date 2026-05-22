@@ -1265,12 +1265,13 @@
             border-radius: 3px;
             background-image: linear-gradient(
                 90deg,
-                #021820 0%,
-                #0d4a62 28%,
-                #3ab8e8 62%,
-                #c8efff 88%,
-                #f8feff 100%
+                #000000 0%,
+                #ff8818 50%,
+                #ffffff 100%
             );
+            background-size: var(--track-lane-control-w) 100%;
+            background-repeat: no-repeat;
+            background-position: left center;
             opacity: 0.72;
             transition: width 0.09s ease-out;
         }
@@ -1326,7 +1327,7 @@
                     rgba(255, 255, 255, 0) calc(70% + 0.5px),
                     rgba(255, 255, 255, 0) 100%
                 ),
-                linear-gradient(90deg, #050810 0%, #0f2030 42%, #153045 58%, #080c14 100%);
+                linear-gradient(90deg, #0a0404 0%, #2a0c0c 42%, #481410 58%, #0c0404 100%);
             box-shadow:
                 inset 0 2px 7px rgba(0, 0, 0, 0.82),
                 inset 0 0 0 1px rgba(255, 255, 255, 0.055);
@@ -1359,7 +1360,7 @@
             width: 100%;
             height: 8px;
             border-radius: 4px;
-            background: linear-gradient(90deg, #050810 0%, #0f2030 42%, #153045 58%, #080c14 100%);
+            background: linear-gradient(90deg, #0a0404 0%, #2a0c0c 42%, #481410 58%, #0c0404 100%);
             box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.82);
         }
         .track-lane-fader:focus-visible::-webkit-slider-thumb {
@@ -2293,7 +2294,7 @@
         .transport-bar #masterVolSlider::-webkit-slider-runnable-track {
             height: 8px;
             border-radius: 999px;
-            background: linear-gradient(90deg, #0a0e16 0%, #162434 50%, #0a0e16 100%);
+            background: linear-gradient(90deg, #0a0404 0%, #381414 50%, #0a0404 100%);
             box-shadow:
                 inset 0 2px 5px rgba(0, 0, 0, 0.78),
                 inset 0 0 0 1px rgba(255, 255, 255, 0.05);
@@ -2314,7 +2315,7 @@
         .transport-bar #masterVolSlider::-moz-range-track {
             height: 8px;
             border-radius: 999px;
-            background: linear-gradient(90deg, #0a0e16 0%, #162434 50%, #0a0e16 100%);
+            background: linear-gradient(90deg, #0a0404 0%, #381414 50%, #0a0404 100%);
             box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.78);
         }
         .transport-bar #masterVolSlider::-moz-range-thumb {
