@@ -227,6 +227,76 @@
     }
     videoMain.addEventListener('ended', onVideoEnded);
 
+    const MIX_VOL_REPEAT_INITIAL_MS = 400;
+    const MIX_VOL_REPEAT_MS = 50;
+    const mixVolActiveKeys = new Map();
+    let mixVolRepeatTimer = null;
+
+    function mixVolHasActiveRepeat() {
+        for (const hold of mixVolActiveKeys.values()) {
+            if (!hold.unityPaused) return true;
+        }
+        return false;
+    }
+
+    function mixVolRepeatTick() {
+        mixVolRepeatTimer = null;
+        if (mixVolActiveKeys.size === 0) return;
+        if (typeof adjustMixLaneVolumeByDisplayIndex !== 'function') return;
+        for (const hold of mixVolActiveKeys.values()) {
+            if (hold.unityPaused) continue;
+            const stopped = adjustMixLaneVolumeByDisplayIndex(
+                hold.displayIndex,
+                hold.deltaDb,
+            );
+            if (stopped) hold.unityPaused = true;
+        }
+        if (mixVolHasActiveRepeat()) {
+            mixVolRepeatTimer = setTimeout(mixVolRepeatTick, MIX_VOL_REPEAT_MS);
+        }
+    }
+
+    function scheduleMixVolRepeat() {
+        if (mixVolRepeatTimer != null) return;
+        mixVolRepeatTimer = setTimeout(mixVolRepeatTick, MIX_VOL_REPEAT_INITIAL_MS);
+    }
+
+    function stopMixVolRepeat() {
+        if (mixVolRepeatTimer != null) {
+            clearTimeout(mixVolRepeatTimer);
+            mixVolRepeatTimer = null;
+        }
+    }
+
+    function handleMixVolKeydown(e, displayIndex, deltaDb) {
+        if (e.repeat) return;
+        e.preventDefault();
+        if (mixVolActiveKeys.has(e.code)) return;
+        mixVolActiveKeys.set(e.code, {
+            displayIndex,
+            deltaDb,
+            unityPaused: false,
+        });
+        if (typeof adjustMixLaneVolumeByDisplayIndex === 'function') {
+            const stopped = adjustMixLaneVolumeByDisplayIndex(displayIndex, deltaDb);
+            if (stopped) mixVolActiveKeys.get(e.code).unityPaused = true;
+        }
+        if (!mixVolActiveKeys.get(e.code).unityPaused) {
+            scheduleMixVolRepeat();
+        }
+    }
+
+    function handleMixVolKeyup(e) {
+        if (!mixVolActiveKeys.has(e.code)) return;
+        mixVolActiveKeys.delete(e.code);
+        if (mixVolActiveKeys.size === 0) stopMixVolRepeat();
+    }
+
+    function clearMixVolActiveKeys() {
+        mixVolActiveKeys.clear();
+        stopMixVolRepeat();
+    }
+
     window.addEventListener('keydown', (e) => {
         if (typeof handleMarkerEscapeKeydown === 'function' && handleMarkerEscapeKeydown(e)) {
             return;
@@ -256,7 +326,12 @@
                 e.code === 'Digit3' ||
                 e.code === 'KeyQ' ||
                 e.code === 'KeyW' ||
-                e.code === 'KeyE';
+                e.code === 'KeyE' ||
+                e.code === 'KeyS' ||
+                e.code === 'KeyD' ||
+                e.code === 'KeyZ' ||
+                e.code === 'KeyX' ||
+                e.code === 'KeyC';
             if (appKey && typeof endAudioWaveformScrub === 'function') endAudioWaveformScrub();
         }
         const waveFocus = audioWaveformLanesTracks || audioWaveformTrack;
@@ -274,7 +349,12 @@
                 e.code === 'Digit3' ||
                 e.code === 'KeyQ' ||
                 e.code === 'KeyW' ||
-                e.code === 'KeyE';
+                e.code === 'KeyE' ||
+                e.code === 'KeyS' ||
+                e.code === 'KeyD' ||
+                e.code === 'KeyZ' ||
+                e.code === 'KeyX' ||
+                e.code === 'KeyC';
             if (appKey && waveFocus) waveFocus.blur();
         }
 
@@ -296,38 +376,53 @@
             return;
         }
 
-        if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey
-        ) {
-            const mixSoloByDigit = {
-                Digit1: 0,
-                Digit2: 1,
-                Digit3: 2,
+        if (!e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+            const mixVolUpByKey = {
+                KeyA: 0,
+                KeyS: 1,
+                KeyD: 2,
             };
-            const mixMuteByKey = {
-                KeyQ: 0,
-                KeyW: 1,
-                KeyE: 2,
+            const mixVolDownByKey = {
+                KeyZ: 0,
+                KeyX: 1,
+                KeyC: 2,
             };
-            if (Object.prototype.hasOwnProperty.call(mixSoloByDigit, e.code)) {
-                e.preventDefault();
-                const displayIndex = mixSoloByDigit[e.code];
-                if (typeof toggleMixSoloByDisplayIndex === 'function') {
-                    toggleMixSoloByDisplayIndex(displayIndex);
-                }
+            if (Object.prototype.hasOwnProperty.call(mixVolUpByKey, e.code)) {
+                handleMixVolKeydown(e, mixVolUpByKey[e.code], 1);
                 return;
             }
-            if (Object.prototype.hasOwnProperty.call(mixMuteByKey, e.code)) {
-                e.preventDefault();
-                const displayIndex = mixMuteByKey[e.code];
-                if (typeof toggleMixMuteByDisplayIndex === 'function') {
-                    toggleMixMuteByDisplayIndex(displayIndex);
-                }
+            if (Object.prototype.hasOwnProperty.call(mixVolDownByKey, e.code)) {
+                handleMixVolKeydown(e, mixVolDownByKey[e.code], -1);
                 return;
+            }
+
+            if (!e.repeat) {
+                const mixSoloByDigit = {
+                    Digit1: 0,
+                    Digit2: 1,
+                    Digit3: 2,
+                };
+                const mixMuteByKey = {
+                    KeyQ: 0,
+                    KeyW: 1,
+                    KeyE: 2,
+                };
+                if (Object.prototype.hasOwnProperty.call(mixSoloByDigit, e.code)) {
+                    e.preventDefault();
+                    const displayIndex = mixSoloByDigit[e.code];
+                    if (typeof toggleMixSoloByDisplayIndex === 'function') {
+                        toggleMixSoloByDisplayIndex(displayIndex);
+                    }
+                    return;
+                }
+                if (Object.prototype.hasOwnProperty.call(mixMuteByKey, e.code)) {
+                    e.preventDefault();
+                    const displayIndex = mixMuteByKey[e.code];
+                    if (typeof toggleMixMuteByDisplayIndex === 'function') {
+                        toggleMixMuteByDisplayIndex(displayIndex);
+                    }
+                    return;
+                }
             }
         }
 
@@ -488,6 +583,11 @@
             })();
         }
     });
+
+    window.addEventListener('keyup', (e) => {
+        handleMixVolKeyup(e);
+    });
+    window.addEventListener('blur', clearMixVolActiveKeys);
 
     function persistOnPageExit() {
         writePrefs();

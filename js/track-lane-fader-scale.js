@@ -65,6 +65,8 @@
     window.trackLaneFormatDbValue = formatDbValue;
 
     window.trackLaneClampGainLinear = clampGainLinear;
+    window.trackLaneLinearGainToDb = linearGainToDb;
+    window.trackLaneLinearGainFromDb = linearGainFromDb;
     window.trackLaneLinearGainFromFaderPos = linearGainFromFaderPos;
     window.trackLaneFaderPosFromLinearGain = faderPosFromLinearGain;
     window.trackLaneFormatFaderDb = formatFaderDb;

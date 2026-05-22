@@ -525,6 +525,61 @@
         else toggleExtraMute(t.slot);
     }
 
+    function isMixLaneDbAtUnity(db) {
+        return Math.abs(db) <= 0.05;
+    }
+
+    function mixLaneVolumeDbAfterStep(currentDb, deltaDb) {
+        const atUnity = isMixLaneDbAtUnity(currentDb);
+        if (deltaDb > 0) {
+            if (!atUnity && currentDb < 0 && currentDb + deltaDb > 0) return 0;
+            return currentDb + deltaDb;
+        }
+        if (!atUnity && currentDb > 0 && currentDb + deltaDb < 0) return 0;
+        return currentDb + deltaDb;
+    }
+
+    function adjustMixLaneVolumeByDisplayIndex(displayIndex, deltaDb) {
+        if (
+            typeof trackLaneLinearGainToDb !== 'function' ||
+            typeof trackLaneLinearGainFromDb !== 'function'
+        ) {
+            return false;
+        }
+        const targets = getVisibleMixLaneTargets();
+        const t = targets[displayIndex];
+        if (!t) return false;
+        let currentLinear;
+        if (t.kind === 'video') {
+            if (typeof videoReady !== 'function' || !videoReady()) return false;
+            currentLinear = getVideoTrackVolLinear();
+        } else {
+            if (typeof isExtraTrackLoaded !== 'function' || !isExtraTrackLoaded(t.slot)) {
+                return false;
+            }
+            currentLinear = getExtraTrackVolLinear(t.slot);
+        }
+        const currentDb = trackLaneLinearGainToDb(currentLinear);
+        const atUnityBefore = isMixLaneDbAtUnity(currentDb);
+        const nextDb = mixLaneVolumeDbAfterStep(currentDb, deltaDb);
+        if (Math.abs(nextDb - currentDb) < 1e-6) {
+            return false;
+        }
+        const next = trackLaneLinearGainFromDb(nextDb);
+        if (t.kind === 'video') {
+            setVideoTrackVolLinear(next);
+        } else {
+            setExtraTrackVolLinear(t.slot, next);
+        }
+        refreshReviewMixUi();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const stoppedAtUnity =
+            isMixLaneDbAtUnity(nextDb) &&
+            !atUnityBefore &&
+            ((deltaDb > 0 && currentDb < 0) || (deltaDb < 0 && currentDb > 0));
+        return stoppedAtUnity;
+    }
+
     function isUsableAudioFile(f) {
         const type = (f.type || '').toLowerCase();
         if (type.startsWith('audio/')) return true;
