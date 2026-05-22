@@ -704,11 +704,20 @@
         } catch (e) {
             writeLog('Session restore: ' + (e && e.message ? e.message : String(e)));
         }
+        if (typeof whenSessionRestoreIdle === 'function') {
+            await whenSessionRestoreIdle();
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
         if (!fileMain && typeof applySavedWaveformLaneUi === 'function') {
             applySavedWaveformLaneUi(null);
         }
         syncSeekMax();
         updateControlsEnabled();
+        if (!fileMain && typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        }
         onVideoMediaReady();
         if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
             await finalizeReviewMixAfterSessionRestore();

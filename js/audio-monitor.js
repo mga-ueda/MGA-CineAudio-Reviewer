@@ -1477,4 +1477,12 @@ window.addEventListener('resize', () => {
     window.isReviewMixMonitorAnalyzersWired = isReviewMixMonitorAnalyzersWired;
     window.setReviewMixMonitorTransportActive = setReviewMixMonitorTransportActive;
     window.resetReviewMixMonitorGain = resetReviewMixMonitorGain;
+
+    /** All Clear 後: マスター音量を 0 dB（線形ゲイン 1.0）にリセット */
+    function resetMasterVolumeForSessionClear() {
+        applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, false);
+        saveUiPrefsToLocalStorage();
+    }
+
+    window.resetMasterVolumeForSessionClear = resetMasterVolumeForSessionClear;
 })();

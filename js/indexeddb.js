@@ -74,6 +74,9 @@
                 return await task();
             } finally {
                 sessionRestoreInProgress = false;
+                if (typeof updateSessionAllClearButton === 'function') {
+                    updateSessionAllClearButton();
+                }
                 if (typeof schedulePersistSession === 'function') {
                     schedulePersistSession();
                 }
@@ -429,6 +432,15 @@
         } else if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
             ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 40 });
         }
+        if (typeof ensureMarkersRestoredFromSession === 'function') {
+            ensureMarkersRestoredFromSession();
+        }
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
     }
 
     function applyRangeLoopRestoreFromRow(row) {
@@ -516,6 +528,14 @@
             pendingRestoreTime = restoreTransportSec;
         }
 
+        if (typeof restoreMarkersFromSessionRow === 'function') {
+            restoreMarkersFromSessionRow(row);
+        } else if (typeof loadMarkersForCurrentVideo === 'function') {
+            loadMarkersForCurrentVideo(
+                Array.isArray(row.markers) ? row.markers : undefined,
+            );
+        }
+
         await restoreExtraTracksFromRow(row);
 
         if (typeof applySavedWaveformLaneUi === 'function') {
@@ -526,15 +546,9 @@
             applySavedWaveformLaneUi(laneSnap);
             pendingLaneUiRestore = null;
         }
-
-        if (typeof restoreMarkersFromSessionRow === 'function') {
-            restoreMarkersFromSessionRow(row);
-        } else if (typeof loadMarkersForCurrentVideo === 'function') {
-            loadMarkersForCurrentVideo(
-                Array.isArray(row.markers) ? row.markers : undefined,
-            );
-        }
-        if (typeof adoptMarkersForAudioOnlySession === 'function') {
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        } else if (typeof adoptMarkersForAudioOnlySession === 'function') {
             adoptMarkersForAudioOnlySession();
         }
         if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {

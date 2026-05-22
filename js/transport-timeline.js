@@ -420,6 +420,10 @@
             const end = extraTrackTimelineEndSec(slot);
             if (end > 0) return end;
         }
+        if (typeof extraTrackContentDurationSec === 'function') {
+            const d = extraTrackContentDurationSec(slot);
+            if (d > 0) return d;
+        }
         if (typeof extraTrackBufferDuration === 'function') {
             return extraTrackBufferDuration(slot);
         }
@@ -600,9 +604,18 @@
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof updateLaneContentEndMarkers === 'function') updateLaneContentEndMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
-        if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
         if (typeof flushPendingSessionMarkersRestore === 'function') {
             flushPendingSessionMarkersRestore();
+        }
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        } else if (typeof refreshMarkerUi === 'function') {
+            refreshMarkerUi();
+        } else if (typeof renderAudioWaveformMarkers === 'function') {
+            renderAudioWaveformMarkers();
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
         }
     }
 

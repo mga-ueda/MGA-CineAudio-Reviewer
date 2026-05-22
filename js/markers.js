@@ -21,6 +21,13 @@
         if (fileMain) {
             return String(fileMain.name) + '\0' + String(fileMain.lastModified);
         }
+        const audioOnlyCached = markersByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
+        if (audioOnlyCached && audioOnlyCached.length > 0) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
+        if (currentMarkers.length > 0) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
         if (
             typeof hasPlayableWaveformTimeline === 'function' &&
             hasPlayableWaveformTimeline()
@@ -48,8 +55,91 @@
     }
 
     let pendingSessionMarkersForRestore = null;
+    /** セッション復元用（IndexedDB row.markers）。メモリへ反映するまで保持 */
+    let sessionMarkersRestorePayload = null;
+
+    function stashSessionMarkersRestorePayload(arr) {
+        if (!Array.isArray(arr) || arr.length < 1) return;
+        sessionMarkersRestorePayload = arr.map(normalizeMarker).filter(Boolean);
+    }
+
+    function hasSessionMarkersPendingRestore() {
+        if (currentMarkers.length > 0 || pendingRangeStartSec != null) return true;
+        if (sessionMarkersRestorePayload && sessionMarkersRestorePayload.length > 0) {
+            return true;
+        }
+        if (
+            pendingSessionMarkersForRestore &&
+            pendingSessionMarkersForRestore.length > 0
+        ) {
+            return true;
+        }
+        const cached = markersByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
+        return !!(cached && cached.length > 0);
+    }
+
+    window.hasSessionMarkersPendingRestore = hasSessionMarkersPendingRestore;
+
+    function ensureMarkersRestoredFromSession() {
+        if (currentMarkers.length > 0) {
+            saveMarkersToCache();
+            return true;
+        }
+        if (sessionMarkersRestorePayload && sessionMarkersRestorePayload.length > 0) {
+            applyMarkersSnapshotToMemory(
+                sessionMarkersRestorePayload,
+                MARKER_SESSION_AUDIO_ONLY_KEY,
+            );
+            if (currentMarkers.length > 0) {
+                sessionMarkersRestorePayload = null;
+                return true;
+            }
+        }
+        if (
+            pendingSessionMarkersForRestore &&
+            pendingSessionMarkersForRestore.length > 0
+        ) {
+            const snap = pendingSessionMarkersForRestore;
+            pendingSessionMarkersForRestore = null;
+            applyMarkersSnapshotToMemory(snap, MARKER_SESSION_AUDIO_ONLY_KEY);
+            if (currentMarkers.length > 0) {
+                sessionMarkersRestorePayload = null;
+                return true;
+            }
+        }
+        const keys = [];
+        const k = getVideoMarkerKey();
+        if (k) keys.push(k);
+        if (k !== MARKER_SESSION_AUDIO_ONLY_KEY) {
+            keys.push(MARKER_SESSION_AUDIO_ONLY_KEY);
+        }
+        for (let i = 0; i < keys.length; i++) {
+            const key = keys[i];
+            if (!markersByVideoKey.has(key)) continue;
+            currentMarkers = markersByVideoKey.get(key).map(cloneMarker).filter(Boolean);
+            sortMarkersInPlace();
+            if (currentMarkers.length > 0) {
+                sessionMarkersRestorePayload = null;
+                saveMarkersToCache();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    window.ensureMarkersRestoredFromSession = ensureMarkersRestoredFromSession;
 
     function flushPendingSessionMarkersRestore() {
+        if (ensureMarkersRestoredFromSession()) {
+            renderMarkerList();
+            renderSeekBarMarkers();
+            updateMarkerRangeHint();
+            updateMarkerCommentOverlay();
+            if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
+            return;
+        }
         if (pendingSessionMarkersForRestore) {
             const snap = pendingSessionMarkersForRestore;
             pendingSessionMarkersForRestore = null;
@@ -64,6 +154,41 @@
     }
 
     window.flushPendingSessionMarkersRestore = flushPendingSessionMarkersRestore;
+
+    let waveformMarkersRenderRetryRaf = 0;
+
+    function scheduleWaveformMarkersRenderRetry() {
+        if (waveformMarkersRenderRetryRaf) {
+            cancelAnimationFrame(waveformMarkersRenderRetryRaf);
+            waveformMarkersRenderRetryRaf = 0;
+        }
+        let attempts = 0;
+        const run = () => {
+            waveformMarkersRenderRetryRaf = 0;
+            if (!currentMarkers.length) return;
+            if (typeof applyWaveformTimelineZoomLayout === 'function') {
+                applyWaveformTimelineZoomLayout();
+            }
+            renderAudioWaveformMarkers();
+            const lanes =
+                typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                    ? audioWaveformLanesTracks
+                    : null;
+            const laneReady = !lanes || (lanes.clientWidth | 0) > 0;
+            const markersVisible =
+                audioWaveformMarkers && !audioWaveformMarkers.hidden;
+            if (laneReady && markersVisible) {
+                if (typeof updateSessionAllClearButton === 'function') {
+                    updateSessionAllClearButton();
+                }
+                return;
+            }
+            attempts += 1;
+            if (attempts >= 72) return;
+            waveformMarkersRenderRetryRaf = requestAnimationFrame(run);
+        };
+        waveformMarkersRenderRetryRaf = requestAnimationFrame(run);
+    }
 
     function adoptMarkersForAudioOnlySession() {
         if (!currentMarkers.length) {
@@ -155,7 +280,7 @@
     }
 
     function saveMarkersToCache() {
-        const k = getVideoMarkerKey();
+        const k = getVideoMarkerKey() || resolveMarkerCacheKey();
         if (k) markersByVideoKey.set(k, getMarkersSnapshot());
     }
 
@@ -164,6 +289,7 @@
             currentMarkers = [];
             return;
         }
+        stashSessionMarkersRestorePayload(arr);
         currentMarkers = arr.map(normalizeMarker).filter(Boolean);
         sortMarkersInPlace();
         const k =
@@ -181,11 +307,19 @@
                 ? row.markers
                 : null;
         if (!arr) return false;
+        stashSessionMarkersRestorePayload(arr);
         applyMarkersSnapshotToMemory(arr, MARKER_SESSION_AUDIO_ONLY_KEY);
-        renderMarkerList();
-        renderSeekBarMarkers();
-        updateMarkerRangeHint();
-        updateMarkerCommentOverlay();
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        } else {
+            renderMarkerList();
+            renderSeekBarMarkers();
+            updateMarkerRangeHint();
+            updateMarkerCommentOverlay();
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
         return true;
     }
 
@@ -204,12 +338,27 @@
                 );
             } else {
                 pendingSessionMarkersForRestore = null;
-                currentMarkers = [];
+                const cacheKey = resolveMarkerCacheKey();
+                if (cacheKey && markersByVideoKey.has(cacheKey)) {
+                    currentMarkers = markersByVideoKey
+                        .get(cacheKey)
+                        .map(cloneMarker)
+                        .filter(Boolean);
+                    sortMarkersInPlace();
+                } else if (
+                    currentMarkers.length === 0 &&
+                    !ensureMarkersRestoredFromSession()
+                ) {
+                    currentMarkers = [];
+                }
             }
             renderMarkerList();
             renderSeekBarMarkers();
             updateMarkerRangeHint();
             updateMarkerCommentOverlay();
+            if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
             return;
         }
         pendingSessionMarkersForRestore = null;
@@ -219,14 +368,61 @@
         } else if (markersByVideoKey.has(k)) {
             currentMarkers = markersByVideoKey.get(k).map(cloneMarker).filter(Boolean);
         } else {
-            currentMarkers = [];
+            const fallbackKey = resolveMarkerCacheKey();
+            if (fallbackKey && markersByVideoKey.has(fallbackKey)) {
+                currentMarkers = markersByVideoKey
+                    .get(fallbackKey)
+                    .map(cloneMarker)
+                    .filter(Boolean);
+                markersByVideoKey.set(k, getMarkersSnapshot());
+            } else if (currentMarkers.length > 0) {
+                markersByVideoKey.set(k, getMarkersSnapshot());
+            } else if (!ensureMarkersRestoredFromSession()) {
+                currentMarkers = [];
+            }
         }
         sortMarkersInPlace();
         renderMarkerList();
         renderSeekBarMarkers();
         updateMarkerRangeHint();
         updateMarkerCommentOverlay();
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
     }
+
+    /** 映像なしセッション: マーカー一覧・波形マーカーをレイアウト確定後も再同期 */
+    function syncAudioOnlyMarkersUi() {
+        if (typeof videoReady === 'function' && videoReady()) return;
+
+        ensureMarkersRestoredFromSession();
+        adoptMarkersForAudioOnlySession();
+        if (!currentMarkers.length) {
+            if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
+            return;
+        }
+        sessionMarkersRestorePayload = null;
+
+        if (typeof applyWaveformTimelineZoomLayout === 'function') {
+            applyWaveformTimelineZoomLayout();
+        }
+        if (isMarkerTcInputFocused()) {
+            renderSeekBarMarkers();
+            updateMarkerRangeHint();
+        } else {
+            refreshMarkerUi();
+        }
+        updateMarkerClearAllButton();
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
+        scheduleWaveformMarkersRenderRetry();
+    }
+
+    window.syncAudioOnlyMarkersUi = syncAudioOnlyMarkersUi;
+    window.refreshMarkersAfterAudioTimelineReady = syncAudioOnlyMarkersUi;
 
     function sortMarkersInPlace() {
         currentMarkers.sort((a, b) => {
@@ -604,13 +800,22 @@
             markersLayoutRefreshTimer = null;
         }
         const run = () => {
+            if (typeof ensureMarkersRestoredFromSession === 'function') {
+                ensureMarkersRestoredFromSession();
+            }
             flushPendingSessionMarkersRestore();
             if (isMarkerTcInputFocused()) {
                 renderSeekBarMarkers();
                 updateMarkerRangeHint();
-                return;
+            } else {
+                refreshMarkerUi();
             }
-            refreshMarkerUi();
+            if (typeof syncAudioOnlyMarkersUi === 'function') {
+                syncAudioOnlyMarkersUi();
+            }
+            if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
         };
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
@@ -650,7 +855,8 @@
     }
 
     function hasMarkerContentToClear() {
-        return currentMarkers.length > 0 || pendingRangeStartSec != null;
+        if (currentMarkers.length > 0 || pendingRangeStartSec != null) return true;
+        return hasSessionMarkersPendingRestore();
     }
 
     window.hasMarkerContentToClear = hasMarkerContentToClear;
@@ -2627,7 +2833,23 @@
     }
 
     function renderAudioWaveformMarkers() {
+        if (typeof applyWaveformTimelineZoomLayout === 'function') {
+            applyWaveformTimelineZoomLayout();
+        }
         renderTimelineMarkersLayer(audioWaveformMarkers);
+        if (
+            audioWaveformMarkers &&
+            audioWaveformMarkers.hidden &&
+            currentMarkers.length > 0
+        ) {
+            const lanes =
+                typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                    ? audioWaveformLanesTracks
+                    : null;
+            if (lanes && (lanes.clientWidth | 0) > 0) {
+                requestAnimationFrame(() => renderTimelineMarkersLayer(audioWaveformMarkers));
+            }
+        }
     }
 
     function refreshMarkerUi(opt) {
@@ -2650,6 +2872,9 @@
 
         if (!hasRows) {
             return;
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
         }
 
         currentMarkers.forEach((m, idx) => {
@@ -2749,6 +2974,7 @@
         pendingRangeStartSec = null;
         activeMarkerId = null;
         pendingSessionMarkersForRestore = null;
+        sessionMarkersRestorePayload = null;
         currentMarkers = [];
         markersByVideoKey.clear();
         renderMarkerList();
@@ -2832,11 +3058,15 @@
         if (lanes && typeof ResizeObserver !== 'undefined') {
             let markerResizeRaf = 0;
             const obs = new ResizeObserver(() => {
-                if (!currentMarkers.length) return;
                 if (markerResizeRaf) return;
                 markerResizeRaf = requestAnimationFrame(() => {
                     markerResizeRaf = 0;
-                    if ((lanes.clientWidth | 0) > 0) renderSeekBarMarkers();
+                    if ((lanes.clientWidth | 0) > 0) {
+                        if (typeof applyWaveformTimelineZoomLayout === 'function') {
+                            applyWaveformTimelineZoomLayout();
+                        }
+                        renderSeekBarMarkers();
+                    }
                 });
             });
             obs.observe(lanes);

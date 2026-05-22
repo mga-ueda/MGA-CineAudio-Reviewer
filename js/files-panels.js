@@ -213,6 +213,30 @@
 
     function sessionHasClearableContent() {
         if (
+            typeof window.hasSessionMarkersPendingRestore === 'function' &&
+            window.hasSessionMarkersPendingRestore()
+        ) {
+            return true;
+        }
+        if (
+            typeof window.hasMarkerContentToClear === 'function' &&
+            window.hasMarkerContentToClear()
+        ) {
+            return true;
+        }
+        if (
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline()
+        ) {
+            return true;
+        }
+        if (
+            typeof window.hasAnyExtraTrackTimelineContent === 'function' &&
+            window.hasAnyExtraTrackTimelineContent()
+        ) {
+            return true;
+        }
+        if (
             typeof transportControlsReady === 'function' &&
             transportControlsReady()
         ) {
@@ -221,22 +245,13 @@
         if (typeof fileMain !== 'undefined' && !!fileMain) {
             return true;
         }
-        if (
-            typeof hasMarkerContentToClear === 'function' &&
-            hasMarkerContentToClear()
-        ) {
-            return true;
-        }
         return false;
     }
 
     function updateSessionAllClearButton() {
         const btn = document.getElementById('sessionAllClearBtn');
         if (!btn) return;
-        const restoring =
-            typeof isSessionRestoreInProgress === 'function' &&
-            isSessionRestoreInProgress();
-        btn.disabled = restoring || !sessionHasClearableContent();
+        btn.disabled = !sessionHasClearableContent();
     }
 
     async function clearEntireSession() {
@@ -257,6 +272,9 @@
         }
         if (typeof deleteStoredSession === 'function') {
             await deleteStoredSession();
+        }
+        if (typeof resetMasterVolumeForSessionClear === 'function') {
+            resetMasterVolumeForSessionClear();
         }
         revokeAll();
         if (typeof resetVideoDriftMonitorSchedule === 'function') {
@@ -309,7 +327,9 @@
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
-        if (typeof adoptMarkersForAudioOnlySession === 'function') {
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        } else if (typeof adoptMarkersForAudioOnlySession === 'function') {
             adoptMarkersForAudioOnlySession();
         } else if (typeof refreshMarkerUi === 'function') {
             refreshMarkerUi();

@@ -87,10 +87,29 @@
         }
     }
 
+    /** Video Audio 行の loaded。composite の赤枠は refreshAudioWaveformCompositeLoadedState で別管理。 */
     function setAudioWaveformLoaded(loaded) {
         if (audioWaveformPanel) audioWaveformPanel.classList.toggle('loaded', !!loaded);
-        if (audioWaveformComposite) audioWaveformComposite.classList.toggle('loaded', !!loaded);
+        refreshAudioWaveformCompositeLoadedState();
     }
+
+    /** 映像なしでも Ex 等のタイムラインが有効なら composite を赤枠にする。 */
+    function refreshAudioWaveformCompositeLoadedState() {
+        if (!audioWaveformComposite) return;
+        const videoLaneLoaded =
+            !!(audioWaveformPanel && audioWaveformPanel.classList.contains('loaded'));
+        const extraTimelineActive =
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline();
+        const shouldLoad = videoLaneLoaded || extraTimelineActive;
+        audioWaveformComposite.classList.toggle('loaded', shouldLoad);
+        if (shouldLoad && !fileMain && typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        }
+    }
+
+    window.refreshAudioWaveformCompositeLoadedState =
+        refreshAudioWaveformCompositeLoadedState;
 
     /** × で閉じていない限り表示。動画なし／解析待ちは枠のみ、音声なし確定時のみ非表示。 */
     let videoLaneUiOpen = true;
@@ -295,6 +314,7 @@
             if (typeof redrawAllExtraTrackWaveforms === 'function') {
                 redrawAllExtraTrackWaveforms();
             }
+            refreshAudioWaveformCompositeLoadedState();
         });
     }
 

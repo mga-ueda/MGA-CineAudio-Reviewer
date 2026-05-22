@@ -844,7 +844,12 @@
         }
         bindExportMediaIncludeCheckboxPersistence();
         if (typeof whenSessionRestoreIdle === 'function') {
-            void whenSessionRestoreIdle().then(refreshExportMediaOptionsUi);
+            void whenSessionRestoreIdle().then(() => {
+                refreshExportMediaOptionsUi();
+                if (typeof updateSessionAllClearButton === 'function') {
+                    updateSessionAllClearButton();
+                }
+            });
         }
         if (sessionIoRow) {
             sessionIoRow.addEventListener('mouseenter', refreshExportMediaOptionsUi);

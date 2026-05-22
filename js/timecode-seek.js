@@ -876,7 +876,15 @@
             stopRaf();
         } else {
             updateTimecodeOverlay();
-            if (typeof refreshMarkerUi === 'function') refreshMarkerUi();
+            if (
+                typeof videoReady === 'function' &&
+                !videoReady() &&
+                typeof syncAudioOnlyMarkersUi === 'function'
+            ) {
+                syncAudioOnlyMarkersUi();
+            } else if (typeof refreshMarkerUi === 'function') {
+                refreshMarkerUi();
+            }
             if (typeof refreshReviewMixUi === 'function') refreshReviewMixUi();
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();

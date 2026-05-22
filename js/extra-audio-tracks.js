@@ -687,6 +687,7 @@
     window.getExtraTrackTimelineStartSec = getExtraTrackTimelineStartSec;
     window.setExtraTrackTimelineStartSec = setExtraTrackTimelineStartSec;
     window.extraTrackTimelineEndSec = extraTrackTimelineEndSec;
+    window.extraTrackContentDurationSec = extraTrackContentDurationSec;
 
     function getExtraUi(slot) {
         return extraTrackUi[slot] || null;
@@ -1116,6 +1117,12 @@
         };
         setExtraTrackStatus(slot, 'Restoring…');
         if (ui.meta) ui.meta.classList.add('loaded');
+        if (typeof refreshAudioWaveformCompositeLoadedState === 'function') {
+            refreshAudioWaveformCompositeLoadedState();
+        }
+        if (typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        }
         refreshExtraTrackUi(slot);
         scheduleExtraTrackWaveformRedraw(slot);
         if (typeof notifyMasterTransportDurationChanged === 'function') {
@@ -1589,6 +1596,12 @@
     function setExtraTrackLoaded(slot, loaded, opt) {
         const ui = getExtraUi(slot);
         if (ui && ui.meta) ui.meta.classList.toggle('loaded', !!loaded);
+        if (typeof refreshAudioWaveformCompositeLoadedState === 'function') {
+            refreshAudioWaveformCompositeLoadedState();
+        }
+        if (loaded && typeof syncAudioOnlyMarkersUi === 'function') {
+            syncAudioOnlyMarkersUi();
+        }
         applyExtraTrackLaneVisibility(slot);
         if (!opt || !opt.skipLayoutRefresh) {
             if (typeof refreshWaveformCompositeLaneLayout === 'function') {
@@ -1782,6 +1795,9 @@
         }
         const hasBuf = !!(tr && tr.buffer);
         if (ui.meta) ui.meta.classList.toggle('loaded', hasBuf);
+        if (typeof refreshAudioWaveformCompositeLoadedState === 'function') {
+            refreshAudioWaveformCompositeLoadedState();
+        }
         if (ui.soloBtn) {
             ui.soloBtn.disabled = !hasBuf;
             setMixBtnState(ui.soloBtn, !!(tr && tr.solo));
