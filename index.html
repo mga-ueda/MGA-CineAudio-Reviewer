@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1a1012">
+    <meta name="application-name" content="MGA CineAudio Reviewer">
+    <title>MGA CineAudio Reviewer</title>
+    <link rel="icon" type="image/png" href="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f3ac.png">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+
+    <div id="seekFlashOverlay" class="seek-flash-overlay" aria-hidden="true">
+        <div class="seek-flash-overlay__box">
+            <span class="seek-flash-overlay__primary" id="seekFlashPrimary"></span>
+            <span class="seek-flash-overlay__secondary" id="seekFlashSecondary" hidden></span>
+        </div>
+    </div>
+
+    <div class="layout-narrow">
+    <header class="app-header">
+        <div class="app-header-inner">
+            <h2 class="app-title">MGA CineAudio Reviewer</h2>
+            <span class="version-badge" aria-label="App version"></span>
+        </div>
+    </header>
+
+    <div id="main-drop-zone" tabindex="0" role="button" aria-label="動画・追加音声ファイルをドロップして読み込み">
+        <strong class="drop-zone-title">レビューする動画・追加音声（WAV 等）をドロップ（またはクリックで選択）</strong>
+        <p class="drop-zone-note drop-zone-note--targets">動画 → 上の枠・<strong>映像エリア</strong>　／　音声 → 上の枠・<strong>波形表示枠</strong></p>
+        <p class="drop-zone-note">動画は<strong>ブラウザが再生できる形式</strong>、追加音声は <strong>WAV / FLAC / MP3 等</strong>（最大2トラック）。Google Chrome の利用を推奨します。</p>
+        <p class="drop-zone-note drop-zone-note--privacy">動画は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。映像・動画音声・追加音声は同一の Web Audio でミックスされ、同期再生されます。</p>
+    </div>
+    </div>
+
+    <div class="player-stage layout-narrow" id="playerStage">
+        <div class="player-stage__main" id="playerStageMain">
+            <div class="video-panel file-drop-target file-drop-target--video" id="panelMain" data-side="main" title="動画ファイルをドロップして読み込み">
+                <p class="video-panel-label">Video</p>
+                <span class="file-name" id="nameMain">Not Loaded</span>
+                <p class="panel-info-line panel-info-line--stacked" id="infoMain" hidden>
+                    <span class="panel-info-line__row" id="infoMainMeta"></span>
+                </p>
+                <div class="video-frame" id="frameMain">
+                    <video id="videoMain" playsinline preload="auto"></video>
+                    <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
+                    <div class="marker-comment-overlay marker-comment-overlay--point" id="markerCommentOverlayPoint" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
+                    <div class="marker-comment-overlay marker-comment-overlay--range" id="markerCommentOverlayRange" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
+                </div>
+            </div>
+        </div>
+        <div
+            class="player-splitter"
+            id="playerSplitter"
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize video and marker list"
+            tabindex="0"
+            title="Drag to resize"
+        ></div>
+        <aside class="marker-panel" id="markerPanel" aria-label="Marker list">
+            <div class="marker-panel__head">
+                <div class="marker-panel__head-row">
+                    <h3 class="marker-panel__title">Markers</h3>
+                    <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="Delete all markers">Clear</button>
+                </div>
+                <p class="marker-panel__range-hint" id="markerRangeHint" hidden>Range: press <kbd>]</kbd> for Out</p>
+            </div>
+            <div class="marker-panel__body">
+                <div class="marker-table-wrap" id="markerTableWrap">
+                    <table class="marker-table" aria-label="Markers">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="marker-table__col-num">#</th>
+                                <th scope="col" class="marker-table__col-in">In</th>
+                                <th scope="col" class="marker-table__col-out">Out</th>
+                                <th scope="col" class="marker-table__col-dur">Length</th>
+                                <th scope="col" class="marker-table__col-comment">Feedback</th>
+                                <th scope="col" class="marker-table__col-act"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="markerTableBody"></tbody>
+                    </table>
+                </div>
+                <p class="marker-list-empty" id="markerListEmpty">Load a video to add markers (<kbd>M</kbd> point, <kbd>[</kbd> <kbd>]</kbd> range)</p>
+            </div>
+        </aside>
+    </div>
+
+    <div class="layout-narrow">
+    <section class="audio-waveform-composite file-drop-target file-drop-target--audio" id="audioWaveformComposite" aria-label="音声波形" title="追加音声ファイルをドロップして読み込み">
+        <div class="audio-waveform-composite__grid">
+            <div class="audio-waveform-composite__sidebar">
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
+                    <div class="audio-waveform-lane-meta__row">
+                        <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio Track</span>
+                        <div class="track-mix-actions">
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo" aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Clear (hide lane)">×</button>
+                        </div>
+                    </div>
+                    <div class="track-lane-controls">
+                        <div class="track-lane-meter-row">
+                            <div class="track-lane-meter" aria-hidden="true">
+                                <div class="track-lane-meter__bar" id="trackLaneMeterVideo"></div>
+                            </div>
+                            <span class="track-lane-meter-db" id="trackLaneMeterDbVideo" aria-hidden="true">-96.0 dB</span>
+                        </div>
+                        <div class="track-lane-fader-row">
+                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="700" disabled aria-label="Video audio volume">
+                            <span class="track-lane-fader-db" id="trackLaneFaderDbVideo">0.0 dB</span>
+                        </div>
+                    </div>
+                    <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
+                </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta0" hidden>
+                    <div class="audio-waveform-lane-meta__row">
+                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle0">Ex 1 Track</span>
+                        <div class="track-mix-actions">
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn0" disabled title="Solo" aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn0" disabled title="Mute" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn0" title="Clear (hide lane)">×</button>
+                        </div>
+                    </div>
+                    <div class="track-lane-controls">
+                        <div class="track-lane-meter-row">
+                            <div class="track-lane-meter" aria-hidden="true">
+                                <div class="track-lane-meter__bar" id="trackLaneMeter0"></div>
+                            </div>
+                            <span class="track-lane-meter-db" id="trackLaneMeterDb0" aria-hidden="true">-96.0 dB</span>
+                        </div>
+                        <div class="track-lane-fader-row">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader0" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 1 volume">
+                            <span class="track-lane-fader-db" id="trackLaneFaderDb0">0.0 dB</span>
+                        </div>
+                    </div>
+                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus0" hidden></span>
+                </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta1" hidden>
+                    <div class="audio-waveform-lane-meta__row">
+                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle1">Ex 2 Track</span>
+                        <div class="track-mix-actions">
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn1" disabled title="Solo" aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn1" disabled title="Mute" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn1" title="Clear (hide lane)">×</button>
+                        </div>
+                    </div>
+                    <div class="track-lane-controls">
+                        <div class="track-lane-meter-row">
+                            <div class="track-lane-meter" aria-hidden="true">
+                                <div class="track-lane-meter__bar" id="trackLaneMeter1"></div>
+                            </div>
+                            <span class="track-lane-meter-db" id="trackLaneMeterDb1" aria-hidden="true">-96.0 dB</span>
+                        </div>
+                        <div class="track-lane-fader-row">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader1" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 2 volume">
+                            <span class="track-lane-fader-db" id="trackLaneFaderDb1">0.0 dB</span>
+                        </div>
+                    </div>
+                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus1" hidden></span>
+                </div>
+            </div>
+            <div
+                class="audio-waveform-composite__lanes"
+                id="audioWaveformLanesTracks"
+                title="Click or drag to seek (all 3 lanes)"
+                tabindex="0"
+                role="presentation"
+            >
+                <div class="audio-waveform-lane audio-waveform-lane--video" id="audioWaveformLaneVideo">
+                    <div class="audio-waveform-lane__track" id="audioWaveformTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas id="audioWaveformCanvas" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
+                        <span class="audio-waveform-lane__file-name" id="audioWaveformFileName" hidden aria-hidden="true"></span>
+                        <div class="audio-waveform-lane__content-end" id="audioWaveformContentEnd" hidden aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane0" hidden>
+                    <div class="audio-waveform-lane__track" id="extraAudioTrack0" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas id="extraAudioCanvas0" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
+                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName0" hidden aria-hidden="true"></span>
+                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd0" hidden aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane1" hidden>
+                    <div class="audio-waveform-lane__track" id="extraAudioTrack1" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas id="extraAudioCanvas1" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
+                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName1" hidden aria-hidden="true"></span>
+                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd1" hidden aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div
+                    class="audio-waveform-composite__markers seek-bar-markers"
+                    id="audioWaveformMarkers"
+                    aria-hidden="true"
+                ></div>
+                <div
+                    class="audio-waveform-composite__marker-labels"
+                    id="audioWaveformMarkerLabels"
+                    hidden
+                    aria-hidden="true"
+                ></div>
+                <div
+                    class="audio-waveform-composite__range-loop"
+                    id="audioWaveformRangeLoop"
+                    hidden
+                    aria-hidden="true"
+                ></div>
+                <div
+                    class="audio-waveform-composite__video-end-line"
+                    id="audioWaveformVideoEndLine"
+                    hidden
+                    aria-hidden="true"
+                ></div>
+                <canvas
+                    class="audio-waveform-composite__seek-trail"
+                    id="audioWaveformSeekTrail"
+                    aria-hidden="true"
+                ></canvas>
+                <div class="audio-waveform-composite__hover-playhead" id="audioWaveformHoverPlayhead" hidden aria-hidden="true"></div>
+                <div class="audio-waveform-composite__playhead-wrap" id="audioWaveformPlayheadWrap" hidden aria-hidden="true">
+                    <div class="audio-waveform-composite__playhead" id="audioWaveformPlayhead"></div>
+                </div>
+                <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position">
+            </div>
+        </div>
+    </section>
+
+    <div class="transport-bar">
+        <div class="transport-bar__row transport-bar__row--primary">
+            <div class="transport-time-row transport-opt-chip" aria-label="Playhead position">
+                <span class="time-display transport-opt-value" id="currentTime">00:00:00:00</span>
+                <span class="transport-time-row__sep" aria-hidden="true">-</span>
+                <span class="time-display transport-opt-value" id="totalTime">00:00:00:00</span>
+            </div>
+            <div class="transport-opt-box transport-opt-chip transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
+                <div class="transport-opt-cell transport-opt-cell--video-drift">
+                    <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
+                        <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> ms</span><span class="transport-drift-sync" hidden></span>
+                    </span>
+                </div>
+            </div>
+            <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
+                <div class="transport-opt-cell transport-opt-cell--playback">
+                    <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
+                        <input type="checkbox" id="loopPlaybackCheckbox" checked>
+                        <span>Loop</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="transport-bar__row transport-bar__row--secondary">
+            <div class="master-vol-container transport-opt-chip" id="masterVolWrap">
+                <span class="master-vol-container__label transport-opt-label">Master Vol</span>
+                <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume">
+                <span class="transport-opt-value" id="masterVolDisp">100% (0.0 dB)</span>
+            </div>
+            <div class="monitor-floor-options transport-opt-chip" role="group" aria-label="Analysis display lower limit">
+                <label class="transport-opt-label" for="spectrumFloorDbSelect">Spectrum floor</label>
+                <select id="spectrumFloorDbSelect" class="transport-select monitor-floor-select" title="Lower dB limit for spectrum display">
+                    <option value="-50">-50 dB</option>
+                    <option value="-60">-60 dB</option>
+                    <option value="-70">-70 dB</option>
+                    <option value="-80">-80 dB</option>
+                    <option value="-96">-96 dB</option>
+                </select>
+                <label class="transport-opt-label" for="meterFloorDbSelect">Level meter floor</label>
+                <select id="meterFloorDbSelect" class="transport-select monitor-floor-select" title="Lower dB limit for level meter scale">
+                    <option value="-50">-50 dB</option>
+                    <option value="-60">-60 dB</option>
+                    <option value="-70">-70 dB</option>
+                    <option value="-80">-80 dB</option>
+                    <option value="-96">-96 dB</option>
+                </select>
+            </div>
+            <button type="button" id="playStopBtn" disabled>Play</button>
+        </div>
+    </div>
+
+    <section class="review-mix-monitor layout-narrow" id="reviewMixMonitor" aria-label="Spectrum and level meters">
+        <div class="monitor-layout">
+            <div class="analyzer-container">
+                <div class="spectrum-canvas-wrap">
+                    <canvas id="spectrumCanvas"></canvas>
+                </div>
+                <div class="analyzer-stack-fill" aria-hidden="true"></div>
+            </div>
+            <div class="master-meter-section">
+                <div class="master-meter-inner">
+                    <div class="master-meter-scale-col">
+                        <div class="master-meter-scale-spacer"></div>
+                        <div class="m-meter-scale-labels m-meter-scale-labels--left" id="m-scale-labels-left"></div>
+                    </div>
+                    <div class="master-meter-unit">
+                        <div class="no-lamp"></div>
+                        <div class="m-meter-container">
+                            <div class="m-meter-ticks" aria-hidden="true"></div>
+                            <div id="m-rms-l" class="m-meter-bar rms-bar"></div>
+                            <div id="m-rms-l-hold" class="m-meter-hold-line" aria-hidden="true"></div>
+                        </div>
+                        <div class="db-display" id="val-rms-l">-50.0</div>
+                        <div class="m-label m-label--rms">RMS</div>
+                    </div>
+                    <div class="master-meter-unit">
+                        <div class="clip-lamp" id="clip-peak-l"></div>
+                        <div class="m-meter-container">
+                            <div class="m-meter-ticks" aria-hidden="true"></div>
+                            <div id="m-peak-l" class="m-meter-bar peak-bar"></div>
+                            <div id="m-peak-l-hold" class="m-meter-hold-line" aria-hidden="true"></div>
+                        </div>
+                        <div class="db-display" id="val-peak-l">-50.0</div>
+                        <div class="m-label">L</div>
+                    </div>
+                    <div class="master-meter-unit">
+                        <div class="clip-lamp" id="clip-peak-r"></div>
+                        <div class="m-meter-container">
+                            <div class="m-meter-ticks" aria-hidden="true"></div>
+                            <div id="m-peak-r" class="m-meter-bar peak-bar"></div>
+                            <div id="m-peak-r-hold" class="m-meter-hold-line" aria-hidden="true"></div>
+                        </div>
+                        <div class="db-display" id="val-peak-r">-50.0</div>
+                        <div class="m-label">R</div>
+                    </div>
+                    <div class="master-meter-unit">
+                        <div class="no-lamp"></div>
+                        <div class="m-meter-container">
+                            <div class="m-meter-ticks" aria-hidden="true"></div>
+                            <div id="m-rms-r" class="m-meter-bar rms-bar"></div>
+                            <div id="m-rms-r-hold" class="m-meter-hold-line" aria-hidden="true"></div>
+                        </div>
+                        <div class="db-display" id="val-rms-r">-50.0</div>
+                        <div class="m-label m-label--rms">RMS</div>
+                    </div>
+                    <div class="master-meter-scale-col">
+                        <div class="master-meter-scale-spacer"></div>
+                        <div class="m-meter-scale-labels m-meter-scale-labels--right" id="m-scale-labels-right"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    </div>
+
+    <div class="layout-narrow">
+    <div class="bottom-info">
+        <div id="log">&gt; System Ready.</div>
+        <div class="shortcut-guide">
+            <strong class="shortcut-guide__title">Keyboard shortcuts</strong>
+            <div class="shortcut-sheet" aria-label="Keyboard shortcuts">
+                <div class="shortcut-sheet__cat">Playback</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">Play/Stop [Space]</span>
+                    <span class="shortcut-sheet__chip">Loop On/Off [L]</span>
+                </div>
+                <div class="shortcut-sheet__cat">Seek</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">1f [←] [→]</span>
+                    <span class="shortcut-sheet__chip">1s [Sft+←] [Sft+→]</span>
+                    <span class="shortcut-sheet__chip">5s [Ctl+←] [Ctl+→]</span>
+                    <span class="shortcut-sheet__chip">10s [Ctl+Sft+←] [Ctl+Sft+→]</span>
+                </div>
+                <div class="shortcut-sheet__cat">Jump</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">0% [Numpad 0] ~ 90% [Numpad 9]</span>
+                </div>
+                <div class="shortcut-sheet__cat">Range loop</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">Set range [Right-drag waveform]</span>
+                    <span class="shortcut-sheet__chip">Clear range loop [Esc]</span>
+                </div>
+                <div class="shortcut-sheet__cat">Mix</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">Solo lane 1 / 2 / 3 (visible order) [1] [2] [3]</span>
+                    <span class="shortcut-sheet__chip">Mute lane 1 / 2 / 3 (visible order) [Q] [W] [E]</span>
+                </div>
+                <div class="shortcut-sheet__cat">Markers</div>
+                <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">Point marker [M]</span>
+                    <span class="shortcut-sheet__chip">Range In <kbd>[</kbd> · Out <kbd>]</kbd></span>
+                    <span class="shortcut-sheet__chip">Seek marker stops [Sft+↑] [Sft+↓]</span>
+                    <span class="shortcut-sheet__chip">Feedback row nav [Alt+↑] [Alt+↓]</span>
+                    <span class="shortcut-sheet__chip">Cancel range / clear target [Esc]</span>
+                    <span class="shortcut-sheet__chip">TC fields: ±1f [+][-] · ±1s [Sft+][Sft-]</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <footer class="app-site-footer">
+        <p class="app-site-footer__copyright">
+            © 2026 <a href="https://www.miyabi-ga.co.jp/" target="_blank" rel="noopener noreferrer">MIYABI GAME AUDIO INC.</a>
+        </p>
+    </footer>
+
+    <input
+        type="file"
+        id="filePicker"
+        accept="video/*,.mp4,.m4v,.webm,.mov,.mkv,.avi,.wmv,.flv,.ogv,.mpeg,.mpg,.m1v,.m2v,.ts,.mts,.m2ts,.3gp,.3g2,.asf,.f4v,audio/*,.wav,.wave,.flac,.ogg,.mp3,.m4a,.aac,.aiff,.aif,.wma,.opus"
+        hidden
+    >
+
+    <script src="js/version.js"></script>
+    <script src="js/dom-refs.js"></script>
+    <script src="js/apply-version.js"></script>
+    <script src="js/session-state.js"></script>
+    <script src="js/prefs-log.js"></script>
+    <script src="js/ui-helpers.js"></script>
+    <script src="js/mp4-fps.js"></script>
+    <script src="js/files-panels.js"></script>
+    <script src="js/transport-timeline.js"></script>
+    <script src="js/player-timecode-overlay.js"></script>
+    <script src="js/timecode-seek.js"></script>
+    <script src="js/range-loop.js"></script>
+    <script src="js/audio-waveform.js"></script>
+    <script src="js/track-lane-fader-scale.js"></script>
+    <script src="js/extra-audio-tracks.js"></script>
+    <script src="js/track-lane-controls.js"></script>
+    <script src="js/audio-monitor.js"></script>
+    <script src="js/markers.js"></script>
+    <script src="js/player-splitter.js"></script>
+    <script src="js/drop-files.js"></script>
+    <script src="js/view-layout.js"></script>
+    <script src="js/indexeddb.js"></script>
+    <script src="js/init-prefs.js"></script>
+    <script src="js/events-boot.js"></script>
+</body>
+</html>
