@@ -1653,15 +1653,18 @@
             display: none !important;
         }
         .transport-bar {
+            --transport-bar-inset-y: 10px;
+            --transport-bar-row-gap: 10px;
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
-            padding: 10px 14px;
+            padding: var(--transport-bar-inset-y) 14px;
             border-radius: 14px;
             margin-bottom: 14px;
             display: flex;
             flex-direction: column;
-            gap: 8px;
+            gap: var(--transport-bar-row-gap);
             border: 1px solid rgba(255, 255, 255, 0.06);
             box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            overflow: visible;
         }
         .transport-bar__row {
             display: flex;
@@ -1676,15 +1679,9 @@
         .transport-bar__row--secondary {
             flex-wrap: nowrap;
             overflow-x: auto;
-            overflow-y: hidden;
+            overflow-y: visible;
             -webkit-overflow-scrolling: touch;
             scrollbar-width: thin;
-        }
-        /* マスターボリューム発光（最大 52px）が clip されないよう下段行に余白（枠内の上下見え方を揃える） */
-        .transport-bar__row--secondary {
-            padding-block: 28px;
-            margin-block-start: -20px;
-            margin-block-end: -28px;
         }
         .transport-bar__row #playStopBtn {
             flex-shrink: 0;
