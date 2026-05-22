@@ -30,8 +30,53 @@
         return null;
     }
 
+    /** 復元直後など、波形タイムライン未準備でもセッション付きマーカーを紐づける */
+    function resolveMarkerCacheKey(savedFromSession) {
+        if (fileMain) {
+            return String(fileMain.name) + '\0' + String(fileMain.lastModified);
+        }
+        const k = getVideoMarkerKey();
+        if (k) return k;
+        if (Array.isArray(savedFromSession) && savedFromSession.length > 0) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
+        const cached = markersByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
+        if (cached && cached.length > 0) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
+        return null;
+    }
+
+    let pendingSessionMarkersForRestore = null;
+
+    function flushPendingSessionMarkersRestore() {
+        if (pendingSessionMarkersForRestore) {
+            const snap = pendingSessionMarkersForRestore;
+            pendingSessionMarkersForRestore = null;
+            loadMarkersForCurrentVideo(snap);
+            return;
+        }
+        const k = getVideoMarkerKey();
+        if (!k || currentMarkers.length > 0) return;
+        if (markersByVideoKey.has(k)) {
+            loadMarkersForCurrentVideo();
+        }
+    }
+
+    window.flushPendingSessionMarkersRestore = flushPendingSessionMarkersRestore;
+
     function adoptMarkersForAudioOnlySession() {
-        if (!currentMarkers.length) return;
+        if (!currentMarkers.length) {
+            const cached = markersByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
+            if (cached && cached.length > 0) {
+                currentMarkers = cached.map(cloneMarker).filter(Boolean);
+                sortMarkersInPlace();
+            }
+        }
+        if (!currentMarkers.length) {
+            flushPendingSessionMarkersRestore();
+            if (!currentMarkers.length) return;
+        }
         const snap = getMarkersSnapshot();
         markersByVideoKey.set(MARKER_SESSION_AUDIO_ONLY_KEY, snap);
         currentMarkers = snap.map(cloneMarker).filter(Boolean);
@@ -114,18 +159,60 @@
         if (k) markersByVideoKey.set(k, getMarkersSnapshot());
     }
 
+    function applyMarkersSnapshotToMemory(arr, cacheKey) {
+        if (!Array.isArray(arr)) {
+            currentMarkers = [];
+            return;
+        }
+        currentMarkers = arr.map(normalizeMarker).filter(Boolean);
+        sortMarkersInPlace();
+        const k =
+            cacheKey ||
+            resolveMarkerCacheKey(arr) ||
+            MARKER_SESSION_AUDIO_ONLY_KEY;
+        if (k) markersByVideoKey.set(k, getMarkersSnapshot());
+        pendingSessionMarkersForRestore = null;
+    }
+
+    /** セッション行の markers をメモリへ（音声のみ復元の本命パス） */
+    function restoreMarkersFromSessionRow(row) {
+        const arr =
+            row && Array.isArray(row.markers) && row.markers.length > 0
+                ? row.markers
+                : null;
+        if (!arr) return false;
+        applyMarkersSnapshotToMemory(arr, MARKER_SESSION_AUDIO_ONLY_KEY);
+        renderMarkerList();
+        renderSeekBarMarkers();
+        updateMarkerRangeHint();
+        updateMarkerCommentOverlay();
+        return true;
+    }
+
+    window.restoreMarkersFromSessionRow = restoreMarkersFromSessionRow;
+
     function loadMarkersForCurrentVideo(savedFromSession) {
         pendingRangeStartSec = null;
         activeMarkerId = null;
-        const k = getVideoMarkerKey();
+        const k = resolveMarkerCacheKey(savedFromSession);
         if (!k) {
-            currentMarkers = [];
+            if (Array.isArray(savedFromSession) && savedFromSession.length > 0) {
+                pendingSessionMarkersForRestore = savedFromSession;
+                applyMarkersSnapshotToMemory(
+                    savedFromSession,
+                    MARKER_SESSION_AUDIO_ONLY_KEY,
+                );
+            } else {
+                pendingSessionMarkersForRestore = null;
+                currentMarkers = [];
+            }
             renderMarkerList();
             renderSeekBarMarkers();
             updateMarkerRangeHint();
             updateMarkerCommentOverlay();
             return;
         }
+        pendingSessionMarkersForRestore = null;
         if (Array.isArray(savedFromSession)) {
             currentMarkers = savedFromSession.map(normalizeMarker).filter(Boolean);
             markersByVideoKey.set(k, getMarkersSnapshot());
@@ -478,12 +565,70 @@
     }
 
     function masterDurForTimelineMarkers() {
+        let dur = 0;
         if (typeof getMasterTransportDurationSec === 'function') {
-            const m = getMasterTransportDurationSec();
-            if (m > 0) return m;
+            dur = getMasterTransportDurationSec();
         }
-        return getDuration(videoMain);
+        if (!dur || dur <= 0) {
+            dur = getDuration(videoMain);
+        }
+        if (currentMarkers.length > 0) {
+            let markerMax = 0;
+            for (const m of currentMarkers) {
+                if (m.type === 'range') {
+                    markerMax = Math.max(
+                        markerMax,
+                        Number(m.startSec),
+                        Number(m.endSec),
+                    );
+                } else {
+                    markerMax = Math.max(markerMax, Number(m.timeSec));
+                }
+            }
+            if (Number.isFinite(markerMax) && markerMax > 0) {
+                const floor = markerMax + Math.max(markerOneFrameSec(), 0.04);
+                if (dur <= 0.01 + 1e-6 || floor > dur) {
+                    dur = Math.max(dur, floor);
+                }
+            }
+        }
+        return dur > 0 ? dur : 0;
     }
+
+    let markersLayoutRefreshTimer = null;
+
+    /** レーン配置確定後にマーカー UI を再描画（音声のみセッション復元直後・Chrome 向けに複数回） */
+    function scheduleMarkersUiRefreshAfterLayout() {
+        if (markersLayoutRefreshTimer != null) {
+            clearTimeout(markersLayoutRefreshTimer);
+            markersLayoutRefreshTimer = null;
+        }
+        const run = () => {
+            flushPendingSessionMarkersRestore();
+            if (isMarkerTcInputFocused()) {
+                renderSeekBarMarkers();
+                updateMarkerRangeHint();
+                return;
+            }
+            refreshMarkerUi();
+        };
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+        run();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(run);
+        });
+        [50, 200, 600].forEach((ms) => {
+            setTimeout(run, ms);
+        });
+        markersLayoutRefreshTimer = setTimeout(() => {
+            markersLayoutRefreshTimer = null;
+            run();
+        }, 1200);
+    }
+
+    window.scheduleMarkersUiRefreshAfterLayout = scheduleMarkersUiRefreshAfterLayout;
 
     function secToSeekRatio(sec, dur) {
         if (!dur || dur <= 0) return 0;
@@ -600,7 +745,9 @@
         normalizeAllMarkerRanges({ silent: true });
         sortMarkersInPlace();
         saveMarkersToCache();
-        if (!(opt && opt.skipMarkerList)) renderMarkerList();
+        if (!(opt && opt.skipMarkerList) && !isMarkerTcInputFocused()) {
+            renderMarkerList();
+        }
         renderSeekBarMarkers();
         if (typeof schedulePersistSession === 'function') {
             schedulePersistSession();
@@ -953,6 +1100,10 @@
         return !!(el && el.classList && el.classList.contains('marker-table__tc-input'));
     }
 
+    function isMarkerTcInputFocused() {
+        return isMarkerTcInputElement(document.activeElement);
+    }
+
     function effectiveMarkerTcEdge(m, edge) {
         if (edge === 'out') return 'out';
         if (m && m.id === activeMarkerId && markerActiveTcEdge === 'out') {
@@ -983,9 +1134,13 @@
         if (idx == null) return false;
         let newIdx;
         if (bySeconds) {
-            const videoSec = videoSecFromPlaybackFrameIndex(idx);
-            if (videoSec == null) return false;
-            newIdx = playbackFrameIndexForSide(videoSec + sign, 'main');
+            const transportSec = transportSecFromPlaybackFrameIndex(idx);
+            if (transportSec == null) return false;
+            const bumped = clampMarkerSec(transportSec + sign);
+            newIdx = playbackFrameIndexForSide(
+                markerVideoSecForTransportSec(bumped),
+                'main',
+            );
         } else {
             newIdx = clampFrameIndexToClip(idx + sign, 'main');
         }
@@ -1027,10 +1182,20 @@
         return true;
     }
 
+    function markerTcNudgeShiftHeld(ev) {
+        return !!(
+            ev.shiftKey ||
+            (typeof ev.getModifierState === 'function' && ev.getModifierState('Shift'))
+        );
+    }
+
     function handleMarkerPanelTcNudgeKeydown(ev) {
         if (ev.ctrlKey || ev.altKey || ev.metaKey) return false;
+        const shift = markerTcNudgeShiftHeld(ev);
         const plus =
-            ev.code === 'NumpadAdd' || ev.key === '+' || (ev.code === 'Equal' && ev.shiftKey);
+            ev.code === 'NumpadAdd' ||
+            ev.key === '+' ||
+            (ev.code === 'Equal' && shift);
         const minus = ev.code === 'NumpadSubtract' || ev.key === '-' || ev.code === 'Minus';
         if (!plus && !minus) return false;
         if (!markerTimelineReady()) return false;
@@ -1062,7 +1227,7 @@
         if (!m) return false;
 
         const sign = plus ? 1 : -1;
-        if (nudgeMarkerTcByEdge(m, edge, sign, !!ev.shiftKey, input)) {
+        if (nudgeMarkerTcByEdge(m, edge, sign, shift, input)) {
             ev.preventDefault();
             return true;
         }
@@ -1165,6 +1330,10 @@
                 input.blur();
             }
         });
+        input.addEventListener('mousedown', (ev) => {
+            if (ev.button !== 0) return;
+            suppressMarkerRowHoverSeek(800);
+        });
         input.addEventListener('blur', (ev) => {
             tcEditRevert = null;
             if (isMarkerTcInputElement(ev.relatedTarget)) return;
@@ -1181,6 +1350,7 @@
             }
         });
         input.addEventListener('focus', () => {
+            suppressMarkerRowHoverSeek(800);
             markerActiveTcEdge = edge === 'out' ? 'out' : 'in';
             activeMarkerId = m.id;
             updateMarkerRowActiveClass(m.id);
@@ -1268,8 +1438,9 @@
         return performance.now() < suppressMarkerRowHoverSeekUntil;
     }
 
-    /** 再生中は MARKERS 行ホバーでのジャンプを無効（停止時のみ） */
+    /** 再生中・TC 編集中は MARKERS 行ホバーでのジャンプを無効 */
     function isMarkerRowHoverSeekBlocked() {
+        if (isMarkerTcInputFocused()) return true;
         if (typeof isTransportPlaying === 'function') return isTransportPlaying();
         return !videoMain.paused;
     }
@@ -2355,7 +2526,6 @@
         const feedbackLabelSpans = [];
         let drew = 0;
         currentMarkers.forEach((m) => {
-            if (!isMarkerVisibleOnSeekBar(m, dur)) return;
             const active = m.id === activeMarkerId;
             if (m.type === 'range') {
                 const left = secToSeekRatio(m.startSec, dur);
@@ -2460,8 +2630,10 @@
         renderTimelineMarkersLayer(audioWaveformMarkers);
     }
 
-    function refreshMarkerUi() {
-        renderMarkerList();
+    function refreshMarkerUi(opt) {
+        const skipList =
+            (opt && opt.skipMarkerList) || isMarkerTcInputFocused();
+        if (!skipList) renderMarkerList();
         renderAudioWaveformMarkers();
         updateMarkerRangeHint();
     }
@@ -2495,6 +2667,7 @@
             tdIn.addEventListener('mouseenter', () => {
                 if (isMarkerHoverBlockedByCommentFocus(m.id)) return;
                 if (isMarkerRowHoverSeekBlocked()) return;
+                if (isMarkerTcInputFocused()) return;
                 markerActiveTcEdge = 'in';
                 syncSeekToMarkerRow(m, { quiet: true, seekIn: true, fromRowHover: true });
             });
@@ -2505,6 +2678,7 @@
             tdOut.addEventListener('mouseenter', () => {
                 if (isMarkerHoverBlockedByCommentFocus(m.id)) return;
                 if (isMarkerRowHoverSeekBlocked()) return;
+                if (isMarkerTcInputFocused()) return;
                 markerActiveTcEdge = 'out';
                 syncSeekToMarkerRow(m, {
                     quiet: true,
@@ -2574,7 +2748,9 @@
     function clearMarkersForRevoke() {
         pendingRangeStartSec = null;
         activeMarkerId = null;
+        pendingSessionMarkersForRestore = null;
         currentMarkers = [];
+        markersByVideoKey.clear();
         renderMarkerList();
         renderSeekBarMarkers();
         updateMarkerRangeHint();
@@ -2648,4 +2824,21 @@
         renderSeekBarMarkers();
         updateMarkerRangeHint();
         updateMarkerCommentOverlay();
+
+        const lanes =
+            typeof audioWaveformLanesTracks !== 'undefined'
+                ? audioWaveformLanesTracks
+                : null;
+        if (lanes && typeof ResizeObserver !== 'undefined') {
+            let markerResizeRaf = 0;
+            const obs = new ResizeObserver(() => {
+                if (!currentMarkers.length) return;
+                if (markerResizeRaf) return;
+                markerResizeRaf = requestAnimationFrame(() => {
+                    markerResizeRaf = 0;
+                    if ((lanes.clientWidth | 0) > 0) renderSeekBarMarkers();
+                });
+            });
+            obs.observe(lanes);
+        }
     }

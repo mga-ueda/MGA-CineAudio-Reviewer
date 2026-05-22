@@ -5,13 +5,27 @@
 
     const UI_PREFS_STORAGE_KEY = 'mga_cineaudio_reviewer_monitor_prefs_v1';
     const DEFAULT_MASTER_VOL_LINEAR = 1;
+    const MASTER_VOL_UNITY_LINEAR = 1;
+    const MASTER_VOL_SLIDER_STEP = 0.01;
+
+    /** スライダー刻みに合わせ、0 dB（1.0）付近は厳密に 1.0 へスナップ */
+    function normalizeMasterVolLinear(raw) {
+        const g = parseFloat(raw);
+        const safe = isFinite(g) ? g : DEFAULT_MASTER_VOL_LINEAR;
+        const clamped = Math.max(0, Math.min(2, safe));
+        const stepped =
+            Math.round(clamped / MASTER_VOL_SLIDER_STEP) * MASTER_VOL_SLIDER_STEP;
+        if (Math.abs(stepped - MASTER_VOL_UNITY_LINEAR) < MASTER_VOL_SLIDER_STEP * 0.51) {
+            return MASTER_VOL_UNITY_LINEAR;
+        }
+        return Math.round(stepped * 100) / 100;
+    }
 
     /**
      * マスター線形ゲイン g（スライダー値＝GainNode.gain）に対し、100%=1.0 を 0 dB とした振幅比表示。
      */
     function formatMasterVolDisplayText(linearGain) {
-        const g = Math.max(0, parseFloat(linearGain));
-        const safeG = !isNaN(g) ? g : 0;
+        const safeG = normalizeMasterVolLinear(linearGain);
         const pct = Math.round(safeG * 100);
         if (safeG <= 0) return `${pct}% (−∞ dB)`;
         const db = 20 * Math.log10(safeG);
@@ -21,9 +35,8 @@
 
     function readMasterVolSliderLinear() {
         const el = document.getElementById('masterVolSlider');
-        if (!el) return DEFAULT_MASTER_VOL_LINEAR;
-        const v = parseFloat(el.value);
-        return !isNaN(v) ? Math.max(0, Math.min(2, v)) : DEFAULT_MASTER_VOL_LINEAR;
+        if (!el) return normalizeMasterVolLinear(DEFAULT_MASTER_VOL_LINEAR);
+        return normalizeMasterVolLinear(el.value);
     }
 
     function syncMasterVolDisplay(linearGain) {
@@ -32,12 +45,12 @@
     }
 
     function applyMasterVolToMix(linearGain, smooth, ctxOpt) {
-        const g = Math.max(0, parseFloat(linearGain));
-        const safeG = !isNaN(g) ? g : DEFAULT_MASTER_VOL_LINEAR;
+        const safeG = normalizeMasterVolLinear(linearGain);
         reviewMixMasterLinearGain = safeG;
         const slider = document.getElementById('masterVolSlider');
-        if (slider && slider.value !== String(safeG)) {
-            slider.value = safeG.toFixed(2);
+        const sliderStr = safeG.toFixed(2);
+        if (slider && slider.value !== sliderStr) {
+            slider.value = sliderStr;
         }
         syncMasterVolDisplay(safeG);
         const ctx = ctxOpt || getReviewMixAudioCtx();
@@ -65,7 +78,7 @@
         return {
             spectrumFloor: spectrumDisplayDbMin,
             meterFloor: meterDisplayDbMin,
-            masterVol: readMasterVolSliderLinear(),
+            masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
         };
     }
 
@@ -85,7 +98,7 @@
         if (specSel) specSel.value = String(spectrumDisplayDbMin);
         if (metSel) metSel.value = String(meterDisplayDbMin);
         if (typeof snap.masterVol === 'number' && isFinite(snap.masterVol)) {
-            applyMasterVolToMix(Math.max(0, Math.min(2, snap.masterVol)), false);
+            applyMasterVolToMix(snap.masterVol, false);
         }
         saveUiPrefsToLocalStorage();
     }
@@ -100,7 +113,7 @@
                 JSON.stringify({
                     spectrumFloor: spectrumDisplayDbMin,
                     meterFloor: meterDisplayDbMin,
-                    masterVol: readMasterVolSliderLinear(),
+                    masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
                 }),
             );
         } catch (_) {}
@@ -120,7 +133,7 @@
                         meterDisplayDbMin = o.meterFloor;
                     }
                     if (typeof o.masterVol === 'number' && isFinite(o.masterVol)) {
-                        applyMasterVolToMix(Math.max(0, Math.min(2, o.masterVol)), false);
+                        applyMasterVolToMix(o.masterVol, false);
                         loadedMasterVolFromStorage = true;
                     }
                 }
@@ -266,7 +279,7 @@
             masterGainNode.disconnect(ctx.destination);
         } catch (_) {}
         masterGainNode.connect(ctx.destination);
-        applyMasterVolToMix(readMasterVolSliderLinear(), false, ctx);
+        applyMasterVolToMix(reviewMixMasterLinearGain, false, ctx);
         if (monitorTransportActive && !requestAnimId && masterAnalyser) {
             requestAnimationFrame(updateUIFrame);
         }
@@ -291,6 +304,7 @@
         slider.addEventListener('dblclick', (ev) => {
             ev.preventDefault();
             applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, true);
+            saveUiPrefsToLocalStorage();
         });
     }
     bindMasterVolSlider();

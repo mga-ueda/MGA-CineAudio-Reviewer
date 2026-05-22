@@ -105,6 +105,16 @@
         if (!row || typeof row !== 'object') {
             row = { v: 4, audioOnlySession: true, extraTracks: [] };
         }
+        if (typeof getMarkersSnapshot === 'function') {
+            const mem = getMarkersSnapshot();
+            if (mem && mem.length) {
+                row.markers = mem;
+            } else if (sessionRowHasMarkers(row)) {
+                /* 既存行の markers は維持（Ex 単体保存で消さない） */
+            } else {
+                delete row.markers;
+            }
+        }
         if (!row.mBlob) {
             row.audioOnlySession = true;
             if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
@@ -201,7 +211,12 @@
 
     async function attachWaveformSessionFieldsToRow(row) {
         if (typeof getMarkersSnapshot === 'function') {
-            row.markers = getMarkersSnapshot();
+            const mem = getMarkersSnapshot();
+            if (mem && mem.length) {
+                row.markers = mem;
+            } else if (!sessionRowHasMarkers(row)) {
+                row.markers = [];
+            }
         }
         await mergePrevMarkersDuringRestore(row);
         if (typeof getRangeLoopPersistSnapshot === 'function') {
@@ -218,6 +233,9 @@
             } else {
                 await mergePrevExtraTracksDuringRestore(row);
             }
+        }
+        if (typeof getMonitorUiPersistSnapshot === 'function') {
+            row.monitorPrefs = getMonitorUiPersistSnapshot();
         }
     }
 
@@ -255,6 +273,24 @@
     }
 
     window.buildSessionPersistRow = buildSessionPersistRow;
+
+    /** All Clear 等: 保存セッションを IndexedDB から完全削除 */
+    async function deleteStoredSession() {
+        clearTimeout(persistSessionTimer);
+        persistSessionTimer = null;
+        if (!window.indexedDB) return;
+        try {
+            const db = await openIdb();
+            await new Promise((resolve, reject) => {
+                const tx = db.transaction(IDB_STORE, 'readwrite');
+                tx.oncomplete = () => resolve();
+                tx.onerror = () => reject(tx.error);
+                tx.objectStore(IDB_STORE).delete(IDB_KEY_LAST);
+            });
+        } catch (_) {}
+    }
+
+    window.deleteStoredSession = deleteStoredSession;
 
     async function persistSessionToStorage() {
         if (!window.indexedDB) return;
@@ -439,6 +475,13 @@
         if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
         if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
         if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
+            scheduleMarkersUiRefreshAfterLayout();
+        } else if (typeof refreshMarkerUi === 'function') {
+            refreshMarkerUi();
+        } else if (typeof flushPendingSessionMarkersRestore === 'function') {
+            flushPendingSessionMarkersRestore();
+        }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
         }
@@ -484,13 +527,22 @@
             pendingLaneUiRestore = null;
         }
 
-        if (typeof loadMarkersForCurrentVideo === 'function') {
+        if (typeof restoreMarkersFromSessionRow === 'function') {
+            restoreMarkersFromSessionRow(row);
+        } else if (typeof loadMarkersForCurrentVideo === 'function') {
             loadMarkersForCurrentVideo(
                 Array.isArray(row.markers) ? row.markers : undefined,
             );
         }
         if (typeof adoptMarkersForAudioOnlySession === 'function') {
             adoptMarkersForAudioOnlySession();
+        }
+        if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
+            scheduleMarkersUiRefreshAfterLayout();
+        } else if (typeof refreshMarkerUi === 'function') {
+            refreshMarkerUi();
+        } else if (typeof flushPendingSessionMarkersRestore === 'function') {
+            flushPendingSessionMarkersRestore();
         }
 
         await finishSessionRestoreFromRow(row, {
@@ -503,6 +555,12 @@
     async function applySessionPersistRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
+        if (
+            row.monitorPrefs &&
+            typeof applyMonitorUiPersistSnapshot === 'function'
+        ) {
+            applyMonitorUiPersistSnapshot(row.monitorPrefs);
+        }
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);

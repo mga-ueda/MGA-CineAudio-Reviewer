@@ -716,4 +716,7 @@
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
         }
+        if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
+            scheduleMarkersUiRefreshAfterLayout();
+        }
     })();

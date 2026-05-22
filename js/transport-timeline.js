@@ -601,6 +601,9 @@
         if (typeof updateLaneContentEndMarkers === 'function') updateLaneContentEndMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
         if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
+        if (typeof flushPendingSessionMarkersRestore === 'function') {
+            flushPendingSessionMarkersRestore();
+        }
     }
 
     function resetTransportPlaybackClock() {
@@ -750,12 +753,27 @@
         return audioWaveformLanesTracks || audioWaveformTrack;
     }
 
+    /** 範囲外帯グラデ（青みのある濃いグレー・レーン下地 #161820 と同系） */
+    const TIMELINE_BAND_GRAD_LIGHT = 'rgba(36, 40, 52, 0.96)';
+    const TIMELINE_BAND_GRAD_MID = 'rgba(22, 26, 34, 0.95)';
+    const TIMELINE_BAND_GRAD_DARK = 'rgba(12, 14, 22, 0.94)';
+
     /** 動画尺以降マスター上の「範囲外」帯（グレーの横グラデーション）。 */
     function timelineBeyondVideoFillGradient(ctx, x0, x1, hCss) {
         const grad = ctx.createLinearGradient(x0, 0, x1, 0);
-        grad.addColorStop(0, 'rgba(40, 42, 48, 0.96)');
-        grad.addColorStop(0.42, 'rgba(24, 26, 30, 0.95)');
-        grad.addColorStop(1, 'rgba(14, 15, 18, 0.94)');
+        grad.addColorStop(0, TIMELINE_BAND_GRAD_LIGHT);
+        grad.addColorStop(0.42, TIMELINE_BAND_GRAD_MID);
+        grad.addColorStop(1, TIMELINE_BAND_GRAD_DARK);
+        void hCss;
+        return grad;
+    }
+
+    /** 波形開始より前: 終端帯と同色だが向き反転（マスター左=暗 → 波形手前=明）。 */
+    function timelinePreAudioStartFillGradient(ctx, x0, x1, hCss) {
+        const grad = ctx.createLinearGradient(x0, 0, x1, 0);
+        grad.addColorStop(0, TIMELINE_BAND_GRAD_DARK);
+        grad.addColorStop(0.58, TIMELINE_BAND_GRAD_MID);
+        grad.addColorStop(1, TIMELINE_BAND_GRAD_LIGHT);
         void hCss;
         return grad;
     }
@@ -764,12 +782,7 @@
     function drawTimelinePreAudioStartBand(ctx, wCss, hCss, startX) {
         if (!startX || startX < 0.5 || !wCss || !hCss) return;
         const x1 = Math.min(startX, wCss);
-        const grad = ctx.createLinearGradient(0, 0, x1, 0);
-        grad.addColorStop(0, 'rgba(20, 3, 6, 0.97)');
-        grad.addColorStop(0.55, 'rgba(32, 6, 10, 0.96)');
-        grad.addColorStop(1, 'rgba(42, 9, 14, 0.95)');
-        void hCss;
-        ctx.fillStyle = grad;
+        ctx.fillStyle = timelinePreAudioStartFillGradient(ctx, 0, x1, hCss);
         ctx.fillRect(0, 0, x1, hCss);
     }
 
@@ -815,6 +828,9 @@
     function timelineContentEndDrawOpt() {
         return {};
     }
+
+    /** レーン全面の下地（濃いグレー・単色） */
+    const TIMELINE_LANE_TRACK_BG = '#161820';
 
     function timelineWaveformFillGradient(ctx, hCss, laneKind, audible) {
         void laneKind;
@@ -1309,7 +1325,7 @@
     function drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, contentDurSec, fillStyle, drawOpt) {
         const mid = hCss * 0.5;
         ctx.clearRect(0, 0, wCss, hCss);
-        ctx.fillStyle = 'rgba(8, 6, 10, 0.92)';
+        ctx.fillStyle = TIMELINE_LANE_TRACK_BG;
         ctx.fillRect(0, 0, wCss, hCss);
 
         const timelineStartSec =

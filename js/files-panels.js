@@ -250,8 +250,13 @@
             clearRangeLoopPlayback({ silent: true });
         }
         if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
+        if (typeof pendingLaneUiRestore !== 'undefined') pendingLaneUiRestore = null;
+        if (typeof setSessionMixRestore === 'function') setSessionMixRestore(null);
         if (typeof resetTransportPlaybackClock === 'function') {
             resetTransportPlaybackClock();
+        }
+        if (typeof deleteStoredSession === 'function') {
+            await deleteStoredSession();
         }
         revokeAll();
         if (typeof resetVideoDriftMonitorSchedule === 'function') {
@@ -262,10 +267,8 @@
         }
         if (typeof syncSeekMax === 'function') syncSeekMax();
         if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
-        if (typeof flushPersistSessionNow === 'function') {
-            await flushPersistSessionNow();
-        } else if (typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+        if (typeof deleteStoredSession === 'function') {
+            await deleteStoredSession();
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
@@ -575,6 +578,12 @@
     }
 
     function hasPlayableWaveformTimeline() {
+        if (
+            typeof hasAnyExtraTrackTimelineContent === 'function' &&
+            hasAnyExtraTrackTimelineContent()
+        ) {
+            return true;
+        }
         return (
             typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded()
         );

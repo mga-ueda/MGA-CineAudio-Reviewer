@@ -657,7 +657,7 @@
 
     function extraTrackTimelineEndSec(slot) {
         const start = getExtraTrackTimelineStartSec(slot);
-        const dur = extraTrackBufferDuration(slot);
+        const dur = extraTrackContentDurationSec(slot);
         return start + (dur > 0 ? dur : 0);
     }
 
@@ -1118,6 +1118,9 @@
         if (ui.meta) ui.meta.classList.add('loaded');
         refreshExtraTrackUi(slot);
         scheduleExtraTrackWaveformRedraw(slot);
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
         writeLog(
             'Extra audio ' +
                 (slot + 1) +
@@ -1742,6 +1745,7 @@
     window.extraTrackBufferDuration = extraTrackBufferDuration;
     window.isExtraTrackLoaded = isExtraTrackLoaded;
     window.hasAnyExtraTrackLoaded = hasAnyExtraTrackLoaded;
+    window.hasAnyExtraTrackTimelineContent = hasAnyExtraTrackTimelineContent;
     window.EXTRA_TRACK_COUNT = EXTRA_TRACK_COUNT;
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
@@ -2121,6 +2125,19 @@
     function hasAnyExtraTrackLoaded() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             if (isExtraTrackLoaded(i)) return true;
+        }
+        return false;
+    }
+
+    /** デコード前の peaks プレビュー（restoreDurationHint）もタイムライン有効とみなす */
+    function hasAnyExtraTrackTimelineContent() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (isExtraTrackLoaded(i)) return true;
+            const tr = extraTrackBySlot(i);
+            if (!tr || !tr.peaks || !tr.peaks.length) continue;
+            if (tr.buffer && tr.buffer.duration > 0) return true;
+            const hint = Number(tr.restoreDurationHint);
+            if (Number.isFinite(hint) && hint > 0) return true;
         }
         return false;
     }

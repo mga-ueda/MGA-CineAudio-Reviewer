@@ -1518,8 +1518,7 @@
             position: absolute;
             inset: 0;
             z-index: 0;
-            background: linear-gradient(180deg, #1c1418 0%, #120c10 100%);
-            opacity: 0.55;
+            background: #161820;
         }
         .audio-waveform-lane__canvas {
             position: relative;
