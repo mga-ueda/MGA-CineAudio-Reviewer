@@ -523,6 +523,15 @@
         return hadActive || inComment;
     }
 
+    function isMarkerAreaKeyboardActive(opt) {
+        const inPanel = (el) =>
+            el && el.nodeType === 1 && el.closest && el.closest('#markerPanel');
+        if (inPanel(opt && opt.target)) return true;
+        return inPanel(document.activeElement);
+    }
+
+    window.isMarkerAreaKeyboardActive = isMarkerAreaKeyboardActive;
+
     function handleMarkerEscapeKeydown(e) {
         if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
         if (e.repeat) return false;
@@ -534,7 +543,7 @@
         }
 
         const el = e.target;
-        const inMarkerPanel = el && el.closest && el.closest('#markerPanel');
+        const inMarkerPanel = isMarkerAreaKeyboardActive({ target: el });
         const inComment = el && el.closest && el.closest('.marker-table__comment');
         const hadActive = activeMarkerId != null;
 

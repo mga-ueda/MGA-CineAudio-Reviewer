@@ -312,6 +312,10 @@
 
         if (isTypingTarget(e.target)) return;
 
+        if (typeof handleWaveformTimelineKeydown === 'function' && handleWaveformTimelineKeydown(e)) {
+            return;
+        }
+
         if (typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive()) {
             const appKey =
                 e.code === 'Space' ||
@@ -331,7 +335,14 @@
                 e.code === 'KeyD' ||
                 e.code === 'KeyZ' ||
                 e.code === 'KeyX' ||
-                e.code === 'KeyC';
+                e.code === 'KeyC' ||
+                e.code === 'KeyR' ||
+                e.code === 'Equal' ||
+                e.code === 'Minus' ||
+                e.code === 'NumpadAdd' ||
+                e.code === 'NumpadSubtract' ||
+                e.code === 'PageUp' ||
+                e.code === 'PageDown';
             if (appKey && typeof endAudioWaveformScrub === 'function') endAudioWaveformScrub();
         }
         const waveFocus = audioWaveformLanesTracks || audioWaveformTrack;
@@ -354,7 +365,14 @@
                 e.code === 'KeyD' ||
                 e.code === 'KeyZ' ||
                 e.code === 'KeyX' ||
-                e.code === 'KeyC';
+                e.code === 'KeyC' ||
+                e.code === 'KeyR' ||
+                e.code === 'Equal' ||
+                e.code === 'Minus' ||
+                e.code === 'NumpadAdd' ||
+                e.code === 'NumpadSubtract' ||
+                e.code === 'PageUp' ||
+                e.code === 'PageDown';
             if (appKey && waveFocus) waveFocus.blur();
         }
 

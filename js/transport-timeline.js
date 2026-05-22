@@ -909,7 +909,84 @@
         }
     }
 
+    function isWaveformTimelineKeyboardReady() {
+        return (
+            (typeof videoReady === 'function' && videoReady()) ||
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded())
+        );
+    }
+
+    function waveformTimelineZoomAnchorClientX() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return null;
+        const rect = lanes.getBoundingClientRect();
+        return rect.left + rect.width * 0.5;
+    }
+
+    function resetWaveformTimelineZoom() {
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, null);
+    }
+
+    function stepWaveformTimelineZoom(zoomIn, fast) {
+        const mult = fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1;
+        const base = WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR;
+        const factor = zoomIn ? Math.pow(base, mult) : 1 / Math.pow(base, mult);
+        setWaveformTimelineZoom(waveformTimelineZoom * factor, waveformTimelineZoomAnchorClientX());
+    }
+
+    function scrollWaveformTimeline(direction, fast) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) return false;
+        const step = Math.max(
+            48,
+            Math.round(waveformTimelineViewportWidthCss() * 0.12) *
+                (fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1),
+        );
+        const max = Math.max(0, lanes.scrollWidth - lanes.clientWidth);
+        lanes.scrollLeft = Math.max(0, Math.min(max, lanes.scrollLeft + step * direction));
+        onWaveformLanesScroll();
+        return true;
+    }
+
+    function handleWaveformTimelineKeydown(e) {
+        if (!isWaveformTimelineKeyboardReady()) return false;
+        if (
+            typeof isMarkerAreaKeyboardActive === 'function' &&
+            isMarkerAreaKeyboardActive({ target: e.target })
+        ) {
+            return false;
+        }
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+        if (e.ctrlKey || e.altKey || e.metaKey) return false;
+
+        if (!e.shiftKey && !e.repeat && e.code === 'KeyR') {
+            e.preventDefault();
+            resetWaveformTimelineZoom();
+            return true;
+        }
+
+        const zoomIn = e.code === 'Equal' || e.code === 'NumpadAdd';
+        const zoomOut = e.code === 'Minus' || e.code === 'NumpadSubtract';
+        if (zoomIn || zoomOut) {
+            if (e.repeat) return false;
+            e.preventDefault();
+            stepWaveformTimelineZoom(!!zoomIn, e.shiftKey);
+            return true;
+        }
+
+        if (e.code === 'PageUp' || e.code === 'PageDown') {
+            e.preventDefault();
+            const dir = e.code === 'PageDown' ? 1 : -1;
+            scrollWaveformTimeline(dir, e.shiftKey);
+            return true;
+        }
+
+        return false;
+    }
+
     window.waveformTimelineHoverLeftPercent = waveformTimelineHoverLeftPercent;
+    window.handleWaveformTimelineKeydown = handleWaveformTimelineKeydown;
+    window.resetWaveformTimelineZoom = resetWaveformTimelineZoom;
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
