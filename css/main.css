@@ -1520,7 +1520,8 @@
             font-weight: 500;
             line-height: 1.2;
             letter-spacing: 0.02em;
-            color: rgba(130, 138, 152, 0.94);
+            color: var(--accent-ink);
+            -webkit-text-fill-color: var(--accent-ink);
             pointer-events: none;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -2516,8 +2517,7 @@
             white-space: nowrap;
         }
         .transport-drift-prefix,
-        .transport-drift-suffix,
-        .transport-drift-sync {
+        .transport-drift-suffix {
             color: var(--transport-opt-label-color);
             font-weight: 400;
         }

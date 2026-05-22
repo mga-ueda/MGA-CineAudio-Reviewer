@@ -107,8 +107,7 @@
         statEl.innerHTML =
             '<span class="transport-drift-prefix">Playback Drift - </span>' +
             '<span class="transport-drift-ms transport-drift-ms--safe">0000</span>' +
-            '<span class="transport-drift-suffix"> ms</span>' +
-            '<span class="transport-drift-sync" hidden></span>';
+            '<span class="transport-drift-suffix"> ms</span>';
     }
 
     function clearPlaybackDriftDisplay(statEl) {
@@ -116,16 +115,11 @@
         statEl.textContent = '';
     }
 
-    function setPlaybackDriftDisplay(statEl, absDriftSec, corrected) {
+    function setPlaybackDriftDisplay(statEl, absDriftSec) {
         ensurePlaybackDriftDisplayStructure(statEl);
         const msEl = playbackDriftMsEl(statEl);
-        const syncEl = statEl.querySelector('.transport-drift-sync');
         const ms = playbackDriftMsFromSec(absDriftSec);
         if (msEl) msEl.textContent = String(ms).padStart(4, '0');
-        if (syncEl) {
-            syncEl.hidden = !corrected;
-            syncEl.textContent = corrected ? ' Sync' : '';
-        }
     }
 
     function applyPlaybackDriftPanelTone(statEl, tone) {
@@ -234,7 +228,7 @@
         const corrected =
             !!(opt && opt.corrected) || performance.now() < videoDriftCorrectFlashUntil;
         if (driftBox) driftBox.hidden = false;
-        setPlaybackDriftDisplay(statEl, signed, corrected);
+        setPlaybackDriftDisplay(statEl, signed);
         applyPlaybackDriftPanelTone(statEl, playbackDriftToneFromMs(ms));
         if (driftBox) {
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
