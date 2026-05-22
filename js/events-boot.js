@@ -646,9 +646,6 @@
         if (typeof initMarkers === 'function') {
             initMarkers();
         }
-        if (typeof initPlayerSplitter === 'function') {
-            initPlayerSplitter();
-        }
         if (typeof initExtraAudioTracksUi === 'function') {
             initExtraAudioTracksUi();
         }

@@ -201,9 +201,8 @@
             scroll-margin-top: 12px;
             display: flex;
             flex-direction: row;
-            align-items: flex-start;
-            gap: 0;
-            --marker-panel-width: 50%;
+            align-items: stretch;
+            gap: 10px;
             min-height: 200px;
         }
         .player-stage__main {
@@ -211,53 +210,11 @@
             min-width: 240px;
             min-height: 0;
         }
-        .player-splitter {
-            flex: 0 0 7px;
-            width: 7px;
-            cursor: col-resize;
-            touch-action: none;
-            position: relative;
-            z-index: 2;
-            align-self: stretch;
-            min-height: 120px;
-            margin: 0 2px;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.04);
-            transition: background 0.15s ease;
-        }
-        .player-splitter::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 3px;
-            height: 96px;
-            max-height: 80%;
-            border-radius: 2px;
-            background: linear-gradient(180deg, var(--accent-deep), var(--accent), var(--accent-deep));
-            opacity: 0.55;
-        }
-        .player-splitter:hover,
-        .player-splitter:focus-visible,
-        .player-splitter--dragging {
-            background: rgba(196, 30, 58, 0.18);
-        }
-        .player-splitter:hover::before,
-        .player-splitter:focus-visible::before,
-        .player-splitter--dragging::before {
-            opacity: 1;
-            box-shadow: 0 0 10px var(--accent-glow-weak);
-        }
-        .player-splitter:focus-visible {
-            outline: 2px solid var(--accent);
-            outline-offset: 1px;
-        }
         .marker-panel {
-            flex: 0 0 var(--marker-panel-width);
-            width: var(--marker-panel-width);
+            flex: 0 0 50%;
+            width: 50%;
             min-width: 200px;
-            max-width: 72%;
+            max-width: 50%;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -719,18 +676,6 @@
         @media (max-width: 960px) {
             .player-stage {
                 flex-direction: column;
-            }
-            .player-splitter {
-                flex: 0 0 7px;
-                width: 100%;
-                height: 7px;
-                margin: 4px 0;
-                cursor: row-resize;
-            }
-            .player-splitter::before {
-                width: 96px;
-                height: 6px;
-                max-height: none;
             }
             .marker-panel {
                 flex: none;

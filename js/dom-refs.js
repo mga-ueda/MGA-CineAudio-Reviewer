@@ -24,7 +24,6 @@
     const logEl = document.getElementById('log');
     const playerStage = document.getElementById('playerStage');
     const playerStageMain = document.getElementById('playerStageMain');
-    const playerSplitter = document.getElementById('playerSplitter');
     const markerPanel = document.getElementById('markerPanel');
     const markerTableBody = document.getElementById('markerTableBody');
     const markerTableWrap = document.getElementById('markerTableWrap');

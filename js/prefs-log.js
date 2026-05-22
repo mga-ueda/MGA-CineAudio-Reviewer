@@ -130,10 +130,6 @@
             const prev = readPrefs();
             const payload = {
                 loopPlayback: getLoopPlaybackEnabled(),
-                markerPanelWidthPx:
-                    typeof prev.markerPanelWidthPx === 'number'
-                        ? prev.markerPanelWidthPx
-                        : undefined,
             };
             if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
                 payload.laneUi = getWaveformLaneUiPersistSnapshot();
