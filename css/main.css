@@ -149,7 +149,9 @@
             border: 3px dashed var(--accent);
             background: linear-gradient(165deg, #352a22 0%, #221a16 100%);
         }
-        #main-drop-zone .drop-zone-note--targets {
+        #main-drop-zone .drop-zone-note--batch,
+        #main-drop-zone .drop-zone-note--targets,
+        #main-drop-zone .drop-zone-note--tracks {
             color: #9aa3b5;
         }
         .video-panel.file-drop-target--dragover {
@@ -182,7 +184,7 @@
         }
         #main-drop-zone .drop-zone-note {
             margin: 0;
-            font-size: 0.76em;
+            font-size: 0.70em;
             font-weight: 500;
             color: #8e96a8;
             line-height: 1.45;

@@ -653,6 +653,27 @@
     window.addEventListener('pagehide', persistOnPageExit);
     window.addEventListener('beforeunload', persistOnPageExit);
 
+    const transportShortcutsLink = document.getElementById('transportShortcutsLink');
+    if (transportShortcutsLink) {
+        transportShortcutsLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            const features = [
+                'noopener',
+                'noreferrer',
+                'width=820',
+                'height=720',
+                'menubar=no',
+                'toolbar=no',
+                'location=no',
+                'status=no',
+                'scrollbars=yes',
+                'resizable=yes',
+            ].join(',');
+            const win = window.open(transportShortcutsLink.href, 'mgaKeyboardShortcuts', features);
+            if (win) win.opener = null;
+        });
+    }
+
     (async function boot() {
         if (typeof initTimecodeOverlay === 'function') {
             initTimecodeOverlay();
