@@ -2041,13 +2041,16 @@
         }
         let ignored = 0;
         for (let i = 0; i < audios.length; i++) {
+            while (slot < EXTRA_TRACK_COUNT && isExtraTrackLoaded(slot)) {
+                slot += 1;
+            }
             if (slot < 0 || slot >= EXTRA_TRACK_COUNT) {
                 ignored += audios.length - i;
                 break;
             }
             setExtraTrackLaneUiOpen(slot, true, { deferLayout: true });
             void loadExtraTrackFile(slot, audios[i]);
-            slot = firstEmptyExtraSlot();
+            slot += 1;
         }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
