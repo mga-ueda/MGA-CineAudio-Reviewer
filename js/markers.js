@@ -74,6 +74,7 @@
         } else {
             currentMarkers = arr.map(normalizeMarker).filter(Boolean);
         }
+        normalizeAllMarkerRanges({ silent: true });
         sortMarkersInPlace();
         saveMarkersToCache();
         renderMarkerList();
@@ -557,6 +558,8 @@
     }
 
     function persistMarkersAfterChange(opt) {
+        normalizeAllMarkerRanges({ silent: true });
+        sortMarkersInPlace();
         saveMarkersToCache();
         if (!(opt && opt.skipMarkerList)) renderMarkerList();
         renderSeekBarMarkers();
@@ -613,13 +616,23 @@
             start = end;
             end = swap;
         }
-        const m = {
-            id: nextMarkerId(),
-            type: 'range',
-            startSec: start,
-            endSec: end,
-            comment: '',
-        };
+        const oneFrame = markerOneFrameSec();
+        const span = end - start;
+        const m =
+            span > oneFrame + 1e-9
+                ? {
+                      id: nextMarkerId(),
+                      type: 'range',
+                      startSec: start,
+                      endSec: end,
+                      comment: '',
+                  }
+                : {
+                      id: nextMarkerId(),
+                      type: 'point',
+                      timeSec: clampMarkerSec(start),
+                      comment: '',
+                  };
         currentMarkers.push(m);
         sortMarkersInPlace();
         activeMarkerId = m.id;
@@ -632,6 +645,55 @@
         const dur = masterDurForTimelineMarkers();
         if (!dur || dur <= 0) return 0;
         return Math.max(0, Math.min(dur - 0.001, sec));
+    }
+
+    function markerOneFrameSec() {
+        const fps = Math.max(1, masterFpsFloatForTransport());
+        return 1 / fps;
+    }
+
+    /** 範囲が1フレーム以下なら点マーカーへ（Out 削除と同義） */
+    function collapseRangeMarkerToPointIfNarrow(m, opt) {
+        if (!m || m.type !== 'range') return false;
+        const start = Number(m.startSec);
+        const end = Number(m.endSec);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+        const span = end - start;
+        const oneFrame = markerOneFrameSec();
+        if (span > oneFrame + 1e-9) return false;
+        const t = clampMarkerSec(start);
+        m.type = 'point';
+        m.timeSec = t;
+        delete m.startSec;
+        delete m.endSec;
+        if (!(opt && opt.silent)) {
+            writeLog('Marker: range ≤1f collapsed to point at ' + tcLabelForSec(t));
+        }
+        return true;
+    }
+
+    function normalizeAllMarkerRanges(opt) {
+        let changed = false;
+        for (let i = 0; i < currentMarkers.length; i++) {
+            if (collapseRangeMarkerToPointIfNarrow(currentMarkers[i], { silent: true })) {
+                changed = true;
+            }
+        }
+        if (changed && !(opt && opt.silent)) {
+            sortMarkersInPlace();
+        }
+        return changed;
+    }
+
+    function transportSecFromWaveformClientX(clientX) {
+        if (typeof transportSecFromClientX === 'function') {
+            return transportSecFromClientX(clientX);
+        }
+        const dur = masterDurForTimelineMarkers();
+        if (typeof transportRatioFromClientX === 'function') {
+            return transportRatioFromClientX(clientX) * dur;
+        }
+        return 0;
     }
 
     function videoSecFromPlaybackFrameIndex(targetIdx) {
@@ -745,36 +807,34 @@
         const m = currentMarkers.find((x) => x.id === markerId);
         if (!m) return false;
         const t = clampMarkerSec(sec);
+        const oneFrame = markerOneFrameSec();
         if (m.type === 'point') {
             if (edge === 'in') {
                 m.timeSec = t;
             } else if (edge === 'out') {
                 const start = clampMarkerSec(m.timeSec);
-                let end = t;
                 m.type = 'range';
                 m.startSec = start;
-                m.endSec = end;
+                m.endSec = Math.max(start + oneFrame, t);
                 delete m.timeSec;
-                if (m.endSec < m.startSec) {
-                    const swap = m.startSec;
-                    m.startSec = m.endSec;
-                    m.endSec = swap;
-                }
             } else {
                 return false;
             }
         } else if (m.type === 'range') {
-            if (edge === 'in') m.startSec = t;
-            else if (edge === 'out') m.endSec = t;
-            else return false;
-            if (m.endSec < m.startSec) {
-                const swap = m.startSec;
-                m.startSec = m.endSec;
-                m.endSec = swap;
+            if (edge === 'in') {
+                m.startSec = Math.max(0, Math.min(t, m.endSec - oneFrame));
+            } else if (edge === 'out') {
+                m.endSec = Math.max(m.startSec + oneFrame, t);
+            } else {
+                return false;
+            }
+            if (m.endSec <= m.startSec) {
+                m.endSec = m.startSec + oneFrame;
             }
         } else {
             return false;
         }
+        collapseRangeMarkerToPointIfNarrow(m, { silent: true });
         sortMarkersInPlace();
         activeMarkerId = m.id;
         persistMarkersAfterChange(opt);
@@ -817,6 +877,10 @@
         return playbackFrameIndexForSide(markerVideoSecForTcInputRaw(raw, m, edge), 'main');
     }
 
+    function isMarkerTcInputElement(el) {
+        return !!(el && el.classList && el.classList.contains('marker-table__tc-input'));
+    }
+
     function nudgeMarkerTcInput(input, m, edge, sign, bySeconds) {
         if (!input || !videoReady() || !Number.isFinite(sign) || sign === 0) return false;
         const idx = frameIndexFromMarkerTcInputRaw(input.value, m, edge);
@@ -842,6 +906,9 @@
         }
         renderSeekBarMarkers();
         updateMarkerCommentOverlay();
+        if (typeof centerWaveformTimelineOnTransport === 'function') {
+            centerWaveformTimelineOnTransport();
+        }
         input.focus();
         return true;
     }
@@ -952,8 +1019,12 @@
                 input.blur();
             }
         });
-        input.addEventListener('blur', () => {
+        input.addEventListener('blur', (ev) => {
             tcEditRevert = null;
+            if (isMarkerTcInputElement(ev.relatedTarget)) return;
+            if (typeof endMarkerTcEditWaveformZoom === 'function') {
+                endMarkerTcEditWaveformZoom();
+            }
         });
         input.addEventListener('dblclick', (ev) => {
             ev.preventDefault();
@@ -978,6 +1049,9 @@
                 seekIn: edge === 'in',
                 seekEnd: edge === 'out',
             });
+            if (typeof beginMarkerTcEditWaveformZoom === 'function') {
+                beginMarkerTcEditWaveformZoom();
+            }
         });
         return input;
     }
@@ -1108,6 +1182,13 @@
         return t;
     }
 
+    /** Feedback コメント編集開始時: 行ハイライト＋シークバーをそのマーカー In へ */
+    function activateMarkerForCommentEdit(m) {
+        if (!videoReady() || !m) return;
+        suppressMarkerRowHoverSeek(400);
+        syncSeekToMarkerRow(m, { quiet: true, seekIn: true });
+    }
+
     /** In / Out 列上でシーク（seekIn / seekEnd を指定） */
     function syncSeekToMarkerRow(m, opt) {
         if (!videoReady() || !m || !opt) return;
@@ -1235,11 +1316,13 @@
     }
 
     function focusMarkerCommentField(id, opt) {
+        const m = currentMarkers.find((x) => x.id === id);
         const run = () => {
             const ta =
                 markerTableBody &&
                 markerTableBody.querySelector('[data-marker-comment="' + id + '"]');
             if (!ta) return;
+            if (m) activateMarkerForCommentEdit(m);
             ta.focus();
             const row = ta.closest('tr');
             if (row && row.scrollIntoView) {
@@ -1326,9 +1409,101 @@
         return m.startSec + ratio * span;
     }
 
+    let markerDragState = null;
+
+    function setMarkerDragLanesActive(active) {
+        const lanes =
+            typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                ? audioWaveformLanesTracks
+                : null;
+        if (lanes) lanes.classList.toggle('audio-waveform-composite__lanes--marker-dragging', !!active);
+    }
+
+    function detachMarkerDragDocListeners() {
+        if (!markerDragState) return;
+        if (markerDragState.onMove) {
+            document.removeEventListener('pointermove', markerDragState.onMove);
+        }
+        if (markerDragState.onUp) {
+            document.removeEventListener('pointerup', markerDragState.onUp);
+            document.removeEventListener('pointercancel', markerDragState.onUp);
+        }
+    }
+
+    function applyMarkerDragSec(m, edge, sec) {
+        const t = clampMarkerSec(sec);
+        const oneFrame = markerOneFrameSec();
+        if (m.type === 'point') {
+            m.timeSec = t;
+            return;
+        }
+        if (edge === 'in') {
+            m.startSec = Math.max(0, Math.min(t, m.endSec - oneFrame));
+        } else if (edge === 'out') {
+            m.endSec = Math.max(m.startSec + oneFrame, t);
+        }
+        if (m.endSec <= m.startSec) {
+            m.endSec = Math.min(
+                masterDurForTimelineMarkers() - 0.001,
+                m.startSec + oneFrame,
+            );
+        }
+    }
+
+    function scheduleMarkerDragRedraw() {
+        if (!markerDragState) return;
+        if (markerDragState.raf) return;
+        markerDragState.raf = requestAnimationFrame(() => {
+            if (!markerDragState) return;
+            markerDragState.raf = 0;
+            renderSeekBarMarkers();
+            if (typeof updateMarkerCommentOverlay === 'function') {
+                updateMarkerCommentOverlay();
+            }
+        });
+    }
+
+    function endMarkerDrag(commit) {
+        if (!markerDragState) return;
+        const st = markerDragState;
+        detachMarkerDragDocListeners();
+        if (st.raf) cancelAnimationFrame(st.raf);
+        markerDragState = null;
+        setMarkerDragLanesActive(false);
+        if (commit) {
+            sortMarkersInPlace();
+            persistMarkersAfterChange();
+            writeLog('Marker: drag ' + markerTimeLabel(st.m));
+            flashSeekHint('Marker', markerTimeLabel(st.m));
+        }
+    }
+
+    function seekToMarkerOnClick(m, edge, clientX, bandEl) {
+        let target = null;
+        if (m.type === 'point') {
+            target = m.timeSec;
+        } else if (edge === 'in') {
+            target = m.startSec;
+        } else if (edge === 'out') {
+            target = m.endSec;
+        } else if (bandEl) {
+            target = rangeMarkerTargetSecFromPointer(m, bandEl, clientX);
+        }
+        if (target == null || !Number.isFinite(target)) return;
+        const wasPlaying =
+            typeof isTransportPlaying === 'function'
+                ? isTransportPlaying()
+                : !videoMain.paused;
+        seekToMarker(m, {
+            targetSec: target,
+            resumeAfterSeek: wasPlaying,
+        });
+    }
+
     function bindSeekBarMarkerPointerSeek(el, m, resolveTargetSec) {
         el.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0) return;
+            if (ev.target.closest && ev.target.closest('.seek-bar-marker__handle')) return;
             ev.preventDefault();
             ev.stopPropagation();
             const target = resolveTargetSec(ev);
@@ -1343,6 +1518,88 @@
             });
         });
     }
+
+    function bindSeekBarMarkerDrag(el, m, edge, opt) {
+        el.addEventListener('pointerdown', (ev) => {
+            if (ev.button !== 0) return;
+            if (opt && opt.pending) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (typeof endAudioWaveformScrub === 'function') {
+                endAudioWaveformScrub({ force: true });
+            }
+            if (typeof hideHoverPlayhead === 'function') hideHoverPlayhead();
+
+            const bandEl = opt && opt.bandEl ? opt.bandEl : null;
+            endMarkerDrag(false);
+            markerDragState = {
+                m: m,
+                edge: edge,
+                bandEl: bandEl,
+                pointerId: ev.pointerId,
+                startX: ev.clientX,
+                moved: false,
+                raf: 0,
+                onMove: null,
+                onUp: null,
+            };
+            activeMarkerId = m.id;
+            updateMarkerRowActiveClass(m.id);
+
+            markerDragState.onMove = (e) => {
+                if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
+                if (Math.abs(e.clientX - markerDragState.startX) >= 4) {
+                    if (!markerDragState.moved) {
+                        markerDragState.moved = true;
+                        setMarkerDragLanesActive(true);
+                    }
+                }
+                if (!markerDragState.moved) return;
+                e.preventDefault();
+                applyMarkerDragSec(m, edge, transportSecFromWaveformClientX(e.clientX));
+                scheduleMarkerDragRedraw();
+            };
+            markerDragState.onUp = (e) => {
+                if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
+                const st = markerDragState;
+                detachMarkerDragDocListeners();
+                if (st.raf) cancelAnimationFrame(st.raf);
+                markerDragState = null;
+                setMarkerDragLanesActive(false);
+                if (!st.moved) {
+                    seekToMarkerOnClick(m, edge, e.clientX, bandEl);
+                    return;
+                }
+                collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                sortMarkersInPlace();
+                persistMarkersAfterChange();
+                writeLog('Marker: drag ' + markerTimeLabel(m));
+                flashSeekHint('Marker', markerTimeLabel(m));
+            };
+            document.addEventListener('pointermove', markerDragState.onMove);
+            document.addEventListener('pointerup', markerDragState.onUp);
+            document.addEventListener('pointercancel', markerDragState.onUp);
+        });
+    }
+
+    function handleMarkerDeleteKeydown(e) {
+        if (e.code !== 'Delete' && e.code !== 'Backspace') return false;
+        if (e.repeat) return false;
+        if (e.ctrlKey || e.altKey || e.metaKey) return false;
+        if (isTypingTarget(e.target)) return false;
+        if (!activeMarkerId) return false;
+        const m = currentMarkers.find((x) => x.id === activeMarkerId);
+        if (!m) {
+            activeMarkerId = null;
+            return false;
+        }
+        e.preventDefault();
+        removeMarker(activeMarkerId);
+        flashSeekHint('Marker', 'Deleted', 'notice');
+        return true;
+    }
+
+    window.handleMarkerDeleteKeydown = handleMarkerDeleteKeydown;
 
     function jumpToAdjacentMarker(dir, opt) {
         const n = currentMarkers.length;
@@ -1844,6 +2101,16 @@
             bindSeekBarMarkerPointerSeek(el, m, (ev) =>
                 rangeMarkerTargetSecFromPointer(m, el, ev.clientX),
             );
+            const handleIn = document.createElement('div');
+            handleIn.className = 'seek-bar-marker__handle seek-bar-marker__handle--in';
+            handleIn.title = 'Drag In';
+            const handleOut = document.createElement('div');
+            handleOut.className = 'seek-bar-marker__handle seek-bar-marker__handle--out';
+            handleOut.title = 'Drag Out';
+            el.appendChild(handleIn);
+            el.appendChild(handleOut);
+            bindSeekBarMarkerDrag(handleIn, m, 'in', { bandEl: el });
+            bindSeekBarMarkerDrag(handleOut, m, 'out', { bandEl: el });
         }
         return el;
     }
@@ -1858,18 +2125,17 @@
         if (opt && opt.title) el.title = opt.title;
         if (opt && opt.marker) {
             const m = opt.marker;
-            bindSeekBarMarkerPointerSeek(el, m, () => m.timeSec);
+            el.title = (opt.title || '') + ' — drag to move';
+            bindSeekBarMarkerDrag(el, m, 'point');
         }
         return el;
     }
 
     function isMarkerVisibleOnSeekBar(m, dur) {
         if (!m || !dur || dur <= 0) return false;
-        const fps = Math.max(1, masterFpsFloatForTransport());
-        const minSpan = 0.5 / fps;
         if (m.type === 'range') {
             const span = Math.abs(m.endSec - m.startSec);
-            return span >= minSpan;
+            return span > markerOneFrameSec() + 1e-9;
         }
         const t = Number(m.timeSec);
         return Number.isFinite(t) && t >= 0 && t <= dur;
@@ -2074,6 +2340,13 @@
             comment.placeholder = '';
             comment.value = m.comment || '';
             comment.dataset.markerComment = m.id;
+            comment.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== 0) return;
+                activateMarkerForCommentEdit(m);
+            });
+            comment.addEventListener('focus', () => {
+                activateMarkerForCommentEdit(m);
+            });
             comment.addEventListener('input', () => {
                 updateMarkerComment(m.id, comment.value);
                 fitMarkerCommentHeight(comment);

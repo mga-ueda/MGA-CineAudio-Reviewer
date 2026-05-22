@@ -312,6 +312,10 @@
 
         if (isTypingTarget(e.target)) return;
 
+        if (typeof handleMarkerDeleteKeydown === 'function' && handleMarkerDeleteKeydown(e)) {
+            return;
+        }
+
         if (typeof handleWaveformTimelineKeydown === 'function' && handleWaveformTimelineKeydown(e)) {
             return;
         }

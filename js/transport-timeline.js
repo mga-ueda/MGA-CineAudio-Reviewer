@@ -744,10 +744,13 @@
 
     const WAVEFORM_TIMELINE_ZOOM_MIN = 1;
     const WAVEFORM_TIMELINE_ZOOM_MAX = 24;
+    /** MARKERS の In/Out TC 編集（+/-）中の波形倍率 */
+    const MARKER_TC_EDIT_WAVEFORM_ZOOM = 12;
     const WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR = 1.14;
     /** Ctrl+ホイール／Shift+Ctrl+ホイール時の倍率（通常の3倍速） */
     const WAVEFORM_TIMELINE_WHEEL_SPEED_FAST = 3;
     let waveformTimelineZoom = 1;
+    let markerTcEditWaveformZoomActive = false;
 
     function clampWaveformTimelineZoom(z) {
         const n = Number(z);
@@ -844,24 +847,34 @@
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
     }
 
-    function setWaveformTimelineZoom(nextZoom, anchorClientX) {
+    function transportSecForWaveformZoomCenter() {
+        if (typeof getTransportSecForDisplay === 'function') {
+            return getTransportSecForDisplay();
+        }
+        if (typeof getTransportSec === 'function') return getTransportSec();
+        return transportPlaybackSec;
+    }
+
+    /** 拡縮後にシークバー（プレイヘッド）がビューポート中央へ来る scrollLeft */
+    function scrollLeftToCenterTransportSec(contentW, viewportW) {
+        const ratio = transportRatioFromMasterSec(transportSecForWaveformZoomCenter());
+        const maxScroll = Math.max(0, contentW - viewportW);
+        const scrollLeft = ratio * contentW - viewportW * 0.5;
+        return Math.max(0, Math.min(maxScroll, scrollLeft));
+    }
+
+    function setWaveformTimelineZoom(nextZoom, centerSeekBar) {
         const lanes = waveformScrubTargetEl();
         const vw = waveformTimelineViewportWidthCss();
         const oldZoom = waveformTimelineZoom;
         const z = clampWaveformTimelineZoom(nextZoom);
         if (Math.abs(z - oldZoom) < 0.001) return;
 
-        const oldContentW = Math.max(1, Math.round(vw * oldZoom));
         const newContentW = Math.max(1, Math.round(vw * z));
         let scrollLeft = lanes ? lanes.scrollLeft || 0 : 0;
 
-        if (lanes && anchorClientX != null && Number.isFinite(anchorClientX)) {
-            const rect = lanes.getBoundingClientRect();
-            const anchorInContent = anchorClientX - rect.left + scrollLeft;
-            const ratio = oldContentW > 0 ? anchorInContent / oldContentW : 0;
-            scrollLeft = ratio * newContentW - (anchorClientX - rect.left);
-            const maxScroll = Math.max(0, newContentW - vw);
-            scrollLeft = Math.max(0, Math.min(maxScroll, scrollLeft));
+        if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) {
+            scrollLeft = scrollLeftToCenterTransportSec(newContentW, vw);
         } else if (z <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) {
             scrollLeft = 0;
         }
@@ -899,7 +912,7 @@
             ev.deltaY < 0
                 ? Math.pow(base, fastMult)
                 : 1 / Math.pow(base, fastMult);
-        setWaveformTimelineZoom(waveformTimelineZoom * factor, ev.clientX);
+        setWaveformTimelineZoom(waveformTimelineZoom * factor, true);
     }
 
     function onWaveformLanesScroll() {
@@ -916,22 +929,40 @@
         );
     }
 
-    function waveformTimelineZoomAnchorClientX() {
-        const lanes = waveformScrubTargetEl();
-        if (!lanes) return null;
-        const rect = lanes.getBoundingClientRect();
-        return rect.left + rect.width * 0.5;
+    function resetWaveformTimelineZoom() {
+        markerTcEditWaveformZoomActive = false;
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, false);
     }
 
-    function resetWaveformTimelineZoom() {
-        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, null);
+    function centerWaveformTimelineOnTransport() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) return;
+        const vw = waveformTimelineViewportWidthCss();
+        const contentW = masterTimelineWidthCss();
+        lanes.scrollLeft = scrollLeftToCenterTransportSec(contentW, vw);
+        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+    }
+
+    function beginMarkerTcEditWaveformZoom() {
+        if (markerTcEditWaveformZoomActive) {
+            centerWaveformTimelineOnTransport();
+            return;
+        }
+        markerTcEditWaveformZoomActive = true;
+        setWaveformTimelineZoom(MARKER_TC_EDIT_WAVEFORM_ZOOM, true);
+    }
+
+    function endMarkerTcEditWaveformZoom() {
+        if (!markerTcEditWaveformZoomActive) return;
+        markerTcEditWaveformZoomActive = false;
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, false);
     }
 
     function stepWaveformTimelineZoom(zoomIn, fast) {
         const mult = fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1;
         const base = WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR;
         const factor = zoomIn ? Math.pow(base, mult) : 1 / Math.pow(base, mult);
-        setWaveformTimelineZoom(waveformTimelineZoom * factor, waveformTimelineZoomAnchorClientX());
+        setWaveformTimelineZoom(waveformTimelineZoom * factor, true);
     }
 
     function scrollWaveformTimeline(direction, fast) {
@@ -957,20 +988,22 @@
             return false;
         }
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+
+        const zoomIn = e.code === 'Equal' || e.code === 'NumpadAdd';
+        const zoomOut = e.code === 'Minus' || e.code === 'NumpadSubtract';
+        if (zoomIn || zoomOut) {
+            if (e.altKey) return false;
+            e.preventDefault();
+            const fast = !!(e.shiftKey || e.ctrlKey || e.metaKey);
+            stepWaveformTimelineZoom(!!zoomIn, fast);
+            return true;
+        }
+
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
 
         if (!e.shiftKey && !e.repeat && e.code === 'KeyR') {
             e.preventDefault();
             resetWaveformTimelineZoom();
-            return true;
-        }
-
-        const zoomIn = e.code === 'Equal' || e.code === 'NumpadAdd';
-        const zoomOut = e.code === 'Minus' || e.code === 'NumpadSubtract';
-        if (zoomIn || zoomOut) {
-            if (e.repeat) return false;
-            e.preventDefault();
-            stepWaveformTimelineZoom(!!zoomIn, e.shiftKey);
             return true;
         }
 
@@ -987,6 +1020,9 @@
     window.waveformTimelineHoverLeftPercent = waveformTimelineHoverLeftPercent;
     window.handleWaveformTimelineKeydown = handleWaveformTimelineKeydown;
     window.resetWaveformTimelineZoom = resetWaveformTimelineZoom;
+    window.beginMarkerTcEditWaveformZoom = beginMarkerTcEditWaveformZoom;
+    window.endMarkerTcEditWaveformZoom = endMarkerTcEditWaveformZoom;
+    window.centerWaveformTimelineOnTransport = centerWaveformTimelineOnTransport;
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
