@@ -325,6 +325,8 @@
         if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
     }
 
+    let waveformLastHoverClientX = null;
+
     function setHoverPlayheadAtClientX(clientX) {
         if (!audioWaveformHoverPlayhead || waveformScrubActive) {
             hideHoverPlayhead();
@@ -338,14 +340,32 @@
             hideHoverPlayhead();
             return;
         }
-        const pct = transportRatioFromClientX(clientX) * 100;
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) {
+            hideHoverPlayhead();
+            return;
+        }
+        waveformLastHoverClientX = clientX;
+        const pct =
+            typeof waveformTimelineHoverLeftPercent === 'function'
+                ? waveformTimelineHoverLeftPercent(clientX)
+                : transportRatioFromClientX(clientX) * 100;
         audioWaveformHoverPlayhead.style.left = pct + '%';
         audioWaveformHoverPlayhead.hidden = false;
     }
 
+    function refreshHoverPlayheadFromLastPointer() {
+        if (waveformLastHoverClientX == null) return;
+        if (!audioWaveformHoverPlayhead || audioWaveformHoverPlayhead.hidden) return;
+        setHoverPlayheadAtClientX(waveformLastHoverClientX);
+    }
+
     function hideHoverPlayhead() {
+        waveformLastHoverClientX = null;
         if (audioWaveformHoverPlayhead) audioWaveformHoverPlayhead.hidden = true;
     }
+
+    window.refreshHoverPlayheadFromLastPointer = refreshHoverPlayheadFromLastPointer;
 
     function clearAudioWaveform() {
         waveformBuildGen += 1;
@@ -774,6 +794,7 @@
     function initAudioWaveformUi() {
         const lanes = waveformScrubTargetEl();
         if (!lanes) return;
+        if (typeof initWaveformTimelineZoomUi === 'function') initWaveformTimelineZoomUi();
 
         const videoAudioClearBtn = document.getElementById('videoAudioClearBtn');
         if (videoAudioClearBtn) {
@@ -785,6 +806,9 @@
 
         if (typeof ResizeObserver !== 'undefined') {
             waveformResizeObs = new ResizeObserver(() => {
+                if (typeof applyWaveformTimelineZoomLayout === 'function') {
+                    applyWaveformTimelineZoomLayout();
+                }
                 if (!waveformAudioBuffer) {
                     drawAudioWaveformCanvas();
                     updateAllWaveformPlayheads();

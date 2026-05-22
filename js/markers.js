@@ -1508,7 +1508,17 @@
         const styleTarget = compositeRoot || layerEl;
         const laneH =
             parseFloat(getComputedStyle(styleTarget).getPropertyValue('--wave-lane-h')) || 52;
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner
+                ? audioWaveformLanesInner
+                : lanes && lanes.querySelector
+                  ? lanes.querySelector('.audio-waveform-composite__lanes-inner')
+                  : null;
         const layerW =
+            (typeof masterTimelineWidthCss === 'function'
+                ? masterTimelineWidthCss()
+                : 0) ||
+            (inner && inner.clientWidth) ||
             (lanes && lanes.clientWidth) ||
             (compositeRoot && compositeRoot.clientWidth) ||
             layerEl.clientWidth ||

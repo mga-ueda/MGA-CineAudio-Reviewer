@@ -168,10 +168,11 @@
             <div
                 class="audio-waveform-composite__lanes"
                 id="audioWaveformLanesTracks"
-                title="Click or drag to seek (all 3 lanes)"
+                title="Click or drag to seek. Wheel: zoom. Ctrl+wheel: fast zoom (3×). Shift+wheel: scroll. Shift+Ctrl+wheel: fast scroll (3×)."
                 tabindex="0"
                 role="presentation"
             >
+                <div class="audio-waveform-composite__lanes-inner" id="audioWaveformLanesInner">
                 <div class="audio-waveform-lane audio-waveform-lane--video" id="audioWaveformLaneVideo">
                     <div class="audio-waveform-lane__track" id="audioWaveformTrack">
                         <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
@@ -218,9 +219,10 @@
                     id="audioWaveformSeekTrail"
                     aria-hidden="true"
                 ></canvas>
-                <div class="audio-waveform-composite__hover-playhead" id="audioWaveformHoverPlayhead" hidden aria-hidden="true"></div>
                 <div class="audio-waveform-composite__playhead-wrap" id="audioWaveformPlayheadWrap" hidden aria-hidden="true">
                     <div class="audio-waveform-composite__playhead" id="audioWaveformPlayhead"></div>
+                </div>
+                <div class="audio-waveform-composite__hover-playhead" id="audioWaveformHoverPlayhead" hidden aria-hidden="true"></div>
                 </div>
                 <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position">
             </div>
@@ -355,6 +357,10 @@
                 </div>
                 <div class="shortcut-sheet__cat">Seek</div>
                 <div class="shortcut-sheet__items">
+                    <span class="shortcut-sheet__chip">Zoom waveform [Wheel on waveform]</span>
+                    <span class="shortcut-sheet__chip">Fast zoom 3× [Ctl+Wheel on waveform]</span>
+                    <span class="shortcut-sheet__chip">Scroll timeline [Sft+Wheel on waveform]</span>
+                    <span class="shortcut-sheet__chip">Fast scroll 3× [Sft+Ctl+Wheel on waveform]</span>
                     <span class="shortcut-sheet__chip">1f [←] [→]</span>
                     <span class="shortcut-sheet__chip">1s [Sft+←] [Sft+→]</span>
                     <span class="shortcut-sheet__chip">5s [Ctl+←] [Ctl+→]</span>

@@ -14,6 +14,7 @@
     const seekBar = document.getElementById('seekBar');
     const audioWaveformComposite = document.getElementById('audioWaveformComposite');
     const audioWaveformLanesTracks = document.getElementById('audioWaveformLanesTracks');
+    const audioWaveformLanesInner = document.getElementById('audioWaveformLanesInner');
     const audioWaveformTrack = document.getElementById('audioWaveformTrack');
     const playStopBtn = document.getElementById('playStopBtn');
     const loopPlaybackCheckbox = document.getElementById('loopPlaybackCheckbox');

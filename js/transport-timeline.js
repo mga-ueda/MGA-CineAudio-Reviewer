@@ -548,6 +548,9 @@
 
     function notifyMasterTransportDurationChanged() {
         if (typeof syncSeekMax === 'function') syncSeekMax();
+        if (typeof applyWaveformTimelineZoomLayout === 'function') {
+            applyWaveformTimelineZoomLayout();
+        }
         if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
         if (typeof redrawAllExtraTrackWaveforms === 'function') redrawAllExtraTrackWaveforms();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
@@ -739,28 +742,187 @@
         return grad;
     }
 
-    function masterTimelineWidthCss() {
+    const WAVEFORM_TIMELINE_ZOOM_MIN = 1;
+    const WAVEFORM_TIMELINE_ZOOM_MAX = 24;
+    const WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR = 1.14;
+    /** Ctrl+ホイール／Shift+Ctrl+ホイール時の倍率（通常の3倍速） */
+    const WAVEFORM_TIMELINE_WHEEL_SPEED_FAST = 3;
+    let waveformTimelineZoom = 1;
+
+    function clampWaveformTimelineZoom(z) {
+        const n = Number(z);
+        if (!Number.isFinite(n)) return WAVEFORM_TIMELINE_ZOOM_MIN;
+        return Math.max(
+            WAVEFORM_TIMELINE_ZOOM_MIN,
+            Math.min(WAVEFORM_TIMELINE_ZOOM_MAX, n),
+        );
+    }
+
+    function getWaveformTimelineZoom() {
+        return waveformTimelineZoom;
+    }
+
+    function waveformTimelineViewportWidthCss() {
         const el = waveformScrubTargetEl();
         if (el) return Math.max(1, el.clientWidth | 0);
         if (audioWaveformTrack) return Math.max(1, audioWaveformTrack.clientWidth | 0);
         return 1;
     }
 
+    function masterTimelineWidthCss() {
+        return Math.max(
+            1,
+            Math.round(waveformTimelineViewportWidthCss() * waveformTimelineZoom),
+        );
+    }
+
     function waveformTimelineMetrics(el) {
         if (!el) return null;
         const rect = el.getBoundingClientRect();
-        const contentW = el.clientWidth;
-        if (!contentW) return null;
-        const contentLeft = rect.left + (rect.width - contentW) * 0.5;
-        return { contentLeft, contentW };
+        const viewportW = el.clientWidth;
+        if (!viewportW) return null;
+        const contentW = masterTimelineWidthCss();
+        const scrollLeft = el.scrollLeft || 0;
+        const borderLeft = el.clientLeft || 0;
+        return {
+            contentLeft: rect.left + borderLeft,
+            viewportW,
+            contentW,
+            scrollLeft,
+        };
+    }
+
+    function waveformTimelineHoverLeftPercent(clientX) {
+        return transportRatioFromClientX(clientX) * 100;
     }
 
     function transportRatioFromClientX(clientX) {
         const el = waveformScrubTargetEl();
         const m = waveformTimelineMetrics(el);
-        if (!m) return 0;
-        return Math.max(0, Math.min(1, (clientX - m.contentLeft) / m.contentW));
+        if (!m || !m.contentW) return 0;
+        const xInContent = clientX - m.contentLeft + m.scrollLeft;
+        return Math.max(0, Math.min(1, xInContent / m.contentW));
     }
+
+    function waveformTimelineInnerEl() {
+        if (typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner) {
+            return audioWaveformLanesInner;
+        }
+        const lanes = waveformScrubTargetEl();
+        return lanes
+            ? lanes.querySelector('.audio-waveform-composite__lanes-inner')
+            : null;
+    }
+
+    function applyWaveformTimelineZoomLayout() {
+        waveformTimelineZoom = clampWaveformTimelineZoom(waveformTimelineZoom);
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return;
+        const contentW = masterTimelineWidthCss();
+        lanes.style.setProperty('--wave-timeline-content-w', contentW + 'px');
+        const zoomed = waveformTimelineZoom > WAVEFORM_TIMELINE_ZOOM_MIN + 0.001;
+        lanes.classList.toggle('audio-waveform-composite__lanes--zoomed', zoomed);
+        const inner = waveformTimelineInnerEl();
+        if (inner) {
+            if (zoomed) {
+                inner.style.width = contentW + 'px';
+                inner.style.minWidth = contentW + 'px';
+            } else {
+                inner.style.width = '';
+                inner.style.minWidth = '';
+            }
+        }
+        if (!zoomed) lanes.scrollLeft = 0;
+    }
+
+    function refreshWaveformTimelineAfterZoomChange() {
+        applyWaveformTimelineZoomLayout();
+        if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+        if (typeof redrawAllExtraTrackWaveforms === 'function') redrawAllExtraTrackWaveforms();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
+        if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+    }
+
+    function setWaveformTimelineZoom(nextZoom, anchorClientX) {
+        const lanes = waveformScrubTargetEl();
+        const vw = waveformTimelineViewportWidthCss();
+        const oldZoom = waveformTimelineZoom;
+        const z = clampWaveformTimelineZoom(nextZoom);
+        if (Math.abs(z - oldZoom) < 0.001) return;
+
+        const oldContentW = Math.max(1, Math.round(vw * oldZoom));
+        const newContentW = Math.max(1, Math.round(vw * z));
+        let scrollLeft = lanes ? lanes.scrollLeft || 0 : 0;
+
+        if (lanes && anchorClientX != null && Number.isFinite(anchorClientX)) {
+            const rect = lanes.getBoundingClientRect();
+            const anchorInContent = anchorClientX - rect.left + scrollLeft;
+            const ratio = oldContentW > 0 ? anchorInContent / oldContentW : 0;
+            scrollLeft = ratio * newContentW - (anchorClientX - rect.left);
+            const maxScroll = Math.max(0, newContentW - vw);
+            scrollLeft = Math.max(0, Math.min(maxScroll, scrollLeft));
+        } else if (z <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) {
+            scrollLeft = 0;
+        }
+
+        waveformTimelineZoom = z;
+        applyWaveformTimelineZoomLayout();
+        if (lanes) lanes.scrollLeft = scrollLeft;
+        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        refreshWaveformTimelineAfterZoomChange();
+    }
+
+    function onWaveformTimelineWheel(ev) {
+        const ready =
+            (typeof videoReady === 'function' && videoReady()) ||
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
+        if (!ready) return;
+
+        const fast = !!(ev.ctrlKey || ev.metaKey);
+        const fastMult = fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1;
+
+        if (ev.shiftKey) {
+            const lanes = waveformScrubTargetEl();
+            if (!lanes) return;
+            const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
+            if (!delta) return;
+            ev.preventDefault();
+            lanes.scrollLeft += delta * fastMult;
+            return;
+        }
+
+        if (!ev.deltaY) return;
+        ev.preventDefault();
+        const base = WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR;
+        const factor =
+            ev.deltaY < 0
+                ? Math.pow(base, fastMult)
+                : 1 / Math.pow(base, fastMult);
+        setWaveformTimelineZoom(waveformTimelineZoom * factor, ev.clientX);
+    }
+
+    function onWaveformLanesScroll() {
+        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        if (typeof refreshHoverPlayheadFromLastPointer === 'function') {
+            refreshHoverPlayheadFromLastPointer();
+        }
+    }
+
+    window.waveformTimelineHoverLeftPercent = waveformTimelineHoverLeftPercent;
+
+    function initWaveformTimelineZoomUi() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || lanes.dataset.waveformZoomWheel === '1') return;
+        lanes.dataset.waveformZoomWheel = '1';
+        lanes.addEventListener('wheel', onWaveformTimelineWheel, { passive: false });
+        lanes.addEventListener('scroll', onWaveformLanesScroll, { passive: true });
+        applyWaveformTimelineZoomLayout();
+    }
+
+    window.getWaveformTimelineZoom = getWaveformTimelineZoom;
+    window.setWaveformTimelineZoom = setWaveformTimelineZoom;
+    window.applyWaveformTimelineZoomLayout = applyWaveformTimelineZoomLayout;
 
     function transportSecFromClientX(clientX) {
         return transportRatioFromClientX(clientX) * getMasterTransportDurationSec();
@@ -824,8 +986,9 @@
                 ? audioWaveformSeekTrail
                 : document.getElementById('audioWaveformSeekTrail');
         const lanes = waveformScrubTargetEl();
-        if (!canvas || !lanes) return null;
-        const w = lanes.clientWidth;
+        const inner = waveformTimelineInnerEl();
+        if (!canvas || !lanes || !inner) return null;
+        const w = masterTimelineWidthCss();
         const h = lanes.clientHeight;
         if (w < 2 || h < 2) return null;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -877,6 +1040,7 @@
         const leftX = (minPct / 100) * w;
         const rightX = (maxPct / 100) * w;
         const rectW = Math.max(1, rightX - leftX);
+        if (rectW <= 0) return;
 
         /* 右端はくっきりシアン、左へ向かって同系色で薄く透明へ */
         const grad = ctx.createLinearGradient(leftX, 0, rightX, 0);
@@ -986,3 +1150,5 @@
     function updateAudioWaveformPlayhead() {
         updateAllWaveformPlayheads();
     }
+
+    initWaveformTimelineZoomUi();
