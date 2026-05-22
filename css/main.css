@@ -17,7 +17,7 @@
             --accent-track-1: #1c070a;
             --accent-track-2: #300810;
             --accent-track-3: #4a0c18;
-            --transport-opt-font-size: 0.76rem;
+            --transport-opt-font-size: 0.88em;
             --transport-opt-label-color: #9aa6bc;
             --transport-opt-value-color: var(--accent-ink);
             --transport-opt-select-bg: #14141a;
@@ -1725,13 +1725,15 @@
             border: none;
             border-radius: 0;
             background: transparent;
-            font-size: var(--transport-opt-font-size);
-            letter-spacing: 0.03em;
+            font-family: var(--font-mono);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
         }
         .transport-time-row__sep {
             color: var(--transport-opt-label-color);
             font-size: var(--transport-opt-font-size);
-            font-weight: 500;
+            font-weight: 700;
             user-select: none;
         }
         .time-display--secondary {
@@ -1741,8 +1743,7 @@
         .transport-opt-label {
             flex-shrink: 0;
             font-size: var(--transport-opt-font-size);
-            font-weight: 600;
-            letter-spacing: 0.04em;
+            font-weight: 700;
             color: var(--transport-opt-label-color);
             white-space: nowrap;
         }
@@ -1750,21 +1751,9 @@
             font-size: var(--transport-opt-font-size);
             font-weight: 700;
             font-variant-numeric: tabular-nums;
-            letter-spacing: 0.03em;
+            letter-spacing: 0.04em;
             color: var(--transport-opt-value-color);
             white-space: nowrap;
-        }
-        .transport-bar .transport-opt-label,
-        .transport-bar .transport-opt-value,
-        .transport-bar .transport-compact-lbl,
-        .transport-bar .transport-compact-lbl span,
-        .transport-bar .transport-drift-display,
-        .transport-bar .transport-time-row__sep,
-        .transport-bar .transport-time-row .time-display,
-        .transport-bar #masterVolDisp,
-        .transport-bar .transport-select,
-        .transport-bar .monitor-floor-select {
-            font-weight: 400;
         }
         .transport-bar .transport-time-row .time-display,
         .transport-bar .transport-time-row .transport-opt-value {
@@ -2212,8 +2201,14 @@
             background: rgba(0, 0, 0, 0.28);
             border: var(--transport-frame-border) solid rgba(255, 255, 255, 0.08);
             font-size: var(--transport-opt-font-size);
+            font-weight: 700;
             color: var(--transport-opt-label-color);
             transition: border-color 0.35s ease-out, box-shadow 0.35s ease-out;
+        }
+        .transport-bar .master-vol-container.transport-opt-chip,
+        .transport-bar .monitor-floor-options.transport-opt-chip {
+            font-size: 0.88em;
+            font-weight: 700;
         }
         .transport-bar .master-vol-container {
             gap: 6px 8px;
@@ -2265,11 +2260,14 @@
         }
         .transport-bar #masterVolDisp {
             font-family: var(--font-mono);
-            min-width: 12ch;
+            font-size: 1em;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            min-width: 15ch;
             text-align: left;
         }
         .transport-bar .monitor-floor-options {
-            gap: 5px 8px;
+            gap: 8px 14px;
         }
         .transport-bar .transport-select,
         .transport-bar .monitor-floor-select {
@@ -2297,8 +2295,9 @@
             color: var(--accent-ink);
             -webkit-text-fill-color: var(--accent-ink);
             font-family: var(--font-mono);
-            font-size: var(--transport-opt-font-size);
-            line-height: var(--transport-opt-control-h);
+            font-size: 1em;
+            font-weight: 700;
+            line-height: calc(var(--transport-frame-inner-h) - 2px);
             cursor: pointer;
         }
         .transport-bar .transport-select option,
@@ -2519,10 +2518,10 @@
         .transport-drift-prefix,
         .transport-drift-suffix {
             color: var(--transport-opt-label-color);
-            font-weight: 400;
+            font-weight: 700;
         }
         .transport-drift-ms {
-            font-weight: 400;
+            font-weight: 700;
         }
         .transport-drift-ms--safe {
             color: var(--transport-opt-label-color);
@@ -2602,9 +2601,8 @@
         .transport-compact-lbl {
             flex-shrink: 0;
             font-size: var(--transport-opt-font-size);
-            font-weight: 500;
-            letter-spacing: 0.06em;
-            color: #9aa6bc;
+            font-weight: 700;
+            color: var(--transport-opt-label-color);
             white-space: nowrap;
         }
         label[for="viewModeSelect"].transport-compact-lbl,
@@ -2620,9 +2618,8 @@
             min-height: var(--transport-opt-control-h);
             cursor: pointer;
             font-size: var(--transport-opt-font-size);
-            font-weight: 500;
-            letter-spacing: 0.04em;
-            color: #d8e0f0;
+            font-weight: 700;
+            color: var(--transport-opt-label-color);
         }
         .transport-compact-lbl--row input {
             margin: 0;
