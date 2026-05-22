@@ -62,7 +62,10 @@
             <div class="marker-panel__head">
                 <div class="marker-panel__head-row">
                     <h3 class="marker-panel__title">Markers</h3>
-                    <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="Delete all markers">Clear</button>
+                    <div class="marker-panel__head-actions">
+                        <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled title="Copy marker table as tab-separated text (no Length column)">Copy</button>
+                        <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="Delete all markers">Clear</button>
+                    </div>
                 </div>
                 <p class="marker-panel__range-hint" id="markerRangeHint" hidden>Range: press <kbd>]</kbd> for Out</p>
             </div>

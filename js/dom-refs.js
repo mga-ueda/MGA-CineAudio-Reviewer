@@ -31,6 +31,7 @@
     const markerTableWrap = document.getElementById('markerTableWrap');
     const markerListEmpty = document.getElementById('markerListEmpty');
     const markerRangeHint = document.getElementById('markerRangeHint');
+    const markerCopyBtn = document.getElementById('markerCopyBtn');
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
     const videoClearBtn = document.getElementById('videoClearBtn');
     const audioWaveformPanel = document.getElementById('audioWaveformPanel');

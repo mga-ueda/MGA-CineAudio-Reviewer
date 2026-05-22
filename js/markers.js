@@ -868,9 +868,64 @@
     }
 
     function updateMarkerClearAllButton() {
-        if (!markerClearAllBtn) return;
-        const canClear = markerTimelineReady() && hasMarkerContentToClear();
-        markerClearAllBtn.disabled = !canClear;
+        const timelineReady = markerTimelineReady();
+        if (markerClearAllBtn) {
+            markerClearAllBtn.disabled = !(timelineReady && hasMarkerContentToClear());
+        }
+        if (markerCopyBtn) {
+            markerCopyBtn.disabled = !(timelineReady && currentMarkers.length > 0);
+        }
+    }
+
+    /** タブ区切りコピー用: セル内のタブ・改行を正規化 */
+    function markerCopyCellText(raw) {
+        return String(raw ?? '')
+            .replace(/\t/g, ' ')
+            .replace(/\r\n/g, '\n')
+            .replace(/\n+/g, ' ')
+            .trim();
+    }
+
+    function markerOutLabelForCopy(m) {
+        if (!m || m.type !== 'range' || !markerHasOutTc(m)) return '';
+        return tcLabelForSec(m.endSec);
+    }
+
+    /** マーカー一覧表（Length 列なし）をタブ区切り文字列にする */
+    function buildMarkersCopyTsvText() {
+        const headers = ['#', 'In', 'Out', 'Feedback'];
+        const lines = [headers.map(markerCopyCellText).join('\t')];
+        currentMarkers.forEach((m, idx) => {
+            const row = [
+                String(idx + 1),
+                tcLabelForSec(markerInSec(m)),
+                markerOutLabelForCopy(m),
+                m.comment || '',
+            ];
+            lines.push(row.map(markerCopyCellText).join('\t'));
+        });
+        return lines.join('\n');
+    }
+
+    async function copyMarkersToClipboard() {
+        if (!currentMarkers.length) {
+            writeLog('Marker: nothing to copy');
+            return;
+        }
+        const text = buildMarkersCopyTsvText();
+        try {
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+                throw new Error('clipboard unavailable');
+            }
+            await navigator.clipboard.writeText(text);
+            writeLog(
+                'Marker: copied to clipboard (' + currentMarkers.length + ' row(s))',
+            );
+            flashSeekHint('Markers', 'Copied', 'notice');
+        } catch (err) {
+            writeLog('Marker: clipboard copy failed');
+            flashSeekHint('Markers', 'Copy failed', 'error');
+        }
     }
 
     function clearAllMarkers() {
@@ -3038,6 +3093,11 @@
             },
             true,
         );
+        if (markerCopyBtn) {
+            markerCopyBtn.addEventListener('click', () => {
+                copyMarkersToClipboard();
+            });
+        }
         if (markerClearAllBtn) {
             markerClearAllBtn.addEventListener('click', () => clearAllMarkers());
         }

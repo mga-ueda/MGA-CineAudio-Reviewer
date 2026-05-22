@@ -264,20 +264,41 @@
             text-align: center;
             color: var(--app-accent);
         }
-        .marker-panel__clear-btn {
+        .marker-panel__head-actions {
             position: absolute;
             right: 0;
             top: 50%;
             transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
             flex-shrink: 0;
+        }
+        .marker-panel__copy-btn,
+        .marker-panel__clear-btn {
             font-size: 0.68rem;
             font-weight: 400;
             padding: 4px 10px;
             border-radius: 6px;
+            cursor: pointer;
+        }
+        .marker-panel__copy-btn {
+            border: 1px solid rgba(120, 170, 220, 0.45);
+            background: rgba(80, 130, 190, 0.18);
+            color: #d8e8f8;
+        }
+        .marker-panel__copy-btn:hover:not(:disabled) {
+            background: rgba(80, 130, 190, 0.35);
+            color: #fff;
+        }
+        .marker-panel__copy-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .marker-panel__clear-btn {
             border: 1px solid rgba(196, 30, 58, 0.45);
             background: rgba(196, 30, 58, 0.18);
             color: #f0d0d8;
-            cursor: pointer;
         }
         .marker-panel__clear-btn:hover:not(:disabled) {
             background: rgba(196, 30, 58, 0.35);
@@ -286,6 +307,13 @@
         .marker-panel__clear-btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
+        }
+        /* VIDEO 枠など、head-actions なしで単独配置の Clear */
+        .video-panel__head-row > .marker-panel__clear-btn {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
         }
         .marker-panel__range-hint {
             margin: 8px 0 0;
