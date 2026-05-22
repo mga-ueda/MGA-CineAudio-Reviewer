@@ -2891,21 +2891,22 @@
 
         .bottom-info {
             display: flex;
+            flex-direction: column;
             gap: 15px;
             margin-top: 15px;
             align-items: stretch;
             width: 100%;
         }
         #log {
-            flex: 1 1 50%;
-            min-width: 0;
-            max-width: none;
+            flex: 0 0 auto;
+            width: 100%;
             box-sizing: border-box;
-            min-height: 120px;
+            height: 148px;
+            min-height: 148px;
+            max-height: 148px;
             resize: none;
             overflow-x: hidden;
             overflow-y: scroll;
-            flex-shrink: 0;
             background: #242629;
             color: #f0f0f5;
             padding: 10px;
@@ -2935,82 +2936,21 @@
             background: rgba(220, 228, 245, 0.5);
             background-clip: padding-box;
         }
-        .shortcut-guide {
-            flex: 1 1 50%;
-            min-width: 0;
-            overflow-x: hidden;
-            background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
-            border-radius: 14px;
-            padding: 14px 16px 22px;
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-            font-family: 'Consolas', 'Courier New', Courier, monospace;
-            font-size: 11px;
-            color: var(--app-shortcut-text);
-            line-height: 1.5;
-        }
-        .shortcut-sheet {
-            display: grid;
-            grid-template-columns: max-content minmax(0, 1fr);
-            column-gap: 12px;
-            align-items: start;
-        }
-        .shortcut-sheet__cat {
-            padding: 9px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        .transport-bar .transport-shortcuts-link.transport-opt-chip {
+            font-size: var(--transport-opt-font-size);
             font-weight: 700;
-            line-height: 1.45;
+            text-decoration: none;
+            color: var(--accent-ink);
             white-space: nowrap;
-            color: var(--app-shortcut-col1);
+            transition: color 0.15s ease, text-decoration-color 0.15s ease;
         }
-        .shortcut-sheet__items {
-            padding: 9px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-            min-width: 0;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 5px 12px;
-            line-height: 1.45;
+        .transport-bar .transport-shortcuts-link.transport-opt-chip:hover {
+            color: var(--accent-soft);
+            text-decoration: underline;
         }
-        .shortcut-sheet > .shortcut-sheet__cat:nth-last-child(2),
-        .shortcut-sheet > .shortcut-sheet__items:last-child {
-            border-bottom: none;
-            padding-bottom: 0;
-        }
-        .shortcut-sheet__chip {
-            white-space: nowrap;
-            font-size: 10.5px;
-            letter-spacing: 0.01em;
-        }
-        .shortcut-sheet__chip kbd {
-            font-family: inherit;
-            font-size: 0.92em;
-            padding: 1px 4px;
-            border-radius: 3px;
-            background: rgba(0, 0, 0, 0.3);
-        }
-        .shortcut-guide__title {
-            color: var(--app-shortcut-heading);
-            display: block;
-            margin-bottom: 12px;
-            font-size: 12px;
-            font-weight: 500;
-            letter-spacing: 0.02em;
-        }
-        @media (max-width: 900px) {
-            .bottom-info {
-                flex-direction: column;
-            }
-            #log {
-                flex: 1 1 auto;
-                max-width: none;
-                width: 100%;
-            }
-            .shortcut-guide {
-                flex: 1 1 auto;
-                width: 100%;
-            }
+        .transport-bar .transport-shortcuts-link.transport-opt-chip:focus-visible {
+            outline: 2px solid var(--accent-ink);
+            outline-offset: 2px;
         }
 
         /* Spectrum + level meters (controls live in transport bar) */

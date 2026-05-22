@@ -1,14 +1,5 @@
     const LOG_MAX_LINES = 500;
 
-    function syncLogPanelHeightToShortcutGuide() {
-        const guide = document.querySelector('.bottom-info .shortcut-guide');
-        if (!guide || !logEl) return;
-        const h = Math.max(148, guide.offsetHeight);
-        logEl.style.height = h + 'px';
-        logEl.style.minHeight = h + 'px';
-        logEl.style.maxHeight = h + 'px';
-    }
-
     function showAppAlert(title, body) {
         const t = title != null ? String(title) : '';
         const b = body != null && body !== '' ? String(body) : '';
@@ -35,7 +26,6 @@
         }
         logEl.innerText = lines.join('\n');
         logEl.scrollTop = logEl.scrollHeight;
-        syncLogPanelHeightToShortcutGuide();
     }
 
     function logArrowSeekDebounced(msg) {
@@ -95,24 +85,6 @@
         lastSeekFlashScrubAt = now;
         flashSeekHint('Scrub', formatTimecodeForTransport(t));
     }
-
-    (function initLogShortcutHeightSync() {
-        const g = document.querySelector('.bottom-info .shortcut-guide');
-        const scheduleSync = () => {
-            requestAnimationFrame(() => {
-                syncLogPanelHeightToShortcutGuide();
-                requestAnimationFrame(syncLogPanelHeightToShortcutGuide);
-            });
-        };
-        if (g && typeof ResizeObserver !== 'undefined') {
-            new ResizeObserver(() => syncLogPanelHeightToShortcutGuide()).observe(g);
-        }
-        scheduleSync();
-        window.addEventListener('load', scheduleSync);
-        if (document.fonts && document.fonts.ready) {
-            document.fonts.ready.then(scheduleSync).catch(() => {});
-        }
-    })();
 
     function readPrefs() {
         try {

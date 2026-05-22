@@ -1,0 +1,130 @@
+:root {
+    --accent: #9a1730;
+    --accent-deep: #5c0f1f;
+    --accent-border: rgba(154, 23, 48, 0.62);
+    --accent-bg-strong: rgba(92, 15, 31, 0.42);
+    --accent-bg-soft: rgba(92, 15, 31, 0.3);
+    --app-shortcut-text: #b4bcc8;
+    --app-shortcut-heading: #c8d0dc;
+    --app-shortcut-col1: #d0d8e4;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body.shortcuts-page {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: #141418;
+    color: #f0f0f5;
+}
+
+.shortcuts-page__header {
+    padding: 16px 24px 4px;
+    text-align: center;
+}
+
+.shortcuts-page__title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 0.02em;
+}
+
+.shortcuts-page__main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 6px 20px 28px;
+    overflow-x: auto;
+}
+
+.shortcut-table {
+    width: 100%;
+    min-width: 640px;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-family: 'Consolas', 'Courier New', Courier, monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--app-shortcut-text);
+    background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
+    border-radius: 14px;
+    border: 1px solid var(--accent-border);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.shortcut-table thead th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    color: var(--app-shortcut-heading);
+    background: var(--accent-bg-strong);
+    border: 1px solid var(--accent-border);
+}
+
+.shortcut-table thead th:nth-child(1) {
+    width: 28%;
+}
+
+.shortcut-table thead th:nth-child(2) {
+    width: 32%;
+}
+
+.shortcut-table thead th:nth-child(3) {
+    width: 40%;
+}
+
+.shortcut-table tbody td,
+.shortcut-table tbody th {
+    padding: 6px 12px;
+    vertical-align: top;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    word-break: break-word;
+}
+
+.shortcut-table tbody td:first-child {
+    font-weight: 700;
+    color: var(--app-shortcut-col1);
+}
+
+.shortcut-table tbody td:nth-child(2) {
+    white-space: normal;
+    line-height: 1.65;
+}
+
+.shortcut-table kbd + kbd {
+    margin-left: 0.35em;
+}
+
+.shortcut-table__section th {
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 700;
+    font-size: 11px;
+    color: var(--app-shortcut-col1);
+    background: var(--accent-bg-soft);
+    border-top: 1px solid var(--accent-border);
+    border-bottom: 1px solid rgba(92, 15, 31, 0.55);
+}
+
+.shortcut-table__section:first-child th {
+    border-top: none;
+}
+
+.shortcut-table kbd {
+    font-family: inherit;
+    font-size: 0.92em;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--accent-border);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+    white-space: nowrap;
+}
