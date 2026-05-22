@@ -42,6 +42,7 @@
     }
 
     function schedulePersistSession() {
+        if (sessionRestoreInProgress) return;
         clearTimeout(persistSessionTimer);
         persistSessionTimer = setTimeout(() => {
             persistSessionTimer = null;
@@ -73,6 +74,9 @@
                 return await task();
             } finally {
                 sessionRestoreInProgress = false;
+                if (typeof schedulePersistSession === 'function') {
+                    schedulePersistSession();
+                }
             }
         };
         const p = sessionRestoreQueue.then(run, run);
@@ -98,7 +102,25 @@
         } catch (e) {
             throw e;
         }
-        if (!row || !row.mBlob) return;
+        if (!row || typeof row !== 'object') {
+            row = { v: 4, audioOnlySession: true, extraTracks: [] };
+        }
+        if (!row.mBlob) {
+            row.audioOnlySession = true;
+            if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
+            row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
+            row.extraTracks.push(entry);
+            row.v = typeof row.v === 'number' ? row.v : 4;
+            await idbPut(IDB_KEY_LAST, row);
+            writeLog(
+                'Session: extra audio ' +
+                    (entry.slot + 1) +
+                    ' saved (' +
+                    (entry.byteLength || entry.blob.size || 0) +
+                    ' bytes)',
+            );
+            return;
+        }
         if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
         row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
         row.extraTracks.push(entry);
@@ -131,6 +153,74 @@
     window.persistExtraTrackEntryToSession = persistExtraTrackEntryToSession;
     window.removeExtraTrackFromSession = removeExtraTrackFromSession;
 
+    function extraTrackEntryHasBlob(entry) {
+        if (!entry || !entry.blob) return false;
+        const n =
+            typeof entry.byteLength === 'number'
+                ? entry.byteLength
+                : entry.blob.size || 0;
+        return n > 0;
+    }
+
+    function sessionRowHasMarkers(row) {
+        return Array.isArray(row.markers) && row.markers.length > 0;
+    }
+
+    function sessionRowHasRestorableContent(row) {
+        if (!row || typeof row !== 'object') return false;
+        if (row.mBlob && (row.mBlob.size || 0) > 0) return true;
+        if (
+            Array.isArray(row.extraTracks) &&
+            row.extraTracks.some(extraTrackEntryHasBlob)
+        ) {
+            return true;
+        }
+        return sessionRowHasMarkers(row);
+    }
+
+    async function mergePrevExtraTracksDuringRestore(row) {
+        if (!sessionRestoreInProgress) return;
+        try {
+            const prev = await idbGet(IDB_KEY_LAST);
+            if (prev && Array.isArray(prev.extraTracks) && prev.extraTracks.length > 0) {
+                row.extraTracks = prev.extraTracks;
+            }
+        } catch (_) {}
+    }
+
+    async function mergePrevMarkersDuringRestore(row) {
+        if (!sessionRestoreInProgress) return;
+        if (sessionRowHasMarkers(row)) return;
+        try {
+            const prev = await idbGet(IDB_KEY_LAST);
+            if (prev && sessionRowHasMarkers(prev)) {
+                row.markers = prev.markers;
+            }
+        } catch (_) {}
+    }
+
+    async function attachWaveformSessionFieldsToRow(row) {
+        if (typeof getMarkersSnapshot === 'function') {
+            row.markers = getMarkersSnapshot();
+        }
+        await mergePrevMarkersDuringRestore(row);
+        if (typeof getRangeLoopPersistSnapshot === 'function') {
+            const rangeLoop = getRangeLoopPersistSnapshot();
+            if (rangeLoop) row.rangeLoop = rangeLoop;
+        }
+        if (typeof getMixPersistSnapshot === 'function') {
+            row.mix = getMixPersistSnapshot();
+        }
+        if (typeof getExtraTracksPersistSnapshot === 'function') {
+            const extra = getExtraTracksPersistSnapshot();
+            if (extra && extra.length > 0) {
+                row.extraTracks = extra;
+            } else {
+                await mergePrevExtraTracksDuringRestore(row);
+            }
+        }
+    }
+
     async function buildSessionPersistRow(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         writePrefs();
@@ -145,26 +235,20 @@
             row.mName = fileMain.name;
             row.mLastModified = fileMain.lastModified;
             row.mBlob = fileMain;
-            row.markers = getMarkersSnapshot();
-            if (typeof getRangeLoopPersistSnapshot === 'function') {
-                const rangeLoop = getRangeLoopPersistSnapshot();
-                if (rangeLoop) row.rangeLoop = rangeLoop;
-            }
-            if (typeof getMixPersistSnapshot === 'function') {
-                row.mix = getMixPersistSnapshot();
-            }
-            if (typeof getExtraTracksPersistSnapshot === 'function') {
-                const extra = getExtraTracksPersistSnapshot();
-                if (extra && extra.length > 0) {
-                    row.extraTracks = extra;
-                } else if (sessionRestoreInProgress) {
-                    try {
-                        const prev = await idbGet(IDB_KEY_LAST);
-                        if (prev && Array.isArray(prev.extraTracks) && prev.extraTracks.length > 0) {
-                            row.extraTracks = prev.extraTracks;
-                        }
-                    } catch (_) {}
-                }
+            await attachWaveformSessionFieldsToRow(row);
+        } else {
+            const extra =
+                typeof getExtraTracksPersistSnapshot === 'function'
+                    ? getExtraTracksPersistSnapshot()
+                    : null;
+            const markersSnap =
+                typeof getMarkersSnapshot === 'function' ? getMarkersSnapshot() : [];
+            const hasExtra = extra && extra.length > 0;
+            const hasMarkers = Array.isArray(markersSnap) && markersSnap.length > 0;
+            if (hasExtra || hasMarkers) {
+                row.audioOnlySession = true;
+                if (hasExtra) row.extraTracks = extra;
+                await attachWaveformSessionFieldsToRow(row);
             }
         }
         return row;
@@ -175,7 +259,7 @@
     async function persistSessionToStorage() {
         if (!window.indexedDB) return;
         const row = await buildSessionPersistRow();
-        if (!row.mBlob) {
+        if (!sessionRowHasRestorableContent(row)) {
             try {
                 const db = await openIdb();
                 await new Promise((resolve, reject) => {
@@ -309,9 +393,111 @@
         } else if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
             ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 40 });
         }
-        if (typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+    }
+
+    function applyRangeLoopRestoreFromRow(row) {
+        if (
+            row.rangeLoop &&
+            Number.isFinite(row.rangeLoop.inSec) &&
+            Number.isFinite(row.rangeLoop.outSec) &&
+            typeof setPendingRangeLoopRestore === 'function'
+        ) {
+            setPendingRangeLoopRestore(row.rangeLoop);
         }
+    }
+
+    async function finishSessionRestoreFromRow(row, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const restoreTransportSec =
+            typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
+                ? Math.max(0, o.restoreTransportSec)
+                : null;
+
+        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
+            ensureAtLeastOneWaveformLaneVisible();
+        }
+        if (restoreTransportSec != null) {
+            if (typeof primePendingRestoreTransportUi === 'function') {
+                primePendingRestoreTransportUi();
+            }
+            if (typeof scheduleSessionTransportRestoreRetry === 'function') {
+                scheduleSessionTransportRestoreRetry();
+            }
+            if (typeof applyPendingTransportRestore === 'function') {
+                applyPendingTransportRestore();
+            }
+        } else if (typeof applySessionTransportAtHead === 'function') {
+            applySessionTransportAtHead();
+        }
+        if (typeof applyPendingRangeLoopRestore === 'function') {
+            applyPendingRangeLoopRestore();
+        }
+        if (typeof syncSeekMax === 'function') syncSeekMax();
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
+        if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
+        if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
+        requestAnimationFrame(() => {
+            if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+        });
+    }
+
+    async function applyAudioOnlySessionPersistRow(row, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!sessionRowHasRestorableContent(row)) return false;
+
+        const storedExtraCount = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
+        writeLog(
+            'Restoring audio-only session (' +
+                storedExtraCount +
+                ' stored extra track' +
+                (storedExtraCount === 1 ? '' : 's') +
+                ')...',
+        );
+
+        prepareLaneUiRestoreFromRow(row);
+        applyRangeLoopRestoreFromRow(row);
+
+        const restoreTransportSec =
+            typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
+                ? Math.max(0, o.restoreTransportSec)
+                : null;
+        if (restoreTransportSec != null) {
+            pendingRestoreTime = restoreTransportSec;
+        }
+
+        await restoreExtraTracksFromRow(row);
+
+        if (typeof applySavedWaveformLaneUi === 'function') {
+            const laneSnap =
+                typeof pendingLaneUiRestore !== 'undefined' && pendingLaneUiRestore
+                    ? pendingLaneUiRestore
+                    : null;
+            applySavedWaveformLaneUi(laneSnap);
+            pendingLaneUiRestore = null;
+        }
+
+        if (typeof loadMarkersForCurrentVideo === 'function') {
+            loadMarkersForCurrentVideo(
+                Array.isArray(row.markers) ? row.markers : undefined,
+            );
+        }
+        if (typeof adoptMarkersForAudioOnlySession === 'function') {
+            adoptMarkersForAudioOnlySession();
+        }
+
+        await finishSessionRestoreFromRow(row, {
+            restoreTransportSec: restoreTransportSec,
+        });
+        writeLog('Restored audio-only session');
+        return true;
     }
 
     async function applySessionPersistRow(row, opt) {
@@ -321,7 +507,9 @@
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);
         }
-        if (!row.mBlob) return false;
+        if (!row.mBlob) {
+            return applyAudioOnlySessionPersistRow(row, opt);
+        }
 
         const storedExtraCount = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
         writeLog(
@@ -331,6 +519,7 @@
         );
 
         prepareLaneUiRestoreFromRow(row);
+        applyRangeLoopRestoreFromRow(row);
 
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
@@ -368,22 +557,9 @@
             }
         }
         await restoreExtraTracksFromRow(row);
-        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-            ensureAtLeastOneWaveformLaneVisible();
-        }
-        if (restoreTransportSec != null) {
-            if (typeof primePendingRestoreTransportUi === 'function') {
-                primePendingRestoreTransportUi();
-            }
-            if (typeof scheduleSessionTransportRestoreRetry === 'function') {
-                scheduleSessionTransportRestoreRetry();
-            }
-            if (typeof applyPendingTransportRestore === 'function') {
-                applyPendingTransportRestore();
-            }
-        } else if (typeof applySessionTransportAtHead === 'function') {
-            applySessionTransportAtHead();
-        }
+        await finishSessionRestoreFromRow(row, {
+            restoreTransportSec: restoreTransportSec,
+        });
         return true;
     }
 
@@ -392,7 +568,7 @@
     async function importAndPersistSessionRow(row, opt) {
         return runSerializedSessionRestore(async () => {
             await applySessionPersistRow(row, opt);
-            if (row && row.mBlob && window.indexedDB) {
+            if (row && sessionRowHasRestorableContent(row) && window.indexedDB) {
                 await idbPut(IDB_KEY_LAST, row);
             }
         });
@@ -416,8 +592,8 @@
                 writeLog('Session read failed: ' + (e && e.message ? e.message : String(e)));
                 return;
             }
-            if (!row || !row.mBlob) {
-                writeLog('No stored video session (playback prefs may still apply).');
+            if (!sessionRowHasRestorableContent(row)) {
+                writeLog('No stored session (playback prefs may still apply).');
                 return;
             }
             await applySessionPersistRow(row);

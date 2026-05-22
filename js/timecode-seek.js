@@ -411,16 +411,35 @@
 
     async function seekTransportToAndWait(sec) {
         applyTimeToVideo(sec);
-        await waitForVideoSeekIdle(3000);
+        if (typeof videoReady === 'function' && videoReady()) {
+            await waitForVideoSeekIdle(3000);
+        }
         updateSeekUiFromVideo();
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport();
         }
     }
 
+    function isAudioOnlyTransportPlayback() {
+        const hasVideo = typeof videoReady === 'function' && videoReady();
+        if (hasVideo) return false;
+        return (
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline()
+        );
+    }
+
     async function runTransportPlay(playGen) {
         if (typeof abortWaveformDecodeInFlight === 'function') {
             abortWaveformDecodeInFlight();
+        }
+        if (isAudioOnlyTransportPlayback()) {
+            if (typeof primeReviewMixForPlayback === 'function') {
+                primeReviewMixForPlayback();
+            } else if (typeof primeExtraAudioForPlayback === 'function') {
+                primeExtraAudioForPlayback();
+            }
+            return startMasterTransportTailPlayback(playGen);
         }
         await ensureVideoCanPlayForTransport();
         if (playGen != null && playGen !== transportPlayGeneration) return false;
@@ -518,7 +537,7 @@
     }
 
     async function startVideoPlayback(opt) {
-        if (!videoReady()) return false;
+        if (!videoReady() && !isAudioOnlyTransportPlayback()) return false;
         const force = !!(opt && opt.force);
         const playGen =
             opt && opt.playGen != null ? opt.playGen : (transportPlayGeneration += 1);
@@ -860,7 +879,11 @@
             if (typeof refreshMarkerUi === 'function') refreshMarkerUi();
             if (typeof refreshReviewMixUi === 'function') refreshReviewMixUi();
         }
+        if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
+        if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }
+
+    window.updateControlsEnabled = updateControlsEnabled;
 
     function loadVideoFile(f, opt) {
         if (typeof prepareReviewMixForNewVideoLoad === 'function') {
@@ -911,4 +934,9 @@
         if (!opt || !opt.skipPersist) {
             schedulePersistSession();
         }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
+        if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
+        if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }

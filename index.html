@@ -42,7 +42,10 @@
     <div class="player-stage layout-narrow" id="playerStage">
         <div class="player-stage__main" id="playerStageMain">
             <div class="video-panel file-drop-target file-drop-target--video" id="panelMain" data-side="main" title="動画ファイルをドロップして読み込み">
-                <p class="video-panel-label">Video</p>
+                <div class="video-panel__head-row">
+                    <p class="video-panel-label">Video</p>
+                    <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="Unload video">Clear</button>
+                </div>
                 <span class="file-name" id="nameMain">Not Loaded</span>
                 <p class="panel-info-line panel-info-line--stacked" id="infoMain" hidden>
                     <span class="panel-info-line__row" id="infoMainMeta"></span>
@@ -79,7 +82,7 @@
                         <tbody id="markerTableBody"></tbody>
                     </table>
                 </div>
-                <p class="marker-list-empty" id="markerListEmpty">Load a video to add markers (<kbd>M</kbd> point, <kbd>[</kbd> <kbd>]</kbd> range)</p>
+                <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます（<kbd>M</kbd> ポイント、<kbd>[</kbd> <kbd>]</kbd> レンジ）</p>
             </div>
         </aside>
     </div>
@@ -281,10 +284,7 @@
                 class="transport-shortcuts-link transport-opt-chip"
                 title="Open Keyboard Shortcuts in a new window"
             >Keyboard Shortcuts</a>
-            <div class="session-io transport-opt-chip" role="group" aria-label="Import and export review">
-                <button type="button" id="sessionImportBtn" class="session-io-btn" title="Restore a review from a .mgacr file">Import Review</button>
-                <button type="button" id="sessionExportBtn" class="session-io-btn" title="Save video, extra audio, markers, mix, and display settings to one file">Export Review</button>
-            </div>
+            <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session">All Clear</button>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap">
@@ -311,6 +311,33 @@
                 </select>
             </div>
             <button type="button" id="playStopBtn" disabled>Play</button>
+        </div>
+        <div class="transport-bar__row transport-bar__row--session-io">
+            <div class="session-io-cluster" role="group" aria-label="Export media selection and review import/export">
+                <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
+                    <span class="transport-opt-label">Include in export</span>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled>
+                        <span>Video</span>
+                    </label>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeEx0" checked disabled>
+                        <span>Ex 1</span>
+                    </label>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeEx1" checked disabled>
+                        <span>Ex 2</span>
+                    </label>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeEx2" checked disabled>
+                        <span>Ex 3</span>
+                    </label>
+                </div>
+                <div class="session-io-actions" role="group" aria-label="Import and export review">
+                    <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file">Import Review</button>
+                    <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file">Export Review</button>
+                </div>
+            </div>
         </div>
     </div>
 

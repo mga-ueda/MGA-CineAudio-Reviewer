@@ -103,6 +103,9 @@
             const payload = {
                 loopPlayback: getLoopPlaybackEnabled(),
             };
+            if (prev.exportMediaInclude && typeof prev.exportMediaInclude === 'object') {
+                payload.exportMediaInclude = prev.exportMediaInclude;
+            }
             if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
                 payload.laneUi = getWaveformLaneUiPersistSnapshot();
             }

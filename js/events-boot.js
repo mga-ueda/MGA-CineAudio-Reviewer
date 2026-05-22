@@ -480,7 +480,12 @@
         };
         if (Object.prototype.hasOwnProperty.call(numpadSeekDigit, e.code)) {
             if (e.repeat) return;
-            if (!videoReady()) return;
+            if (
+                typeof transportControlsReady !== 'function' ||
+                !transportControlsReady()
+            ) {
+                return;
+            }
             e.preventDefault();
             const d = numpadSeekDigit[e.code];
             const dur =
@@ -518,7 +523,12 @@
 
         if (e.code === 'Space') {
             if (e.repeat) return;
-            if (!videoReady()) return;
+            if (
+                typeof transportControlsReady !== 'function' ||
+                !transportControlsReady()
+            ) {
+                return;
+            }
             e.preventDefault();
             const playingNow =
                 typeof isTransportPlaying === 'function'
@@ -533,7 +543,12 @@
         }
 
         if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
-            if (!videoReady()) return;
+            if (
+                typeof transportControlsReady !== 'function' ||
+                !transportControlsReady()
+            ) {
+                return;
+            }
             e.preventDefault();
             const wasPlaying =
                 typeof isTransportPlaying === 'function'
@@ -697,5 +712,8 @@
         onVideoMediaReady();
         if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
             await finalizeReviewMixAfterSessionRestore();
+        }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
         }
     })();

@@ -3,6 +3,8 @@
     let currentMarkers = [];
     let pendingRangeStartSec = null;
     let activeMarkerId = null;
+    /** In/Out 列ホバー・シークでどちらの TC を +/- 対象にするか（フォーカスが In のままのとき Out を直す） */
+    let markerActiveTcEdge = 'in';
     let markerIdSeq = 0;
     /** renderMarkerList 直後など、ホバーシークが誤って元位置へ戻すのを防ぐ */
     let suppressMarkerRowHoverSeekUntil = 0;
@@ -13,10 +15,34 @@
         return 'm' + Date.now().toString(36) + '_' + markerIdSeq;
     }
 
+    const MARKER_SESSION_AUDIO_ONLY_KEY = '\0mga-marker-session-audio-only';
+
     function getVideoMarkerKey() {
-        if (!fileMain) return null;
-        return String(fileMain.name) + '\0' + String(fileMain.lastModified);
+        if (fileMain) {
+            return String(fileMain.name) + '\0' + String(fileMain.lastModified);
+        }
+        if (
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline()
+        ) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
+        return null;
     }
+
+    function adoptMarkersForAudioOnlySession() {
+        if (!currentMarkers.length) return;
+        const snap = getMarkersSnapshot();
+        markersByVideoKey.set(MARKER_SESSION_AUDIO_ONLY_KEY, snap);
+        currentMarkers = snap.map(cloneMarker).filter(Boolean);
+        sortMarkersInPlace();
+        renderMarkerList();
+        renderSeekBarMarkers();
+        updateMarkerRangeHint();
+        updateMarkerCommentOverlay();
+    }
+
+    window.adoptMarkersForAudioOnlySession = adoptMarkersForAudioOnlySession;
 
     function cloneMarker(m) {
         if (!m || typeof m !== 'object') return null;
@@ -124,9 +150,11 @@
     }
 
     function currentTransportSec() {
-        if (!videoReady()) return 0;
         if (typeof getTransportSec === 'function') return getTransportSec();
-        return videoMain.currentTime || 0;
+        if (typeof videoReady === 'function' && videoReady()) {
+            return videoMain.currentTime || 0;
+        }
+        return 0;
     }
 
     function markerCommentOverlayTextEl(overlayEl) {
@@ -149,7 +177,7 @@
      * In が同じときは一覧で後ろのマーカー（後から追加された方）を優先。
      */
     function findMarkerCommentHitForOverlayByType(t, type) {
-        if (!videoReady() || !Number.isFinite(t)) return null;
+        if (!markerTimelineReady() || !Number.isFinite(t)) return null;
         const wantPoint = type === 'point';
         const fadeDur = markerCommentFadeOutDurationSec();
         const holdSec = MARKER_COMMENT_POINT_HOLD_SEC;
@@ -385,7 +413,7 @@
 
     function updateMarkerCommentOverlay() {
         if (!markerCommentOverlayPoint && !markerCommentOverlayRange) return;
-        if (!videoReady()) {
+        if (!markerTimelineReady()) {
             hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
             hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
             return;
@@ -413,6 +441,9 @@
 
     function markerVideoSecForTransportSec(transportSec) {
         if (!Number.isFinite(transportSec)) return 0;
+        if (typeof videoReady === 'function' && !videoReady()) {
+            return transportSec;
+        }
         return typeof videoSecForTransportSec === 'function'
             ? videoSecForTransportSec(transportSec)
             : transportSec;
@@ -477,9 +508,17 @@
         return currentMarkers.length > 0 || pendingRangeStartSec != null;
     }
 
+    window.hasMarkerContentToClear = hasMarkerContentToClear;
+
+    function markerTimelineReady() {
+        return (
+            typeof transportControlsReady === 'function' && transportControlsReady()
+        );
+    }
+
     function updateMarkerClearAllButton() {
         if (!markerClearAllBtn) return;
-        const canClear = videoReady() && hasMarkerContentToClear();
+        const canClear = markerTimelineReady() && hasMarkerContentToClear();
         markerClearAllBtn.disabled = !canClear;
     }
 
@@ -563,7 +602,12 @@
         saveMarkersToCache();
         if (!(opt && opt.skipMarkerList)) renderMarkerList();
         renderSeekBarMarkers();
-        schedulePersistSession();
+        if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (!(opt && opt.skipSessionFlush) && typeof flushPersistSessionNow === 'function') {
+            void flushPersistSessionNow().catch(() => {});
+        }
     }
 
     function addPointMarkerAtSec(sec) {
@@ -583,7 +627,7 @@
     }
 
     function addPointMarkerAtCurrentTime() {
-        if (!videoReady()) {
+        if (!markerTimelineReady()) {
             writeLog('Marker: load a video first');
             return;
         }
@@ -591,7 +635,7 @@
     }
 
     function beginPendingRangeAtCurrentTime() {
-        if (!videoReady()) {
+        if (!markerTimelineReady()) {
             writeLog('Marker: load a video first');
             return;
         }
@@ -605,7 +649,7 @@
     }
 
     function completePendingRangeAtCurrentTime() {
-        if (!videoReady() || pendingRangeStartSec == null) return;
+        if (!markerTimelineReady() || pendingRangeStartSec == null) return;
         const t = currentTransportSec();
         let start = pendingRangeStartSec;
         let end = t;
@@ -652,22 +696,20 @@
         return 1 / fps;
     }
 
-    /** 範囲が1フレーム以下なら点マーカーへ（Out 削除と同義） */
+    /** Out が In 以前（同時刻含む）なら点マーカーへ（Out 削除と同義） */
     function collapseRangeMarkerToPointIfNarrow(m, opt) {
         if (!m || m.type !== 'range') return false;
         const start = Number(m.startSec);
         const end = Number(m.endSec);
         if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
-        const span = end - start;
-        const oneFrame = markerOneFrameSec();
-        if (span > oneFrame + 1e-9) return false;
+        if (end > start + 1e-9) return false;
         const t = clampMarkerSec(start);
         m.type = 'point';
         m.timeSec = t;
         delete m.startSec;
         delete m.endSec;
         if (!(opt && opt.silent)) {
-            writeLog('Marker: range ≤1f collapsed to point at ' + tcLabelForSec(t));
+            writeLog('Marker: range collapsed to point at ' + tcLabelForSec(t));
         }
         return true;
     }
@@ -696,34 +738,47 @@
         return 0;
     }
 
-    function videoSecFromPlaybackFrameIndex(targetIdx) {
-        if (!videoReady()) return null;
-        const dur = getDuration(videoMain);
+    function transportSecFromPlaybackFrameIndex(targetIdx) {
+        if (!markerTimelineReady()) return null;
+        const dur = masterDurForTimelineMarkers();
         if (!dur || dur <= 0) return 0;
+        if (typeof videoReady === 'function' && videoReady()) {
+            const durVideo = getDuration(videoMain);
+            if (durVideo > 0) {
+                let lo = 0;
+                let hi = durVideo - 0.001;
+                for (let i = 0; i < 48; i++) {
+                    const mid = (lo + hi) * 0.5;
+                    if (playbackFrameIndexForSide(mid, 'main') < targetIdx) lo = mid;
+                    else hi = mid;
+                }
+                let sec = hi;
+                if (playbackFrameIndexForSide(sec, 'main') < targetIdx) {
+                    sec = Math.min(durVideo - 0.001, sec + masterFrameSec);
+                }
+                const videoSec = Math.max(0, Math.min(durVideo - 0.001, sec));
+                return typeof audioSecFromVideoSec === 'function'
+                    ? audioSecFromVideoSec(videoSec)
+                    : videoSec;
+            }
+        }
         let lo = 0;
         let hi = dur - 0.001;
+        const fps = masterFpsFloatForTransport();
         for (let i = 0; i < 48; i++) {
             const mid = (lo + hi) * 0.5;
-            if (playbackFrameIndexForSide(mid, 'main') < targetIdx) lo = mid;
+            if (linearFrameIndexFromSec(mid, fps) < targetIdx) lo = mid;
             else hi = mid;
         }
         let sec = hi;
-        if (playbackFrameIndexForSide(sec, 'main') < targetIdx) {
+        if (linearFrameIndexFromSec(sec, fps) < targetIdx) {
             sec = Math.min(dur - 0.001, sec + masterFrameSec);
         }
         return Math.max(0, Math.min(dur - 0.001, sec));
     }
 
-    function transportSecFromPlaybackFrameIndex(targetIdx) {
-        const videoSec = videoSecFromPlaybackFrameIndex(targetIdx);
-        if (videoSec == null) return null;
-        return typeof audioSecFromVideoSec === 'function'
-            ? audioSecFromVideoSec(videoSec)
-            : videoSec;
-    }
-
     function transportSecFromMarkerTcString(tcStr) {
-        if (!videoReady()) return null;
+        if (!markerTimelineReady()) return null;
         const targetIdx = parseTimecodeStringToClipFrameIndex(
             String(tcStr || '').trim(),
             masterFpsFloatForTransport(),
@@ -734,7 +789,7 @@
 
     function applyMarkerOutFrameOffset(markerId, frameDelta) {
         const m = currentMarkers.find((x) => x.id === markerId);
-        if (!m || !videoReady() || !Number.isFinite(frameDelta)) return false;
+        if (!m || !markerTimelineReady() || !Number.isFinite(frameDelta)) return false;
         const inIdx = playbackFrameIndexForSide(
             markerVideoSecForTransportSec(markerInSec(m)),
             'main',
@@ -774,7 +829,7 @@
         if (!trimmed) return null;
         const rel = trimmed.match(/^([+-])(\d+)$/);
         if (rel) {
-            if (!videoReady() || !m) return null;
+            if (!markerTimelineReady() || !m) return null;
             const sign = rel[1] === '+' ? 1 : -1;
             const frameDelta = parseInt(rel[2], 10);
             if (!Number.isFinite(frameDelta)) return null;
@@ -855,6 +910,23 @@
         return playbackFrameIndexForSide(markerVideoSecForTransportSec(sec), 'main');
     }
 
+    /** +/- 用: Out が空の点マーカーは In 位置を基準にする（従来どおり） */
+    function markerTcFrameIndexForNudge(m, edge) {
+        const effEdge = effectiveMarkerTcEdge(m, edge);
+        let idx = markerTcFrameIndexForEdge(m, effEdge);
+        if (idx != null) return idx;
+        if (effEdge === 'out') {
+            const inSec = markerInSec(m);
+            if (Number.isFinite(inSec)) {
+                return playbackFrameIndexForSide(
+                    markerVideoSecForTransportSec(inSec),
+                    'main',
+                );
+            }
+        }
+        return null;
+    }
+
     function markerVideoSecForTcInputRaw(raw, m, edge) {
         const trimmed = String(raw || '').trim();
         if (trimmed) {
@@ -881,9 +953,33 @@
         return !!(el && el.classList && el.classList.contains('marker-table__tc-input'));
     }
 
-    function nudgeMarkerTcInput(input, m, edge, sign, bySeconds) {
-        if (!input || !videoReady() || !Number.isFinite(sign) || sign === 0) return false;
-        const idx = frameIndexFromMarkerTcInputRaw(input.value, m, edge);
+    function effectiveMarkerTcEdge(m, edge) {
+        if (edge === 'out') return 'out';
+        if (m && m.id === activeMarkerId && markerActiveTcEdge === 'out') {
+            return 'out';
+        }
+        return 'in';
+    }
+
+    function refreshMarkerTcInputDisplay(input, m, edge) {
+        if (!input || !m) return;
+        const eff = edge === 'out' ? 'out' : effectiveMarkerTcEdge(m, edge);
+        if (eff === 'out' && m.type === 'range') {
+            input.value = tcLabelForSec(m.endSec);
+        } else {
+            const sec = markerTcSecForEdge(m, eff);
+            input.value = sec != null ? tcLabelForSec(sec) : '';
+        }
+    }
+
+    function nudgeMarkerTcByEdge(m, edge, sign, bySeconds, inputOpt) {
+        if (!m || !markerTimelineReady() || !Number.isFinite(sign) || sign === 0) return false;
+        const effEdge = effectiveMarkerTcEdge(m, edge);
+        let idx = markerTcFrameIndexForNudge(m, edge);
+        if (idx == null) {
+            const raw = inputOpt && inputOpt.value ? inputOpt.value : '';
+            idx = frameIndexFromMarkerTcInputRaw(raw, m, effEdge);
+        }
         if (idx == null) return false;
         let newIdx;
         if (bySeconds) {
@@ -895,36 +991,86 @@
         }
         const newSec = transportSecFromPlaybackFrameIndex(newIdx);
         if (newSec == null) return false;
-        if (!applyMarkerTcEdit(m.id, edge, newSec, { skipMarkerList: true })) return false;
+        if (!applyMarkerTcEdit(m.id, effEdge, newSec, { skipMarkerList: true })) return false;
         const t = commitMarkerTransportSeek(newSec);
         syncMarkerSeekTransportUi(t);
-        if (edge === 'out' && m.type === 'range') {
-            input.value = tcLabelForSec(m.endSec);
-        } else {
-            const sec = markerTcSecForEdge(m, edge);
-            input.value = sec != null ? tcLabelForSec(sec) : '';
+        const input =
+            inputOpt ||
+            (markerTableBody
+                ? markerTableBody.querySelector(
+                      '.marker-table__tc-input[data-marker-for="' +
+                          m.id +
+                          '"][data-marker-tc-edge="' +
+                          effEdge +
+                          '"]',
+                  )
+                : null);
+        if (input) {
+            refreshMarkerTcInputDisplay(input, m, effEdge);
+            input.focus();
+        }
+        if (markerTableBody && m.id === activeMarkerId) {
+            const outInput = markerTableBody.querySelector(
+                '.marker-table__tc-input[data-marker-for="' +
+                    m.id +
+                    '"][data-marker-tc-edge="out"]',
+            );
+            if (outInput && outInput !== input && m.type === 'range') {
+                outInput.value = tcLabelForSec(m.endSec);
+            }
         }
         renderSeekBarMarkers();
         updateMarkerCommentOverlay();
         if (typeof centerWaveformTimelineOnTransport === 'function') {
             centerWaveformTimelineOnTransport();
         }
-        input.focus();
         return true;
     }
 
-    function handleMarkerTcInputNudgeKey(ev, input, m, edge) {
+    function handleMarkerPanelTcNudgeKeydown(ev) {
         if (ev.ctrlKey || ev.altKey || ev.metaKey) return false;
         const plus =
             ev.code === 'NumpadAdd' || ev.key === '+' || (ev.code === 'Equal' && ev.shiftKey);
         const minus = ev.code === 'NumpadSubtract' || ev.key === '-' || ev.code === 'Minus';
         if (!plus && !minus) return false;
+        if (!markerTimelineReady()) return false;
+
+        const ae = document.activeElement;
+        if (ae && ae.closest && ae.closest('.marker-table__comment')) return false;
+
+        let m = null;
+        let edge = markerActiveTcEdge;
+        let input = null;
+
+        if (isMarkerTcInputElement(ae)) {
+            input = ae;
+            m = currentMarkers.find((x) => x.id === ae.dataset.markerFor);
+            edge = effectiveMarkerTcEdge(m, ae.dataset.markerTcEdge || edge);
+        } else if (activeMarkerId) {
+            m = currentMarkers.find((x) => x.id === activeMarkerId);
+            if (m && markerTableBody) {
+                edge = effectiveMarkerTcEdge(m, edge);
+                input = markerTableBody.querySelector(
+                    '.marker-table__tc-input[data-marker-for="' +
+                        m.id +
+                        '"][data-marker-tc-edge="' +
+                        edge +
+                        '"]',
+                );
+            }
+        }
+        if (!m) return false;
+
         const sign = plus ? 1 : -1;
-        if (nudgeMarkerTcInput(input, m, edge, sign, !!ev.shiftKey)) {
+        if (nudgeMarkerTcByEdge(m, edge, sign, !!ev.shiftKey, input)) {
             ev.preventDefault();
             return true;
         }
         return false;
+    }
+
+    function handleMarkerTcInputNudgeKey(ev, input, m, edge) {
+        return handleMarkerPanelTcNudgeKeydown(ev);
     }
 
     function focusMarkerTcInput(markerId, edge) {
@@ -1035,6 +1181,9 @@
             }
         });
         input.addEventListener('focus', () => {
+            markerActiveTcEdge = edge === 'out' ? 'out' : 'in';
+            activeMarkerId = m.id;
+            updateMarkerRowActiveClass(m.id);
             if (m.type === 'range') {
                 tcEditRevert = {
                     type: 'range',
@@ -1046,8 +1195,8 @@
             }
             syncSeekToMarkerRow(m, {
                 quiet: true,
-                seekIn: edge === 'in',
-                seekEnd: edge === 'out',
+                seekIn: edge === 'in' || (edge === 'out' && !markerHasOutTc(m)),
+                seekEnd: edge === 'out' && markerHasOutTc(m),
             });
             if (typeof beginMarkerTcEditWaveformZoom === 'function') {
                 beginMarkerTcEditWaveformZoom();
@@ -1184,14 +1333,16 @@
 
     /** Feedback コメント編集開始時: 行ハイライト＋シークバーをそのマーカー In へ */
     function activateMarkerForCommentEdit(m) {
-        if (!videoReady() || !m) return;
+        if (!markerTimelineReady() || !m) return;
         suppressMarkerRowHoverSeek(400);
         syncSeekToMarkerRow(m, { quiet: true, seekIn: true });
     }
 
     /** In / Out 列上でシーク（seekIn / seekEnd を指定） */
     function syncSeekToMarkerRow(m, opt) {
-        if (!videoReady() || !m || !opt) return;
+        if (!markerTimelineReady() || !m || !opt) return;
+        activeMarkerId = m.id;
+        updateMarkerRowActiveClass(m.id);
         if (!opt.seekIn && !opt.seekEnd) return;
         if (opt.fromRowHover && isMarkerRowHoverSeekSuppressed()) return;
         if (opt.fromRowHover && isMarkerRowHoverSeekBlocked()) return;
@@ -1199,6 +1350,8 @@
         const quiet = !!(opt && opt.quiet);
         const target = clampMarkerSec(opt.seekIn ? markerInSec(m) : m.endSec);
         const edgeLabel = opt.seekIn ? 'In' : 'Out';
+        if (opt.seekEnd) markerActiveTcEdge = 'out';
+        else if (opt.seekIn) markerActiveTcEdge = 'in';
         if (!videoMain.paused) {
             videoMain.pause();
             setPlayingUi(false);
@@ -1206,8 +1359,6 @@
         }
         const t = commitMarkerTransportSeek(target);
         syncMarkerSeekTransportUi(t);
-        activeMarkerId = m.id;
-        updateMarkerRowActiveClass(m.id);
         renderSeekBarMarkers();
         if (!quiet) {
             writeLog('Marker: row sync ' + tcLabelForSec(t) + ' ' + edgeLabel);
@@ -1265,7 +1416,7 @@
     }
 
     function appendVideoEndSnapStop(stops) {
-        if (typeof videoReady === 'function' && !videoReady()) return;
+        if (!markerTimelineReady()) return;
         let end = 0;
         if (typeof getVideoTimelineEndSecForWaveform === 'function') {
             end = getVideoTimelineEndSecForWaveform();
@@ -1382,7 +1533,7 @@
     }
 
     function seekToMarker(m, opt) {
-        if (!videoReady() || !m) return;
+        if (!markerTimelineReady() || !m) return;
         const focusComment = !!(opt && opt.focusComment);
         const resumeAfter = !!(opt && opt.resumeAfterSeek);
         const seekEnd = !!(opt && opt.seekEnd);
@@ -1689,7 +1840,7 @@
 
     function handleMarkerNavigationKeydown(e) {
         if (e.repeat) return false;
-        if (!videoReady() || currentMarkers.length === 0) return false;
+        if (!markerTimelineReady() || currentMarkers.length === 0) return false;
         if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return false;
         if (e.ctrlKey || e.metaKey) return false;
 
@@ -2197,7 +2348,6 @@
         if (labelLayer) {
             labelLayer.replaceChildren();
         }
-        if (!videoReady()) return;
         const dur = masterDurForTimelineMarkers();
         if (!dur || dur <= 0) return;
 
@@ -2345,6 +2495,7 @@
             tdIn.addEventListener('mouseenter', () => {
                 if (isMarkerHoverBlockedByCommentFocus(m.id)) return;
                 if (isMarkerRowHoverSeekBlocked()) return;
+                markerActiveTcEdge = 'in';
                 syncSeekToMarkerRow(m, { quiet: true, seekIn: true, fromRowHover: true });
             });
             tdIn.appendChild(createMarkerTcInput(m, 'in'));
@@ -2354,19 +2505,13 @@
             tdOut.addEventListener('mouseenter', () => {
                 if (isMarkerHoverBlockedByCommentFocus(m.id)) return;
                 if (isMarkerRowHoverSeekBlocked()) return;
-                if (markerHasOutTc(m)) {
-                    syncSeekToMarkerRow(m, {
-                        quiet: true,
-                        seekEnd: true,
-                        fromRowHover: true,
-                    });
-                } else {
-                    syncSeekToMarkerRow(m, {
-                        quiet: true,
-                        seekIn: true,
-                        fromRowHover: true,
-                    });
-                }
+                markerActiveTcEdge = 'out';
+                syncSeekToMarkerRow(m, {
+                    quiet: true,
+                    seekEnd: markerHasOutTc(m),
+                    seekIn: !markerHasOutTc(m),
+                    fromRowHover: true,
+                });
             });
             tdOut.appendChild(createMarkerTcInput(m, 'out'));
 
@@ -2442,7 +2587,7 @@
         if (e.repeat) return false;
         if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
         if (isTypingTarget(e.target)) return false;
-        if (!videoReady()) return false;
+        if (!markerTimelineReady()) return false;
         e.preventDefault();
         addPointMarkerAtCurrentTime();
         return true;
@@ -2452,7 +2597,7 @@
         if (e.repeat) return false;
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
         if (isTypingTarget(e.target)) return false;
-        if (!videoReady()) return false;
+        if (!markerTimelineReady()) return false;
         if (e.key === '[') {
             e.preventDefault();
             beginPendingRangeAtCurrentTime();
@@ -2468,6 +2613,19 @@
     }
 
     function initMarkers() {
+        const markerPanelEl = document.getElementById('markerPanel');
+        if (markerPanelEl) {
+            markerPanelEl.addEventListener(
+                'keydown',
+                (e) => {
+                    if (handleMarkerPanelTcNudgeKeydown(e)) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                    }
+                },
+                true,
+            );
+        }
         window.addEventListener(
             'keydown',
             (e) => {

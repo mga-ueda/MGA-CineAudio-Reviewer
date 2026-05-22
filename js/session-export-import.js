@@ -3,14 +3,6 @@
     const EXPORT_FORMAT = 'mgacr-session-v1';
     const EXPORT_FILE_EXT = '.mgacr';
 
-    function getExportTransportSec() {
-        if (typeof getTransportSec === 'function') {
-            return Math.max(0, getTransportSec());
-        }
-        if (seekBar) return Math.max(0, parseFloat(seekBar.value) || 0);
-        return 0;
-    }
-
     function formatByteSize(bytes) {
         const n = Number(bytes);
         if (!Number.isFinite(n) || n < 1) return '0 B';
@@ -168,9 +160,6 @@
         } else {
             writeLog('Export Review: range loop off');
         }
-        if (typeof manifest.transportSec === 'number' && Number.isFinite(manifest.transportSec)) {
-            writeLog('Export Review: transport position ' + formatTcForLog(manifest.transportSec));
-        }
         writeLog('Export Review: ' + describeLaneUi(manifest.prefs && manifest.prefs.laneUi));
         writeLog('Export Review: ' + describeMonitorPrefs(manifest.monitorPrefs));
         logMixSnapshotDetails(sess && sess.mix, 'Export Review');
@@ -209,7 +198,7 @@
         }
     }
 
-    function logImportReviewSuccess(manifest, sourceFile, row, transportSec) {
+    function logImportReviewSuccess(manifest, sourceFile, row) {
         writeLog('Import Review: completed successfully');
         writeLog(
             'Import Review: source file "' +
@@ -225,13 +214,17 @@
             writeLog('Import Review: package app version ' + manifest.appVersion);
         }
         const videoBytes = row.mBlob ? row.mBlob.size || 0 : 0;
-        writeLog(
-            'Import Review: restored video "' +
-                (row.mName || 'video') +
-                '" (' +
-                formatByteSize(videoBytes) +
-                ')',
-        );
+        if (videoBytes > 0) {
+            writeLog(
+                'Import Review: restored video "' +
+                    (row.mName || 'video') +
+                    '" (' +
+                    formatByteSize(videoBytes) +
+                    ')',
+            );
+        } else {
+            writeLog('Import Review: no video in package (loaded video cleared if any)');
+        }
         const extras = Array.isArray(row.extraTracks) ? row.extraTracks : [];
         if (extras.length > 0) {
             for (const tr of extras) {
@@ -268,15 +261,138 @@
                     formatTcForLog(row.rangeLoop.outSec),
             );
         }
-        if (transportSec != null) {
-            writeLog('Import Review: transport position restored to ' + formatTcForLog(transportSec));
-        }
+        writeLog('Import Review: transport at head (seek position not imported)');
         logMixSnapshotDetails(row.mix, 'Import Review');
         writeLog('Import Review: session saved to IndexedDB for reload');
     }
 
-    function sessionRowForManifest(row) {
+    function defaultExportMediaOptions() {
+        return { includeVideo: true, includeExtra: [true, true, true] };
+    }
+
+    function normalizeExportMediaOptions(opt) {
+        const base = defaultExportMediaOptions();
+        if (!opt || typeof opt !== 'object') return base;
+        const extra = Array.isArray(opt.includeExtra) ? opt.includeExtra : base.includeExtra;
+        const count =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        const includeExtra = [];
+        for (let i = 0; i < count; i++) {
+            includeExtra.push(!!extra[i]);
+        }
+        return {
+            includeVideo: !!opt.includeVideo,
+            includeExtra,
+        };
+    }
+
+    function isExportVideoAvailable() {
+        return typeof fileMain !== 'undefined' && !!fileMain;
+    }
+
+    function isExportExtraSlotAvailable(slot) {
+        return typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(slot);
+    }
+
+    function readExportMediaIncludePrefs() {
+        if (typeof readPrefs !== 'function') return defaultExportMediaOptions();
+        const p = readPrefs();
+        return normalizeExportMediaOptions(p.exportMediaInclude);
+    }
+
+    function getExportMediaIncludePrefsSnapshot() {
+        const opts = defaultExportMediaOptions();
+        const videoEl = document.getElementById('sessionExportIncludeVideo');
+        if (videoEl) opts.includeVideo = !!videoEl.checked;
+        for (let i = 0; i < opts.includeExtra.length; i++) {
+            const el = document.getElementById('sessionExportIncludeEx' + i);
+            if (el) opts.includeExtra[i] = !!el.checked;
+        }
+        return opts;
+    }
+
+    function persistExportMediaIncludePrefs() {
+        if (typeof readPrefs !== 'function' || typeof LS_PREFS_KEY === 'undefined') return;
+        try {
+            const prev = readPrefs();
+            const payload = Object.assign({}, prev, {
+                exportMediaInclude: getExportMediaIncludePrefsSnapshot(),
+            });
+            localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
+        } catch (_) {}
+    }
+
+    function applyExportMediaIncludePrefs(saved) {
+        const media = normalizeExportMediaOptions(saved);
+        const videoEl = document.getElementById('sessionExportIncludeVideo');
+        if (videoEl) videoEl.checked = media.includeVideo;
+        for (let i = 0; i < media.includeExtra.length; i++) {
+            const el = document.getElementById('sessionExportIncludeEx' + i);
+            if (el) el.checked = media.includeExtra[i];
+        }
+    }
+
+    /** Active export selection (loaded media only); not written to .mgacr. */
+    function getExportMediaOptionsFromUi() {
+        const saved = getExportMediaIncludePrefsSnapshot();
+        const opts = defaultExportMediaOptions();
+        if (isExportVideoAvailable()) {
+            opts.includeVideo = saved.includeVideo;
+        }
+        for (let i = 0; i < opts.includeExtra.length; i++) {
+            if (isExportExtraSlotAvailable(i)) {
+                opts.includeExtra[i] = saved.includeExtra[i];
+            }
+        }
+        return opts;
+    }
+
+    function refreshExportMediaOptionsUi() {
+        const saved = readExportMediaIncludePrefs();
+        const videoEl = document.getElementById('sessionExportIncludeVideo');
+        const hasVideo = isExportVideoAvailable();
+        if (videoEl) {
+            const wasDisabled = videoEl.disabled;
+            videoEl.disabled = !hasVideo;
+            if (hasVideo && wasDisabled) {
+                videoEl.checked = saved.includeVideo;
+            }
+        }
+        const count =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        for (let i = 0; i < count; i++) {
+            const el = document.getElementById('sessionExportIncludeEx' + i);
+            const loaded = isExportExtraSlotAvailable(i);
+            if (!el) continue;
+            const wasDisabled = el.disabled;
+            el.disabled = !loaded;
+            if (loaded && wasDisabled) {
+                el.checked = saved.includeExtra[i];
+            }
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
+    }
+
+    function bindExportMediaIncludeCheckboxPersistence() {
+        const ids = [
+            'sessionExportIncludeVideo',
+            'sessionExportIncludeEx0',
+            'sessionExportIncludeEx1',
+            'sessionExportIncludeEx2',
+        ];
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (!el || el.dataset.exportMediaPersistBound === '1') continue;
+            el.dataset.exportMediaPersistBound = '1';
+            el.addEventListener('change', persistExportMediaIncludePrefs);
+        }
+    }
+
+    function sessionRowForManifest(row, exportMedia) {
         if (!row || typeof row !== 'object') return null;
+        const media = normalizeExportMediaOptions(exportMedia);
         const out = {
             v: typeof row.v === 'number' ? row.v : 4,
             laneUi: row.laneUi,
@@ -290,6 +406,7 @@
         if (Array.isArray(row.extraTracks)) {
             for (const entry of row.extraTracks) {
                 if (!entry || typeof entry.slot !== 'number') continue;
+                if (!media.includeExtra[entry.slot]) continue;
                 out.extraTracks.push({
                     slot: entry.slot,
                     name: entry.name,
@@ -302,7 +419,7 @@
                 });
             }
         }
-        if (row.mBlob) out.videoBlobKey = 'video';
+        if (row.mBlob && media.includeVideo) out.videoBlobKey = 'video';
         return out;
     }
 
@@ -315,17 +432,19 @@
         return blob.arrayBuffer();
     }
 
-    async function collectExportBlobs(sessionRow) {
+    async function collectExportBlobs(sessionRow, exportMedia) {
         const blobs = {};
         const order = [];
         if (!sessionRow) return { blobs, order };
-        if (sessionRow.mBlob) {
+        const media = normalizeExportMediaOptions(exportMedia);
+        if (sessionRow.mBlob && media.includeVideo) {
             blobs.video = await blobToArrayBuffer(sessionRow.mBlob);
             order.push('video');
         }
         if (Array.isArray(sessionRow.extraTracks)) {
             for (const entry of sessionRow.extraTracks) {
-                if (!entry || !entry.blob) continue;
+                if (!entry || !entry.blob || typeof entry.slot !== 'number') continue;
+                if (!media.includeExtra[entry.slot]) continue;
                 const key = 'extra' + entry.slot;
                 blobs[key] = await blobToArrayBuffer(entry.blob);
                 order.push(key);
@@ -334,7 +453,7 @@
         return { blobs, order };
     }
 
-    async function buildExportManifest() {
+    async function buildExportManifest(exportMedia) {
         if (typeof flushPersistSessionNow === 'function') {
             await flushPersistSessionNow();
         }
@@ -366,11 +485,10 @@
                 typeof getTimecodeOverlayPersistSnapshot === 'function'
                     ? getTimecodeOverlayPersistSnapshot()
                     : null,
-            transportSec: getExportTransportSec(),
-            session: sessionRowForManifest(sessionRow),
+            session: sessionRowForManifest(sessionRow, exportMedia),
             blobOrder: [],
         };
-        const { blobs, order } = await collectExportBlobs(sessionRow);
+        const { blobs, order } = await collectExportBlobs(sessionRow, exportMedia);
         manifest.blobOrder = order;
         return { manifest, blobs };
     }
@@ -473,7 +591,46 @@
                 });
             }
         }
-        return row.mBlob ? row : null;
+        const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
+        const hasExtra =
+            Array.isArray(row.extraTracks) &&
+            row.extraTracks.some((e) => e && e.blob && (e.byteLength || e.blob.size || 0) > 0);
+        const hasMarkers = Array.isArray(row.markers) && row.markers.length > 0;
+        if (!hasVideo && !hasExtra && !hasMarkers) return null;
+        if (!hasVideo) row.audioOnlySession = true;
+        return row;
+    }
+
+    function packageManifestHasVideoBlob(manifest, blobs) {
+        const sess = manifest && manifest.session;
+        if (!sess || !sess.videoBlobKey) return false;
+        const ab = blobs && blobs[sess.videoBlobKey];
+        return !!(ab && ab.byteLength > 0);
+    }
+
+    async function clearLoadedVideoForImport(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (typeof setPlayingUi === 'function') setPlayingUi(false);
+        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof videoPanelHasVideo === 'function' && videoPanelHasVideo()) {
+            if (typeof revokeVideoOnly === 'function') {
+                revokeVideoOnly();
+            } else if (typeof clearVideoPanel === 'function') {
+                clearVideoPanel();
+            }
+        }
+    }
+
+    async function prepareImportWithoutVideo(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        writeLog('Import Review: package has no video; clearing loaded video before restore');
+        await clearLoadedVideoForImport(o);
+        if (o.clearExtras && typeof clearAllExtraTracks === 'function') {
+            clearAllExtraTracks();
+        }
+        if (o.clearMarkers && typeof clearMarkersForRevoke === 'function') {
+            clearMarkersForRevoke();
+        }
     }
 
     function applyExportPrefs(manifest) {
@@ -554,79 +711,182 @@
     }
 
     async function exportSessionPackage() {
-        writeLog('Export Review: started (flushing session, building package…)');
-        const { manifest, blobs } = await buildExportManifest();
+        const exportMedia = getExportMediaOptionsFromUi();
+        const mediaSummary = [];
+        if (exportMedia.includeVideo) mediaSummary.push('video');
+        for (let i = 0; i < exportMedia.includeExtra.length; i++) {
+            if (exportMedia.includeExtra[i]) mediaSummary.push('Ex' + (i + 1));
+        }
+        writeLog(
+            'Export Review: started (flushing session, building package…' +
+                (mediaSummary.length
+                    ? '; media: ' + mediaSummary.join(', ')
+                    : '; media: none (settings only)') +
+                ')',
+        );
+        const { manifest, blobs } = await buildExportManifest(exportMedia);
         const packed = packMgacr(manifest, blobs);
         const downloadName = buildExportDownloadFilename(manifest);
         triggerDownload(packed, downloadName);
         logExportReviewDetails(manifest, blobs, packed, downloadName);
     }
 
+    function refreshTransportControlsAfterImport() {
+        const tick = () => {
+            if (typeof updateControlsEnabled === 'function') {
+                updateControlsEnabled();
+            } else if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
+            if (typeof refreshExportMediaOptionsUi === 'function') {
+                refreshExportMediaOptionsUi();
+            }
+        };
+        tick();
+        requestAnimationFrame(tick);
+        window.setTimeout(tick, 0);
+        window.setTimeout(tick, 400);
+    }
+
     async function importSessionPackage(file) {
-        if (!file || file.size < 1) {
-            throw new Error('Empty file');
-        }
-        const maxBytes = 4 * 1024 * 1024 * 1024;
-        if (file.size > maxBytes) {
-            throw new Error('File exceeds 4 GB limit');
-        }
-        writeLog(
-            'Import Review: started — reading "' +
-                file.name +
-                '" (' +
-                formatByteSize(file.size) +
-                ')',
-        );
-        const buffer = await file.arrayBuffer();
-        const { manifest, blobs } = unpackMgacr(buffer);
-        writeLog(
-            'Import Review: package parsed (format ' +
-                manifest.format +
-                (manifest.appVersion ? ', exported with ' + manifest.appVersion : '') +
-                ')',
-        );
-        if (typeof whenSessionRestoreIdle === 'function') {
-            writeLog('Import Review: waiting for any in-progress session restore…');
-            await whenSessionRestoreIdle();
-        }
-        applyExportPrefs(manifest);
+        try {
+            if (!file || file.size < 1) {
+                throw new Error('Empty file');
+            }
+            const maxBytes = 4 * 1024 * 1024 * 1024;
+            if (file.size > maxBytes) {
+                throw new Error('File exceeds 4 GB limit');
+            }
+            writeLog(
+                'Import Review: started — reading "' +
+                    file.name +
+                    '" (' +
+                    formatByteSize(file.size) +
+                    ')',
+            );
+            const buffer = await file.arrayBuffer();
+            const { manifest, blobs } = unpackMgacr(buffer);
+            writeLog(
+                'Import Review: package parsed (format ' +
+                    manifest.format +
+                    (manifest.appVersion ? ', exported with ' + manifest.appVersion : '') +
+                    ')',
+            );
+            if (typeof whenSessionRestoreIdle === 'function') {
+                writeLog('Import Review: waiting for any in-progress session restore…');
+                await whenSessionRestoreIdle();
+            }
+            applyExportPrefs(manifest);
 
-        const transportSec =
-            typeof manifest.transportSec === 'number' && Number.isFinite(manifest.transportSec)
-                ? Math.max(0, manifest.transportSec)
-                : null;
+            const row = manifestToSessionRow(manifest, blobs);
+            const packageHasVideo = packageManifestHasVideoBlob(manifest, blobs);
+            if (!row) {
+                if (!packageHasVideo) {
+                    await clearLoadedVideoForImport();
+                }
+                if (typeof applySessionTransportAtHead === 'function') {
+                    applySessionTransportAtHead();
+                }
+                logImportReviewSettingsOnly(manifest, file);
+                return;
+            }
 
-        const row = manifestToSessionRow(manifest, blobs);
-        if (!row) {
-            logImportReviewSettingsOnly(manifest, file);
-            return;
+            if (typeof importAndPersistSessionRow !== 'function') {
+                throw new Error('Import handler unavailable');
+            }
+            const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
+            if (!hasVideo) {
+                await prepareImportWithoutVideo({ clearExtras: true, clearMarkers: true });
+                writeLog(
+                    'Import Review: restoring audio-only session' +
+                        (Array.isArray(row.extraTracks) && row.extraTracks.length
+                            ? ' (' + row.extraTracks.length + ' extra track(s))…'
+                            : '…'),
+                );
+            } else {
+                writeLog(
+                    'Import Review: restoring video "' +
+                        (row.mName || 'video') +
+                        '"' +
+                        (Array.isArray(row.extraTracks) && row.extraTracks.length
+                            ? ' and ' + row.extraTracks.length + ' extra audio track(s)…'
+                            : '…'),
+                );
+            }
+            await importAndPersistSessionRow(row);
+            logImportReviewSuccess(manifest, file, row);
+        } finally {
+            if (typeof whenSessionRestoreIdle === 'function') {
+                try {
+                    await whenSessionRestoreIdle();
+                } catch (_) {}
+            }
+            refreshTransportControlsAfterImport();
         }
-
-        if (typeof importAndPersistSessionRow !== 'function') {
-            throw new Error('Import handler unavailable');
-        }
-        writeLog(
-            'Import Review: restoring video "' +
-                (row.mName || 'video') +
-                '"' +
-                (Array.isArray(row.extraTracks) && row.extraTracks.length
-                    ? ' and ' + row.extraTracks.length + ' extra audio track(s)…'
-                    : '…'),
-        );
-        await importAndPersistSessionRow(row, { restoreTransportSec: transportSec });
-        logImportReviewSuccess(manifest, file, row, transportSec);
     }
 
     window.exportSessionPackage = exportSessionPackage;
     window.importSessionPackage = importSessionPackage;
+    window.refreshExportMediaOptionsUi = refreshExportMediaOptionsUi;
 
     function bindSessionIoUi() {
         const exportBtn = document.getElementById('sessionExportBtn');
         const importBtn = document.getElementById('sessionImportBtn');
+        const allClearBtn = document.getElementById('sessionAllClearBtn');
         const importFile = document.getElementById('sessionImportFile');
+        const sessionIoRow = document.querySelector('.transport-bar__row--session-io');
         if (!exportBtn || !importBtn || !importFile) return;
 
+        applyExportMediaIncludePrefs(readExportMediaIncludePrefs());
+        refreshExportMediaOptionsUi();
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
+        bindExportMediaIncludeCheckboxPersistence();
+        if (typeof whenSessionRestoreIdle === 'function') {
+            void whenSessionRestoreIdle().then(refreshExportMediaOptionsUi);
+        }
+        if (sessionIoRow) {
+            sessionIoRow.addEventListener('mouseenter', refreshExportMediaOptionsUi);
+            sessionIoRow.addEventListener('focusin', refreshExportMediaOptionsUi);
+        }
+        const mediaOpts = document.getElementById('sessionExportMediaOpts');
+        if (mediaOpts) {
+            const mo = new MutationObserver(refreshExportMediaOptionsUi);
+            for (let i = 0; i < 3; i++) {
+                const meta = document.getElementById('extraAudioMeta' + i);
+                if (meta) mo.observe(meta, { attributes: true, attributeFilter: ['hidden'] });
+            }
+            if (typeof nameMain !== 'undefined' && nameMain) {
+                mo.observe(nameMain, { childList: true, characterData: true, subtree: true });
+            }
+        }
+
+        if (allClearBtn) {
+            allClearBtn.addEventListener('click', () => {
+                allClearBtn.disabled = true;
+                const run =
+                    typeof clearEntireSession === 'function'
+                        ? clearEntireSession()
+                        : Promise.resolve();
+                Promise.resolve(run)
+                    .catch((e) => {
+                        const msg = e && e.message ? e.message : String(e);
+                        writeLog('Session: All Clear failed — ' + msg);
+                        if (typeof showAppAlert === 'function') {
+                            showAppAlert('All Clear に失敗しました', msg);
+                        }
+                    })
+                    .finally(() => {
+                        if (typeof updateSessionAllClearButton === 'function') {
+                            updateSessionAllClearButton();
+                        }
+                    });
+            });
+        }
+
         exportBtn.addEventListener('click', () => {
+            refreshExportMediaOptionsUi();
             exportBtn.disabled = true;
             exportSessionPackage()
                 .catch((e) => {
@@ -671,6 +931,7 @@
                 })
                 .finally(() => {
                     importBtn.disabled = false;
+                    refreshTransportControlsAfterImport();
                 });
         });
     }

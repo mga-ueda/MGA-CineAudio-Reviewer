@@ -1842,6 +1842,9 @@
         } else if (typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
     }
 
     function clearAllExtraTracks() {
@@ -2018,6 +2021,12 @@
                 schedulePersistSession();
             }
             scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
+            if (typeof refreshExportMediaOptionsUi === 'function') {
+                refreshExportMediaOptionsUi();
+            }
+            if (typeof updateControlsEnabled === 'function') {
+                updateControlsEnabled();
+            }
         } catch (err) {
             if (gen !== tr.loadGen) return;
             writeLog(
@@ -2028,6 +2037,9 @@
             );
             refreshExtraTrackUi(slot);
             scheduleExtraTrackWaveformRedraw(slot);
+            if (typeof updateControlsEnabled === 'function') {
+                updateControlsEnabled();
+            }
         }
     }
 

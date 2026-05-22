@@ -32,6 +32,7 @@
     const markerListEmpty = document.getElementById('markerListEmpty');
     const markerRangeHint = document.getElementById('markerRangeHint');
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
+    const videoClearBtn = document.getElementById('videoClearBtn');
     const audioWaveformPanel = document.getElementById('audioWaveformPanel');
     const audioWaveformCanvas = document.getElementById('audioWaveformCanvas');
     const audioWaveformMarkers = document.getElementById('audioWaveformMarkers');

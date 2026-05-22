@@ -122,6 +122,30 @@
         if (msEl) msEl.textContent = String(ms).padStart(4, '0');
     }
 
+    function setPlaybackDriftDisplayUnknown(statEl) {
+        ensurePlaybackDriftDisplayStructure(statEl);
+        const msEl = playbackDriftMsEl(statEl);
+        if (msEl) msEl.textContent = '----';
+    }
+
+    function showPlaybackDriftPanelUnknown(statEl, title) {
+        const driftBox = videoDriftTransportBoxEl(statEl);
+        if (driftBox) driftBox.hidden = false;
+        setPlaybackDriftDisplayUnknown(statEl);
+        applyPlaybackDriftPanelTone(statEl, 'safe');
+        if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
+        statEl.title = title || 'Playback Drift: not available';
+    }
+
+    function showPlaybackDriftPanelZero(statEl) {
+        const driftBox = videoDriftTransportBoxEl(statEl);
+        if (driftBox) driftBox.hidden = false;
+        setPlaybackDriftDisplay(statEl, 0);
+        applyPlaybackDriftPanelTone(statEl, 'safe');
+        if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
+        statEl.title = 'Playback Drift: no session loaded (0 ms)';
+    }
+
     function applyPlaybackDriftPanelTone(statEl, tone) {
         if (!statEl) return;
         const box = videoDriftTransportBoxEl(statEl);
@@ -172,10 +196,17 @@
         if (!statEl) return;
 
         const driftBox = videoDriftTransportBoxEl(statEl);
+        const transportReady =
+            typeof transportControlsReady === 'function' && transportControlsReady();
+        if (!transportReady) {
+            showPlaybackDriftPanelZero(statEl);
+            return;
+        }
         if (!videoReady()) {
-            clearPlaybackDriftDisplay(statEl);
-            if (driftBox) driftBox.hidden = true;
-            applyPlaybackDriftPanelTone(statEl, 'safe');
+            showPlaybackDriftPanelUnknown(
+                statEl,
+                'Playback Drift: not available without video (shows ---- ms)',
+            );
             return;
         }
 
@@ -218,8 +249,10 @@
             }
         }
         if (signed == null) {
-            clearPlaybackDriftDisplay(statEl);
-            if (driftBox) driftBox.hidden = true;
+            showPlaybackDriftPanelUnknown(
+                statEl,
+                'Playback Drift: no measurable drift (shows ---- ms)',
+            );
             return;
         }
 
@@ -330,6 +363,11 @@
 
     function transportPlaybackIsInMasterTail() {
         if (transportTailPlaybackActive) return true;
+        if (typeof videoReady === 'function' && !videoReady()) {
+            return (
+                typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded()
+            );
+        }
         if (!hasMasterTransportTailBeyondVideo()) return false;
         const vd = getVideoPlaybackEndSec();
         const eps = masterTransportTailEpsilonSec();

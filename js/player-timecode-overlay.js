@@ -206,7 +206,7 @@
         if (frameMain) {
             frameMain.classList.remove('video-frame--burn-snap-x', 'video-frame--burn-snap-y');
         }
-        if (!tcOverlayDragState || !videoReady()) return;
+        if (!tcOverlayDragState || !tcOverlayTimelineReady()) return;
         const el = getTcOverlayElement();
         const frame = getTcOverlayFrame(el);
         if (!el || !frame || el.classList.contains('video-timecode--hidden')) return;
@@ -242,7 +242,7 @@
     function seedDefaultTcOverlayPos() {
         const el = getTcOverlayElement();
         const frame = getTcOverlayFrame(el);
-        if (!el || !frame || !videoReady()) return false;
+        if (!el || !frame || !tcOverlayTimelineReady()) return false;
         const { maxLeft, maxBottom } = tcOverlayTravelForFrame(frame, el);
         const d = defaultTcOverlayRatios(maxLeft, maxBottom);
         tcOverlaySharedPos.xRatio = d.xRatio;
@@ -273,7 +273,7 @@
 
     function tryApplyPendingDefaultTcPosition() {
         if (!tcOverlaySharedPos._pendingDefaultSeed) return;
-        if (!videoReady()) return;
+        if (!tcOverlayTimelineReady()) return;
         if (!seedDefaultTcOverlayPos()) return;
         delete tcOverlaySharedPos._pendingDefaultSeed;
         invalidateTcOverlayBaseMetrics();
@@ -326,10 +326,16 @@
         } catch (_) {}
     }
 
+    function tcOverlayTimelineReady() {
+        return (
+            typeof transportControlsReady === 'function' && transportControlsReady()
+        );
+    }
+
     function refreshTimecodeOverlayInteractive() {
         const el = getTcOverlayElement();
         if (!el) return;
-        const show = videoReady();
+        const show = tcOverlayTimelineReady();
         el.classList.toggle('video-timecode--hidden', !show);
         el.classList.toggle('video-timecode--draggable', show);
         if (!show) {
@@ -346,7 +352,7 @@
     }
 
     function onTcOverlayPointerDown(ev) {
-        if (!videoReady() || ev.button !== 0) return;
+        if (!tcOverlayTimelineReady() || ev.button !== 0) return;
         if (ev.target && ev.target.closest && ev.target.closest('.video-timecode__resize-handle')) return;
         const el = getTcOverlayElement();
         const frame = getTcOverlayFrame(el);
@@ -409,7 +415,7 @@
     }
 
     function onTcResizePointerDown(ev) {
-        if (!videoReady() || ev.button !== 0) return;
+        if (!tcOverlayTimelineReady() || ev.button !== 0) return;
         const el = getTcOverlayElement();
         const frame = getTcOverlayFrame(el);
         if (!el || !frame || el.classList.contains('video-timecode--hidden')) return;
@@ -467,7 +473,7 @@
         el.addEventListener('pointerup', onTcOverlayPointerUp);
         el.addEventListener('pointercancel', onTcOverlayPointerUp);
         el.addEventListener('dblclick', (ev) => {
-            if (!videoReady() || el.classList.contains('video-timecode--hidden')) return;
+            if (!tcOverlayTimelineReady() || el.classList.contains('video-timecode--hidden')) return;
             ev.preventDefault();
             ev.stopPropagation();
             resetTcOverlayToDefaultPosition();

@@ -117,9 +117,8 @@
         if (!fileMain) {
             infoMain.hidden = true;
             setInfoMainMetaText('');
-            if (videoDriftPanelStat) videoDriftPanelStat.textContent = '';
-            if (typeof videoDriftTransportBox !== 'undefined' && videoDriftTransportBox) {
-                videoDriftTransportBox.hidden = true;
+            if (typeof refreshVideoDriftPanelStat === 'function') {
+                refreshVideoDriftPanelStat();
             }
             return;
         }
@@ -148,7 +147,7 @@
         }
     }
 
-    function revokeAll() {
+    function revokeVideoMediaCore() {
         containerFps.main = null;
         containerSampleCount.main = null;
         containerStszSampleCount.main = null;
@@ -158,9 +157,6 @@
         infoMain.hidden = true;
         setInfoMainMetaText('');
         if (videoDriftPanelStat) videoDriftPanelStat.textContent = '';
-        if (typeof videoDriftTransportBox !== 'undefined' && videoDriftTransportBox) {
-            videoDriftTransportBox.hidden = true;
-        }
         if (urlMain) URL.revokeObjectURL(urlMain);
         urlMain = null;
         fileMain = null;
@@ -168,6 +164,34 @@
         videoMain.load();
         nameMain.textContent = 'Not Loaded';
         setLoaded(panelMain, false);
+    }
+
+    /** Unload video only; markers and waveform lanes (incl. extra tracks) stay. */
+    function revokeVideoOnly() {
+        revokeVideoMediaCore();
+        if (typeof resetAudioWaveformForNewVideo === 'function') {
+            resetAudioWaveformForNewVideo();
+        }
+        if (typeof resetVideoMix === 'function') resetVideoMix();
+        if (typeof dismissVideoAudioLane === 'function') {
+            dismissVideoAudioLane();
+        } else if (typeof refreshVideoAudioLaneVisibility === 'function') {
+            refreshVideoAudioLaneVisibility();
+        }
+        if (typeof refreshVideoDriftPanelStat === 'function') {
+            refreshVideoDriftPanelStat();
+        }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        updateVideoClearButton();
+    }
+
+    function revokeAll() {
+        revokeVideoMediaCore();
         if (typeof clearMarkersForRevoke === 'function') clearMarkersForRevoke();
         if (typeof clearAudioWaveform === 'function') clearAudioWaveform();
         if (typeof clearAllExtraTracks === 'function') clearAllExtraTracks();
@@ -175,7 +199,133 @@
         if (typeof showVideoAudioLane === 'function') {
             showVideoAudioLane();
         }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
+        if (typeof refreshVideoDriftPanelStat === 'function') {
+            refreshVideoDriftPanelStat();
+        }
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        updateVideoClearButton();
+        if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }
+
+    function sessionHasClearableContent() {
+        if (
+            typeof transportControlsReady === 'function' &&
+            transportControlsReady()
+        ) {
+            return true;
+        }
+        if (typeof fileMain !== 'undefined' && !!fileMain) {
+            return true;
+        }
+        if (
+            typeof hasMarkerContentToClear === 'function' &&
+            hasMarkerContentToClear()
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    function updateSessionAllClearButton() {
+        const btn = document.getElementById('sessionAllClearBtn');
+        if (!btn) return;
+        const restoring =
+            typeof isSessionRestoreInProgress === 'function' &&
+            isSessionRestoreInProgress();
+        btn.disabled = restoring || !sessionHasClearableContent();
+    }
+
+    async function clearEntireSession() {
+        if (!sessionHasClearableContent()) {
+            writeLog('Session: nothing to clear');
+            return;
+        }
+        if (typeof setPlayingUi === 'function') setPlayingUi(false);
+        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof clearRangeLoopPlayback === 'function') {
+            clearRangeLoopPlayback({ silent: true });
+        }
+        if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
+        if (typeof resetTransportPlaybackClock === 'function') {
+            resetTransportPlaybackClock();
+        }
+        revokeAll();
+        if (typeof resetVideoDriftMonitorSchedule === 'function') {
+            resetVideoDriftMonitorSchedule();
+        }
+        if (typeof refreshVideoDriftPanelStat === 'function') {
+            refreshVideoDriftPanelStat();
+        }
+        if (typeof syncSeekMax === 'function') syncSeekMax();
+        if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+        if (typeof flushPersistSessionNow === 'function') {
+            await flushPersistSessionNow();
+        } else if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
+        updateSessionAllClearButton();
+        writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Session', 'All cleared', 'notice');
+        }
+    }
+
+    window.clearEntireSession = clearEntireSession;
+    window.updateSessionAllClearButton = updateSessionAllClearButton;
+
+    function videoPanelHasVideo() {
+        return typeof fileMain !== 'undefined' && !!fileMain;
+    }
+
+    function updateVideoClearButton() {
+        const btn = document.getElementById('videoClearBtn');
+        if (!btn) return;
+        btn.disabled = !videoPanelHasVideo();
+    }
+
+    function clearVideoPanel() {
+        if (!videoPanelHasVideo()) {
+            writeLog('Video: nothing to clear');
+            return;
+        }
+        const name = fileMain && fileMain.name ? fileMain.name : 'video';
+        if (typeof setPlayingUi === 'function') setPlayingUi(false);
+        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof clearRangeLoopPlayback === 'function') {
+            clearRangeLoopPlayback({ silent: true });
+        }
+        revokeVideoOnly();
+        if (typeof syncSeekMax === 'function') syncSeekMax();
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        if (typeof adoptMarkersForAudioOnlySession === 'function') {
+            adoptMarkersForAudioOnlySession();
+        } else if (typeof refreshMarkerUi === 'function') {
+            refreshMarkerUi();
+        }
+        if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        updateVideoClearButton();
+        writeLog('Video: cleared (“' + name + '” unloaded); markers and waveform tracks kept');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Video', 'Cleared', 'notice');
+        }
+    }
+
+    window.updateVideoClearButton = updateVideoClearButton;
+    window.clearVideoPanel = clearVideoPanel;
+    window.videoPanelHasVideo = videoPanelHasVideo;
+    window.revokeVideoOnly = revokeVideoOnly;
 
     function setLoaded(panel, loaded) {
         panel.classList.toggle('loaded', !!loaded);
@@ -247,6 +397,13 @@
         return clampFrameIndexToClip(idx, side);
     }
 
+    function masterTimelineDurationSecForSide(side) {
+        if (side !== 'main') return 0;
+        if (typeof getMasterTransportDurationSec !== 'function') return 0;
+        const m = getMasterTransportDurationSec();
+        return m > 0.01 ? m : 0;
+    }
+
     function totalFrameCountForSide(side) {
         const stsz = containerStszSampleCount[side];
         if (stsz != null && stsz > 0) return stsz | 0;
@@ -256,6 +413,10 @@
         if (md > 0) return frameCountFromDurationSec(md, fpsFloatForSide(side));
         const d = getDuration(videoMain);
         if (d > 0) return frameCountFromDurationSec(d, fpsFloatForSide(side));
+        const masterDur = masterTimelineDurationSecForSide(side);
+        if (masterDur > 0) {
+            return frameCountFromDurationSec(masterDur, fpsFloatForSide(side));
+        }
         return 0;
     }
 
@@ -330,12 +491,17 @@
     }
 
     function parseTimecodeToTransportSec(tcStr) {
-        if (!videoReady()) return null;
+        if (!transportControlsReady()) return null;
         const fps = masterFpsFloatForTransport();
         const targetIdx = parseTimecodeStringToClipFrameIndex(tcStr, fps);
         if (targetIdx == null || !Number.isFinite(targetIdx)) return null;
-        reconcileContainerSampleCountForSide('main');
-        const dur = getDuration(videoMain);
+        if (videoReady()) {
+            reconcileContainerSampleCountForSide('main');
+        }
+        const dur =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : getDuration(videoMain);
         if (!dur || dur <= 0) return 0;
         let lo = 0;
         let hi = dur - 0.001;
@@ -408,14 +574,33 @@
         return videoMain.readyState >= 2;
     }
 
+    function hasPlayableWaveformTimeline() {
+        return (
+            typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded()
+        );
+    }
+
     function transportControlsReady() {
-        return videoReady();
+        return videoReady() || hasPlayableWaveformTimeline();
+    }
+
+    window.hasPlayableWaveformTimeline = hasPlayableWaveformTimeline;
+    window.transportControlsReady = transportControlsReady;
+
+    function timecodeOverlayDisplaySec() {
+        if (videoReady()) return videoMain.currentTime || 0;
+        if (typeof getTransportSecForDisplay === 'function') {
+            return getTransportSecForDisplay();
+        }
+        if (typeof getTransportSec === 'function') return getTransportSec();
+        return 0;
     }
 
     function updateTimecodeOverlay() {
         if (!timecodeOverlayMain) return;
         const textEl = timecodeOverlayMain.querySelector('.video-timecode__text');
-        if (!videoReady()) {
+        const show = transportControlsReady();
+        if (!show) {
             timecodeOverlayMain.classList.add('video-timecode--idle');
             timecodeOverlayMain.style.visibility = 'hidden';
             if (textEl) textEl.textContent = '00:00:00:00';
@@ -427,12 +612,23 @@
         }
         timecodeOverlayMain.classList.remove('video-timecode--idle');
         timecodeOverlayMain.style.visibility = 'visible';
-        /* 焼き込み TC は常に video の現在位置。動画終端以降も増えない（transport-timeline.js の仕様コメント参照）。 */
-        const displaySec = videoMain.currentTime || 0;
-        const tc = formatTimecodeForSide(displaySec, 'main');
+        const displaySec = timecodeOverlayDisplaySec();
+        /* 動画あり: 焼き込み TC（video.currentTime）。動画なし: トランスポートマスター位置。 */
+        const tc = videoReady()
+            ? formatTimecodeForSide(displaySec, 'main')
+            : formatTimecodeForTransport(displaySec);
         if (textEl) textEl.textContent = tc;
         if (typeof refreshTimecodeOverlayInteractive === 'function') {
             refreshTimecodeOverlayInteractive();
             if (typeof applyTcOverlayPosition === 'function') applyTcOverlayPosition();
         }
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
     }
+
+    (function bindVideoClearButton() {
+        const btn = document.getElementById('videoClearBtn');
+        if (!btn) return;
+        btn.addEventListener('click', clearVideoPanel);
+        updateVideoClearButton();
+        if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
+    })();

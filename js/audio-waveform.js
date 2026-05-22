@@ -102,7 +102,7 @@
     function isVideoAudioLaneShown() {
         if (!videoLaneUiOpen) return false;
         const hasVideo = typeof videoReady === 'function' && videoReady();
-        if (!hasVideo) return true;
+        if (!hasVideo) return false;
         if (containerHasAudio.main === false) return false;
         return true;
     }
