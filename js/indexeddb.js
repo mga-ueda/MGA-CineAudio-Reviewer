@@ -226,6 +226,10 @@
             const rangeLoop = getRangeLoopPersistSnapshot();
             if (rangeLoop) row.rangeLoop = rangeLoop;
         }
+        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            const playbackRegion = getPlaybackRegionPersistSnapshot();
+            if (playbackRegion) row.playbackRegion = playbackRegion;
+        }
         if (typeof getMixPersistSnapshot === 'function') {
             row.mix = getMixPersistSnapshot();
         }
@@ -395,7 +399,66 @@
                 await loadExtraTrackFile(entry.slot, af, {
                     fromSessionRestore: true,
                     timelineStartSec: entry.timelineStartSec,
+                    regionSegments: entry.regionSegments,
+                    regionHeadPadSec: entry.regionHeadPadSec,
+                    regionTimelineInSec: entry.regionTimelineInSec,
+                    regionLeadPadSec: entry.regionLeadPadSec,
+                    regionSourceInSec: entry.regionSourceInSec,
+                    regionSourceOutSec: entry.regionSourceOutSec,
                 });
+                if (Array.isArray(entry.clips) && entry.clips.length > 1) {
+                    for (const clipEntry of entry.clips) {
+                        if (!clipEntry || clipEntry.id === 'main' || !clipEntry.blob) continue;
+                        const clipBytes =
+                            typeof clipEntry.byteLength === 'number'
+                                ? clipEntry.byteLength
+                                : clipEntry.blob.size || 0;
+                        if (clipBytes < 1) continue;
+                        const clipAf = new File(
+                            [clipEntry.blob],
+                            clipEntry.name || 'audio.wav',
+                            {
+                                type:
+                                    typeof mimeTypeHintForAudioFileName === 'function'
+                                        ? mimeTypeHintForAudioFileName(
+                                              clipEntry.name || 'audio.wav',
+                                          )
+                                        : 'application/octet-stream',
+                                lastModified:
+                                    typeof clipEntry.lastModified === 'number'
+                                        ? clipEntry.lastModified
+                                        : Date.now(),
+                            },
+                        );
+                        try {
+                            await loadExtraTrackFile(entry.slot, clipAf, {
+                                addClip: true,
+                                fromSessionRestore: true,
+                                preservedClipId: clipEntry.id,
+                            });
+                        } catch (clipErr) {
+                            writeLog(
+                                'Extra audio ' +
+                                    (entry.slot + 1) +
+                                    ': clip restore failed — ' +
+                                    (clipErr && clipErr.message
+                                        ? clipErr.message
+                                        : String(clipErr)),
+                            );
+                        }
+                    }
+                    if (
+                        Array.isArray(entry.regionSegments) &&
+                        entry.regionSegments.length &&
+                        typeof setTrackSegments === 'function'
+                    ) {
+                        setTrackSegments(
+                            { type: 'extra', slot: entry.slot },
+                            entry.regionSegments,
+                            { silent: true },
+                        );
+                    }
+                }
                 if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(entry.slot)) {
                     restoredCount += 1;
                 } else {
@@ -454,14 +517,25 @@
         }
     }
 
+    function applyPlaybackRegionRestoreFromRow(row) {
+        if (row.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
+            setPendingPlaybackRegionRestore(row.playbackRegion);
+        }
+    }
+
     async function finishSessionRestoreFromRow(row, opt) {
+        if (typeof resetMarkersDisplayHidden === 'function') {
+            resetMarkersDisplayHidden();
+        }
         const o = opt && typeof opt === 'object' ? opt : {};
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
                 ? Math.max(0, o.restoreTransportSec)
                 : null;
 
-        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
+        if (typeof syncExtraLaneVisibilityAfterSessionRestore === 'function') {
+            syncExtraLaneVisibilityAfterSessionRestore();
+        } else if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
             ensureAtLeastOneWaveformLaneVisible();
         }
         if (restoreTransportSec != null) {
@@ -479,6 +553,9 @@
         }
         if (typeof applyPendingRangeLoopRestore === 'function') {
             applyPendingRangeLoopRestore();
+        }
+        if (typeof applyPendingPlaybackRegionRestore === 'function') {
+            applyPendingPlaybackRegionRestore();
         }
         if (typeof syncSeekMax === 'function') syncSeekMax();
         if (typeof notifyMasterTransportDurationChanged === 'function') {
@@ -519,6 +596,7 @@
 
         prepareLaneUiRestoreFromRow(row);
         applyRangeLoopRestoreFromRow(row);
+        applyPlaybackRegionRestoreFromRow(row);
 
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
@@ -592,6 +670,7 @@
 
         prepareLaneUiRestoreFromRow(row);
         applyRangeLoopRestoreFromRow(row);
+        applyPlaybackRegionRestoreFromRow(row);
 
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
@@ -614,6 +693,7 @@
                 Number.isFinite(row.rangeLoop.outSec)
                     ? row.rangeLoop
                     : undefined,
+            playbackRegion: row.playbackRegion || undefined,
         });
         writeLog(
             'Restored video: ' +

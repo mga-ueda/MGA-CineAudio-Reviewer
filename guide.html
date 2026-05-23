@@ -134,7 +134,7 @@
 
                 <h3>ポイントマーカー（1 時刻）</h3>
                 <ul>
-                    <li>再生位置で <span class="guide-kbd">M</span> を押すと、現在位置にポイントが追加されます。</li>
+                    <li>再生位置で <span class="guide-kbd">Ins</span> を押すと、現在位置にポイントが追加されます。</li>
                     <li>一覧の <strong>Feedback</strong> 列をクリックしてコメントを入力します。再生中は映像上にコメントが短時間表示されます。</li>
                 </ul>
 
@@ -165,12 +165,12 @@
                 <h3>レーンの見方</h3>
                 <ul>
                     <li>左サイドバー：トラック名、<strong>S</strong>（Solo）、<strong>M</strong>（Mute）、<strong>×</strong>（レーンを非表示／クリア）、レベルメーター、音量フェーダー。</li>
-                    <li>右側：各トラックの波形。クリックまたはドラッグでシーク、ホイールでズーム・横スクロール（詳細はキーボードショートカット参照）。</li>
+                    <li>右側：各トラックの波形。クリックでシーク、ホイールでズーム・横スクロール（詳細はキーボードショートカット参照）。</li>
                     <li>赤い縦線が再生ヘッドです。再生中は通過軌跡が残る表示があります。</li>
                 </ul>
 
-                <h3>追加音声の開始位置</h3>
-                <p>Ex レーンの波形上で <span class="guide-kbd">Alt</span> を押しながらドラッグすると、そのトラックの<strong>再生開始位置</strong>（タイムライン上のオフセット）をずらせます。映像より遅れて入る音源の同期に使います。</p>
+                <h3>再生リージョンの移動</h3>
+                <p>波形上を<strong>クリック</strong>するとその位置へシークします。Ex レーンの<strong>リージョン上</strong>は、クリックでシーク・ドラッグでクリップの<strong>タイムライン上の開始位置</strong>をずらします（映像より遅れて入る音源の同期に使います）。リージョン情報は <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">C</span> でコピーし、<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">V</span> で同じ Ex レーンの末尾にペーストできます（ショートカット表参照）。</p>
 
                 <h3>範囲ループ（波形上）</h3>
                 <ul>
@@ -178,50 +178,7 @@
                     <li>解除：<span class="guide-kbd">Esc</span>、右クリック、または別の操作でキャンセル（ショートカット表の Esc 優先順位を参照）。</li>
                 </ul>
 
-                <h3>キーボードでのミックス（レーン 1〜4）</h3>
-                <div class="guide-table-wrap">
-                    <table class="guide-table">
-                        <thead>
-                            <tr>
-                                <th>操作</th>
-                                <th>レーン 1（Video Audio）</th>
-                                <th>レーン 2（Ex 1）</th>
-                                <th>レーン 3（Ex 2）</th>
-                                <th>レーン 4（Ex 3）</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Solo</td>
-                                <td><span class="guide-kbd">1</span></td>
-                                <td><span class="guide-kbd">2</span></td>
-                                <td><span class="guide-kbd">3</span></td>
-                                <td><span class="guide-kbd">4</span></td>
-                            </tr>
-                            <tr>
-                                <td>Mute</td>
-                                <td><span class="guide-kbd">Q</span></td>
-                                <td><span class="guide-kbd">W</span></td>
-                                <td><span class="guide-kbd">E</span></td>
-                                <td><span class="guide-kbd">R</span></td>
-                            </tr>
-                            <tr>
-                                <td>音量 +1 dB</td>
-                                <td><span class="guide-kbd">A</span></td>
-                                <td><span class="guide-kbd">S</span></td>
-                                <td><span class="guide-kbd">D</span></td>
-                                <td><span class="guide-kbd">F</span></td>
-                            </tr>
-                            <tr>
-                                <td>音量 −1 dB</td>
-                                <td><span class="guide-kbd">Z</span></td>
-                                <td><span class="guide-kbd">X</span></td>
-                                <td><span class="guide-kbd">C</span></td>
-                                <td><span class="guide-kbd">V</span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+                <p>Solo・Mute・各トラックの音量は、左サイドバーの <strong>S</strong> / <strong>M</strong> ボタンとフェーダーで操作できます。波形上でポインタを置いたレーン（Video / Ex）では <span class="guide-kbd">PgUp</span> / <span class="guide-kbd">PgDn</span> で ±1 dB、Ex リージョン上では <span class="guide-kbd">S</span>（ソロ）・<span class="guide-kbd">M</span>（ミュート）も使えます（詳細はショートカット表）。</p>
                 <p>表示されているレーンの数に合わせて波形パネルの高さが変わります。空の Ex 枠は非表示にできます。</p>
             </section>
 

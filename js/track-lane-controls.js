@@ -33,7 +33,7 @@
     function defaultFaderPos() {
         return typeof TRACK_LANE_FADER_POS_UNITY === 'number'
             ? TRACK_LANE_FADER_POS_UNITY
-            : 700;
+            : 1000;
     }
 
     function readFaderLinear(el) {

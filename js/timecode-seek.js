@@ -587,6 +587,8 @@
             !transportPlayingUi &&
             pendingRestoreTime != null &&
             Number.isFinite(pendingRestoreTime) &&
+            typeof videoReady === 'function' &&
+            videoReady() &&
             videoMain.paused
         ) {
             const t = Math.max(0, Math.min(pendingRestoreTime, master - 0.001));
@@ -646,12 +648,33 @@
 
     function applyPendingTransportRestore() {
         if (pendingRestoreTime == null || !Number.isFinite(pendingRestoreTime)) return false;
-        if (!videoReady()) return false;
-        if (videoMain.readyState < 2) return false;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : getDuration(videoMain);
+        if (!videoReady()) {
+            if (
+                !(typeof hasPlayableWaveformTimeline === 'function' &&
+                    hasPlayableWaveformTimeline()) ||
+                !(master > 0)
+            ) {
+                return false;
+            }
+            const t = Math.max(0, Math.min(pendingRestoreTime, master - 0.001));
+            if (typeof applyTransportAtSec === 'function') {
+                applyTransportAtSec(t, { markers: true });
+            } else {
+                setTransportSec(t);
+            }
+            if (typeof syncExtraAudioToTransport === 'function') {
+                syncExtraAudioToTransport({ force: true });
+            }
+            currentTimeEl.textContent = formatTimecodeForTransport(t);
+            updateTimecodeOverlay();
+            pendingRestoreTime = null;
+            return true;
+        }
+        if (videoMain.readyState < 2) return false;
         const t = Math.max(0, Math.min(pendingRestoreTime, master - 0.001));
         applyTimeToVideoIfNeeded(t);
         currentTimeEl.textContent = formatTimecodeForTransport(t);
@@ -685,7 +708,7 @@
                   : !videoMain.paused;
         const scrubbing =
             typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive();
-        if (transportActive && !scrubbing) {
+        if (transportActive && !scrubbing && !isSeeking) {
             if (typeof syncTransportPlaybackClockFromAudio === 'function') {
                 syncTransportPlaybackClockFromAudio();
             } else if (typeof syncTransportPlaybackClockFromVideo === 'function') {
@@ -793,13 +816,43 @@
 
     let handlingMasterTransportEnd = false;
 
+    function stopPlaybackReturnTransportToHead() {
+        isSeeking = false;
+        if (typeof resetTransportPlaybackClock === 'function') {
+            resetTransportPlaybackClock();
+        } else {
+            transportPlaybackSec = 0;
+            transportPlaybackLastTs = 0;
+        }
+        if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
+        if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
+        if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
+        setPlayingUi(false);
+        stopRaf();
+        if (videoMain) videoMain.pause();
+        if (typeof stopAllExtraTrackSources === 'function') stopAllExtraTrackSources();
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(0, { markers: true });
+        } else {
+            applyTimeToVideo(0);
+        }
+        setTransportSec(0);
+        updateSeekUiFromVideo();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        schedulePersistSession();
+    }
+
+    window.stopPlaybackReturnTransportToHead = stopPlaybackReturnTransportToHead;
+
     async function handleMasterTransportEndReached() {
         if (handlingMasterTransportEnd) return false;
         const clockActive =
             typeof isTransportUiClockActive === 'function'
                 ? isTransportUiClockActive()
                 : typeof isTransportPlaying === 'function' && isTransportPlaying();
-        if (!clockActive) {
+        const atMaster =
+            typeof isAtMasterTransportEnd === 'function' && isAtMasterTransportEnd();
+        if (!clockActive && !atMaster) {
             return false;
         }
         handlingMasterTransportEnd = true;
@@ -848,16 +901,8 @@
                 }
                 return true;
             }
-            transportPlaybackSec = master;
-            if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
-            if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
-            setPlayingUi(false);
-            stopRaf();
-            if (videoMain) videoMain.pause();
-            if (typeof stopAllExtraTrackSources === 'function') stopAllExtraTrackSources();
-            setTransportSec(master);
-            updateSeekUiFromVideo();
-            writeLog('Playback: end reached (transport stopped)');
+            stopPlaybackReturnTransportToHead();
+            writeLog('Playback: end reached (returned to head)');
             return true;
         } finally {
             handlingMasterTransportEnd = false;
@@ -903,6 +948,9 @@
         if (typeof resetTransportPlaybackClock === 'function') resetTransportPlaybackClock();
         if (opt && opt.rangeLoop && typeof setPendingRangeLoopRestore === 'function') {
             setPendingRangeLoopRestore(opt.rangeLoop);
+        }
+        if (opt && opt.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
+            setPendingPlaybackRegionRestore(opt.playbackRegion);
         } else if (typeof clearRangeLoopPlayback === 'function') {
             clearRangeLoopPlayback({ silent: true });
         }

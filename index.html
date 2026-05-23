@@ -33,7 +33,7 @@
         <strong class="drop-zone-title">レビューする動画・追加音声（WAV 等）をドロップ（またはクリックで選択）</strong>
         <p class="drop-zone-note drop-zone-note--batch">動画と追加音声を<strong>まとめて</strong>ここにドロップ（または選択）すると、種類ごとに自動で読み込みます。</p>
         <p class="drop-zone-note drop-zone-note--targets">個別に読み込む場合：動画は<strong>映像エリア</strong>へ、追加音声は<strong>音声トラックエリア（波形表示枠）</strong>へそれぞれドロップできます。</p>
-        <p class="drop-zone-note drop-zone-note--tracks">音声トラックエリアは<strong>4レーン</strong>（動画音声の Video Audio ＋ 追加用 Ex 1〜3）。追加できるのは<strong>最大3トラック</strong>です。続けて追加するときは、既に読み込んだレーンの上にドロップすると次の Ex レーンが表示され、そこへ読み込まれます。</p>
+        <p class="drop-zone-note drop-zone-note--tracks">音声トラックエリアは<strong>4レーン</strong>（動画音声の Video Audio ＋ 追加用 Ex 1〜3）。ここへまとめてドロップした追加音声は<strong>ファイルごとに別トラック</strong>へ割り当てます（最大3トラック）。空きトラックが無い場合は読み込まれません。手動でトラックを増やすときは各 Ex レーン下の<strong>+ Add Track</strong>を使います。</p>
         <p class="drop-zone-note">動画は<strong>ブラウザが再生できる形式</strong>、追加音声は <strong>WAV / FLAC / MP3 等</strong>。Google Chrome の利用を推奨します。</p>
         <p class="drop-zone-note drop-zone-note--privacy">動画・音声は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。</p>
     </div>
@@ -63,6 +63,7 @@
                 <div class="marker-panel__head-row">
                     <h3 class="marker-panel__title">Markers</h3>
                     <div class="marker-panel__head-actions">
+                        <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled title="Add markers to use Hide/View">Hide</button>
                         <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled title="Copy marker table as tab-separated text (no Length column)">Copy</button>
                         <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="Delete all markers">Clear</button>
                     </div>
@@ -85,7 +86,7 @@
                         <tbody id="markerTableBody"></tbody>
                     </table>
                 </div>
-                <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます（<kbd>M</kbd> ポイント、<kbd>[</kbd> <kbd>]</kbd> レンジ）</p>
+                <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます（<kbd>Ins</kbd> ポイント、<kbd>[</kbd> <kbd>]</kbd> レンジ）</p>
             </div>
         </aside>
     </div>
@@ -111,7 +112,7 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDbVideo" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="700" disabled aria-label="Video audio volume">
+                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="1000" disabled aria-label="Video audio volume">
                             <span class="track-lane-fader-db" id="trackLaneFaderDbVideo">0.0 dB</span>
                         </div>
                     </div>
@@ -134,11 +135,12 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDb0" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader0" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 1 volume">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader0" min="0" max="1000" step="1" value="1000" disabled aria-label="Extra audio 1 volume">
                             <span class="track-lane-fader-db" id="trackLaneFaderDb0">0.0 dB</span>
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="extraAudioStatus0" hidden></span>
+                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn0" title="Show next extra audio track">+ Add Track</button>
                 </div>
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta1" hidden>
                     <div class="audio-waveform-lane-meta__row">
@@ -157,11 +159,12 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDb1" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader1" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 2 volume">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader1" min="0" max="1000" step="1" value="1000" disabled aria-label="Extra audio 2 volume">
                             <span class="track-lane-fader-db" id="trackLaneFaderDb1">0.0 dB</span>
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="extraAudioStatus1" hidden></span>
+                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn1" title="Show next extra audio track">+ Add Track</button>
                 </div>
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta2" hidden>
                     <div class="audio-waveform-lane-meta__row">
@@ -180,11 +183,12 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDb2" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader2" min="0" max="1000" step="1" value="700" disabled aria-label="Extra audio 3 volume">
+                            <input type="range" class="track-lane-fader" id="trackLaneFader2" min="0" max="1000" step="1" value="1000" disabled aria-label="Extra audio 3 volume">
                             <span class="track-lane-fader-db" id="trackLaneFaderDb2">0.0 dB</span>
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="extraAudioStatus2" hidden></span>
+                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn2" title="Show next extra audio track" hidden disabled>+ Add Track</button>
                 </div>
             </div>
             <div
@@ -210,6 +214,7 @@
                         <span class="audio-waveform-lane__file-name" id="extraAudioFileName0" hidden aria-hidden="true"></span>
                         <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd0" hidden aria-hidden="true"></div>
                     </div>
+                    <div class="audio-waveform-lane__playback-regions" data-track="extra:0" hidden aria-hidden="true"></div>
                 </div>
                 <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane1" hidden>
                     <div class="audio-waveform-lane__track" id="extraAudioTrack1" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
@@ -218,6 +223,7 @@
                         <span class="audio-waveform-lane__file-name" id="extraAudioFileName1" hidden aria-hidden="true"></span>
                         <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd1" hidden aria-hidden="true"></div>
                     </div>
+                    <div class="audio-waveform-lane__playback-regions" data-track="extra:1" hidden aria-hidden="true"></div>
                 </div>
                 <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane2" hidden>
                     <div class="audio-waveform-lane__track" id="extraAudioTrack2" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
@@ -226,6 +232,7 @@
                         <span class="audio-waveform-lane__file-name" id="extraAudioFileName2" hidden aria-hidden="true"></span>
                         <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd2" hidden aria-hidden="true"></div>
                     </div>
+                    <div class="audio-waveform-lane__playback-regions" data-track="extra:2" hidden aria-hidden="true"></div>
                 </div>
                 <div
                     class="audio-waveform-composite__markers seek-bar-markers"
@@ -446,6 +453,7 @@
     <script src="js/player-timecode-overlay.js"></script>
     <script src="js/timecode-seek.js"></script>
     <script src="js/range-loop.js"></script>
+    <script src="js/waveform-region.js"></script>
     <script src="js/audio-waveform.js"></script>
     <script src="js/track-lane-fader-scale.js"></script>
     <script src="js/extra-audio-tracks.js"></script>

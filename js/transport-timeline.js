@@ -7,7 +7,7 @@
      * - 焼き込み TC（映像オーバーレイ）: video.currentTime 基準のため動画尺を超えて増えない（意図した仕様）。
      * - トランスポート欄の現在時刻（#currentTime）: マスター長に合わせて進む（動画終端以降も表示可能）。
      * - シーク: マスター全長へ移動できるが、映像は終端付近にパークしたまま（音声のみ続く区間）。
-     * - 波形: 動画尺以降をグレーの横グラデで「範囲外」と示す（3レーン共通）。
+     * - 波形: 動画尺以降もマスター上はシーク可能（範囲外のグレー帯表示はなし）。
      */
     let transportPlaybackSec = 0;
     let transportPlaybackLastTs = 0;
@@ -388,6 +388,82 @@
         return !!(videoMain && !videoMain.paused);
     }
 
+    /** マスター尺の終端付近か（pause/ended 後でも終了処理を許可する） */
+    function isAtMasterTransportEnd() {
+        const master = getMasterTransportDurationSec();
+        if (!(master > 0)) return false;
+        const eps = masterTransportTailEpsilonSec();
+        let t =
+            typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
+                ? transportPlaybackSec
+                : NaN;
+        if (!Number.isFinite(t) && typeof getTransportSec === 'function') {
+            t = getTransportSec();
+        }
+        if (!Number.isFinite(t) && videoMain) {
+            t = videoMain.currentTime || 0;
+        }
+        if (!Number.isFinite(t)) return false;
+        if (t >= master - eps) return true;
+        if (
+            typeof extraAudioSourcesActive === 'function' &&
+            !extraAudioSourcesActive() &&
+            typeof isPastAllLoadedTrackPlaybackEnds === 'function' &&
+            isPastAllLoadedTrackPlaybackEnds(t)
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    window.isAtMasterTransportEnd = isAtMasterTransportEnd;
+
+    /**
+     * 全トラックの BufferSource 終了後（特に映像なし）にマスター終端処理へ進める。
+     * @returns {boolean} handleMasterTransportEndReached を起動した
+     */
+    function maybeFinishMasterTransportPlayback() {
+        if (typeof isTransportPlaying !== 'function' || !isTransportPlaying()) {
+            return false;
+        }
+        if (typeof extraAudioSourcesActive === 'function' && extraAudioSourcesActive()) {
+            return false;
+        }
+        if (typeof videoReady === 'function' && videoReady() && videoMain) {
+            if (!videoMain.paused && !videoMain.ended) return false;
+        }
+        const master = getMasterTransportDurationSec();
+        const eps = masterTransportTailEpsilonSec();
+        let t =
+            typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
+                ? transportPlaybackSec
+                : NaN;
+        const ctx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        if (
+            ctx &&
+            typeof getTransportSecFromActiveExtraMix === 'function'
+        ) {
+            const fromMix = getTransportSecFromActiveExtraMix(ctx);
+            if (fromMix != null && Number.isFinite(fromMix)) {
+                t = fromMix;
+            }
+        }
+        if (!Number.isFinite(t) && typeof getTransportSec === 'function') {
+            t = getTransportSec();
+        }
+        const atMaster = master > 0 && Number.isFinite(t) && t >= master - eps;
+        const pastAll =
+            typeof isPastAllLoadedTrackPlaybackEnds === 'function' &&
+            isPastAllLoadedTrackPlaybackEnds(t);
+        if (!atMaster && !pastAll) return false;
+        if (typeof handleMasterTransportEndReached !== 'function') return false;
+        void handleMasterTransportEndReached();
+        return true;
+    }
+
+    window.maybeFinishMasterTransportPlayback = maybeFinishMasterTransportPlayback;
+
     /** Enter post-video tail: keep extra audio, advance transport UI to master end. */
     function enterPostVideoTransportTail() {
         if (!hasMasterTransportTailBeyondVideo()) return false;
@@ -415,17 +491,34 @@
         return true;
     }
 
+    /** マスタータイムラインの右端（秒）。リージョン編集後は実際の終端を使い、未編集時はバッファ長。 */
     function getExtraTrackDurationSec(slot) {
-        if (typeof extraTrackTimelineEndSec === 'function') {
-            const end = extraTrackTimelineEndSec(slot);
+        const extendSlot =
+            typeof getRegionOutDragExtendSlot === 'function'
+                ? getRegionOutDragExtendSlot()
+                : -1;
+        if (
+            extendSlot === slot &&
+            typeof getExtraTrackMaxTimelineEndSec === 'function'
+        ) {
+            const maxEnd = getExtraTrackMaxTimelineEndSec(slot);
+            if (maxEnd > 0) return maxEnd;
+        }
+        if (typeof getTrackTimelineEndSec === 'function') {
+            const end = getTrackTimelineEndSec({ type: 'extra', slot });
             if (end > 0) return end;
         }
-        if (typeof extraTrackContentDurationSec === 'function') {
-            const d = extraTrackContentDurationSec(slot);
-            if (d > 0) return d;
-        }
+        const start =
+            typeof getExtraTrackTimelineStartSec === 'function'
+                ? getExtraTrackTimelineStartSec(slot)
+                : 0;
         if (typeof extraTrackBufferDuration === 'function') {
-            return extraTrackBufferDuration(slot);
+            const buf = extraTrackBufferDuration(slot);
+            if (buf > 0) return start + buf;
+        }
+        if (typeof getExtraTrackMaxTimelineEndSec === 'function') {
+            const end = getExtraTrackMaxTimelineEndSec(slot);
+            if (end > 0) return end;
         }
         return 0;
     }
@@ -560,6 +653,14 @@
     }
 
     function applyTransportAtSec(t, opt) {
+        if (
+            opt &&
+            (opt.logInput || opt.flash) &&
+            typeof pendingRestoreTime !== 'undefined' &&
+            pendingRestoreTime != null
+        ) {
+            pendingRestoreTime = null;
+        }
         const x = clampTransportSec(t);
         transportPlaybackSec = x;
         transportPlaybackLastTs = performance.now();
@@ -604,6 +705,7 @@
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof updateLaneContentEndMarkers === 'function') updateLaneContentEndMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+        if (typeof updateAllPlaybackRegionOverlays === 'function') updateAllPlaybackRegionOverlays();
         if (typeof flushPendingSessionMarkersRestore === 'function') {
             flushPendingSessionMarkersRestore();
         }
@@ -658,6 +760,10 @@
             if (typeof handleMasterTransportEndReached === 'function') {
                 void handleMasterTransportEndReached();
             }
+            return;
+        }
+        if (typeof maybeFinishMasterTransportPlayback === 'function') {
+            maybeFinishMasterTransportPlayback();
         }
     }
 
@@ -681,10 +787,17 @@
             if (typeof handleMasterTransportEndReached === 'function') {
                 void handleMasterTransportEndReached();
             }
+            return;
+        }
+        if (typeof maybeFinishMasterTransportPlayback === 'function') {
+            maybeFinishMasterTransportPlayback();
         }
     }
 
     function syncReviewMixPlaybackIfNeeded() {
+        if (typeof applyReviewMixCrossfadeGainsIfNeeded === 'function') {
+            applyReviewMixCrossfadeGainsIfNeeded();
+        }
         if (
             typeof reviewMixNeedsPlaybackSync === 'function' &&
             reviewMixNeedsPlaybackSync() &&
@@ -738,6 +851,10 @@
             if (typeof handleMasterTransportEndReached === 'function') {
                 void handleMasterTransportEndReached();
             }
+            return;
+        }
+        if (typeof maybeFinishMasterTransportPlayback === 'function') {
+            maybeFinishMasterTransportPlayback();
         }
         syncReviewMixPlaybackIfNeeded();
     }
@@ -764,52 +881,6 @@
 
     function waveformScrubTargetEl() {
         return audioWaveformLanesTracks || audioWaveformTrack;
-    }
-
-    /** 範囲外帯グラデ（青みのある濃いグレー・レーン下地 #161820 と同系） */
-    const TIMELINE_BAND_GRAD_LIGHT = 'rgba(36, 40, 52, 0.96)';
-    const TIMELINE_BAND_GRAD_MID = 'rgba(22, 26, 34, 0.95)';
-    const TIMELINE_BAND_GRAD_DARK = 'rgba(12, 14, 22, 0.94)';
-
-    /** 動画尺以降マスター上の「範囲外」帯（グレーの横グラデーション）。 */
-    function timelineBeyondVideoFillGradient(ctx, x0, x1, hCss) {
-        const grad = ctx.createLinearGradient(x0, 0, x1, 0);
-        grad.addColorStop(0, TIMELINE_BAND_GRAD_LIGHT);
-        grad.addColorStop(0.42, TIMELINE_BAND_GRAD_MID);
-        grad.addColorStop(1, TIMELINE_BAND_GRAD_DARK);
-        void hCss;
-        return grad;
-    }
-
-    /** 波形開始より前: 終端帯と同色だが向き反転（マスター左=暗 → 波形手前=明）。 */
-    function timelinePreAudioStartFillGradient(ctx, x0, x1, hCss) {
-        const grad = ctx.createLinearGradient(x0, 0, x1, 0);
-        grad.addColorStop(0, TIMELINE_BAND_GRAD_DARK);
-        grad.addColorStop(0.58, TIMELINE_BAND_GRAD_MID);
-        grad.addColorStop(1, TIMELINE_BAND_GRAD_LIGHT);
-        void hCss;
-        return grad;
-    }
-
-    /** Ex オフセット: 波形開始（timelineStart）より前のマスター区間 */
-    function drawTimelinePreAudioStartBand(ctx, wCss, hCss, startX) {
-        if (!startX || startX < 0.5 || !wCss || !hCss) return;
-        const x1 = Math.min(startX, wCss);
-        ctx.fillStyle = timelinePreAudioStartFillGradient(ctx, 0, x1, hCss);
-        ctx.fillRect(0, 0, x1, hCss);
-    }
-
-    /** レーンごと: 当該トラックのタイムライン終端〜マスター終端をグレーで塗る。 */
-    function drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec) {
-        const master = getMasterTransportDurationSec();
-        const endSec = Number(trackEndSec);
-        if (!master || !wCss || !Number.isFinite(endSec) || endSec <= 0) return;
-        const trackEndW = masterTimelineContentWidth(wCss, endSec);
-        const eps = masterTransportTailEpsilonSec();
-        if (trackEndW <= 0 || trackEndW >= wCss - 0.5) return;
-        if (master <= endSec + eps) return;
-        ctx.fillStyle = timelineBeyondVideoFillGradient(ctx, trackEndW, wCss, hCss);
-        ctx.fillRect(trackEndW, 0, wCss - trackEndW, hCss);
     }
 
     function getVideoTimelineEndSecForWaveform() {
@@ -861,7 +932,9 @@
         return grad;
     }
 
-    const WAVEFORM_TIMELINE_ZOOM_MIN = 1;
+    /** 波形全体がビューポートに収まる倍率（\ で復帰） */
+    const WAVEFORM_TIMELINE_ZOOM_FIT = 1;
+    const WAVEFORM_TIMELINE_ZOOM_MIN = 0.25;
     const WAVEFORM_TIMELINE_ZOOM_MAX = 24;
     /** MARKERS の In/Out TC 編集（+/-）中の波形倍率 */
     const MARKER_TC_EDIT_WAVEFORM_ZOOM = 12;
@@ -873,11 +946,15 @@
 
     function clampWaveformTimelineZoom(z) {
         const n = Number(z);
-        if (!Number.isFinite(n)) return WAVEFORM_TIMELINE_ZOOM_MIN;
+        if (!Number.isFinite(n)) return WAVEFORM_TIMELINE_ZOOM_FIT;
         return Math.max(
             WAVEFORM_TIMELINE_ZOOM_MIN,
             Math.min(WAVEFORM_TIMELINE_ZOOM_MAX, n),
         );
+    }
+
+    function isWaveformTimelineAtFitZoom() {
+        return Math.abs(waveformTimelineZoom - WAVEFORM_TIMELINE_ZOOM_FIT) < 0.001;
     }
 
     function getWaveformTimelineZoom() {
@@ -898,18 +975,27 @@
         );
     }
 
+    /** 描画・シーク座標用のタイムライン幅（zoom×ビューポート。1×未満も 0.25× まで反映） */
+    function waveformTimelineScrubWidthCss() {
+        return masterTimelineWidthCss();
+    }
+
     function waveformTimelineMetrics(el) {
         if (!el) return null;
         const rect = el.getBoundingClientRect();
         const viewportW = el.clientWidth;
         if (!viewportW) return null;
         const contentW = masterTimelineWidthCss();
-        const scrollLeft = el.scrollLeft || 0;
+        const scrubW = contentW;
+        const scrollable = contentW > viewportW + 0.5;
+        const scrollLeft = scrollable ? el.scrollLeft || 0 : 0;
         const borderLeft = el.clientLeft || 0;
         return {
             contentLeft: rect.left + borderLeft,
             viewportW,
             contentW,
+            scrubW,
+            scrollable,
             scrollLeft,
         };
     }
@@ -919,11 +1005,15 @@
     }
 
     function transportRatioFromClientX(clientX) {
-        const el = waveformScrubTargetEl();
-        const m = waveformTimelineMetrics(el);
-        if (!m || !m.contentW) return 0;
-        const xInContent = clientX - m.contentLeft + m.scrollLeft;
-        return Math.max(0, Math.min(1, xInContent / m.contentW));
+        const lanes = waveformScrubTargetEl();
+        const m = waveformTimelineMetrics(lanes);
+        if (!m || !m.scrubW) return 0;
+        const inner = waveformTimelineInnerEl();
+        const ref = inner || lanes;
+        if (!ref) return 0;
+        const left = ref.getBoundingClientRect().left;
+        const xInScrub = clientX - left;
+        return Math.max(0, Math.min(1, xInScrub / m.scrubW));
     }
 
     function waveformTimelineInnerEl() {
@@ -940,9 +1030,10 @@
         waveformTimelineZoom = clampWaveformTimelineZoom(waveformTimelineZoom);
         const lanes = waveformScrubTargetEl();
         if (!lanes) return;
+        const viewportW = waveformTimelineViewportWidthCss();
         const contentW = masterTimelineWidthCss();
         lanes.style.setProperty('--wave-timeline-content-w', contentW + 'px');
-        const zoomed = waveformTimelineZoom > WAVEFORM_TIMELINE_ZOOM_MIN + 0.001;
+        const zoomed = !isWaveformTimelineAtFitZoom();
         lanes.classList.toggle('audio-waveform-composite__lanes--zoomed', zoomed);
         const inner = waveformTimelineInnerEl();
         if (inner) {
@@ -954,7 +1045,8 @@
                 inner.style.minWidth = '';
             }
         }
-        if (!zoomed) lanes.scrollLeft = 0;
+        const scrollable = contentW > viewportW + 0.5;
+        if (!scrollable || isWaveformTimelineAtFitZoom()) lanes.scrollLeft = 0;
     }
 
     function refreshWaveformTimelineAfterZoomChange() {
@@ -975,10 +1067,10 @@
     }
 
     /** 拡縮後にシークバー（プレイヘッド）がビューポート中央へ来る scrollLeft */
-    function scrollLeftToCenterTransportSec(contentW, viewportW) {
+    function scrollLeftToCenterTransportSec(scrubW, viewportW) {
         const ratio = transportRatioFromMasterSec(transportSecForWaveformZoomCenter());
-        const maxScroll = Math.max(0, contentW - viewportW);
-        const scrollLeft = ratio * contentW - viewportW * 0.5;
+        const maxScroll = Math.max(0, scrubW - viewportW);
+        const scrollLeft = ratio * scrubW - viewportW * 0.5;
         return Math.max(0, Math.min(maxScroll, scrollLeft));
     }
 
@@ -992,9 +1084,9 @@
         const newContentW = Math.max(1, Math.round(vw * z));
         let scrollLeft = lanes ? lanes.scrollLeft || 0 : 0;
 
-        if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) {
+        if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
             scrollLeft = scrollLeftToCenterTransportSec(newContentW, vw);
-        } else if (z <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) {
+        } else if (z <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
             scrollLeft = 0;
         }
 
@@ -1005,33 +1097,60 @@
         refreshWaveformTimelineAfterZoomChange();
     }
 
-    function onWaveformTimelineWheel(ev) {
-        const ready =
+    function isWaveformTimelineInteractionReady() {
+        if (typeof transportControlsReady === 'function') {
+            return transportControlsReady();
+        }
+        return (
             (typeof videoReady === 'function' && videoReady()) ||
-            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
-        if (!ready) return;
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded())
+        );
+    }
 
+    function wheelEventOverWaveformLanes(ev) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || !ev) return false;
+        if (typeof ev.composedPath === 'function') {
+            return ev.composedPath().includes(lanes);
+        }
+        return !!(ev.target && lanes.contains(ev.target));
+    }
+
+    function onWaveformTimelineWheel(ev) {
+        if (!isWaveformTimelineInteractionReady()) return;
+
+        const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
         const fast = !!(ev.ctrlKey || ev.metaKey);
         const fastMult = fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1;
 
         if (ev.shiftKey) {
             const lanes = waveformScrubTargetEl();
             if (!lanes) return;
-            const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
+            const m = waveformTimelineMetrics(lanes);
+            if (!m || !m.scrollable) return;
             if (!delta) return;
             ev.preventDefault();
-            lanes.scrollLeft += delta * fastMult;
+            const max = Math.max(0, m.scrubW - m.viewportW);
+            lanes.scrollLeft = Math.max(
+                0,
+                Math.min(max, lanes.scrollLeft + delta * fastMult),
+            );
             return;
         }
 
-        if (!ev.deltaY) return;
+        if (!delta) return;
         ev.preventDefault();
         const base = WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR;
         const factor =
-            ev.deltaY < 0
+            delta < 0
                 ? Math.pow(base, fastMult)
                 : 1 / Math.pow(base, fastMult);
         setWaveformTimelineZoom(waveformTimelineZoom * factor, true);
+    }
+
+    function onWaveformTimelineWheelCapture(ev) {
+        if (!wheelEventOverWaveformLanes(ev)) return;
+        onWaveformTimelineWheel(ev);
     }
 
     function onWaveformLanesScroll() {
@@ -1042,23 +1161,20 @@
     }
 
     function isWaveformTimelineKeyboardReady() {
-        return (
-            (typeof videoReady === 'function' && videoReady()) ||
-            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded())
-        );
+        return isWaveformTimelineInteractionReady();
     }
 
     function resetWaveformTimelineZoom() {
         markerTcEditWaveformZoomActive = false;
-        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, false);
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, false);
     }
 
     function centerWaveformTimelineOnTransport() {
         const lanes = waveformScrubTargetEl();
-        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) return;
+        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) return;
         const vw = waveformTimelineViewportWidthCss();
-        const contentW = masterTimelineWidthCss();
-        lanes.scrollLeft = scrollLeftToCenterTransportSec(contentW, vw);
+        const scrubW = waveformTimelineScrubWidthCss();
+        lanes.scrollLeft = scrollLeftToCenterTransportSec(scrubW, vw);
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
     }
 
@@ -1074,7 +1190,7 @@
     function endMarkerTcEditWaveformZoom() {
         if (!markerTcEditWaveformZoomActive) return;
         markerTcEditWaveformZoomActive = false;
-        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MIN, false);
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, false);
     }
 
     function stepWaveformTimelineZoom(zoomIn, fast) {
@@ -1086,7 +1202,7 @@
 
     function scrollWaveformTimeline(direction, fast) {
         const lanes = waveformScrubTargetEl();
-        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_MIN + 0.001) return false;
+        if (!lanes || isWaveformTimelineAtFitZoom()) return false;
         const step = Math.max(
             48,
             Math.round(waveformTimelineViewportWidthCss() * 0.12) *
@@ -1120,11 +1236,7 @@
 
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
 
-        if (
-            !e.shiftKey &&
-            !e.repeat &&
-            (e.code === 'IntlYen' || e.code === 'Backslash')
-        ) {
+        if (!e.shiftKey && !e.repeat && e.code === 'KeyF') {
             e.preventDefault();
             resetWaveformTimelineZoom();
             return true;
@@ -1149,12 +1261,23 @@
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
-        if (!lanes || lanes.dataset.waveformZoomWheel === '1') return;
-        lanes.dataset.waveformZoomWheel = '1';
-        lanes.addEventListener('wheel', onWaveformTimelineWheel, { passive: false });
-        lanes.addEventListener('scroll', onWaveformLanesScroll, { passive: true });
+        if (!lanes) return;
+        const root = document.documentElement;
+        if (root && root.dataset.waveformZoomWheel !== '1') {
+            root.dataset.waveformZoomWheel = '1';
+            document.addEventListener('wheel', onWaveformTimelineWheelCapture, {
+                passive: false,
+                capture: true,
+            });
+        }
+        if (lanes.dataset.waveformZoomScroll !== '1') {
+            lanes.dataset.waveformZoomScroll = '1';
+            lanes.addEventListener('scroll', onWaveformLanesScroll, { passive: true });
+        }
         applyWaveformTimelineZoomLayout();
     }
+
+    window.initWaveformTimelineZoomUi = initWaveformTimelineZoomUi;
 
     window.getWaveformTimelineZoom = getWaveformTimelineZoom;
     window.setWaveformTimelineZoom = setWaveformTimelineZoom;
@@ -1163,6 +1286,10 @@
     function transportSecFromClientX(clientX) {
         return transportRatioFromClientX(clientX) * getMasterTransportDurationSec();
     }
+
+    window.transportRatioFromClientX = transportRatioFromClientX;
+    window.transportSecFromClientX = transportSecFromClientX;
+    window.waveformTimelineScrubWidthCss = waveformTimelineScrubWidthCss;
 
     function applyTransportAtRatio(ratio, opt) {
         const master = getMasterTransportDurationSec();
@@ -1419,12 +1546,6 @@
                 ? drawOpt.timelineStartSec
                 : 0;
         const startX = masterTimelineContentWidth(wCss, timelineStartSec);
-        if (startX > 0.5) {
-            drawTimelinePreAudioStartBand(ctx, wCss, hCss, startX);
-        }
-
-        const trackEndSec =
-            timelineStartSec + (Number(contentDurSec) > 0 ? Number(contentDurSec) : 0);
 
         if (!peaks || peaks.length === 0) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -1433,7 +1554,6 @@
             ctx.moveTo(0, mid);
             ctx.lineTo(wCss, mid);
             ctx.stroke();
-            drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec);
             drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
             return;
         }
@@ -1451,8 +1571,6 @@
             const h = Math.max(1, bot - top);
             ctx.fillRect(x, top, Math.max(1, barW + 0.5), h);
         }
-
-        drawTimelineBeyondTrackEndBand(ctx, wCss, hCss, trackEndSec);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
@@ -1483,3 +1601,4 @@
     }
 
     initWaveformTimelineZoomUi();
+

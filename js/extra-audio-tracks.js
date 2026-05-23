@@ -67,6 +67,8 @@
             analyser: null,
             loadGen: 0,
             timelineStartSec: 0,
+            clips: [],
+            segmentSources: {},
         },
         {
             file: null,
@@ -82,6 +84,8 @@
             analyser: null,
             loadGen: 0,
             timelineStartSec: 0,
+            clips: [],
+            segmentSources: {},
         },
         {
             file: null,
@@ -97,8 +101,279 @@
             analyser: null,
             loadGen: 0,
             timelineStartSec: 0,
+            clips: [],
+            segmentSources: {},
         },
     ];
+
+    function newExtraClipId() {
+        return (
+            'clip-' +
+            Date.now().toString(36) +
+            '-' +
+            Math.random().toString(36).slice(2, 9)
+        );
+    }
+
+    function ensureExtraTrackClips(tr) {
+        if (!tr.clips) {
+            tr.clips = [];
+            if (tr.buffer && tr.buffer.duration > 0) {
+                tr.clips.push({
+                    id: 'main',
+                    file: tr.file,
+                    buffer: tr.buffer,
+                    peaks: tr.peaks,
+                    persistBlob: tr.persistBlob,
+                    name: tr.file ? tr.file.name : '',
+                });
+            }
+        }
+        if (!tr.segmentSources) tr.segmentSources = {};
+        return tr.clips;
+    }
+
+    function syncExtraTrackPrimaryFromFirstClip(tr) {
+        const clips = ensureExtraTrackClips(tr);
+        const c = clips[0];
+        if (!c) return;
+        tr.file = c.file;
+        tr.buffer = c.buffer;
+        tr.peaks = c.peaks;
+        tr.persistBlob = c.persistBlob;
+    }
+
+    function getExtraTrackClip(tr, clipId) {
+        const clips = ensureExtraTrackClips(tr);
+        if (!clipId || clipId === 'main') {
+            return clips.find((c) => c.id === 'main') || clips[0] || null;
+        }
+        return clips.find((c) => c.id === clipId) || clips[0] || null;
+    }
+
+    /** 意図したクロスフェードとみなす最小重なり（境界接触のみは除外） */
+    const MIN_CROSSFADE_OVERLAP_SEC = 0.02;
+
+    /** 重なりペアのフェードアウト／イン: タイムライン上で先に始まった方が cos（アウト）、後から始まった方が sin（イン）。 */
+    function crossfadeOutInIndices(active, i, j) {
+        const a = active[i];
+        const b = active[j];
+        if (a.timelineStart < b.timelineStart - 0.0005) {
+            return { out: i, in: j };
+        }
+        if (b.timelineStart < a.timelineStart - 0.0005) {
+            return { out: j, in: i };
+        }
+        if (a.timelineEnd < b.timelineEnd - 0.0005) {
+            return { out: i, in: j };
+        }
+        if (b.timelineEnd < a.timelineEnd - 0.0005) {
+            return { out: j, in: i };
+        }
+        return { out: i, in: j };
+    }
+
+    function computeEqualPowerCrossfadeGains(active, transportSec) {
+        const gains = new Map();
+        if (!active.length) return gains;
+        if (active.length === 1) {
+            gains.set(active[0].key, 1);
+            return gains;
+        }
+        const weights = active.map(() => 1);
+        const t = Number(transportSec);
+        for (let i = 0; i < active.length; i++) {
+            for (let j = i + 1; j < active.length; j++) {
+                if (active[i].slot !== active[j].slot) continue;
+                const oStart = Math.max(active[i].timelineStart, active[j].timelineStart);
+                const oEnd = Math.min(active[i].timelineEnd, active[j].timelineEnd);
+                if (
+                    oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC ||
+                    t < oStart ||
+                    t >= oEnd - 0.0005
+                ) {
+                    continue;
+                }
+                const p = (t - oStart) / (oEnd - oStart);
+                const gOut = Math.cos(p * Math.PI * 0.5);
+                const gIn = Math.sin(p * Math.PI * 0.5);
+                const { out, in: inIdx } = crossfadeOutInIndices(active, i, j);
+                weights[out] *= gOut;
+                weights[inIdx] *= gIn;
+            }
+        }
+        let sumSq = 0;
+        for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
+        const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
+        for (let i = 0; i < active.length; i++) {
+            gains.set(active[i].key, weights[i] * norm);
+        }
+        return gains;
+    }
+
+    function stopExtraTrackSegmentSourceEntry(entry) {
+        if (!entry) return;
+        try {
+            if (entry.src) entry.src.stop();
+        } catch (_) {}
+        try {
+            if (entry.src) entry.src.disconnect();
+        } catch (_) {}
+        try {
+            if (entry.segGain) entry.segGain.disconnect();
+        } catch (_) {}
+        entry.lastAppliedGain = null;
+    }
+
+    function isSegmentSourceAudibleOnCtx(entry, ctx) {
+        if (
+            !entry ||
+            entry.src == null ||
+            !Number.isFinite(entry.playbackAnchorCtxTime)
+        ) {
+            return false;
+        }
+        return ctx.currentTime >= entry.playbackAnchorCtxTime - 0.0005;
+    }
+
+    function applySegmentEntryGain(entry, gainLinear, ctx) {
+        if (!entry || !entry.segGain) return;
+        const now = ctx.currentTime;
+        const g = Math.max(0, gainLinear);
+        if (
+            entry.lastAppliedGain != null &&
+            Math.abs(entry.lastAppliedGain - g) < 0.002
+        ) {
+            return;
+        }
+        entry.lastAppliedGain = g;
+        entry.segGain.gain.setTargetAtTime(g, now, 0.05);
+    }
+
+    function extraTrackSourcesAudibleOnCtx(tr, ctx) {
+        if (!tr || !ctx) return false;
+        if (tr.source && isExtraTrackSourceAudibleOnCtx(tr, ctx)) return true;
+        if (!tr.segmentSources) return false;
+        for (const k of Object.keys(tr.segmentSources)) {
+            if (isSegmentSourceAudibleOnCtx(tr.segmentSources[k], ctx)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function pruneExtraSegmentSourcesToActive(allActiveAtT) {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            const tr = extraTrackBySlot(i);
+            if (!tr || !tr.segmentSources) continue;
+            const wanted = new Set();
+            for (const segHit of allActiveAtT) {
+                if (segHit.slot === i) wanted.add(segHit.key);
+            }
+            for (const k of Object.keys(tr.segmentSources)) {
+                if (!wanted.has(k)) {
+                    stopExtraTrackSegmentSourceEntry(tr.segmentSources[k]);
+                    delete tr.segmentSources[k];
+                }
+            }
+        }
+    }
+
+    function stopExtraTrackAllSources(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return;
+        if (tr.segmentSources) {
+            for (const k of Object.keys(tr.segmentSources)) {
+                stopExtraTrackSegmentSourceEntry(tr.segmentSources[k]);
+            }
+            tr.segmentSources = {};
+        }
+        tr.mixRoutingReady = false;
+        stopExtraTrackSource(slot);
+    }
+
+    function ensureExtraTrackMixRouting(slot, ctx) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !ctx) return null;
+        const master = ensureReviewMixMasterBus(ctx);
+        if (!tr.gainNode) tr.gainNode = ctx.createGain();
+        if (tr.mixRoutingReady) {
+            applyExtraTrackLaneGain(slot);
+            return tr;
+        }
+        const meter = ensureExtraTrackAnalyser(ctx, tr);
+        try {
+            tr.gainNode.disconnect();
+        } catch (_) {}
+        try {
+            if (meter) meter.disconnect();
+        } catch (_) {}
+        const bus = master || ctx.destination;
+        if (meter) {
+            tr.gainNode.connect(meter);
+            meter.connect(bus);
+        } else {
+            tr.gainNode.connect(bus);
+        }
+        tr.mixRoutingReady = true;
+        applyExtraTrackLaneGain(slot);
+        return tr;
+    }
+
+    function startExtraTrackSegmentSource(slot, segHit, gainLinear, scheduleWhen, ctx, opt) {
+        const tr = extraTrackBySlot(slot);
+        const clip = getExtraTrackClip(tr, segHit.clipId);
+        if (!tr || !clip || !clip.buffer || !isExtraTrackAudible(slot)) return;
+        if (!tr.segmentSources) tr.segmentSources = {};
+        const key = segHit.key;
+        const existing = tr.segmentSources[key];
+        if (existing && existing.src && !opt.force) {
+            applySegmentEntryGain(existing, gainLinear, ctx);
+            return;
+        }
+        ensureExtraTrackMixRouting(slot, ctx);
+        const anchorT = Number.isFinite(opt.transportSec)
+            ? opt.transportSec
+            : typeof getAudioSyncTransportSec === 'function'
+              ? getAudioSyncTransportSec()
+              : typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : 0;
+        stopExtraTrackSegmentSourceEntry(existing);
+        const off = Math.max(0, segHit.bufferOff);
+        const remain = Math.max(0, segHit.remain);
+        if (remain <= 0.002) return;
+        const maxOff = Math.max(0, clip.buffer.duration - 0.002);
+        const startAt = Math.min(off, maxOff);
+        const src = ctx.createBufferSource();
+        src.buffer = clip.buffer;
+        const segGain = ctx.createGain();
+        segGain.gain.value = Math.max(0, gainLinear);
+        src.connect(segGain);
+        segGain.connect(tr.gainNode);
+        src.start(scheduleWhen, startAt, Math.min(remain, clip.buffer.duration - startAt));
+        tr.segmentSources[key] = {
+            src,
+            segGain,
+            transportAnchor: anchorT,
+            playbackAnchorCtxTime: scheduleWhen,
+            bufferOff: startAt,
+            lastAppliedGain: Math.max(0, gainLinear),
+        };
+        tr.source = src;
+        tr.playbackAnchorTransportSec = opt.transportSec;
+        tr.playbackAnchorCtxTime = scheduleWhen;
+        src.onended = () => {
+            if (tr.segmentSources[key] && tr.segmentSources[key].src === src) {
+                delete tr.segmentSources[key];
+                if (tr.source === src) {
+                    tr.source = null;
+                    clearExtraTrackPlaybackAnchor(tr);
+                }
+            }
+            scheduleMasterPlaybackFinishCheck();
+        };
+    }
 
     const videoMix = { muted: false, solo: false, volLinear: 1 };
     let sessionMixRestore = null;
@@ -125,7 +400,8 @@
             return trackLaneClampGainLinear(v);
         }
         const n = Number(v);
-        if (!isFinite(n) || n <= 0) return 1;
+        if (!isFinite(n) || n < 0) return 1;
+        if (n === 0) return 0;
         return n;
     }
 
@@ -263,11 +539,9 @@
         ) {
             return false;
         }
+        const t = getMasterTransportSecForAudioSync();
         const vd = getVideoTransportDurationSecForMix();
-        if (vd > 0) {
-            const t = getMasterTransportSecForAudioSync();
-            if (t >= vd - 0.001) return false;
-        }
+        if (vd > 0 && t >= vd - 0.001) return false;
         return true;
     }
 
@@ -580,6 +854,96 @@
         return currentDb + deltaDb;
     }
 
+    function resolveActiveMixLaneDisplayIndex(clientX, clientY) {
+        const targets = getVisibleMixLaneTargets();
+        if (!targets.length) return -1;
+
+        if (typeof resolveMixTargetFromActiveRegion === 'function') {
+            const regionTarget = resolveMixTargetFromActiveRegion(clientX, clientY);
+            if (regionTarget) {
+                if (regionTarget.kind === 'video') {
+                    const vi = targets.findIndex((t) => t.kind === 'video');
+                    if (vi >= 0) return vi;
+                }
+                if (regionTarget.kind === 'extra') {
+                    const ei = targets.findIndex(
+                        (t) => t.kind === 'extra' && t.slot === regionTarget.slot,
+                    );
+                    if (ei >= 0) return ei;
+                }
+            }
+        }
+
+        if (Number.isFinite(clientY)) {
+            if (typeof waveformExtraLaneSlotFromClientY === 'function') {
+                const slot = waveformExtraLaneSlotFromClientY(clientY);
+                if (slot >= 0) {
+                    const ei = targets.findIndex(
+                        (t) => t.kind === 'extra' && t.slot === slot,
+                    );
+                    if (ei >= 0) return ei;
+                }
+            }
+            const videoLane = document.getElementById('audioWaveformLaneVideo');
+            if (videoLane && !videoLane.hidden) {
+                const rect = videoLane.getBoundingClientRect();
+                if (clientY >= rect.top && clientY <= rect.bottom) {
+                    const vi = targets.findIndex((t) => t.kind === 'video');
+                    if (vi >= 0) return vi;
+                }
+            }
+        }
+
+        if (typeof getWaveformTargetExtraSlot === 'function') {
+            const slot = getWaveformTargetExtraSlot();
+            if (slot >= 0) {
+                const ei = targets.findIndex((t) => t.kind === 'extra' && t.slot === slot);
+                if (ei >= 0) return ei;
+            }
+        }
+
+        return -1;
+    }
+
+    function handleActiveMixLaneVolumeKeydown(e) {
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
+        if (e.code !== 'PageUp' && e.code !== 'PageDown') return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+
+        let clientX = null;
+        let clientY = null;
+        if (typeof getWaveformLanesPointerClientX === 'function') {
+            clientX = getWaveformLanesPointerClientX();
+        }
+        if (typeof getWaveformLanesPointerClientY === 'function') {
+            clientY = getWaveformLanesPointerClientY();
+        }
+        if (clientX == null && typeof getWaveformPointerClientX === 'function') {
+            clientX = getWaveformPointerClientX();
+        }
+        if (clientY == null && typeof getWaveformPointerClientY === 'function') {
+            clientY = getWaveformPointerClientY();
+        }
+
+        const idx = resolveActiveMixLaneDisplayIndex(clientX, clientY);
+        if (idx < 0) return false;
+
+        e.preventDefault();
+        const deltaDb = e.code === 'PageUp' ? 1 : -1;
+        adjustMixLaneVolumeByDisplayIndex(idx, deltaDb);
+        return true;
+    }
+
+    window.handleActiveMixLaneVolumeKeydown = handleActiveMixLaneVolumeKeydown;
+
+    const mixLaneVolumeUnityHoldDir = {};
+
+    function mixLaneVolumeUnityHoldKey(t) {
+        return t.kind === 'video' ? 'video' : t.slot;
+    }
+
     function adjustMixLaneVolumeByDisplayIndex(displayIndex, deltaDb) {
         if (
             typeof trackLaneLinearGainToDb !== 'function' ||
@@ -590,6 +954,11 @@
         const targets = getVisibleMixLaneTargets();
         const t = targets[displayIndex];
         if (!t) return false;
+        const holdKey = mixLaneVolumeUnityHoldKey(t);
+        const hold = mixLaneVolumeUnityHoldDir[holdKey] || 0;
+        if (hold !== 0 && ((hold > 0 && deltaDb > 0) || (hold < 0 && deltaDb < 0))) {
+            return false;
+        }
         let currentLinear;
         if (t.kind === 'video') {
             if (typeof videoReady !== 'function' || !videoReady()) return false;
@@ -618,6 +987,61 @@
             isMixLaneDbAtUnity(nextDb) &&
             !atUnityBefore &&
             ((deltaDb > 0 && currentDb < 0) || (deltaDb < 0 && currentDb > 0));
+        if (stoppedAtUnity) {
+            mixLaneVolumeUnityHoldDir[holdKey] = deltaDb > 0 ? 1 : -1;
+        } else {
+            delete mixLaneVolumeUnityHoldDir[holdKey];
+        }
+        return stoppedAtUnity;
+    }
+
+    function clearExtraTrackVolumeUnityHold(slot) {
+        if (slot === 'video') {
+            delete mixLaneVolumeUnityHoldDir.video;
+            return;
+        }
+        if (Number.isFinite(slot)) {
+            delete mixLaneVolumeUnityHoldDir[slot];
+        } else {
+            for (const k of Object.keys(mixLaneVolumeUnityHoldDir)) {
+                delete mixLaneVolumeUnityHoldDir[k];
+            }
+        }
+    }
+
+    function adjustExtraTrackVolumeDb(slot, deltaDb) {
+        if (
+            typeof trackLaneLinearGainToDb !== 'function' ||
+            typeof trackLaneLinearGainFromDb !== 'function'
+        ) {
+            return false;
+        }
+        if (typeof isExtraTrackLoaded !== 'function' || !isExtraTrackLoaded(slot)) {
+            return false;
+        }
+        const hold = mixLaneVolumeUnityHoldDir[slot] || 0;
+        if (hold !== 0 && ((hold > 0 && deltaDb > 0) || (hold < 0 && deltaDb < 0))) {
+            return false;
+        }
+        const currentLinear = getExtraTrackVolLinear(slot);
+        const currentDb = trackLaneLinearGainToDb(currentLinear);
+        const atUnityBefore = isMixLaneDbAtUnity(currentDb);
+        const nextDb = mixLaneVolumeDbAfterStep(currentDb, deltaDb);
+        if (Math.abs(nextDb - currentDb) < 1e-6) {
+            return false;
+        }
+        setExtraTrackVolLinear(slot, trackLaneLinearGainFromDb(nextDb));
+        refreshReviewMixUi();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const stoppedAtUnity =
+            isMixLaneDbAtUnity(nextDb) &&
+            !atUnityBefore &&
+            ((deltaDb > 0 && currentDb < 0) || (deltaDb < 0 && currentDb > 0));
+        if (stoppedAtUnity) {
+            mixLaneVolumeUnityHoldDir[slot] = deltaDb > 0 ? 1 : -1;
+        } else {
+            delete mixLaneVolumeUnityHoldDir[slot];
+        }
         return stoppedAtUnity;
     }
 
@@ -656,6 +1080,9 @@
     }
 
     function extraTrackTimelineEndSec(slot) {
+        if (typeof getTrackTimelineEndSec === 'function') {
+            return getTrackTimelineEndSec({ type: 'extra', slot });
+        }
         const start = getExtraTrackTimelineStartSec(slot);
         const dur = extraTrackContentDurationSec(slot);
         return start + (dur > 0 ? dur : 0);
@@ -667,6 +1094,9 @@
         const next = clampExtraTrackTimelineStartSec(slot, sec);
         if (Math.abs(next - getExtraTrackTimelineStartSec(slot)) < 0.0005) return;
         tr.timelineStartSec = next;
+        if (typeof updateTrackRegionOverlay === 'function') {
+            updateTrackRegionOverlay({ type: 'extra', slot });
+        }
         if (opt && opt.skipRedraw) return;
         if (typeof drawExtraTrackWaveform === 'function') drawExtraTrackWaveform(slot);
         if (typeof notifyMasterTransportDurationChanged === 'function') {
@@ -688,6 +1118,22 @@
     window.setExtraTrackTimelineStartSec = setExtraTrackTimelineStartSec;
     window.extraTrackTimelineEndSec = extraTrackTimelineEndSec;
     window.extraTrackContentDurationSec = extraTrackContentDurationSec;
+    window.getDefaultExtraClipId = function () {
+        return 'main';
+    };
+    window.getExtraTrackClipDurationSec = function (slot, clipId) {
+        const tr = extraTrackBySlot(slot);
+        const clip = getExtraTrackClip(tr, clipId);
+        return clip && clip.buffer && clip.buffer.duration > 0 ? clip.buffer.duration : 0;
+    };
+    window.getExtraTrackClipPeaks = function (slot, clipId) {
+        const tr = extraTrackBySlot(slot);
+        const clip = getExtraTrackClip(tr, clipId);
+        return clip && clip.peaks ? clip.peaks : null;
+    };
+    window.getExtraTrackMaxClipDurationSec = function (slot) {
+        return extraTrackBufferDuration(slot);
+    };
 
     function getExtraUi(slot) {
         return extraTrackUi[slot] || null;
@@ -729,6 +1175,22 @@
         return 0;
     }
 
+    function expectedTransportSecForSegmentEntry(entry, ctx) {
+        if (
+            !entry ||
+            !Number.isFinite(entry.transportAnchor) ||
+            !Number.isFinite(entry.playbackAnchorCtxTime)
+        ) {
+            return null;
+        }
+        if (ctx.currentTime < entry.playbackAnchorCtxTime) {
+            return entry.transportAnchor;
+        }
+        return (
+            entry.transportAnchor + (ctx.currentTime - entry.playbackAnchorCtxTime)
+        );
+    }
+
     function expectedTransportSecForTrack(tr, ctx, slot) {
         if (
             !tr ||
@@ -762,10 +1224,66 @@
     }
 
     function extraTrackPlayableTransportEndSec(slot) {
+        if (typeof getTrackTimelineEndSec === 'function') {
+            return getTrackTimelineEndSec({ type: 'extra', slot });
+        }
         return getExtraTrackTimelineStartSec(slot) + extraTrackBufferDuration(slot);
     }
 
+    /** 読み込み済み・可聴トラックの再生終端をすべて過ぎたか（映像なしセッション向け） */
+    function isPastAllLoadedTrackPlaybackEnds(transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        const eps =
+            typeof masterTransportTailEpsilonSec === 'function'
+                ? masterTransportTailEpsilonSec()
+                : 0.02;
+        let any = false;
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLoaded(i)) continue;
+            if (!isExtraTrackAudible(i)) continue;
+            any = true;
+            const end = extraTrackPlayableTransportEndSec(i);
+            if (!(end > 0) || t < end - eps) return false;
+        }
+        if (any) return true;
+        if (typeof videoReady === 'function' && videoReady()) {
+            const vd =
+                typeof getVideoPlaybackEndSec === 'function'
+                    ? getVideoPlaybackEndSec()
+                    : typeof getVideoTransportDurationSec === 'function'
+                      ? getVideoTransportDurationSec()
+                      : 0;
+            return vd > 0 && t >= vd - eps;
+        }
+        return false;
+    }
+
+    function scheduleMasterPlaybackFinishCheck() {
+        const run = () => {
+            if (typeof maybeFinishMasterTransportPlayback === 'function') {
+                maybeFinishMasterTransportPlayback();
+            }
+        };
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(run);
+        } else {
+            setTimeout(run, 0);
+        }
+    }
+
     function isExtraTrackWithinPlayableTimeline(slot, transportSec) {
+        const track = { type: 'extra', slot };
+        if (
+            typeof isTrackRegionActive === 'function' &&
+            isTrackRegionActive(track) &&
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+        ) {
+            return getActiveExtraSegmentsAtTransport(transportSec).some((s) => s.slot === slot);
+        }
+        if (typeof isTrackTransportAudible === 'function') {
+            return isTrackTransportAudible(track, transportSec);
+        }
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return false;
         const start = getExtraTrackTimelineStartSec(slot);
@@ -775,8 +1293,9 @@
 
     function shouldExtraTrackSourceBePlaying(slot) {
         if (!isExtraTrackAudible(slot)) return false;
+        if (!isExtraTrackLoaded(slot)) return false;
         const tr = extraTrackBySlot(slot);
-        if (!tr || !tr.buffer) return false;
+        if (!tr) return false;
         if (!isTransportPlayingForExtra()) return false;
         const audioT = getAudioSyncTransportSec();
         if (!isExtraTrackWithinPlayableTimeline(slot, audioT)) {
@@ -791,18 +1310,19 @@
 
     function stopExtraTrackSourceIfPastPlayableEnd(slot) {
         const tr = extraTrackBySlot(slot);
-        if (!tr || !tr.source) return;
+        if (!tr) return;
         const audioT = getAudioSyncTransportSec();
         if (!isExtraTrackWithinPlayableTimeline(slot, audioT)) {
-            stopExtraTrackSource(slot);
+            stopExtraTrackAllSources(slot);
         }
     }
 
     function extraTrackRoutingMismatch() {
+        const ctx = ensureReviewMixCtx();
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
             const shouldPlay = shouldExtraTrackSourceBePlaying(i);
-            const playing = !!(tr && tr.source);
+            const playing = extraTrackSourcesAudibleOnCtx(tr, ctx);
             if (shouldPlay === playing) continue;
             if (!shouldPlay && playing) {
                 stopExtraTrackSourceIfPastPlayableEnd(i);
@@ -813,13 +1333,72 @@
         return false;
     }
 
-    /** 再生中に Ex ソースの開始／停止がトランスポートとずれている */
+    function reviewMixHasCrossfadeAtTransport(transportSec) {
+        if (typeof getActiveExtraSegmentsAtTransport !== 'function') return false;
+        const active = getActiveExtraSegmentsAtTransport(transportSec);
+        if (active.length < 2) return false;
+        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
+        for (let i = 0; i < active.length; i++) {
+            const g = gains.get(active[i].key) ?? 1;
+            if (g < 0.97) return true;
+        }
+        return false;
+    }
+
+    function segmentSourcesReadyForActive(active) {
+        if (!active || !active.length) return false;
+        for (const segHit of active) {
+            const tr = extraTrackBySlot(segHit.slot);
+            const entry =
+                tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
+            if (!entry || !entry.src) return false;
+        }
+        return true;
+    }
+
+    function applySegmentCrossfadeGains(ctx, active, transportSec) {
+        if (!ctx || !active || active.length < 2) return;
+        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
+        for (const segHit of active) {
+            const tr = extraTrackBySlot(segHit.slot);
+            const entry =
+                tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
+            if (entry && entry.segGain) {
+                const g = gains.get(segHit.key) ?? 1;
+                applySegmentEntryGain(entry, g, ctx);
+            }
+        }
+    }
+
     function reviewMixNeedsPlaybackSync() {
         if (!isTransportPlayingForExtra()) return false;
-        return extraTrackRoutingMismatch();
+        if (extraTrackRoutingMismatch()) return true;
+        const audioT = getAudioSyncTransportSec();
+        const active =
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+                ? getActiveExtraSegmentsAtTransport(audioT)
+                : [];
+        if (active.length > 1) {
+            return !segmentSourcesReadyForActive(active);
+        }
+        return false;
+    }
+
+    function applyReviewMixCrossfadeGainsIfNeeded() {
+        if (!isTransportPlayingForExtra()) return;
+        const ctx = ensureReviewMixCtx();
+        if (!ctx) return;
+        const audioT = getAudioSyncTransportSec();
+        const active =
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+                ? getActiveExtraSegmentsAtTransport(audioT)
+                : [];
+        if (active.length < 2 || !segmentSourcesReadyForActive(active)) return;
+        applySegmentCrossfadeGains(ctx, active, audioT);
     }
 
     window.reviewMixNeedsPlaybackSync = reviewMixNeedsPlaybackSync;
+    window.applyReviewMixCrossfadeGainsIfNeeded = applyReviewMixCrossfadeGainsIfNeeded;
 
     function extraTracksNeedResync(targetSec, ctx) {
         if (extraTrackRoutingMismatch()) return true;
@@ -831,6 +1410,9 @@
                 continue;
             }
             const tr = extraTrackBySlot(i);
+            if (tr && tr.segmentSources && Object.keys(tr.segmentSources).length > 0) {
+                continue;
+            }
             if (!tr || !tr.source) return true;
             if (!isExtraTrackSourceAudibleOnCtx(tr, ctx)) continue;
             const expected = expectedTransportSecForTrack(tr, ctx, i);
@@ -871,13 +1453,19 @@
 
     function stopAllExtraTrackSources() {
         resetExtraMixScheduleTime();
-        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) stopExtraTrackSource(i);
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) stopExtraTrackAllSources(i);
     }
 
     function extraAudioSourcesActive() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
-            if (tr && tr.source && isExtraTrackAudible(i)) return true;
+            if (!tr || !isExtraTrackAudible(i)) continue;
+            if (tr.source) return true;
+            if (tr.segmentSources) {
+                for (const k of Object.keys(tr.segmentSources)) {
+                    if (tr.segmentSources[k] && tr.segmentSources[k].src) return true;
+                }
+            }
         }
         return false;
     }
@@ -967,6 +1555,20 @@
         return tr.persistBlob;
     }
 
+    function cacheExtraClipPersistBlob(clip, file, ab) {
+        if (!clip || !file || !ab || ab.byteLength < 1) {
+            if (clip) clip.persistBlob = null;
+            return null;
+        }
+        const type =
+            file.type ||
+            (typeof mimeTypeHintForAudioFileName === 'function'
+                ? mimeTypeHintForAudioFileName(file.name)
+                : 'application/octet-stream');
+        clip.persistBlob = new Blob([ab.slice(0)], { type });
+        return clip.persistBlob;
+    }
+
     function getExtraTrackPersistEntry(slot) {
         const tr = extraTrackBySlot(slot);
         if (!tr || !tr.file || !tr.buffer || !tr.persistBlob || tr.persistBlob.size < 1) {
@@ -974,7 +1576,7 @@
         }
         const peaks = clonePeaksForPersist(tr.peaks);
         const timelineStart = getExtraTrackTimelineStartSec(slot);
-        return {
+        const entry = {
             slot,
             name: tr.file.name,
             lastModified: tr.file.lastModified,
@@ -984,6 +1586,43 @@
             peaks,
             timelineStartSec: timelineStart > 0 ? timelineStart : 0,
         };
+        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            const snap = getPlaybackRegionPersistSnapshot();
+            const reg =
+                snap && snap.extra
+                    ? snap.extra.find((e) => e && e.slot === slot)
+                    : null;
+            if (reg && Array.isArray(reg.segments) && reg.segments.length) {
+                entry.regionSegments = reg.segments;
+                if (Number.isFinite(reg.headPadSec) && reg.headPadSec > 0) {
+                    entry.regionHeadPadSec = reg.headPadSec;
+                }
+                if (Number.isFinite(reg.regionTimelineInSec)) {
+                    entry.regionTimelineInSec = reg.regionTimelineInSec;
+                }
+                if (Number.isFinite(reg.regionLeadPadSec) && reg.regionLeadPadSec > 0) {
+                    entry.regionLeadPadSec = reg.regionLeadPadSec;
+                }
+            }
+        }
+        const clips = ensureExtraTrackClips(tr);
+        if (clips.length > 1) {
+            entry.clips = clips
+                .map((c) => {
+                    if (!c.persistBlob || c.persistBlob.size < 1) return null;
+                    return {
+                        id: c.id,
+                        name: c.file ? c.file.name : c.name || 'audio',
+                        lastModified: c.file ? c.file.lastModified : Date.now(),
+                        blob: c.persistBlob,
+                        byteLength: c.persistBlob.size,
+                        duration: c.buffer && c.buffer.duration > 0 ? c.buffer.duration : 0,
+                        peaks: clonePeaksForPersist(c.peaks),
+                    };
+                })
+                .filter(Boolean);
+        }
+        return entry;
     }
 
     /** Web Audio を使わず WAV から peaks のみ構築（復元時のデコード待ち回避） */
@@ -1185,6 +1824,7 @@
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             applyExtraSlotMixFromSessionRestore(i);
         }
+        syncExtraLaneVisibilityAfterSessionRestore();
         refreshReviewMixUi();
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
@@ -1222,7 +1862,10 @@
         const off = Math.max(0, Number(offsetSec) || 0);
         const maxOff = Math.max(0, tr.buffer.duration - 0.002);
         const startAt = Math.min(off, maxOff);
-        const remain = tr.buffer.duration - startAt;
+        let remain = tr.buffer.duration - startAt;
+        if (opt && Number.isFinite(opt.playRemainSec)) {
+            remain = Math.min(remain, Math.max(0, opt.playRemainSec));
+        }
         if (remain <= 0.002) return;
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
         const src = ctx.createBufferSource();
@@ -1239,15 +1882,29 @@
                 tr.source = null;
                 clearExtraTrackPlaybackAnchor(tr);
             }
+            scheduleMasterPlaybackFinishCheck();
         };
     }
 
     function extraTrackBufferDuration(slot) {
         const tr = extraTrackBySlot(slot);
-        return tr && tr.buffer && tr.buffer.duration > 0 ? tr.buffer.duration : 0;
+        if (!tr) return 0;
+        let max = 0;
+        const clips = ensureExtraTrackClips(tr);
+        for (const c of clips) {
+            if (c.buffer && c.buffer.duration > max) max = c.buffer.duration;
+        }
+        if (max > 0) return max;
+        return tr.buffer && tr.buffer.duration > 0 ? tr.buffer.duration : 0;
     }
 
     function isExtraTrackLoaded(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return false;
+        const clips = ensureExtraTrackClips(tr);
+        for (const c of clips) {
+            if (c.buffer && c.buffer.duration > 0) return true;
+        }
         return extraTrackBufferDuration(slot) > 0;
     }
 
@@ -1264,22 +1921,86 @@
         }
         const ctx = ensureReviewMixCtx();
         if (!ctx) return;
-        if (!force && !extraTracksNeedResync(masterT, ctx) && extraAudioSourcesActive()) {
+        const allActiveAtT =
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+                ? getActiveExtraSegmentsAtTransport(audioT)
+                : [];
+        const crossfadeActive = reviewMixHasCrossfadeAtTransport(audioT);
+        if (
+            !force &&
+            crossfadeActive &&
+            segmentSourcesReadyForActive(allActiveAtT) &&
+            !extraTracksNeedResync(masterT, ctx)
+        ) {
+            applySegmentCrossfadeGains(ctx, allActiveAtT, audioT);
+            pruneExtraSegmentSourcesToActive(allActiveAtT);
+            return;
+        }
+        if (
+            !force &&
+            !crossfadeActive &&
+            !extraTracksNeedResync(masterT, ctx) &&
+            extraAudioSourcesActive()
+        ) {
+            pruneExtraSegmentSourcesToActive(allActiveAtT);
             return;
         }
         resetExtraMixScheduleTime();
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
+        const crossfadeGains = computeEqualPowerCrossfadeGains(allActiveAtT, audioT);
+        if (crossfadeActive) {
+            applySegmentCrossfadeGains(ctx, allActiveAtT, audioT);
+        }
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             stopExtraTrackSourceIfPastPlayableEnd(i);
             const tr = extraTrackBySlot(i);
             if (!shouldExtraTrackSourceBePlaying(i)) {
-                stopExtraTrackSource(i);
+                stopExtraTrackAllSources(i);
                 continue;
             }
+            const trackRef = { type: 'extra', slot: i };
+            const regionActive =
+                typeof isTrackRegionActive === 'function'
+                    ? isTrackRegionActive(trackRef)
+                    : false;
+            const activeAtT = allActiveAtT.filter((s) => s.slot === i);
+
+            if (regionActive && activeAtT.length) {
+                ensureExtraTrackMixRouting(i, ctx);
+                const wanted = new Set();
+                for (const segHit of activeAtT) {
+                    wanted.add(segHit.key);
+                    const g = crossfadeGains.get(segHit.key) ?? 1;
+                    startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
+                        force,
+                        transportSec: masterT,
+                    });
+                }
+                if (tr.segmentSources) {
+                    for (const k of Object.keys(tr.segmentSources)) {
+                        if (!wanted.has(k)) {
+                            stopExtraTrackSegmentSourceEntry(tr.segmentSources[k]);
+                            delete tr.segmentSources[k];
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if (regionActive) {
+                stopExtraTrackAllSources(i);
+                continue;
+            }
+
             const timelineStart = getExtraTrackTimelineStartSec(i);
-            const bufferOff = audioT - timelineStart;
-            if (!tr || !tr.buffer || bufferOff < 0 || bufferOff >= tr.buffer.duration - 0.002) {
-                stopExtraTrackSource(i);
+            let bufferOff = audioT - timelineStart;
+            if (
+                !tr ||
+                !tr.buffer ||
+                bufferOff < -0.0005 ||
+                bufferOff >= tr.buffer.duration - 0.002
+            ) {
+                stopExtraTrackAllSources(i);
                 continue;
             }
             let needsStart = force || !tr.source;
@@ -1290,9 +2011,13 @@
                     Math.abs(expected - masterT) > EXTRA_AUDIO_RESYNC_DRIFT_SEC;
             }
             if (!needsStart) continue;
+            if (tr.segmentSources && Object.keys(tr.segmentSources).length) {
+                stopExtraTrackAllSources(i);
+            }
             startExtraTrackSource(i, bufferOff, {
                 when: scheduleWhen,
                 transportSec: masterT,
+                playRemainSec: tr.buffer.duration - bufferOff,
             });
         }
     }
@@ -1332,6 +2057,19 @@
     }
 
     function extraTrackContentDurationSec(slot) {
+        const track = { type: 'extra', slot };
+        if (
+            typeof isTrackRegionActive === 'function' &&
+            isTrackRegionActive(track) &&
+            typeof getTrackTimelineEndSec === 'function'
+        ) {
+            const end = getTrackTimelineEndSec(track);
+            const start =
+                typeof getExtraTrackTimelineStartSec === 'function'
+                    ? getExtraTrackTimelineStartSec(slot)
+                    : 0;
+            return Math.max(0, end - start);
+        }
         const tr = extraTrackBySlot(slot);
         if (!tr) return 0;
         if (tr.buffer && tr.buffer.duration > 0) return tr.buffer.duration;
@@ -1512,9 +2250,11 @@
     function syncExtraCanvasSize(ui) {
         if (!ui || !ui.canvas || !ui.track) return null;
         const wCss =
-            typeof masterTimelineWidthCss === 'function'
-                ? masterTimelineWidthCss()
-                : Math.max(1, ui.track.clientWidth | 0);
+            typeof waveformTimelineScrubWidthCss === 'function'
+                ? waveformTimelineScrubWidthCss()
+                : typeof masterTimelineWidthCss === 'function'
+                  ? masterTimelineWidthCss()
+                  : Math.max(1, ui.track.clientWidth | 0);
         const hCss = Math.max(1, ui.track.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         ui.canvas.width = Math.max(1, Math.round(wCss * dpr));
@@ -1536,17 +2276,25 @@
         const sized = syncExtraCanvasSize(ui);
         if (!sized || !sized.ctx) return;
         const { ctx, wCss, hCss } = sized;
-        const contentDur = extraTrackContentDurationSec(slot);
         const audible =
             typeof isExtraTrackAudible === 'function' ? isExtraTrackAudible(slot) : true;
         const grad =
             typeof timelineWaveformFillGradient === 'function'
                 ? timelineWaveformFillGradient(ctx, hCss, 'extra', audible)
                 : null;
-        const endDrawOpt = {
-            timelineStartSec: getExtraTrackTimelineStartSec(slot),
-        };
-        drawPeaksForMasterTimeline(ctx, tr ? tr.peaks : null, wCss, hCss, contentDur, grad, endDrawOpt);
+        if (typeof drawExtraTrackWaveformRegions === 'function') {
+            drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad);
+        } else {
+            drawPeaksForMasterTimeline(
+                ctx,
+                tr ? tr.peaks : null,
+                wCss,
+                hCss,
+                extraTrackContentDurationSec(slot),
+                grad,
+                { timelineStartSec: getExtraTrackTimelineStartSec(slot) },
+            );
+        }
     }
 
     function redrawAllExtraTrackWaveforms() {
@@ -1584,7 +2332,17 @@
             ui.title.title = tip ? label + ' — ' + tip : label;
         }
         if (ui && ui.fileName) {
-            if (tr && tr.file && tr.file.name) {
+            const hasRegions =
+                typeof isTrackRegionActive === 'function' &&
+                isTrackRegionActive({ type: 'extra', slot });
+            if (hasRegions) {
+                if (typeof syncExtraLaneFileNameForRegions === 'function') {
+                    syncExtraLaneFileNameForRegions(slot);
+                } else {
+                    ui.fileName.hidden = true;
+                    ui.fileName.textContent = '';
+                }
+            } else if (tr && tr.file && tr.file.name) {
                 const full = tr.file.name;
                 setLaneWaveformFileNameEl(ui.fileName, full, tip ? full + ' — ' + tip : full);
             } else {
@@ -1610,8 +2368,84 @@
         }
     }
 
+    function extraTrackSlotHasContent(slot) {
+        if (isExtraTrackLoaded(slot)) return true;
+        const track = { type: 'extra', slot };
+        if (
+            typeof isTrackRegionActive === 'function' &&
+            isTrackRegionActive(track)
+        ) {
+            return true;
+        }
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return false;
+        const clips = tr.clips;
+        if (clips && clips.length) {
+            for (const c of clips) {
+                if (c.buffer && c.buffer.duration > 0) return true;
+            }
+        }
+        if (tr.peaks && tr.peaks.length) {
+            const hint = Number(tr.restoreDurationHint);
+            if (Number.isFinite(hint) && hint > 0) return true;
+            if (tr.buffer && tr.buffer.duration > 0) return true;
+        }
+        return false;
+    }
+
     function isExtraTrackLaneShown(slot) {
-        return !!(extraLaneUiOpen[slot] || isExtraTrackLoaded(slot));
+        if (extraTrackSlotHasContent(slot)) return true;
+        return !!extraLaneUiOpen[slot];
+    }
+
+    /** リロード後: 波形・リージョンのない Ex レーンを閉じ、最低 1 レーンは残す */
+    function syncExtraLaneVisibilityAfterSessionRestore() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!extraTrackSlotHasContent(i)) {
+                extraLaneUiOpen[i] = false;
+            } else {
+                extraLaneUiOpen[i] = true;
+            }
+            applyExtraTrackLaneVisibility(i);
+        }
+        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
+            ensureAtLeastOneWaveformLaneVisible();
+        }
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+        refreshExtraTrackAddLaneButtons();
+    }
+
+    function canRevealNextExtraTrackLane(fromSlot) {
+        for (let i = fromSlot + 1; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLaneShown(i)) return true;
+        }
+        return false;
+    }
+
+    function revealNextExtraTrackLane(fromSlot) {
+        for (let i = fromSlot + 1; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLaneShown(i)) {
+                setExtraTrackLaneUiOpen(i, true);
+                setExtraTrackStatus(i, 'Not Loaded');
+                refreshExtraTrackUi(i);
+                writeLog('Ex ' + (i + 1) + ': track lane opened');
+                return i;
+            }
+        }
+        writeLog('Extra audio: maximum track count reached');
+        return -1;
+    }
+
+    function refreshExtraTrackAddLaneButtons() {
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const ui = getExtraUi(slot);
+            if (!ui || !ui.addTrackBtn) continue;
+            const canAdd = canRevealNextExtraTrackLane(slot);
+            ui.addTrackBtn.disabled = !canAdd;
+            ui.addTrackBtn.hidden = slot >= EXTRA_TRACK_COUNT - 1 && !canAdd;
+        }
     }
 
     function applyExtraTrackLaneVisibility(slot) {
@@ -1640,6 +2474,7 @@
                 refreshWaveformCompositeLaneLayout();
             }
         }
+        refreshExtraTrackAddLaneButtons();
         if (!opt || !opt.skipPersist) {
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }
@@ -1664,9 +2499,9 @@
     window.reviveOneEmptyExtraLane = reviveOneEmptyExtraLane;
 
     function getWaveformLaneUiPersistSnapshot() {
-        const extraLanesOpen = extraLaneUiOpen.slice(0, EXTRA_TRACK_COUNT);
+        const extraLanesOpen = [];
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
-            if (isExtraTrackLoaded(i)) extraLanesOpen[i] = true;
+            extraLanesOpen[i] = isExtraTrackLaneShown(i);
         }
         return {
             videoLaneOpen:
@@ -1738,11 +2573,15 @@
         }
     }
 
-    /** 新規動画読み込み時: クリアで隠した Ex レーンを空きドロップ枠として再表示 */
+    /** 新規動画読み込み時: 空き Ex レーンを 1 つだけ表示 */
     function restoreExtraTrackLanesForNewVideo() {
         for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
-            setExtraTrackLaneUiOpen(slot, true, { deferLayout: true });
+            setExtraTrackLaneUiOpen(slot, false, {
+                deferLayout: true,
+                skipPersist: true,
+            });
         }
+        setExtraTrackLaneUiOpen(0, true, { deferLayout: true, skipPersist: true });
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -1756,9 +2595,16 @@
 
     window.restoreExtraTrackLanesForNewVideo = restoreExtraTrackLanesForNewVideo;
     window.extraTrackBufferDuration = extraTrackBufferDuration;
+    window.toggleExtraTrackSolo = toggleExtraSolo;
+    window.toggleExtraTrackMute = toggleExtraMute;
+    window.adjustExtraTrackVolumeDb = adjustExtraTrackVolumeDb;
+    window.clearExtraTrackVolumeUnityHold = clearExtraTrackVolumeUnityHold;
     window.isExtraTrackLoaded = isExtraTrackLoaded;
     window.hasAnyExtraTrackLoaded = hasAnyExtraTrackLoaded;
+    window.isPastAllLoadedTrackPlaybackEnds = isPastAllLoadedTrackPlaybackEnds;
     window.hasAnyExtraTrackTimelineContent = hasAnyExtraTrackTimelineContent;
+    window.extraTrackSlotHasContent = extraTrackSlotHasContent;
+    window.isExtraTrackLaneShown = isExtraTrackLaneShown;
     window.EXTRA_TRACK_COUNT = EXTRA_TRACK_COUNT;
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
@@ -1783,7 +2629,17 @@
             ui.title.title = tip ? label + ' — ' + tip : label;
         }
         if (ui.fileName) {
-            if (tr && tr.file && tr.file.name) {
+            const hasRegions =
+                typeof isTrackRegionActive === 'function' &&
+                isTrackRegionActive({ type: 'extra', slot });
+            if (hasRegions) {
+                if (typeof syncExtraLaneFileNameForRegions === 'function') {
+                    syncExtraLaneFileNameForRegions(slot);
+                } else {
+                    ui.fileName.hidden = true;
+                    ui.fileName.textContent = '';
+                }
+            } else if (tr && tr.file && tr.file.name) {
                 const st = ui.status ? ui.status.textContent || '' : '';
                 const tip =
                     typeof laneStatusTooltip === 'function' ? laneStatusTooltip(st) : '';
@@ -1808,43 +2664,40 @@
         }
         if (ui.clearBtn) ui.clearBtn.disabled = false;
         drawExtraTrackWaveform(slot);
+        if (hasBuf && typeof updateTrackRegionOverlay === 'function') {
+            updateTrackRegionOverlay({ type: 'extra', slot });
+        }
         if (typeof refreshTrackLaneControlsUi === 'function') refreshTrackLaneControlsUi();
         refreshExtraTrackLaneVisibility(slot);
+        refreshExtraTrackAddLaneButtons();
     }
 
     function clearExtraTrack(slot) {
         const tr = extraTrackBySlot(slot);
         if (!tr) return;
-        if (!tr.buffer) {
-            resetExtraTrackMixToDefault(slot);
-            setExtraTrackLaneUiOpen(slot, false, { deferLayout: true });
-            setExtraTrackStatus(slot, 'Not Loaded');
-            refreshExtraTrackUi(slot);
-            if (typeof refreshTrackLaneControlsUi === 'function') {
-                refreshTrackLaneControlsUi();
-            }
-            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-                refreshWaveformCompositeLaneLayout();
-            }
-            if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-                ensureAtLeastOneWaveformLaneVisible();
-            }
-            return;
-        }
-        stopExtraTrackSource(slot);
+        const hadContent = extraTrackSlotHasContent(slot);
+        stopExtraTrackAllSources(slot);
         tr.loadGen += 1;
+        if (typeof clearTrackRegion === 'function') {
+            clearTrackRegion({ type: 'extra', slot }, { silent: true });
+        }
+        tr.clips = [];
+        tr.segmentSources = {};
         tr.file = null;
         tr.buffer = null;
         tr.peaks = null;
         tr.persistBlob = null;
         tr.restoreDurationHint = 0;
         tr.timelineStartSec = 0;
+        tr.playbackRegions = { active: false, segments: [], headPadSec: 0 };
+        delete tr.region;
         resetExtraTrackMixToDefault(slot);
         try {
             if (tr.analyser) tr.analyser.disconnect();
         } catch (_) {}
         tr.analyser = null;
-        setExtraTrackLaneUiOpen(slot, false, { deferLayout: true });
+        extraLaneUiOpen[slot] = false;
+        setExtraTrackLaneUiOpen(slot, false, { deferLayout: true, skipPersist: false });
         setExtraTrackLoaded(slot, false);
         setExtraTrackStatus(slot, 'Not Loaded');
         refreshExtraTrackUi(slot);
@@ -1854,16 +2707,19 @@
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
-        if (typeof notifyMasterTransportDurationChanged === 'function') {
+        if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
-        if (typeof removeExtraTrackFromSession === 'function') {
+        if (hadContent && typeof removeExtraTrackFromSession === 'function') {
             void removeExtraTrackFromSession(slot);
-        } else if (typeof schedulePersistSession === 'function') {
+        } else if (hadContent && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
+        }
+        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
+            ensureAtLeastOneWaveformLaneVisible();
         }
     }
 
@@ -1907,6 +2763,7 @@
             }
             return;
         }
+        const addClipEarly = !!(opt && opt.addClip) && isExtraTrackLoaded(slot);
         setExtraTrackStatus(slot, 'Decoding…');
         let buffer = null;
         try {
@@ -1920,7 +2777,9 @@
             if (!ab || ab.byteLength < 1) {
                 throw new Error('empty file');
             }
-            cacheExtraTrackPersistBlob(tr, file, ab);
+            if (!addClipEarly) {
+                cacheExtraTrackPersistBlob(tr, file, ab);
+            }
             writeLog(
                 'Extra audio ' +
                     (slot + 1) +
@@ -1977,13 +2836,102 @@
             return;
         }
 
+        const addClip = addClipEarly;
+        const clipId =
+            opt && opt.preservedClipId
+                ? String(opt.preservedClipId)
+                : addClip
+                  ? newExtraClipId()
+                  : 'main';
+        ensureExtraTrackClips(tr);
+        if (addClip) {
+            const clipEntry = {
+                id: clipId,
+                file,
+                buffer,
+                peaks: null,
+                persistBlob: null,
+                name: file.name || 'audio',
+            };
+            cacheExtraClipPersistBlob(clipEntry, file, ab);
+            tr.clips.push(clipEntry);
+        } else {
+            tr.clips = [
+                {
+                    id: 'main',
+                    file,
+                    buffer,
+                    peaks: null,
+                    persistBlob: tr.persistBlob,
+                    name: file.name || 'audio',
+                },
+            ];
+            tr.segmentSources = {};
+            tr.restoreDurationHint = 0;
+            if (opt && opt.fromSessionRestore && Number.isFinite(opt.timelineStartSec)) {
+                tr.timelineStartSec = clampExtraTrackTimelineStartSec(slot, opt.timelineStartSec);
+            } else if (!(opt && opt.fromSessionRestore)) {
+                tr.timelineStartSec = 0;
+            }
+        }
         tr.file = file;
         tr.buffer = buffer;
-        tr.restoreDurationHint = 0;
-        if (opt && opt.fromSessionRestore && Number.isFinite(opt.timelineStartSec)) {
-            tr.timelineStartSec = clampExtraTrackTimelineStartSec(slot, opt.timelineStartSec);
-        } else {
-            tr.timelineStartSec = 0;
+        syncExtraTrackPrimaryFromFirstClip(tr);
+        const clipRef = getExtraTrackClip(tr, clipId);
+        if (clipRef) {
+            clipRef.buffer = buffer;
+            clipRef.file = file;
+        }
+        if (opt && opt.fromSessionRestore && typeof setTrackSegments === 'function') {
+            const track = { type: 'extra', slot };
+            if (Array.isArray(opt.regionSegments) && opt.regionSegments.length) {
+                setTrackSegments(track, opt.regionSegments, { silent: true });
+                if (
+                    Number.isFinite(opt.regionHeadPadSec) ||
+                    Number.isFinite(opt.regionTimelineInSec) ||
+                    Number.isFinite(opt.regionLeadPadSec)
+                ) {
+                    const trRestored = extraTrackBySlot(slot);
+                    if (trRestored && trRestored.playbackRegions) {
+                        if (Number.isFinite(opt.regionHeadPadSec)) {
+                            trRestored.playbackRegions.headPadSec = Math.max(
+                                0,
+                                opt.regionHeadPadSec,
+                            );
+                        }
+                        if (Number.isFinite(opt.regionTimelineInSec)) {
+                            trRestored.playbackRegions.regionTimelineInSec = Math.max(
+                                0,
+                                opt.regionTimelineInSec,
+                            );
+                        }
+                        if (Number.isFinite(opt.regionLeadPadSec)) {
+                            trRestored.playbackRegions.regionLeadPadSec = Math.max(
+                                0,
+                                opt.regionLeadPadSec,
+                            );
+                        }
+                    }
+                    if (typeof updateTrackRegionOverlay === 'function') {
+                        updateTrackRegionOverlay({ type: 'extra', slot });
+                    }
+                    drawExtraTrackWaveform(slot);
+                }
+            } else if (
+                Number.isFinite(opt.regionSourceInSec) &&
+                Number.isFinite(opt.regionSourceOutSec)
+            ) {
+                setTrackSegments(
+                    track,
+                    [
+                        {
+                            sourceInSec: opt.regionSourceInSec,
+                            sourceOutSec: opt.regionSourceOutSec,
+                        },
+                    ],
+                    { silent: true },
+                );
+            }
         }
         if (!(opt && opt.fromSessionRestore)) {
             tr.muted = false;
@@ -2004,7 +2952,25 @@
             const ui = getExtraUi(slot);
             const sized = ui && ui.track ? syncExtraCanvasSize(ui) : null;
             const barCount = sized ? sized.barCount : 1200;
-            tr.peaks = peaksFromBuffer(buffer, barCount);
+            const peaks = peaksFromBuffer(buffer, barCount);
+            tr.peaks = peaks;
+            if (clipRef) clipRef.peaks = peaks;
+            if (!(opt && opt.fromSessionRestore)) {
+                if (
+                    addClip &&
+                    typeof addExtraTrackRegionForClip === 'function'
+                ) {
+                    const place =
+                        opt && Number.isFinite(opt.placeAtTransportSec)
+                            ? opt.placeAtTransportSec
+                            : typeof getTransportSec === 'function'
+                              ? getTransportSec()
+                              : 0;
+                    addExtraTrackRegionForClip(slot, clipId, buffer.duration, place);
+                } else if (typeof ensureDefaultTrackRegion === 'function') {
+                    ensureDefaultTrackRegion({ type: 'extra', slot }, { silent: true });
+                }
+            }
             const ch = buffer.numberOfChannels;
             const rate = buffer.sampleRate | 0;
             setExtraTrackStatus(
@@ -2070,32 +3036,42 @@
         return -1;
     }
 
-    function assignExtraAudioFiles(files, startSlot) {
+    function assignExtraAudioFiles(files, startSlot, opt) {
         const audios = pickAudioFiles(files);
         if (audios.length === 0) {
             writeLog('Extra audio: no playable audio in selection');
             return;
         }
+        const oneFilePerTrack = !!(opt && opt.oneFilePerTrack);
         let slot =
             typeof startSlot === 'number' && startSlot >= 0
                 ? startSlot
                 : firstEmptyExtraSlot();
-        if (slot < 0) {
+        if (slot < 0 && !(opt && opt.addClip)) {
             writeLog('Extra audio: all Ex slots are full — drop ignored');
             return;
         }
+        if (slot < 0) slot = 0;
         let ignored = 0;
         for (let i = 0; i < audios.length; i++) {
-            while (slot < EXTRA_TRACK_COUNT && isExtraTrackLoaded(slot)) {
-                slot += 1;
+            if (oneFilePerTrack || !(opt && opt.addClip)) {
+                while (slot < EXTRA_TRACK_COUNT && isExtraTrackLoaded(slot)) {
+                    slot += 1;
+                }
             }
             if (slot < 0 || slot >= EXTRA_TRACK_COUNT) {
                 ignored += audios.length - i;
                 break;
             }
+            const addClip =
+                !oneFilePerTrack && (!!(opt && opt.addClip) || isExtraTrackLoaded(slot));
             setExtraTrackLaneUiOpen(slot, true, { deferLayout: true });
-            void loadExtraTrackFile(slot, audios[i]);
-            slot += 1;
+            void loadExtraTrackFile(slot, audios[i], {
+                addClip,
+                placeAtTransportSec:
+                    typeof getTransportSec === 'function' ? getTransportSec() : 0,
+            });
+            if (!addClip) slot += 1;
         }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
@@ -2158,30 +3134,28 @@
         return false;
     }
 
+    function isMainDropZoneTarget(target) {
+        if (!target || !target.closest) return false;
+        return !!target.closest('#main-drop-zone');
+    }
+
     function resolveExtraSlotForAudioDrop(target) {
         const hit = extraSlotFromDropTarget(target);
         if (hit >= 0) {
-            if (!isExtraTrackLoaded(hit)) return hit;
-            const next = firstEmptyExtraSlot();
-            if (next < 0) return -1;
-            writeLog(
-                'Extra audio: Ex ' +
-                    (hit + 1) +
-                    ' already has audio — loading into Ex ' +
-                    (next + 1),
-            );
-            return next;
+            if (!isExtraTrackLoaded(hit)) return { slot: hit, addClip: false };
+            return { slot: hit, addClip: true };
         }
         if (isVideoAudioLaneDropTarget(target) && videoAudioLaneOccupiedForExtraDrop()) {
             const next = firstEmptyExtraSlot();
-            if (next < 0) return -1;
+            if (next < 0) return { slot: -1, addClip: false };
             writeLog(
                 'Extra audio: Video Audio lane already in use — loading into Ex ' +
                     (next + 1),
             );
-            return next;
+            return { slot: next, addClip: false };
         }
-        return firstEmptyExtraSlot();
+        const next = firstEmptyExtraSlot();
+        return { slot: next, addClip: false };
     }
 
     function assignExtraAudioFilesFromDrop(files, dropTarget) {
@@ -2190,16 +3164,39 @@
             writeLog('Extra audio: no playable audio in selection');
             return;
         }
-        const slot = resolveExtraSlotForAudioDrop(dropTarget);
-        if (slot < 0) {
+        if (isMainDropZoneTarget(dropTarget)) {
+            const start = firstEmptyExtraSlot();
+            if (start < 0) {
+                writeLog('Extra audio: all Ex slots are full — drop ignored');
+                return;
+            }
+            writeLog(
+                'Extra audio: drop zone — ' +
+                    audios.length +
+                    ' file(s) → one track each',
+            );
+            assignExtraAudioFiles(audios, start, { oneFilePerTrack: true });
+            return;
+        }
+        const resolved = resolveExtraSlotForAudioDrop(dropTarget);
+        if (resolved.slot < 0) {
             writeLog('Extra audio: all Ex slots are full — drop ignored');
             return;
         }
-        assignExtraAudioFiles(audios, slot);
+        if (resolved.addClip) {
+            writeLog(
+                'Extra audio: adding clip to Ex ' + (resolved.slot + 1) + ' lane',
+            );
+        }
+        assignExtraAudioFiles(audios, resolved.slot, { addClip: resolved.addClip });
     }
 
     window.assignExtraAudioFiles = assignExtraAudioFiles;
     window.assignExtraAudioFilesFromDrop = assignExtraAudioFilesFromDrop;
+    window.isMainDropZoneTarget = isMainDropZoneTarget;
+    window.revealNextExtraTrackLane = revealNextExtraTrackLane;
+    window.syncExtraLaneVisibilityAfterSessionRestore =
+        syncExtraLaneVisibilityAfterSessionRestore;
 
     function initExtraAudioTracksUi() {
         videoAudioSoloBtn = document.getElementById('videoAudioSoloBtn');
@@ -2225,11 +3222,18 @@
                 soloBtn: document.getElementById('extraAudioSoloBtn' + slot),
                 muteBtn: document.getElementById('extraAudioMuteBtn' + slot),
                 clearBtn: document.getElementById('extraAudioClearBtn' + slot),
+                addTrackBtn: document.getElementById('extraAudioAddTrackBtn' + slot),
             };
             extraTrackUi[slot] = ui;
             refreshExtraTrackUi(slot);
             refreshExtraTrackLaneVisibility(slot);
 
+            if (ui.addTrackBtn) {
+                ui.addTrackBtn.addEventListener('click', () => {
+                    revealNextExtraTrackLane(slot);
+                    refreshExtraTrackAddLaneButtons();
+                });
+            }
             if (ui.clearBtn) {
                 ui.clearBtn.addEventListener('click', () => {
                     clearExtraTrack(slot);
@@ -2245,6 +3249,7 @@
         }
 
         refreshAllExtraTrackLaneVisibility();
+        refreshExtraTrackAddLaneButtons();
         refreshReviewMixUi();
         if (typeof initTrackLaneControlsUi === 'function') {
             initTrackLaneControlsUi();

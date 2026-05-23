@@ -105,9 +105,14 @@
                         <th scope="colgroup" colspan="3">波形タイムライン（動画または追加音声読込後）</th>
                     </tr>
                     <tr>
+                        <td>シーク</td>
+                        <td>クリック</td>
+                        <td>波形上（リージョン上はクリックでシーク・ドラッグで移動）</td>
+                    </tr>
+                    <tr>
                         <td>ズーム</td>
                         <td>ホイール（波形上）</td>
-                        <td></td>
+                        <td>全体表示時もズームアウト可（最小 0.25×）</td>
                     </tr>
                     <tr>
                         <td>高速ズーム（３倍）</td>
@@ -125,9 +130,9 @@
                         <td></td>
                     </tr>
                     <tr>
-                        <td>ズームリセット</td>
-                        <td><kbd>￥</kbd>/<kbd>\</kbd></td>
-                        <td></td>
+                        <td>波形全体表示（ズーム 1×）</td>
+                        <td><kbd>F</kbd></td>
+                        <td>ズームアウト後も <kbd>F</kbd> で全体表示に戻す</td>
                     </tr>
                     <tr>
                         <td>横スクロール</td>
@@ -140,19 +145,87 @@
                         <td>ズーム時</td>
                     </tr>
                     <tr>
+                        <td>アクティブトラック音量 ±1 dB</td>
+                        <td><kbd>PgUp</kbd><kbd>PgDn</kbd></td>
+                        <td>ポインタ下の Video / Ex レーン（0 dB をまたぐときは一度 0 dB で止まる）</td>
+                    </tr>
+                    <tr>
                         <td>横スクロール</td>
                         <td><kbd>PgUp</kbd><kbd>PgDn</kbd></td>
-                        <td>ズーム時のみ</td>
+                        <td>ズーム時のみ（上記音量が使えないとき）</td>
                     </tr>
                     <tr>
                         <td>高速横スクロール</td>
                         <td><kbd>Shift</kbd>+<kbd>PgUp</kbd><kbd>Shift</kbd>+<kbd>PgDn</kbd></td>
                         <td>ズーム時のみ</td>
                     </tr>
+                    <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">再生リージョン（追加音声 Ex のみ）</th>
+                    </tr>
                     <tr>
-                        <td>追加トラック開始位置</td>
-                        <td><kbd>Alt</kbd>+ドラッグ</td>
-                        <td>対象レーン上</td>
+                        <td>スプリット（2 リージョンに分割）</td>
+                        <td><kbd>X</kbd></td>
+                        <td>対象の Ex レーン上にマウスを置いてから（リージョン内の位置で分割）</td>
+                    </tr>
+                    <tr>
+                        <td>ソース In／Out・スプリット点</td>
+                        <td>Ex レーンのハンドル</td>
+                        <td>隣接時は境界を 1 本のスプリットハンドルで移動。離したあとは各リージョンに In/Out</td>
+                    </tr>
+                    <tr>
+                        <td>クリップ開始位置（タイムライン）</td>
+                        <td>ドラッグ</td>
+                        <td>リージョン上でドラッグ（他リージョン・動画終端・マーカーへスナップ可。重なり可・重なり部は等パワー・クロスフェード）</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン情報をコピー</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>C</kbd></td>
+                        <td>カーソル下の Ex リージョン（ソース In/Out・クリップ・リードパッド等）</td>
+                    </tr>
+                    <tr>
+                        <td>リージョンをトラック末尾にペースト</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>V</kbd></td>
+                        <td>コピー元と同じ Ex レーンの末尾へ追加（直前リージョンと重ならない）</td>
+                    </tr>
+                    <tr>
+                        <td>同一 Ex レーンへの追加ファイル</td>
+                        <td>ドロップ</td>
+                        <td>読み込み済み Ex レーン上へドロップすると別クリップとして追加（トラックあたり複数波形ファイル可）</td>
+                    </tr>
+                    <tr>
+                        <td>次の Ex トラックを表示</td>
+                        <td>+ Add Track</td>
+                        <td>各 Ex レーン下部のボタン。空きトラックが無いときの自動表示はしません</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン削除</td>
+                        <td><kbd>Del</kbd></td>
+                        <td>カーソル下の Ex リージョンを削除（最後の 1 つで全解除）</td>
+                    </tr>
+                    <tr>
+                        <td>元に戻す（スプリット・削除・範囲変更など）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
+                        <td>リージョン編集の履歴をさかのぼる（<kbd>Cmd</kbd>+<kbd>Z</kbd> 可・回数無制限）</td>
+                    </tr>
+                    <tr>
+                        <td>やり直し</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
+                        <td>Undo で戻した操作を進める（<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 可）</td>
+                    </tr>
+                    <tr>
+                        <td>解除</td>
+                        <td><kbd>Esc</kbd></td>
+                        <td>ポインタ下の Ex レーン、または全 Ex</td>
+                    </tr>
+                    <tr>
+                        <td>ソロ（ポインタ下の Ex リージョンのトラック）</td>
+                        <td><kbd>S</kbd></td>
+                        <td>リージョン上にマウスを置いた状態で</td>
+                    </tr>
+                    <tr>
+                        <td>ミュート（ポインタ下の Ex リージョンのトラック）</td>
+                        <td><kbd>M</kbd></td>
+                        <td>リージョン上でポインタを置いた状態で</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">範囲ループ（波形上）</th>
@@ -173,29 +246,6 @@
                         <td>ドラッグ中・ループ再生中</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">ミックス（表示順レーン１〜４）</th>
-                    </tr>
-                    <tr>
-                        <td>ソロ</td>
-                        <td><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd><kbd>4</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>ミュート</td>
-                        <td><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>音量 +1dB</td>
-                        <td><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><kbd>F</kbd></td>
-                        <td>押し続け可・0dB でリピート停止</td>
-                    </tr>
-                    <tr>
-                        <td>音量 -1dB</td>
-                        <td><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd><kbd>V</kbd></td>
-                        <td>押し続け可・0dB でリピート停止</td>
-                    </tr>
-                    <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
                     </tr>
                     <tr>
@@ -204,9 +254,14 @@
                         <td></td>
                     </tr>
                     <tr>
+                        <td>タイムライン上の表示／非表示</td>
+                        <td><kbd>V</kbd></td>
+                        <td>トグル（マーカーが 1 件以上あるとき）</td>
+                    </tr>
+                    <tr>
                         <td>ポイント追加</td>
-                        <td><kbd>M</kbd></td>
-                        <td></td>
+                        <td><kbd>Ins</kbd></td>
+                        <td>入力欄外</td>
                     </tr>
                     <tr>
                         <td>範囲 In</td>

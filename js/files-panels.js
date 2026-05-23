@@ -264,6 +264,9 @@
         if (typeof clearRangeLoopPlayback === 'function') {
             clearRangeLoopPlayback({ silent: true });
         }
+        if (typeof clearPlaybackRegion === 'function') {
+            clearPlaybackRegion({ silent: true });
+        }
         if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
         if (typeof pendingLaneUiRestore !== 'undefined') pendingLaneUiRestore = null;
         if (typeof setSessionMixRestore === 'function') setSessionMixRestore(null);
@@ -321,6 +324,9 @@
         if (typeof stopRaf === 'function') stopRaf();
         if (typeof clearRangeLoopPlayback === 'function') {
             clearRangeLoopPlayback({ silent: true });
+        }
+        if (typeof clearPlaybackRegion === 'function') {
+            clearPlaybackRegion({ silent: true });
         }
         revokeVideoOnly();
         if (typeof syncSeekMax === 'function') syncSeekMax();

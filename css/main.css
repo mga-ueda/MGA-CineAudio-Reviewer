@@ -252,7 +252,7 @@
             position: relative;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: 28px;
         }
         .marker-panel__title {
@@ -261,7 +261,7 @@
             font-weight: 400;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            text-align: center;
+            text-align: left;
             color: var(--app-accent);
         }
         .marker-panel__head-actions {
@@ -274,6 +274,7 @@
             gap: 6px;
             flex-shrink: 0;
         }
+        .marker-panel__hide-view-btn,
         .marker-panel__copy-btn,
         .marker-panel__clear-btn {
             font-size: 0.68rem;
@@ -281,6 +282,32 @@
             padding: 4px 10px;
             border-radius: 6px;
             cursor: pointer;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        .marker-panel__head-actions .marker-panel__hide-view-btn,
+        .marker-panel__head-actions .marker-panel__copy-btn,
+        .marker-panel__head-actions .marker-panel__clear-btn {
+            min-width: 3.2rem;
+        }
+        .marker-panel__hide-view-btn {
+            border: 1px solid var(--marker-orange-border);
+            background: var(--marker-orange-bg);
+            color: #f4e8d8;
+        }
+        .marker-panel__hide-view-btn:hover:not(:disabled) {
+            background: rgba(184, 101, 16, 0.58);
+            border-color: var(--marker-orange-pale);
+            color: #fff;
+        }
+        .marker-panel__hide-view-btn[aria-pressed='true'] {
+            background: rgba(184, 101, 16, 0.52);
+            border-color: var(--marker-orange-pale);
+            color: #fff8f0;
+        }
+        .marker-panel__hide-view-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
         }
         .marker-panel__copy-btn {
             border: 1px solid rgba(120, 170, 220, 0.45);
@@ -308,12 +335,15 @@
             opacity: 0.4;
             cursor: not-allowed;
         }
-        /* VIDEO 枠など、head-actions なしで単独配置の Clear */
+        /* VIDEO 枠など、head-actions なしで単独配置の Clear（Markers 側ボタンと同幅） */
         .video-panel__head-row > .marker-panel__clear-btn {
             position: absolute;
             right: 0;
             top: 50%;
             transform: translateY(-50%);
+            min-width: 3.2rem;
+            box-sizing: border-box;
+            text-align: center;
         }
         .marker-panel__range-hint {
             margin: 8px 0 0;
@@ -772,7 +802,7 @@
             position: relative;
             display: flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             min-height: 28px;
             margin: 0 0 8px;
         }
@@ -786,7 +816,7 @@
             text-transform: uppercase;
             color: #8e96a8;
             margin: 0 0 8px;
-            text-align: center;
+            text-align: left;
         }
         .video-panel.loaded .video-panel-label {
             color: var(--app-accent);
@@ -1139,6 +1169,7 @@
             box-sizing: border-box;
         }
         .audio-waveform-composite__lanes {
+            position: relative;
             height: calc(var(--wave-lane-count, 3) * var(--wave-lane-h));
             max-height: calc(var(--wave-lane-count, 3) * var(--wave-lane-h));
             box-sizing: border-box;
@@ -1162,6 +1193,20 @@
             z-index: 6;
             pointer-events: none;
             display: block;
+        }
+        /* レーンに明示 grid-row を付与したあと、オーバーレイが余分行へ押し出されないよう全行に重ねる */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__marker-labels,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__range-loop,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__playhead-wrap,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead {
+            grid-row: 1 / -1;
+            grid-column: 1;
+        }
+        /* リージョン付きレーン (z-index:5)・シークトレイル (6) より上、プレイヘッド (8) より下 */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers.seek-bar-markers {
+            z-index: 7;
         }
         /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex レーンを上から連番（JS でも再割当） */
         .audio-waveform-composite--no-video-audio .audio-waveform-lane-meta--video,
@@ -1259,6 +1304,31 @@
             flex: 0 0 auto;
             box-sizing: border-box;
         }
+        .track-lane-add-btn {
+            display: block;
+            width: var(--track-lane-controls-w);
+            min-width: var(--track-lane-controls-w);
+            max-width: var(--track-lane-controls-w);
+            margin-top: 4px;
+            padding: 1px 6px;
+            font-size: 10px;
+            line-height: 1.15;
+            color: var(--text-muted, #9aa3b2);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 4px;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+        .track-lane-add-btn:hover:not(:disabled) {
+            color: var(--text, #e8ecf1);
+            border-color: rgba(120, 200, 255, 0.45);
+            background: rgba(120, 200, 255, 0.08);
+        }
+        .track-lane-add-btn:disabled,
+        .track-lane-add-btn[hidden] {
+            display: none;
+        }
         .track-lane-meter-row,
         .track-lane-fader-row {
             display: grid;
@@ -1346,16 +1416,8 @@
             width: 100%;
             height: 8px;
             border-radius: 4px;
-            background:
-                linear-gradient(
-                    90deg,
-                    rgba(255, 255, 255, 0) 0%,
-                    rgba(255, 255, 255, 0) calc(70% - 0.5px),
-                    rgba(255, 255, 255, 0.38) 70%,
-                    rgba(255, 255, 255, 0) calc(70% + 0.5px),
-                    rgba(255, 255, 255, 0) 100%
-                ),
-                linear-gradient(90deg, #0a0404 0%, #2a0c0c 42%, #481410 58%, #0c0404 100%);
+            /* 0 dB = フェーダー最大（Layer Music Checker と同様、正規化位置 1.0） */
+            background: linear-gradient(90deg, #0a0404 0%, #2a0c0c 42%, #481410 58%, #0c0404 100%);
             box-shadow:
                 inset 0 2px 7px rgba(0, 0, 0, 0.82),
                 inset 0 0 0 1px rgba(255, 255, 255, 0.055);
@@ -1493,7 +1555,7 @@
         .audio-waveform-composite__lanes {
             position: relative;
             min-width: 0;
-            border-radius: 10px;
+            border-radius: 0;
             overflow: hidden;
             background: #100c10;
             border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1537,9 +1599,38 @@
         }
         .audio-waveform-lane--video,
         .audio-waveform-lane--extra {
+            position: relative;
             height: var(--wave-lane-h);
             min-height: var(--wave-lane-h);
             max-height: var(--wave-lane-h);
+        }
+        .audio-waveform-lane--has-regions {
+            z-index: 5;
+        }
+        /* トラック先頭オフセット後の空白など、子がすべて pointer-events:none でもシーク可能に */
+        .audio-waveform-lane__scrub-hit {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: auto;
+            cursor: pointer;
+            background: transparent;
+        }
+        .audio-waveform-lane--video .audio-waveform-lane__track,
+        .audio-waveform-lane--extra .audio-waveform-lane__track {
+            position: relative;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .audio-waveform-lane--video .audio-waveform-lane__track-bg,
+        .audio-waveform-lane--video .audio-waveform-lane__canvas,
+        .audio-waveform-lane--video .audio-waveform-lane__file-name,
+        .audio-waveform-lane--video .audio-waveform-lane__content-end,
+        .audio-waveform-lane--extra .audio-waveform-lane__track-bg,
+        .audio-waveform-lane--extra .audio-waveform-lane__canvas,
+        .audio-waveform-lane--extra .audio-waveform-lane__file-name,
+        .audio-waveform-lane--extra .audio-waveform-lane__content-end {
+            pointer-events: none;
         }
         .audio-waveform-lane__track-bg {
             pointer-events: none;
@@ -1577,6 +1668,28 @@
         .audio-waveform-lane__file-name[hidden] {
             display: none !important;
         }
+        .audio-waveform-lane--has-regions > .audio-waveform-lane__file-name {
+            display: none !important;
+        }
+        .audio-waveform-lane__playback-region__label {
+            position: absolute;
+            left: 5px;
+            bottom: 4px;
+            z-index: 3;
+            max-width: calc(100% - 10px);
+            font-size: 0.58rem;
+            font-weight: 500;
+            line-height: 1.2;
+            letter-spacing: 0.02em;
+            color: var(--accent-ink);
+            -webkit-text-fill-color: var(--accent-ink);
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .audio-waveform-composite__markers.seek-bar-markers .seek-bar-marker {
             pointer-events: auto;
         }
@@ -1586,42 +1699,63 @@
         }
         .audio-waveform-composite__seek-input {
             position: absolute;
-            inset: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: auto;
             width: 100%;
-            height: 100%;
+            height: 14px;
             margin: 0;
-            opacity: 0;
+            opacity: 1;
             cursor: pointer;
-            z-index: 6;
-            pointer-events: none;
+            z-index: 9;
+            pointer-events: auto;
+            accent-color: transparent;
+            color: transparent;
             -webkit-appearance: none;
             appearance: none;
             background: transparent;
         }
         .audio-waveform-composite__seek-input:disabled {
             cursor: not-allowed;
+            opacity: 0.5;
         }
         .audio-waveform-composite__seek-input::-webkit-slider-runnable-track {
-            height: 100%;
+            height: 10px;
+            border-radius: 999px;
             background: transparent;
+            box-shadow: none;
         }
         .audio-waveform-composite__seek-input::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 1px;
-            height: 100%;
-            background: transparent;
-            border: none;
-            box-shadow: none;
+            appearance: none;
+            width: 18px;
+            height: 12px;
+            margin-top: -1px;
+            border-radius: 5px;
+            background: linear-gradient(180deg, #ffe8ec 0%, #e87898 42%, #a83048 100%);
+            border: 1px solid rgba(100, 24, 36, 0.88);
+            box-shadow:
+                inset 0 1px 0 rgba(255, 255, 255, 0.45),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+                0 1px 2px rgba(0, 0, 0, 0.45);
         }
         .audio-waveform-composite__seek-input::-moz-range-track {
-            height: 100%;
+            height: 10px;
+            border-radius: 999px;
+            background: transparent;
+            box-shadow: none;
+        }
+        .audio-waveform-composite__seek-input::-moz-range-progress {
             background: transparent;
         }
         .audio-waveform-composite__seek-input::-moz-range-thumb {
-            width: 1px;
-            height: 100%;
-            background: transparent;
-            border: none;
+            width: 18px;
+            height: 12px;
+            border-radius: 5px;
+            border: 1px solid rgba(100, 24, 36, 0.88);
+            background: linear-gradient(180deg, #ffe8ec 0%, #e87898 50%, #a83048 100%);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 1px 2px rgba(0, 0, 0, 0.45);
         }
         .audio-waveform-composite__range-loop {
             position: absolute;
@@ -1634,22 +1768,114 @@
             border-left: 1px solid rgba(120, 230, 255, 0.92);
             border-right: 1px solid rgba(120, 230, 255, 0.92);
         }
-        .audio-waveform-composite__lanes--range-loop-drag {
-            cursor: crosshair;
+        .audio-waveform-lane__playback-regions {
+            position: absolute;
+            inset: 0;
+            z-index: 6;
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
-        .audio-waveform-composite__hover-playhead {
+        .audio-waveform-composite__lanes--scrubbing,
+        .audio-waveform-composite__lanes--scrubbing * {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .audio-waveform-lane__playback-region {
             position: absolute;
             top: 0;
             bottom: 0;
             left: 0;
-            width: 1px;
-            margin-left: 0;
-            transform: translateX(-50%);
-            background: rgba(0, 255, 255, 0.72);
-            box-shadow: 0 0 4px rgba(0, 255, 255, 0.35);
-            border-radius: 1px;
+            box-sizing: border-box;
+            pointer-events: auto;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+            min-width: 28px;
+            border-left: 0.5px solid rgba(150, 156, 168, 0.88);
+            border-right: 0.5px solid rgba(150, 156, 168, 0.88);
+        }
+        .audio-waveform-lane__playback-region--hover {
+            z-index: 9;
+            border-left-color: var(--marker-orange-border) !important;
+            border-right-color: var(--marker-orange-border) !important;
+            box-shadow: inset 0 0 0 1px var(--marker-orange-border);
+        }
+        .audio-waveform-lane__playback-region--hover
+            .audio-waveform-lane__playback-region__handle::after {
+            background: var(--marker-orange-border);
+        }
+        .audio-waveform-lane__playback-region__cursor-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            width: 0.5px;
+            margin-left: -0.25px;
             pointer-events: none;
+            z-index: 9;
+            background: var(--marker-orange-border);
+            opacity: 0.92;
+        }
+        .audio-waveform-lane__playback-region--overlap {
+            background: linear-gradient(
+                180deg,
+                rgba(100, 180, 255, 0.14) 0%,
+                rgba(180, 120, 255, 0.2) 50%,
+                rgba(100, 180, 255, 0.14) 100%
+            );
+            border-left: 0.5px solid rgba(140, 200, 255, 0.95);
+            border-right: 0.5px solid rgba(200, 140, 255, 0.95);
             z-index: 7;
+        }
+        .audio-waveform-lane__playback-region__handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            pointer-events: auto;
+            cursor: ew-resize;
+            touch-action: none;
+        }
+        .audio-waveform-lane__playback-region__handle--in {
+            left: 0;
+            transform: translateX(-50%);
+        }
+        .audio-waveform-lane__playback-region__handle--out {
+            right: 0;
+            transform: translateX(50%);
+        }
+        .audio-waveform-lane__playback-region__handle--split {
+            left: 0;
+            transform: translateX(-50%);
+            width: 14px;
+            z-index: 8;
+        }
+        .audio-waveform-lane__playback-region__handle--split::after {
+            width: 0.5px;
+            background: rgba(150, 156, 168, 0.92);
+            box-shadow: none;
+        }
+        .audio-waveform-lane__playback-region__handle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 0.5px;
+            transform: translateX(-50%);
+            background: rgba(150, 156, 168, 0.92);
+            box-shadow: none;
+            border-radius: 0;
+        }
+        .audio-waveform-composite__lanes--region-drag {
+            cursor: ew-resize;
+        }
+        .audio-waveform-composite__lanes--range-loop-drag {
+            cursor: crosshair;
+        }
+        .audio-waveform-composite__hover-playhead {
+            display: none !important;
         }
         .audio-waveform-composite__playhead-wrap {
             position: absolute;
@@ -1686,8 +1912,9 @@
         .audio-waveform-composite__lanes--scrubbing .audio-waveform-composite__hover-playhead {
             display: none !important;
         }
-        .audio-waveform-composite__lanes--offset-drag {
-            cursor: ew-resize;
+        .audio-waveform-composite__lanes--offset-drag,
+        .audio-waveform-composite__lanes--offset-drag .audio-waveform-lane__playback-region {
+            cursor: grabbing;
         }
         .audio-waveform-composite__lanes--offset-drag .audio-waveform-composite__hover-playhead {
             display: none !important;

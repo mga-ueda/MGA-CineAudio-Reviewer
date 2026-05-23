@@ -20,10 +20,21 @@
             writeLog('Drop (waveform area): no playable audio in selection');
             return;
         }
+        if (!dropTarget && typeof window.assignExtraAudioFiles === 'function') {
+            window.assignExtraAudioFiles(audios, undefined, { oneFilePerTrack: true });
+            return;
+        }
         if (typeof window.assignExtraAudioFilesFromDrop === 'function') {
             window.assignExtraAudioFilesFromDrop(audios, dropTarget);
         } else if (typeof window.assignExtraAudioFiles === 'function') {
-            window.assignExtraAudioFiles(audios);
+            const onePerTrack =
+                typeof window.isMainDropZoneTarget === 'function' &&
+                window.isMainDropZoneTarget(dropTarget);
+            window.assignExtraAudioFiles(
+                audios,
+                undefined,
+                onePerTrack ? { oneFilePerTrack: true } : {},
+            );
         } else {
             writeLog('Drop (waveform area): extra audio module not ready');
         }
@@ -44,7 +55,11 @@
         }
 
         if (audios.length > 0) {
-            assignAudioFiles(audios);
+            if (typeof window.assignExtraAudioFiles === 'function') {
+                window.assignExtraAudioFiles(audios, undefined, { oneFilePerTrack: true });
+            } else {
+                assignAudioFiles(audios);
+            }
         }
     }
 

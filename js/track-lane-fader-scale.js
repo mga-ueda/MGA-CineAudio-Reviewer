@@ -1,19 +1,38 @@
 (function trackLaneFaderScaleModule() {
+    /** MGA-Layer-Music-Checker getPracticalGain と同一: スライダー正規化位置 → 線形ゲイン */
+    const FADER_GAIN_EXPONENT = 1.5;
+    const FADER_GAIN_UNITY_LINEAR = 1;
+
     const DB_MIN = -96;
     const DB_MAX = 10;
-    const UNITY_POS = 0.7;
     const POS_MAX = 1000;
     const GAIN_MIN = Math.pow(10, DB_MIN / 20);
     const GAIN_MAX = Math.pow(10, DB_MAX / 20);
 
+    function practicalGainFromNormalizedPos(p) {
+        const x = Number(p);
+        if (!isFinite(x) || x <= 0) return 0;
+        return Math.pow(Math.min(1, x), FADER_GAIN_EXPONENT);
+    }
+
+    function normalizedPosFromPracticalGain(gain) {
+        const g = Number(gain);
+        if (!isFinite(g) || g <= 0) return 0;
+        if (g >= FADER_GAIN_UNITY_LINEAR) return 1;
+        return Math.pow(g, 1 / FADER_GAIN_EXPONENT);
+    }
+
     function clampGainLinear(g) {
         const n = Number(g);
-        if (!isFinite(n) || n <= 0) return GAIN_MIN;
-        return Math.max(GAIN_MIN, Math.min(GAIN_MAX, n));
+        if (!isFinite(n) || n < 0) return 0;
+        if (n === 0) return 0;
+        return Math.min(GAIN_MAX, n);
     }
 
     function linearGainToDb(g) {
-        return 20 * Math.log10(clampGainLinear(g));
+        const n = Number(g);
+        if (!isFinite(n) || n <= 0) return DB_MIN;
+        return 20 * Math.log10(n);
     }
 
     function linearGainFromDb(db) {
@@ -23,29 +42,21 @@
 
     function clampFaderPos(pos) {
         const n = Math.round(Number(pos));
-        if (!isFinite(n)) return Math.round(POS_MAX * UNITY_POS);
+        if (!isFinite(n)) return POS_MAX;
         return Math.max(0, Math.min(POS_MAX, n));
     }
 
     function linearGainFromFaderPos(pos) {
         const p = clampFaderPos(pos) / POS_MAX;
-        let db;
-        if (p <= UNITY_POS) {
-            db = DB_MIN + (p / UNITY_POS) * -DB_MIN;
-        } else {
-            db = ((p - UNITY_POS) / (1 - UNITY_POS)) * DB_MAX;
-        }
-        return linearGainFromDb(db);
+        const g = practicalGainFromNormalizedPos(p);
+        if (g <= 0) return 0;
+        return clampGainLinear(g);
     }
 
     function faderPosFromLinearGain(gain) {
-        const db = linearGainToDb(gain);
-        let p;
-        if (db <= 0) {
-            p = ((db - DB_MIN) / -DB_MIN) * UNITY_POS;
-        } else {
-            p = UNITY_POS + (db / DB_MAX) * (1 - UNITY_POS);
-        }
+        const g = Number(gain);
+        if (!isFinite(g) || g <= 0) return 0;
+        const p = normalizedPosFromPracticalGain(Math.min(g, FADER_GAIN_UNITY_LINEAR));
         return clampFaderPos(Math.round(p * POS_MAX));
     }
 
@@ -63,7 +74,6 @@
     }
 
     window.trackLaneFormatDbValue = formatDbValue;
-
     window.trackLaneClampGainLinear = clampGainLinear;
     window.trackLaneLinearGainToDb = linearGainToDb;
     window.trackLaneLinearGainFromDb = linearGainFromDb;
@@ -71,6 +81,7 @@
     window.trackLaneFaderPosFromLinearGain = faderPosFromLinearGain;
     window.trackLaneFormatFaderDb = formatFaderDb;
     window.trackLaneClampFaderPos = clampFaderPos;
-    window.TRACK_LANE_FADER_POS_UNITY = Math.round(POS_MAX * UNITY_POS);
+    window.trackLanePracticalGainFromNormalizedPos = practicalGainFromNormalizedPos;
+    window.TRACK_LANE_FADER_POS_UNITY = POS_MAX;
     window.TRACK_LANE_FADER_POS_MAX = POS_MAX;
 })();

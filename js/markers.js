@@ -6,6 +6,11 @@
     /** In/Out 列ホバー・シークでどちらの TC を +/- 対象にするか（フォーカスが In のままのとき Out を直す） */
     let markerActiveTcEdge = 'in';
     let markerIdSeq = 0;
+    /**
+     * タイムライン・映像上のマーカー表示のみ非表示（一覧データは保持）。
+     * ページ内の一時状態のみ。localStorage / IndexedDB / インポート・エクスポートには含めない。
+     */
+    let markersDisplayHidden = false;
     /** renderMarkerList 直後など、ホバーシークが誤って元位置へ戻すのを防ぐ */
     let suppressMarkerRowHoverSeekUntil = 0;
     const MARKER_COMMENT_POINT_HOLD_SEC = 1;
@@ -696,6 +701,11 @@
 
     function updateMarkerCommentOverlay() {
         if (!markerCommentOverlayPoint && !markerCommentOverlayRange) return;
+        if (markersDisplayHidden) {
+            hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
+            hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+            return;
+        }
         if (!markerTimelineReady()) {
             hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
             hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
@@ -867,6 +877,87 @@
         );
     }
 
+    function hideMarkersVisualLayers() {
+        if (audioWaveformMarkers) {
+            audioWaveformMarkers.replaceChildren();
+            audioWaveformMarkers.style.display = 'none';
+            audioWaveformMarkers.hidden = true;
+        }
+        const labelLayer = markerLabelsLayerEl();
+        if (labelLayer) {
+            labelLayer.replaceChildren();
+            labelLayer.hidden = true;
+        }
+        if (markerCommentOverlayPoint) {
+            hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
+        }
+        if (markerCommentOverlayRange) {
+            hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+        }
+    }
+
+    /** セッション復元・インポート後など、表示を既定（表示）に戻す */
+    function resetMarkersDisplayHidden() {
+        if (!markersDisplayHidden) {
+            updateMarkerHideViewButton();
+            return;
+        }
+        markersDisplayHidden = false;
+        applyMarkersDisplayVisibility();
+        updateMarkerHideViewButton();
+    }
+
+    window.resetMarkersDisplayHidden = resetMarkersDisplayHidden;
+
+    function applyMarkersDisplayVisibility() {
+        if (markerPanel) {
+            markerPanel.classList.toggle('marker-panel--markers-hidden', markersDisplayHidden);
+        }
+        if (markersDisplayHidden) {
+            hideMarkersVisualLayers();
+            return;
+        }
+        renderSeekBarMarkers();
+        updateMarkerCommentOverlay();
+    }
+
+    function setMarkersDisplayHidden(hidden) {
+        const next = !!hidden;
+        if (markersDisplayHidden === next) {
+            updateMarkerHideViewButton();
+            return;
+        }
+        markersDisplayHidden = next;
+        applyMarkersDisplayVisibility();
+        updateMarkerHideViewButton();
+        writeLog(
+            markersDisplayHidden
+                ? 'Markers: hidden on timeline'
+                : 'Markers: shown on timeline',
+        );
+    }
+
+    function toggleMarkersDisplayHidden() {
+        if (currentMarkers.length === 0) return;
+        setMarkersDisplayHidden(!markersDisplayHidden);
+    }
+
+    function updateMarkerHideViewButton() {
+        if (!markerHideViewBtn) return;
+        const hasMarkers = currentMarkers.length > 0;
+        markerHideViewBtn.textContent = markersDisplayHidden ? 'View' : 'Hide';
+        markerHideViewBtn.title = hasMarkers
+            ? markersDisplayHidden
+                ? 'Show markers on timeline and video (V)'
+                : 'Hide markers on timeline and video (V)'
+            : 'Add markers to use Hide/View';
+        markerHideViewBtn.setAttribute(
+            'aria-pressed',
+            markersDisplayHidden ? 'true' : 'false',
+        );
+        markerHideViewBtn.disabled = !hasMarkers;
+    }
+
     function updateMarkerClearAllButton() {
         const timelineReady = markerTimelineReady();
         if (markerClearAllBtn) {
@@ -875,6 +966,7 @@
         if (markerCopyBtn) {
             markerCopyBtn.disabled = !(timelineReady && currentMarkers.length > 0);
         }
+        updateMarkerHideViewButton();
     }
 
     /** タブ区切りコピー用: セル内のタブ・改行を正規化 */
@@ -937,6 +1029,10 @@
         pendingRangeStartSec = null;
         activeMarkerId = null;
         currentMarkers = [];
+        if (markersDisplayHidden) {
+            markersDisplayHidden = false;
+            applyMarkersDisplayVisibility();
+        }
         const k = getVideoMarkerKey();
         if (k) markersByVideoKey.set(k, []);
         persistMarkersAfterChange();
@@ -1862,7 +1958,7 @@
         }
     }
 
-    /** マーカー In/Out・点・動画終端（波形オフセット Alt+ドラッグ用） */
+    /** マーカー In/Out・点・動画終端（リージョン／トラックオフセットドラッグ用） */
     function snapSecToMarkerInOut(sec, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n)) return 0;
@@ -2781,7 +2877,10 @@
             labelLayer.replaceChildren();
         }
         const dur = masterDurForTimelineMarkers();
-        if (!dur || dur <= 0) return;
+        if (!dur || dur <= 0) {
+            containerEl.hidden = true;
+            return;
+        }
 
         const frag = document.createDocumentFragment();
         const feedbackLabelSpans = [];
@@ -2888,6 +2987,10 @@
     }
 
     function renderAudioWaveformMarkers() {
+        if (markersDisplayHidden) {
+            hideMarkersVisualLayers();
+            return;
+        }
         if (typeof applyWaveformTimelineZoomLayout === 'function') {
             applyWaveformTimelineZoomLayout();
         }
@@ -3040,7 +3143,7 @@
     }
 
     function handleMarkerKeydown(e) {
-        if (e.code !== 'KeyM') return false;
+        if (e.code !== 'Insert') return false;
         if (e.repeat) return false;
         if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
         if (isTypingTarget(e.target)) return false;
@@ -3049,6 +3152,20 @@
         addPointMarkerAtCurrentTime();
         return true;
     }
+
+    function handleMarkerHideViewKeydown(e) {
+        if (e.code !== 'KeyV') return false;
+        if (e.repeat) return false;
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
+        if (isTypingTarget(e.target)) return false;
+        if (!markerTimelineReady()) return false;
+        if (currentMarkers.length === 0) return false;
+        e.preventDefault();
+        toggleMarkersDisplayHidden();
+        return true;
+    }
+
+    window.handleMarkerHideViewKeydown = handleMarkerHideViewKeydown;
 
     function handleMarkerBracketKeydown(e) {
         if (e.repeat) return false;
@@ -3086,13 +3203,21 @@
         window.addEventListener(
             'keydown',
             (e) => {
-                if (handleMarkerNavigationKeydown(e)) {
+                if (handleMarkerHideViewKeydown(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                } else if (handleMarkerNavigationKeydown(e)) {
                     e.preventDefault();
                     e.stopPropagation();
                 }
             },
             true,
         );
+        if (markerHideViewBtn) {
+            markerHideViewBtn.addEventListener('click', () => {
+                toggleMarkersDisplayHidden();
+            });
+        }
         if (markerCopyBtn) {
             markerCopyBtn.addEventListener('click', () => {
                 copyMarkersToClipboard();
@@ -3101,6 +3226,7 @@
         if (markerClearAllBtn) {
             markerClearAllBtn.addEventListener('click', () => clearAllMarkers());
         }
+        updateMarkerHideViewButton();
         if (audioWaveformMarkers) {
             audioWaveformMarkers.replaceChildren();
             audioWaveformMarkers.style.display = 'none';

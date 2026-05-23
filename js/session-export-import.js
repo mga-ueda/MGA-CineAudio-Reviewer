@@ -160,6 +160,16 @@
         } else {
             writeLog('Export Review: range loop off');
         }
+        if (sess && sess.playbackRegion && Number.isFinite(sess.playbackRegion.inSec)) {
+            writeLog(
+                'Export Review: playback region ' +
+                    formatTcForLog(sess.playbackRegion.inSec) +
+                    ' – ' +
+                    formatTcForLog(sess.playbackRegion.outSec),
+            );
+        } else {
+            writeLog('Export Review: playback region off');
+        }
         writeLog('Export Review: ' + describeLaneUi(manifest.prefs && manifest.prefs.laneUi));
         writeLog('Export Review: ' + describeMonitorPrefs(manifest.monitorPrefs));
         logMixSnapshotDetails(sess && sess.mix, 'Export Review');
@@ -259,6 +269,14 @@
                     formatTcForLog(row.rangeLoop.inSec) +
                     ' – ' +
                     formatTcForLog(row.rangeLoop.outSec),
+            );
+        }
+        if (row.playbackRegion && Number.isFinite(row.playbackRegion.inSec)) {
+            writeLog(
+                'Import Review: playback region ' +
+                    formatTcForLog(row.playbackRegion.inSec) +
+                    ' – ' +
+                    formatTcForLog(row.playbackRegion.outSec),
             );
         }
         writeLog('Import Review: transport at head (seek position not imported)');
@@ -400,6 +418,7 @@
             mLastModified: row.mLastModified,
             markers: row.markers,
             rangeLoop: row.rangeLoop,
+            playbackRegion: row.playbackRegion,
             mix: row.mix,
             extraTracks: [],
         };
@@ -470,6 +489,7 @@
             sessionRow.mix = getMixPersistSnapshot();
         }
         const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
+        /* マーカー HIDE 状態はエクスポートしない（表示のオンオフはセッション内のみ） */
         const manifest = {
             format: EXPORT_FORMAT,
             appVersion: typeof APP_VERSION_LABEL === 'string' ? APP_VERSION_LABEL : '',
@@ -567,6 +587,7 @@
             mLastModified: sess.mLastModified,
             markers: sess.markers,
             rangeLoop: sess.rangeLoop,
+            playbackRegion: sess.playbackRegion,
             mix: sess.mix,
             extraTracks: [],
         };
@@ -820,6 +841,9 @@
                 try {
                     await whenSessionRestoreIdle();
                 } catch (_) {}
+            }
+            if (typeof resetMarkersDisplayHidden === 'function') {
+                resetMarkersDisplayHidden();
             }
             refreshTransportControlsAfterImport();
         }
