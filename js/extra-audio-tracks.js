@@ -2648,14 +2648,100 @@
         refreshExtraTrackAddLaneButtons();
     }
 
-    function clearExtraTrack(slot) {
+    function extraSlotHasContentAbove(slot) {
+        for (let i = slot + 1; i < EXTRA_TRACK_COUNT; i++) {
+            if (extraTrackSlotHasContent(i)) return true;
+        }
+        return false;
+    }
+
+    function cloneExtraTrackClips(clips) {
+        if (!clips || !clips.length) return [];
+        return clips.map((c) => ({
+            id: c.id,
+            file: c.file,
+            buffer: c.buffer,
+            peaks: c.peaks,
+            persistBlob: c.persistBlob,
+            name: c.name,
+        }));
+    }
+
+    function transferSessionMixRestoreEntry(fromSlot, toSlot) {
+        if (!sessionMixRestore || !Array.isArray(sessionMixRestore.extra)) return;
+        const entry = sessionMixRestore.extra.find((e) => e && e.slot === fromSlot);
+        sessionMixRestore.extra = sessionMixRestore.extra.filter(
+            (e) => !e || e.slot !== toSlot,
+        );
+        if (entry) entry.slot = toSlot;
+    }
+
+    function transferExtraTrackPlaybackRegions(fromSlot, toSlot) {
+        const srcTr = extraTrackBySlot(fromSlot);
+        const dstTr = extraTrackBySlot(toSlot);
+        const toTrack = { type: 'extra', slot: toSlot };
+        if (typeof clearTrackRegion === 'function') {
+            clearTrackRegion(toTrack, { silent: true, skipUndo: true });
+        }
+        if (
+            !srcTr ||
+            !dstTr ||
+            !srcTr.playbackRegions ||
+            !srcTr.playbackRegions.active ||
+            !srcTr.playbackRegions.segments.length
+        ) {
+            return;
+        }
+        dstTr.playbackRegions = JSON.parse(JSON.stringify(srcTr.playbackRegions));
+        delete dstTr.region;
+        if (typeof updateTrackRegionOverlay === 'function') {
+            updateTrackRegionOverlay(toTrack);
+        }
+    }
+
+    function transferExtraTrackSlotContent(fromSlot, toSlot) {
+        if (fromSlot === toSlot) return;
+        const src = extraTrackBySlot(fromSlot);
+        const dst = extraTrackBySlot(toSlot);
+        if (!src || !dst) return;
+
+        stopExtraTrackAllSources(fromSlot);
+        stopExtraTrackAllSources(toSlot);
+        dst.loadGen += 1;
+
+        dst.file = src.file;
+        dst.buffer = src.buffer;
+        dst.peaks = src.peaks;
+        dst.persistBlob = src.persistBlob;
+        dst.restoreDurationHint = src.restoreDurationHint;
+        dst.timelineStartSec = src.timelineStartSec;
+        dst.clips = cloneExtraTrackClips(src.clips);
+        dst.segmentSources = {};
+        dst.muted = src.muted;
+        dst.solo = src.solo;
+        dst.volLinear = src.volLinear;
+        transferSessionMixRestoreEntry(fromSlot, toSlot);
+        transferExtraTrackPlaybackRegions(fromSlot, toSlot);
+        applyExtraTrackLaneGain(toSlot);
+
+        const loaded = extraTrackSlotHasContent(toSlot);
+        setExtraTrackLoaded(toSlot, loaded, { skipLayoutRefresh: true });
+        if (loaded) {
+            setExtraTrackStatus(toSlot, 'Ready');
+        } else {
+            setExtraTrackStatus(toSlot, 'Not Loaded');
+        }
+        refreshExtraTrackUi(toSlot);
+    }
+
+    function wipeExtraTrackSlotContent(slot, opt) {
         const tr = extraTrackBySlot(slot);
-        if (!tr) return;
+        if (!tr) return false;
         const hadContent = extraTrackSlotHasContent(slot);
         stopExtraTrackAllSources(slot);
         tr.loadGen += 1;
         if (typeof clearTrackRegion === 'function') {
-            clearTrackRegion({ type: 'extra', slot }, { silent: true });
+            clearTrackRegion({ type: 'extra', slot }, { silent: true, skipUndo: true });
         }
         tr.clips = [];
         tr.segmentSources = {};
@@ -2667,30 +2753,99 @@
         tr.timelineStartSec = 0;
         tr.playbackRegions = { active: false, segments: [], headPadSec: 0 };
         delete tr.region;
-        resetExtraTrackMixToDefault(slot);
+        if (!opt || !opt.keepMix) {
+            resetExtraTrackMixToDefault(slot);
+        }
         try {
             if (tr.analyser) tr.analyser.disconnect();
         } catch (_) {}
         tr.analyser = null;
-        extraLaneUiOpen[slot] = false;
-        setExtraTrackLaneUiOpen(slot, false, { deferLayout: true, skipPersist: false });
-        setExtraTrackLoaded(slot, false);
+        setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
         setExtraTrackStatus(slot, 'Not Loaded');
         refreshExtraTrackUi(slot);
-        if (typeof refreshTrackLaneControlsUi === 'function') {
-            refreshTrackLaneControlsUi();
+        return hadContent;
+    }
+
+    function compactExtraTracksAfterClear(clearedSlot) {
+        stopAllExtraTrackSources();
+        let dest = clearedSlot;
+        for (let src = clearedSlot + 1; src < EXTRA_TRACK_COUNT; src++) {
+            if (!extraTrackSlotHasContent(src)) continue;
+            if (dest !== src) {
+                transferExtraTrackSlotContent(src, dest);
+                extraLaneUiOpen[dest] = extraLaneUiOpen[src];
+            }
+            dest++;
         }
-        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
-            refreshWaveformCompositeLaneLayout();
+        for (let i = dest; i < EXTRA_TRACK_COUNT; i++) {
+            wipeExtraTrackSlotContent(i);
+            extraLaneUiOpen[i] = false;
+            setExtraTrackLaneUiOpen(i, false, { deferLayout: true, skipPersist: true });
         }
-        if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
-            notifyMasterTransportDurationChanged();
+        for (let i = clearedSlot; i < dest; i++) {
+            setExtraTrackLaneUiOpen(i, true, { deferLayout: true, skipPersist: true });
         }
-        if (hadContent && typeof removeExtraTrackFromSession === 'function') {
-            void removeExtraTrackFromSession(slot);
-        } else if (hadContent && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+        if (typeof clearExtraTrackVolumeUnityHold === 'function') {
+            clearExtraTrackVolumeUnityHold();
         }
+    }
+
+    function clearExtraTrack(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return;
+        const hadContent = extraTrackSlotHasContent(slot);
+        const shouldCompact = extraSlotHasContentAbove(slot);
+
+        if (shouldCompact) {
+            compactExtraTracksAfterClear(slot);
+            if (typeof refreshTrackLaneControlsUi === 'function') {
+                refreshTrackLaneControlsUi();
+            }
+            if (typeof refreshReviewMixUi === 'function') {
+                refreshReviewMixUi();
+            }
+            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                refreshWaveformCompositeLaneLayout();
+            }
+            if (typeof syncExtraAudioToTransport === 'function') {
+                syncExtraAudioToTransport({ force: true });
+            }
+            if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+            for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+                if (extraTrackSlotHasContent(i)) {
+                    if (typeof schedulePersistExtraTrackSlot === 'function') {
+                        schedulePersistExtraTrackSlot(i);
+                    }
+                } else if (typeof removeExtraTrackFromSession === 'function') {
+                    void removeExtraTrackFromSession(i);
+                }
+            }
+            if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        } else {
+            wipeExtraTrackSlotContent(slot);
+            extraLaneUiOpen[slot] = false;
+            setExtraTrackLaneUiOpen(slot, false, { deferLayout: true, skipPersist: false });
+            if (typeof refreshTrackLaneControlsUi === 'function') {
+                refreshTrackLaneControlsUi();
+            }
+            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                refreshWaveformCompositeLaneLayout();
+            }
+            if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+            if (hadContent && typeof removeExtraTrackFromSession === 'function') {
+                void removeExtraTrackFromSession(slot);
+            } else if (hadContent && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        }
+
+        refreshExtraTrackAddLaneButtons();
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
         }
