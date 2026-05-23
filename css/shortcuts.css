@@ -1,9 +1,10 @@
 :root {
-    --accent: #9a1730;
+    --accent: #c41e3a;
     --accent-deep: #5c0f1f;
-    --accent-border: rgba(154, 23, 48, 0.62);
-    --accent-bg-strong: rgba(92, 15, 31, 0.42);
-    --accent-bg-soft: rgba(92, 15, 31, 0.3);
+    --accent-ink: #e83858;
+    --accent-border: rgba(230, 100, 120, 0.45);
+    --accent-bg-strong: rgba(196, 30, 58, 0.35);
+    --accent-bg-soft: rgba(196, 30, 58, 0.22);
     --app-shortcut-text: #b4bcc8;
     --app-shortcut-heading: #c8d0dc;
     --app-shortcut-col1: #d0d8e4;
@@ -32,7 +33,7 @@ body.shortcuts-page {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--accent);
+    color: var(--accent-ink);
     letter-spacing: 0.02em;
 }
 
@@ -112,7 +113,7 @@ body.shortcuts-page {
     color: var(--app-shortcut-col1);
     background: var(--accent-bg-soft);
     border-top: 1px solid var(--accent-border);
-    border-bottom: 1px solid rgba(92, 15, 31, 0.55);
+    border-bottom: 1px solid rgba(196, 30, 58, 0.45);
 }
 
 .shortcut-table__section:first-child th {

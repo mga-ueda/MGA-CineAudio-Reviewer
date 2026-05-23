@@ -612,6 +612,10 @@
             hideHoverPlayhead();
             return;
         }
+        if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
+            hideHoverPlayhead();
+            return;
+        }
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()

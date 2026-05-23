@@ -668,15 +668,15 @@
     window.addEventListener('pagehide', persistOnPageExit);
     window.addEventListener('beforeunload', persistOnPageExit);
 
-    const transportShortcutsLink = document.getElementById('transportShortcutsLink');
-    if (transportShortcutsLink) {
-        transportShortcutsLink.addEventListener('click', (e) => {
+    function bindTransportDocPopupLink(linkEl, windowName, width, height) {
+        if (!linkEl) return;
+        linkEl.addEventListener('click', (e) => {
             e.preventDefault();
             const features = [
                 'noopener',
                 'noreferrer',
-                'width=820',
-                'height=720',
+                'width=' + width,
+                'height=' + height,
                 'menubar=no',
                 'toolbar=no',
                 'location=no',
@@ -684,10 +684,23 @@
                 'scrollbars=yes',
                 'resizable=yes',
             ].join(',');
-            const win = window.open(transportShortcutsLink.href, 'mgaKeyboardShortcuts', features);
+            const win = window.open(linkEl.href, windowName, features);
             if (win) win.opener = null;
         });
     }
+
+    bindTransportDocPopupLink(
+        document.getElementById('transportGuideLink'),
+        'mgaCineAudioGuide',
+        960,
+        820,
+    );
+    bindTransportDocPopupLink(
+        document.getElementById('transportShortcutsLink'),
+        'mgaKeyboardShortcuts',
+        820,
+        720,
+    );
 
     (async function boot() {
         if (typeof initTimecodeOverlay === 'function') {
