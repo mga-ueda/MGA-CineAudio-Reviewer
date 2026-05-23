@@ -173,6 +173,17 @@
         return { out: i, in: j };
     }
 
+    function segmentRegionGainLinear(segHit) {
+        if (!segHit || typeof getSegmentGainLinear !== 'function') return 1;
+        const track = { type: 'extra', slot: segHit.slot };
+        return getSegmentGainLinear(track, segHit.segmentIndex);
+    }
+
+    function segmentPlaybackGainLinear(segHit, crossfadeLinear) {
+        const cf = Number.isFinite(crossfadeLinear) ? crossfadeLinear : 1;
+        return cf * segmentRegionGainLinear(segHit);
+    }
+
     function computeEqualPowerCrossfadeGains(active, transportSec) {
         const gains = new Map();
         if (!active.length) return gains;
@@ -1337,7 +1348,10 @@
             const entry =
                 tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
             if (entry && entry.segGain) {
-                const g = gains.get(segHit.key) ?? 1;
+                const g = segmentPlaybackGainLinear(
+                    segHit,
+                    gains.get(segHit.key) ?? 1,
+                );
                 applySegmentEntryGain(entry, g, ctx);
             }
         }
@@ -1943,7 +1957,10 @@
                 const wanted = new Set();
                 for (const segHit of activeAtT) {
                     wanted.add(segHit.key);
-                    const g = crossfadeGains.get(segHit.key) ?? 1;
+                    const g = segmentPlaybackGainLinear(
+                        segHit,
+                        crossfadeGains.get(segHit.key) ?? 1,
+                    );
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force,
                         transportSec: masterT,

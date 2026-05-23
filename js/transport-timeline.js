@@ -1119,6 +1119,17 @@
     function onWaveformTimelineWheel(ev) {
         if (!isWaveformTimelineInteractionReady()) return;
 
+        if (
+            ev.altKey &&
+            !ev.ctrlKey &&
+            !ev.metaKey &&
+            !ev.shiftKey &&
+            typeof handlePlaybackRegionGainWheel === 'function' &&
+            handlePlaybackRegionGainWheel(ev)
+        ) {
+            return;
+        }
+
         const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
         const fast = !!(ev.ctrlKey || ev.metaKey);
         const fastMult = fast ? WAVEFORM_TIMELINE_WHEEL_SPEED_FAST : 1;

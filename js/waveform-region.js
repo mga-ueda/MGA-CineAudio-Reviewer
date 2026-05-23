@@ -1,6 +1,8 @@
 (function waveformRegionModule() {
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
+    const REGION_GAIN_DB_MIN = -96;
+    const REGION_GAIN_DB_MAX = 10;
 
     let regionHandleDragActive = false;
     let regionHandleDragTrack = null;
@@ -209,7 +211,133 @@
         if (seg && Number.isFinite(seg.regionLeadPadSec)) {
             base.regionLeadPadSec = Math.max(0, seg.regionLeadPadSec);
         }
+        if (seg && Number.isFinite(seg.gainDb)) {
+            const db = Math.max(
+                REGION_GAIN_DB_MIN,
+                Math.min(REGION_GAIN_DB_MAX, seg.gainDb),
+            );
+            if (Math.abs(db) > 0.0005) base.gainDb = db;
+        }
         return base;
+    }
+
+    function clampRegionGainDb(db) {
+        const n = Number(db);
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(REGION_GAIN_DB_MIN, Math.min(REGION_GAIN_DB_MAX, n));
+    }
+
+    function getSegmentGainDb(track, segmentIndex) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (!raw || !Number.isFinite(raw.gainDb)) return 0;
+        return clampRegionGainDb(raw.gainDb);
+    }
+
+    function getSegmentGainLinear(track, segmentIndex) {
+        const db = getSegmentGainDb(track, segmentIndex);
+        if (Math.abs(db) < 0.0005) return 1;
+        if (typeof trackLaneLinearGainFromDb === 'function') {
+            return trackLaneLinearGainFromDb(db);
+        }
+        return Math.pow(10, db / 20);
+    }
+
+    function formatRegionGainDbDisplay(db) {
+        const n = clampRegionGainDb(db);
+        if (Math.abs(n) < 0.0005) return '';
+        if (typeof trackLaneFormatDbValue === 'function') {
+            return trackLaneFormatDbValue(n) + ' dB';
+        }
+        const s = n.toFixed(1);
+        return (n > 0 ? '+' : '') + s + ' dB';
+    }
+
+    function setSegmentGainDb(track, segmentIndex, gainDb, opt) {
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments[segmentIndex]) return false;
+        const next = clampRegionGainDb(gainDb);
+        const prev = getSegmentGainDb(track, segmentIndex);
+        if (Math.abs(next - prev) < 0.0005) return false;
+        if (!(opt && opt.skipUndo) && !regionUndoPaused) {
+            requestRegionUndoCapture();
+        }
+        const raw = state.segments[segmentIndex];
+        if (Math.abs(next) < 0.0005) {
+            delete raw.gainDb;
+        } else {
+            raw.gainDb = next;
+        }
+        updateTrackRegionOverlays(track);
+        redrawAfterRegionChange(track.slot);
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        return true;
+    }
+
+    function adjustSegmentGainDbAtPointer(clientX, clientY, deltaDb) {
+        const hit =
+            typeof resolveRegionSegmentFromPointer === 'function'
+                ? resolveRegionSegmentFromPointer(clientX, clientY)
+                : null;
+        if (!hit || hit.segmentIndex < 0) return false;
+        const track = hit.track || { type: 'extra', slot: hit.slot };
+        if (!isTrackRegionActive(track)) return false;
+        const step = Number(deltaDb);
+        if (!Number.isFinite(step) || Math.abs(step) < 0.0005) return false;
+        const next = clampRegionGainDb(
+            getSegmentGainDb(track, hit.segmentIndex) + step,
+        );
+        if (
+            !setSegmentGainDb(track, hit.segmentIndex, next, { skipPersist: true })
+        ) {
+            return false;
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const label = formatRegionGainDbDisplay(next);
+        writeLog(
+            'Ex ' +
+                (hit.slot + 1) +
+                ' region ' +
+                (hit.segmentIndex + 1) +
+                ' gain: ' +
+                (label || '0.0 dB'),
+        );
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(
+                'Ex ' + (hit.slot + 1) + ' R' + (hit.segmentIndex + 1),
+                label || '0.0 dB',
+                'notice',
+            );
+        }
+        return true;
+    }
+
+    function handlePlaybackRegionGainWheel(ev) {
+        if (!ev || !ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+            return false;
+        }
+        const lanes =
+            typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
+        if (!lanes) return false;
+        let over = false;
+        if (typeof ev.composedPath === 'function') {
+            over = ev.composedPath().includes(lanes);
+        } else if (ev.target) {
+            over = lanes.contains(ev.target);
+        }
+        if (!over) return false;
+        const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
+        if (!delta) return false;
+        const deltaDb = delta > 0 ? -1 : 1;
+        if (!adjustSegmentGainDbAtPointer(ev.clientX, ev.clientY, deltaDb)) {
+            return false;
+        }
+        ev.preventDefault();
+        return true;
     }
 
     function getSegmentSourceDurationSec(track, seg) {
@@ -1207,11 +1335,9 @@
                 if (barTransport < waveformHideBefore - 0.0005) {
                     continue;
                 }
-                const gain = computeSegmentCrossfadeVisualGain(
-                    track,
-                    i,
-                    barTransport,
-                );
+                const gain =
+                    computeSegmentCrossfadeVisualGain(track, i, barTransport) *
+                    getSegmentGainLinear(track, i);
                 const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
                 const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
                 ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
@@ -1588,6 +1714,14 @@
         label.textContent = fileName || 'Region ' + (segmentIndex + 1);
         label.title = fileName || '';
         el.appendChild(label);
+        const gainDb = getSegmentGainDb(track, segmentIndex);
+        const gainLabel = document.createElement('span');
+        gainLabel.className = 'audio-waveform-lane__playback-region__gain-db';
+        const gainText = formatRegionGainDbDisplay(gainDb);
+        gainLabel.textContent = gainText;
+        gainLabel.hidden = !gainText;
+        gainLabel.setAttribute('aria-hidden', gainText ? 'false' : 'true');
+        el.appendChild(gainLabel);
         const cursorLine = document.createElement('div');
         cursorLine.className = 'audio-waveform-lane__playback-region__cursor-line';
         cursorLine.setAttribute('aria-hidden', 'true');
@@ -1820,6 +1954,7 @@
             anchorStartSec: getSegmentTimelineStart(track, segmentIndex),
             regionInSec: getSegmentRegionTimelineIn(track, segmentIndex),
             regionLeadPadSec: getSegmentRegionLeadPadSec(track, segmentIndex),
+            gainDb: getSegmentGainDb(track, segmentIndex),
         };
     }
 
@@ -1906,6 +2041,9 @@
             regionInDelta <= SEGMENT_BOUNDARY_JOIN_EPS_SEC
         ) {
             clone.regionLeadPadSec = clip.regionLeadPadSec;
+        }
+        if (Number.isFinite(clip.gainDb) && Math.abs(clip.gainDb) > 0.0005) {
+            clone.gainDb = clip.gainDb;
         }
 
         const fullDur = getSegmentSourceDurationSec(track, clone);
@@ -2879,6 +3017,9 @@
                     if (raw && Number.isFinite(raw.regionLeadPadSec)) {
                         entry.regionLeadPadSec = raw.regionLeadPadSec;
                     }
+                    if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
+                        entry.gainDb = raw.gainDb;
+                    }
                     return entry;
                 }),
             });
@@ -3149,6 +3290,10 @@
         syncLaneFileNameForTrack({ type: 'extra', slot });
     };
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
+    window.getSegmentGainDb = getSegmentGainDb;
+    window.getSegmentGainLinear = getSegmentGainLinear;
+    window.setSegmentGainDb = setSegmentGainDb;
+    window.handlePlaybackRegionGainWheel = handlePlaybackRegionGainWheel;
     window.ensureDefaultTrackRegion = ensureDefaultTrackRegion;
     window.updatePlaybackRegionHoverFromPointer = updatePlaybackRegionHoverFromPointer;
     window.addExtraTrackRegionForClip = function (slot, clipId, durationSec, timelineStartSec) {
