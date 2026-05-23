@@ -2372,6 +2372,138 @@
         redrawAfterRegionChange(track.slot);
     }
 
+    function joinSegmentBoundaryAt(track, boundaryIndex, opt) {
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const left = segments[boundaryIndex];
+        const right = segments[boundaryIndex + 1];
+        if (!left || !right) return false;
+
+        const leftClip =
+            left.clipId || getSegmentClipId(track, boundaryIndex);
+        const rightClip =
+            right.clipId || getSegmentClipId(track, boundaryIndex + 1);
+        if (leftClip !== rightClip) {
+            writeLog('Playback region: cannot join (different clips at boundary)');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Cannot join', 'notice');
+            }
+            return false;
+        }
+
+        const sourceJoin =
+            Math.abs((Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0)) <=
+            SEGMENT_BOUNDARY_JOIN_EPS_SEC;
+        if (!sourceJoin) {
+            writeLog('Playback region: cannot join (source gap at boundary)');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Cannot join', 'notice');
+            }
+            return false;
+        }
+
+        const merged = {
+            id: left.id || newRegionId(),
+            clipId: leftClip,
+            sourceInSec: left.sourceInSec,
+            sourceOutSec: right.sourceOutSec,
+            timelineStartSec: getSegmentTimelineStart(track, boundaryIndex),
+        };
+        if (Number.isFinite(left.regionTimelineInSec)) {
+            merged.regionTimelineInSec = left.regionTimelineInSec;
+        }
+        if (Number.isFinite(left.regionLeadPadSec)) {
+            merged.regionLeadPadSec = left.regionLeadPadSec;
+        }
+        if (Number.isFinite(left.gainDb)) {
+            merged.gainDb = left.gainDb;
+        }
+
+        segments.splice(boundaryIndex, 2, merged);
+        if (
+            !setTrackSegments(track, segments, {
+                silent: true,
+                skipUndo: !!(opt && opt.skipUndo),
+            })
+        ) {
+            writeLog('Playback region: join failed');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Join failed', 'notice');
+            }
+            return false;
+        }
+
+        writeLog(
+            'Ex ' +
+                (track.slot + 1) +
+                ': regions joined at boundary ' +
+                (boundaryIndex + 1) +
+                ' (' +
+                segments.length +
+                ' left)',
+        );
+        if (!(opt && opt.silent) && typeof flashSeekHint === 'function') {
+            flashSeekHint('Ex ' + (track.slot + 1), 'Regions joined', 'notice');
+        }
+        return true;
+    }
+
+    function resolveJoinedBoundaryIndexAtPointer(track, clientX, clientY) {
+        if (!isExtraTrackRef(track)) return -1;
+        const segments = getTrackSegments(track);
+        if (segments.length < 2) return -1;
+
+        if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+            const hit = document.elementFromPoint(clientX, clientY);
+            if (hit) {
+                const splitHandle = hit.closest(
+                    '.audio-waveform-lane__playback-region__handle--split',
+                );
+                if (splitHandle) {
+                    const lane = splitHandle.closest('.audio-waveform-lane--extra');
+                    const m =
+                        lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                    if (m && parseInt(m[1], 10) === track.slot) {
+                        const b = Number(splitHandle.dataset.boundaryIndex);
+                        if (Number.isFinite(b) && isSegmentBoundaryJoined(track, b)) {
+                            return b;
+                        }
+                    }
+                }
+            }
+        }
+
+        const transportSec =
+            typeof transportSecFromClientX === 'function'
+                ? transportSecFromClientX(clientX)
+                : null;
+        if (!Number.isFinite(transportSec)) return -1;
+
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        let hitSec = 0.05;
+        if (master > 0) {
+            const lanes =
+                typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
+            const m =
+                typeof waveformTimelineMetrics === 'function' && lanes
+                    ? waveformTimelineMetrics(lanes)
+                    : null;
+            if (m && m.scrubW > 0) {
+                hitSec = (12 / m.scrubW) * master;
+            }
+        }
+
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (!isSegmentBoundaryJoined(track, b)) continue;
+            const boundT = getSegmentTimelineEnd(track, b);
+            if (Math.abs(transportSec - boundT) <= hitSec) return b;
+        }
+        return -1;
+    }
+
     function setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec) {
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return;
@@ -2888,6 +3020,52 @@
         document.addEventListener('pointercancel', regionHandleDragDocUp);
     }
 
+    function joinPlaybackRegionAtPointer() {
+        const slot = resolveTargetExtraSlot();
+        if (slot < 0) {
+            writeLog('Playback region: hover an Ex lane (1–3), then press B');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Hover Ex lane', 'notice');
+            }
+            return false;
+        }
+        if (!isExtraSlotUsableForRegion(slot)) {
+            writeLog('Playback region: load an extra audio track first');
+            return false;
+        }
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) {
+            writeLog('Playback region: no active regions on Ex ' + (slot + 1));
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'No regions', 'notice');
+            }
+            return false;
+        }
+        const { clientX, clientY } = waveformPointerClientXY();
+        const boundaryIndex = resolveJoinedBoundaryIndexAtPointer(
+            track,
+            clientX,
+            clientY,
+        );
+        if (boundaryIndex < 0) {
+            writeLog('Playback region: hover a joined boundary, then press B');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Hover joined boundary', 'notice');
+            }
+            return false;
+        }
+        return joinSegmentBoundaryAt(track, boundaryIndex);
+    }
+
+    function handlePlaybackRegionJoinKeydown(e) {
+        if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
+        if (e.code !== 'KeyB') return false;
+        if (e.repeat) return false;
+        e.preventDefault();
+        joinPlaybackRegionAtPointer();
+        return true;
+    }
+
     function handlePlaybackRegionSplitKeydown(e) {
         if (!isPlaybackRegionSplitKeyEvent(e)) return false;
         if (e.repeat) return false;
@@ -3237,10 +3415,12 @@
         return setTrackSegments(track, [{ sourceInSec: inS, sourceOutSec: outS }], opt);
     };
     window.splitPlaybackRegionAtTargetSec = splitPlaybackRegionAtTargetSec;
+    window.joinPlaybackRegionAtPointer = joinPlaybackRegionAtPointer;
     window.cutPlaybackRegionTailAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.getPlaybackRegionPersistSnapshot = getPlaybackRegionPersistSnapshot;
     window.restorePlaybackRegionFromPersist = restorePlaybackRegionFromPersist;
     window.handlePlaybackRegionSplitKeydown = handlePlaybackRegionSplitKeydown;
+    window.handlePlaybackRegionJoinKeydown = handlePlaybackRegionJoinKeydown;
     window.handlePlaybackRegionSlashKeydown = handlePlaybackRegionSlashKeydown;
     window.handlePlaybackRegionUndoKeydown = handlePlaybackRegionUndoKeydown;
     window.handlePlaybackRegionRedoKeydown = handlePlaybackRegionRedoKeydown;

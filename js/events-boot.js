@@ -293,6 +293,13 @@
             return;
         }
 
+        if (
+            typeof handlePlaybackRegionJoinKeydown === 'function' &&
+            handlePlaybackRegionJoinKeydown(e)
+        ) {
+            return;
+        }
+
         if (isTypingTarget(e.target)) return;
 
         if (
@@ -328,6 +335,7 @@
                 e.code === 'KeyS' ||
                 e.code === 'KeyV' ||
                 e.code === 'KeyX' ||
+                e.code === 'KeyB' ||
                 e.code === 'KeyF' ||
                 e.code === 'KeyZ' ||
                 e.code === 'Insert' ||
@@ -362,6 +370,7 @@
                 e.code === 'NumpadAdd' ||
                 e.code === 'NumpadSubtract' ||
                 e.code === 'KeyX' ||
+                e.code === 'KeyB' ||
                 e.code === 'PageUp' ||
                 e.code === 'PageDown';
             if (appKey && waveFocus) waveFocus.blur();

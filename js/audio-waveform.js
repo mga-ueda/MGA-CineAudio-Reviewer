@@ -1414,7 +1414,9 @@
                 (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                     handlePlaybackRegionSplitKeydown(ev)) ||
                 (typeof handlePlaybackRegionSlashKeydown === 'function' &&
-                    handlePlaybackRegionSlashKeydown(ev))
+                    handlePlaybackRegionSlashKeydown(ev)) ||
+                (typeof handlePlaybackRegionJoinKeydown === 'function' &&
+                    handlePlaybackRegionJoinKeydown(ev))
             ) {
                 return;
             }
