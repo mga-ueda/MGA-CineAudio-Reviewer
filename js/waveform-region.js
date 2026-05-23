@@ -404,6 +404,14 @@
         return best;
     }
 
+    function isRegionSnapStopExcluded(exclude, slot, segmentIndex) {
+        if (!exclude || exclude.slot !== slot) return false;
+        if (Array.isArray(exclude.segmentIndices)) {
+            return exclude.segmentIndices.indexOf(segmentIndex) >= 0;
+        }
+        return exclude.segmentIndex === segmentIndex;
+    }
+
     function collectRegionSnapStops(exclude, sameSlotOnly) {
         const stops = [];
         const n =
@@ -416,7 +424,7 @@
             if (!isTrackRegionActive(track)) continue;
             const segs = getTrackSegments(track);
             for (let i = 0; i < segs.length; i++) {
-                if (exclude && exclude.slot === slot && exclude.segmentIndex === i) {
+                if (isRegionSnapStopExcluded(exclude, slot, i)) {
                     continue;
                 }
                 stops.push(getSegmentRegionTimelineIn(track, i));
@@ -2328,7 +2336,10 @@
 
         const leftStart = getSegmentTimelineStart(track, boundaryIndex);
         const t = snapRegionTransportSec(transportSec, {
-            exclude: { slot: track.slot, segmentIndex: boundaryIndex },
+            exclude: {
+                slot: track.slot,
+                segmentIndices: [boundaryIndex, boundaryIndex + 1],
+            },
             sameSlotOnly: track.slot,
         });
         if (!Number.isFinite(t)) return;
