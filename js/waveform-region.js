@@ -1661,6 +1661,66 @@
         );
     }
 
+    /** 再生ミックスと同じ区間で、同一トラック内のクロスフェード重なりを列挙 */
+    function collectTrackCrossfadeZones(track) {
+        const segments = getTrackSegments(track);
+        if (segments.length < 2) return [];
+        const zones = [];
+        for (let i = 0; i < segments.length; i++) {
+            for (let j = i + 1; j < segments.length; j++) {
+                const oStart = Math.max(
+                    getSegmentPlaybackTimelineStart(track, i),
+                    getSegmentPlaybackTimelineStart(track, j),
+                );
+                const oEnd = Math.min(
+                    getSegmentTimelineEnd(track, i),
+                    getSegmentTimelineEnd(track, j),
+                );
+                if (oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC) continue;
+                zones.push({ startSec: oStart, endSec: oEnd });
+            }
+        }
+        return zones;
+    }
+
+    function buildCrossfadeMarkerEl() {
+        const el = document.createElement('div');
+        el.className = 'audio-waveform-lane__crossfade-marker';
+        el.setAttribute('aria-hidden', 'true');
+        el.title = 'Crossfade';
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'audio-waveform-lane__crossfade-marker__shape');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.setAttribute('preserveAspectRatio', 'none');
+        const fadeOut = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        fadeOut.setAttribute('d', 'M 1 1 Q 50 14 99 99');
+        const fadeIn = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        fadeIn.setAttribute('d', 'M 1 99 Q 50 14 99 1');
+        svg.appendChild(fadeOut);
+        svg.appendChild(fadeIn);
+        el.appendChild(svg);
+        return el;
+    }
+
+    function positionCrossfadeMarkerEl(el, startSec, endSec) {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!master) return;
+        const leftPct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(startSec)
+                : (startSec / master) * 100;
+        const rightPct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(endSec)
+                : (endSec / master) * 100;
+        el.style.left = leftPct + '%';
+        el.style.width = Math.max(0.08, rightPct - leftPct) + '%';
+        el.hidden = false;
+    }
+
     function resolveRegionSegmentIndexAtPointer(track, clientX, clientY) {
         if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
             const hit = document.elementFromPoint(clientX, clientY);
@@ -2088,6 +2148,13 @@
             const el = buildRegionOverlayEl(track, i, seg, fileName);
             positionRegionOverlayEl(el, track, i, seg);
             container.appendChild(el);
+        }
+        const crossfadeZones = collectTrackCrossfadeZones(track);
+        for (let z = 0; z < crossfadeZones.length; z++) {
+            const zone = crossfadeZones[z];
+            const marker = buildCrossfadeMarkerEl();
+            positionCrossfadeMarkerEl(marker, zone.startSec, zone.endSec);
+            container.appendChild(marker);
         }
         for (let b = 0; b < segments.length - 1; b++) {
             if (!isSegmentBoundaryJoined(track, b)) continue;

@@ -1830,6 +1830,29 @@
             border-right: 0.5px solid rgba(200, 140, 255, 0.95);
             z-index: 7;
         }
+        .audio-waveform-lane__crossfade-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            box-sizing: border-box;
+            pointer-events: none;
+            z-index: 8;
+            min-width: 8px;
+            overflow: visible;
+        }
+        .audio-waveform-lane__crossfade-marker__shape {
+            display: block;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+        .audio-waveform-lane__crossfade-marker__shape path {
+            fill: none;
+            stroke: rgba(190, 190, 190, 0.82);
+            stroke-width: 1;
+            stroke-linecap: round;
+            vector-effect: non-scaling-stroke;
+        }
         .audio-waveform-lane__playback-region__handle {
             position: absolute;
             top: 0;
