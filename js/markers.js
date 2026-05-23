@@ -1085,15 +1085,18 @@
 
     window.isMarkerAreaKeyboardActive = isMarkerAreaKeyboardActive;
 
-    function handleMarkerEscapeKeydown(e) {
+    function handleMarkerPendingRangeEscapeKeydown(e) {
         if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
         if (e.repeat) return false;
+        if (pendingRangeStartSec == null) return false;
+        cancelPendingRange();
+        e.preventDefault();
+        return true;
+    }
 
-        if (pendingRangeStartSec != null) {
-            cancelPendingRange();
-            e.preventDefault();
-            return true;
-        }
+    function handleMarkerSelectionEscapeKeydown(e) {
+        if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
+        if (e.repeat) return false;
 
         const el = e.target;
         const inMarkerPanel = isMarkerAreaKeyboardActive({ target: el });
@@ -1107,6 +1110,13 @@
             return true;
         }
         return false;
+    }
+
+    function handleMarkerEscapeKeydown(e) {
+        return (
+            handleMarkerPendingRangeEscapeKeydown(e) ||
+            handleMarkerSelectionEscapeKeydown(e)
+        );
     }
 
     function persistMarkersAfterChange(opt) {

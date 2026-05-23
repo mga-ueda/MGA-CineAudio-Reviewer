@@ -38,6 +38,14 @@
         );
     }
 
+    function isRangeLoopEscapeRelevant() {
+        return (
+            loopRangeDragActive ||
+            loopRangeRightPressActive ||
+            isRangeLoopPlaybackActive()
+        );
+    }
+
     function getRangeLoopInSec() {
         return loopRangeInSec;
     }
@@ -534,5 +542,7 @@
             composite.addEventListener('contextmenu', onRangeLoopContextMenu);
         }
     }
+
+    window.isRangeLoopEscapeRelevant = isRangeLoopEscapeRelevant;
 
     initRangeLoopUi();

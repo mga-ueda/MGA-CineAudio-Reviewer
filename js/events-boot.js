@@ -237,7 +237,14 @@
     videoMain.addEventListener('ended', onVideoEnded);
 
     window.addEventListener('keydown', (e) => {
-        if (typeof handleMarkerEscapeKeydown === 'function' && handleMarkerEscapeKeydown(e)) {
+        if (
+            typeof handleMarkerPendingRangeEscapeKeydown === 'function' &&
+            handleMarkerPendingRangeEscapeKeydown(e)
+        ) {
+            return;
+        }
+
+        if (typeof handleRangeLoopEscapeKeydown === 'function' && handleRangeLoopEscapeKeydown(e)) {
             return;
         }
 
@@ -248,7 +255,10 @@
             return;
         }
 
-        if (typeof handleRangeLoopEscapeKeydown === 'function' && handleRangeLoopEscapeKeydown(e)) {
+        if (
+            typeof handleMarkerSelectionEscapeKeydown === 'function' &&
+            handleMarkerSelectionEscapeKeydown(e)
+        ) {
             return;
         }
 
