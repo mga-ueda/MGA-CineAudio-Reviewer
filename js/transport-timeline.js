@@ -1177,12 +1177,15 @@
         if (lanes) lanes.setAttribute('aria-valuenow', String(Math.round(r * 100)));
     }
 
-    /** 軌跡の最大幅 = 波形ビューポート幅 × この比率（通過区間のみ描画） */
-    const SEEK_TRAIL_MAX_VIEWPORT_RATIO = 0.25;
+    /** 描画してからこの時間（ms）で完全に透明になる */
+    const SEEK_TRAIL_FADE_MS = 10400;
+    const SEEK_TRAIL_PEAK_ALPHA = 0.15;
     /** プレイヘッド縦線（2px）と重ねない余白 */
     const SEEK_TRAIL_PLAYHEAD_GAP_PX = 2;
     const SEEK_TRAIL_MIN_SEC_DELTA = 0.02;
-    const SEEK_TRAIL_SAMPLE_MIN_INTERVAL_MS = 36;
+    const SEEK_TRAIL_SAMPLE_MIN_INTERVAL_MS = 24;
+    /** 広い区間を細分化して描くときの最大幅（px） */
+    const SEEK_TRAIL_SEGMENT_CHUNK_PX = 3;
     const SEEK_TRAIL_MAX_SAMPLES = 900;
     /** 再生位置がこれ以上飛ぶとループ／シークとみなし軌跡をリセット */
     const SEEK_TRAIL_DISCONTINUITY_SEC = 1.25;
@@ -1194,25 +1197,15 @@
         return Math.max(SEEK_TRAIL_DISCONTINUITY_SEC, master * 0.025);
     }
 
-    function seekTrailMaxWidthPx() {
-        return waveformTimelineViewportWidthCss() * SEEK_TRAIL_MAX_VIEWPORT_RATIO;
+    function seekTrailAlphaForAgeMs(ageMs) {
+        if (ageMs >= SEEK_TRAIL_FADE_MS) return 0;
+        const t = ageMs / SEEK_TRAIL_FADE_MS;
+        const fade = 1 - t;
+        return SEEK_TRAIL_PEAK_ALPHA * fade * fade;
     }
 
-    /** 表示幅 1/4 に相当するタイムライン上の秒数 */
-    function seekTrailMaxSpanSec(master, contentW) {
-        if (!(master > 0) || !(contentW > 0)) return 0;
-        return (seekTrailMaxWidthPx() / contentW) * master;
-    }
-
-    function pruneSeekTrailSamplesToMaxSpan() {
-        if (!seekTrailSamples.length) return;
-        const master = getMasterTransportDurationSec();
-        const contentW = masterTimelineWidthCss();
-        const maxSpan = seekTrailMaxSpanSec(master, contentW);
-        if (!(maxSpan > 0)) return;
-        const newestSec = seekTrailSamples[seekTrailSamples.length - 1].sec;
-        const minSec = newestSec - maxSpan;
-        while (seekTrailSamples.length && seekTrailSamples[0].sec < minSec) {
+    function pruneSeekTrailSamplesByAge(now) {
+        while (seekTrailSamples.length && now - seekTrailSamples[0].at >= SEEK_TRAIL_FADE_MS) {
             seekTrailSamples.shift();
         }
     }
@@ -1241,11 +1234,63 @@
         ) {
             return;
         }
+        if (last && seekTrailSamples.length) {
+            const master = getMasterTransportDurationSec();
+            const contentW = masterTimelineWidthCss();
+            const secDelta = Math.abs(n - last.sec);
+            if (master > 0 && contentW > 0 && secDelta > SEEK_TRAIL_MIN_SEC_DELTA * 1.5) {
+                const pxDelta = (secDelta / master) * contentW;
+                const insertN = Math.min(8, Math.max(1, Math.ceil(pxDelta / 8) - 1));
+                for (let j = 1; j <= insertN; j++) {
+                    const f = j / (insertN + 1);
+                    seekTrailSamples.push({
+                        sec: last.sec + (n - last.sec) * f,
+                        at: last.at + (now - last.at) * f,
+                    });
+                }
+            }
+        }
         seekTrailSamples.push({ sec: n, at: now });
-        pruneSeekTrailSamplesToMaxSpan();
+        pruneSeekTrailSamplesByAge(now);
         if (seekTrailSamples.length > SEEK_TRAIL_MAX_SAMPLES) {
             seekTrailSamples.splice(0, seekTrailSamples.length - SEEK_TRAIL_MAX_SAMPLES);
-            pruneSeekTrailSamplesToMaxSpan();
+            pruneSeekTrailSamplesByAge(now);
+        }
+    }
+
+    function drawSeekTrailSegmentChunk(ctx, segL, segR, atL, atR, now, h) {
+        const a0 = seekTrailAlphaForAgeMs(now - atL);
+        const a1 = seekTrailAlphaForAgeMs(now - atR);
+        if (a0 <= 0.001 && a1 <= 0.001) return;
+        const segW = segR - segL;
+        if (segW <= 0) return;
+        const grad = ctx.createLinearGradient(segL, 0, segR, 0);
+        grad.addColorStop(0, 'rgba(0, 255, 255, ' + a0.toFixed(4) + ')');
+        grad.addColorStop(1, 'rgba(0, 255, 255, ' + a1.toFixed(4) + ')');
+        ctx.fillStyle = grad;
+        ctx.fillRect(segL, 0, segW, h);
+    }
+
+    function drawSeekTrailSegment(ctx, older, newer, secToX, now, trailRightX, h) {
+        const x0 = secToX(older.sec);
+        const x1 = secToX(newer.sec);
+        let segL = Math.min(x0, x1);
+        let segR = Math.max(x0, x1);
+        if (segL >= trailRightX) return;
+        segR = Math.min(segR, trailRightX);
+        const segW = segR - segL;
+        if (segW <= 0) return;
+
+        const steps = Math.max(1, Math.ceil(segW / SEEK_TRAIL_SEGMENT_CHUNK_PX));
+        const atSpan = newer.at - older.at;
+        for (let k = 0; k < steps; k++) {
+            const f0 = k / steps;
+            const f1 = (k + 1) / steps;
+            const subL = segL + segW * f0;
+            const subR = segL + segW * f1;
+            const at0 = older.at + atSpan * f0;
+            const at1 = older.at + atSpan * f1;
+            drawSeekTrailSegmentChunk(ctx, subL, subR, at0, at1, now, h);
         }
     }
 
@@ -1292,49 +1337,29 @@
         ctx.clearRect(0, 0, w, h);
         if (!seekTrailSamples.length) return;
 
-        pruneSeekTrailSamplesToMaxSpan();
+        const now = performance.now();
+        pruneSeekTrailSamplesByAge(now);
         if (seekTrailSamples.length < 2) return;
 
         const master = getMasterTransportDurationSec();
         if (!(master > 0)) return;
 
-        const maxTrailPx = seekTrailMaxWidthPx();
         const secToX = (sec) => (sec / master) * w;
         const playheadX = secToX(seekTrailSamples[seekTrailSamples.length - 1].sec);
         const trailRightX = playheadX - SEEK_TRAIL_PLAYHEAD_GAP_PX;
         if (trailRightX <= 0) return;
 
-        let trailLeftX = secToX(seekTrailSamples[0].sec);
         for (let i = 1; i < seekTrailSamples.length; i++) {
-            const x = secToX(seekTrailSamples[i].sec);
-            if (x < trailLeftX) trailLeftX = x;
+            drawSeekTrailSegment(
+                ctx,
+                seekTrailSamples[i - 1],
+                seekTrailSamples[i],
+                secToX,
+                now,
+                trailRightX,
+                h,
+            );
         }
-        const clipLeftX = Math.max(trailLeftX, trailRightX - maxTrailPx);
-        if (trailRightX - clipLeftX < 0.75) return;
-
-        let drew = false;
-        const grad = ctx.createLinearGradient(clipLeftX, 0, trailRightX, 0);
-        grad.addColorStop(0, 'rgba(0, 255, 255, 0)');
-        grad.addColorStop(0.2, 'rgba(0, 240, 255, 0.07)');
-        grad.addColorStop(0.45, 'rgba(0, 230, 255, 0.13)');
-        grad.addColorStop(0.72, 'rgba(0, 255, 255, 0.2)');
-        grad.addColorStop(1, 'rgba(0, 255, 255, 0.22)');
-        ctx.fillStyle = grad;
-
-        for (let i = 1; i < seekTrailSamples.length; i++) {
-            const x0 = secToX(seekTrailSamples[i - 1].sec);
-            const x1 = secToX(seekTrailSamples[i].sec);
-            let segL = Math.min(x0, x1);
-            let segR = Math.max(x0, x1);
-            if (segR <= clipLeftX || segL >= trailRightX) continue;
-            segL = Math.max(segL, clipLeftX);
-            segR = Math.min(segR, trailRightX);
-            const segW = segR - segL;
-            if (segW < 0.5) continue;
-            ctx.fillRect(segL, 0, segW, h);
-            drew = true;
-        }
-        if (!drew) return;
     }
 
     window.clearSeekPlaybackTrail = clearSeekPlaybackTrail;
