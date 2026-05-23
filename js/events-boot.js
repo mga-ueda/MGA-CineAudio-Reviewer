@@ -125,6 +125,9 @@
             schedulePersistSession();
             return;
         }
+        if (typeof requestScrollToPlayerStageOnNextPlay === 'function') {
+            requestScrollToPlayerStageOnNextPlay();
+        }
         if (typeof endAudioWaveformScrub === 'function') {
             endAudioWaveformScrub({ force: true });
         }
@@ -487,9 +490,6 @@
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
                     : !videoMain.paused;
-            if (!playingNow && typeof requestScrollToPlayerStageOnNextPlay === 'function') {
-                requestScrollToPlayerStageOnNextPlay();
-            }
             writeLog('Keyboard: Space -> transport toggle');
             playStopBtn.click();
             return;
