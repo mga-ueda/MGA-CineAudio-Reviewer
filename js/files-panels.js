@@ -351,10 +351,16 @@
         }
     }
 
+    /** 動画ファイル差し替えのみ（マーカー・Ex トラック・ミックスは維持） */
+    function replaceVideoMediaForLoad() {
+        revokeVideoMediaCore();
+    }
+
     window.updateVideoClearButton = updateVideoClearButton;
     window.clearVideoPanel = clearVideoPanel;
     window.videoPanelHasVideo = videoPanelHasVideo;
     window.revokeVideoOnly = revokeVideoOnly;
+    window.replaceVideoMediaForLoad = replaceVideoMediaForLoad;
 
     function setLoaded(panel, loaded) {
         panel.classList.toggle('loaded', !!loaded);

@@ -858,46 +858,19 @@
         const targets = getVisibleMixLaneTargets();
         if (!targets.length) return -1;
 
-        if (typeof resolveMixTargetFromActiveRegion === 'function') {
-            const regionTarget = resolveMixTargetFromActiveRegion(clientX, clientY);
-            if (regionTarget) {
-                if (regionTarget.kind === 'video') {
-                    const vi = targets.findIndex((t) => t.kind === 'video');
-                    if (vi >= 0) return vi;
-                }
-                if (regionTarget.kind === 'extra') {
-                    const ei = targets.findIndex(
-                        (t) => t.kind === 'extra' && t.slot === regionTarget.slot,
-                    );
-                    if (ei >= 0) return ei;
-                }
+        const pointerTarget =
+            typeof resolveMixTargetFromPointer === 'function'
+                ? resolveMixTargetFromPointer(clientY)
+                : null;
+        if (pointerTarget) {
+            if (pointerTarget.kind === 'video') {
+                const vi = targets.findIndex((t) => t.kind === 'video');
+                if (vi >= 0) return vi;
             }
-        }
-
-        if (Number.isFinite(clientY)) {
-            if (typeof waveformExtraLaneSlotFromClientY === 'function') {
-                const slot = waveformExtraLaneSlotFromClientY(clientY);
-                if (slot >= 0) {
-                    const ei = targets.findIndex(
-                        (t) => t.kind === 'extra' && t.slot === slot,
-                    );
-                    if (ei >= 0) return ei;
-                }
-            }
-            const videoLane = document.getElementById('audioWaveformLaneVideo');
-            if (videoLane && !videoLane.hidden) {
-                const rect = videoLane.getBoundingClientRect();
-                if (clientY >= rect.top && clientY <= rect.bottom) {
-                    const vi = targets.findIndex((t) => t.kind === 'video');
-                    if (vi >= 0) return vi;
-                }
-            }
-        }
-
-        if (typeof getWaveformTargetExtraSlot === 'function') {
-            const slot = getWaveformTargetExtraSlot();
-            if (slot >= 0) {
-                const ei = targets.findIndex((t) => t.kind === 'extra' && t.slot === slot);
+            if (pointerTarget.kind === 'extra') {
+                const ei = targets.findIndex(
+                    (t) => t.kind === 'extra' && t.slot === pointerTarget.slot,
+                );
                 if (ei >= 0) return ei;
             }
         }
@@ -2597,6 +2570,9 @@
     window.extraTrackBufferDuration = extraTrackBufferDuration;
     window.toggleExtraTrackSolo = toggleExtraSolo;
     window.toggleExtraTrackMute = toggleExtraMute;
+    window.resolveActiveMixLaneDisplayIndex = resolveActiveMixLaneDisplayIndex;
+    window.toggleMixSoloByDisplayIndex = toggleMixSoloByDisplayIndex;
+    window.toggleMixMuteByDisplayIndex = toggleMixMuteByDisplayIndex;
     window.adjustExtraTrackVolumeDb = adjustExtraTrackVolumeDb;
     window.clearExtraTrackVolumeUnityHold = clearExtraTrackVolumeUnityHold;
     window.isExtraTrackLoaded = isExtraTrackLoaded;

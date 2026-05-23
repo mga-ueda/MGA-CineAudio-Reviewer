@@ -138,6 +138,7 @@
                         '" (' +
                         formatByteSize(bytes) +
                         start +
+                        describeExtraTrackRegionForLog(tr) +
                         ')',
                 );
             }
@@ -160,13 +161,24 @@
         } else {
             writeLog('Export Review: range loop off');
         }
-        if (sess && sess.playbackRegion && Number.isFinite(sess.playbackRegion.inSec)) {
-            writeLog(
-                'Export Review: playback region ' +
-                    formatTcForLog(sess.playbackRegion.inSec) +
-                    ' – ' +
-                    formatTcForLog(sess.playbackRegion.outSec),
-            );
+        if (sess && sess.playbackRegion) {
+            const pr = sess.playbackRegion;
+            if (Array.isArray(pr.extra) && pr.extra.length) {
+                writeLog(
+                    'Export Review: playback regions on ' +
+                        pr.extra.length +
+                        ' extra track(s)',
+                );
+            } else if (Number.isFinite(pr.inSec)) {
+                writeLog(
+                    'Export Review: playback region ' +
+                        formatTcForLog(pr.inSec) +
+                        ' – ' +
+                        formatTcForLog(pr.outSec),
+                );
+            } else {
+                writeLog('Export Review: playback region off');
+            }
         } else {
             writeLog('Export Review: playback region off');
         }
@@ -251,6 +263,7 @@
                         '" (' +
                         formatByteSize(bytes) +
                         start +
+                        describeExtraTrackRegionForLog(tr) +
                         ')',
                 );
             }
@@ -271,13 +284,22 @@
                     formatTcForLog(row.rangeLoop.outSec),
             );
         }
-        if (row.playbackRegion && Number.isFinite(row.playbackRegion.inSec)) {
-            writeLog(
-                'Import Review: playback region ' +
-                    formatTcForLog(row.playbackRegion.inSec) +
-                    ' – ' +
-                    formatTcForLog(row.playbackRegion.outSec),
-            );
+        if (row.playbackRegion) {
+            const pr = row.playbackRegion;
+            if (Array.isArray(pr.extra) && pr.extra.length) {
+                writeLog(
+                    'Import Review: playback regions on ' +
+                        pr.extra.length +
+                        ' extra track(s)',
+                );
+            } else if (Number.isFinite(pr.inSec)) {
+                writeLog(
+                    'Import Review: playback region ' +
+                        formatTcForLog(pr.inSec) +
+                        ' – ' +
+                        formatTcForLog(pr.outSec),
+                );
+            }
         }
         writeLog('Import Review: transport at head (seek position not imported)');
         logMixSnapshotDetails(row.mix, 'Import Review');
@@ -408,6 +430,57 @@
         }
     }
 
+    function extraClipBlobKey(slot, clipId) {
+        return 'extra' + slot + '_clip_' + clipId;
+    }
+
+    function appendExtraTrackRegionFields(dst, entry) {
+        if (!dst || !entry || typeof entry !== 'object') return;
+        if (Array.isArray(entry.regionSegments) && entry.regionSegments.length) {
+            dst.regionSegments = entry.regionSegments;
+            if (Number.isFinite(entry.regionHeadPadSec)) {
+                dst.regionHeadPadSec = entry.regionHeadPadSec;
+            }
+            if (Number.isFinite(entry.regionTimelineInSec)) {
+                dst.regionTimelineInSec = entry.regionTimelineInSec;
+            }
+            if (Number.isFinite(entry.regionLeadPadSec)) {
+                dst.regionLeadPadSec = entry.regionLeadPadSec;
+            }
+        }
+        if (Array.isArray(entry.clips) && entry.clips.length > 1) {
+            dst.clips = entry.clips
+                .map((clip) => {
+                    if (!clip || !clip.id || clip.id === 'main') return null;
+                    return {
+                        id: clip.id,
+                        name: clip.name,
+                        lastModified: clip.lastModified,
+                        byteLength: clip.byteLength,
+                        duration: clip.duration,
+                        peaks: clip.peaks,
+                        blobKey: extraClipBlobKey(entry.slot, clip.id),
+                    };
+                })
+                .filter(Boolean);
+            if (!dst.clips.length) delete dst.clips;
+        }
+    }
+
+    function describeExtraTrackRegionForLog(entry) {
+        if (!entry || !Array.isArray(entry.regionSegments) || !entry.regionSegments.length) {
+            return '';
+        }
+        let detail = ', ' + entry.regionSegments.length + ' region(s)';
+        if (Number.isFinite(entry.regionTimelineInSec)) {
+            detail += ', region in ' + formatTcForLog(entry.regionTimelineInSec);
+        }
+        if (Number.isFinite(entry.regionHeadPadSec) && entry.regionHeadPadSec > 0) {
+            detail += ', head pad ' + formatTcForLog(entry.regionHeadPadSec);
+        }
+        return detail;
+    }
+
     function sessionRowForManifest(row, exportMedia) {
         if (!row || typeof row !== 'object') return null;
         const media = normalizeExportMediaOptions(exportMedia);
@@ -426,7 +499,7 @@
             for (const entry of row.extraTracks) {
                 if (!entry || typeof entry.slot !== 'number') continue;
                 if (!media.includeExtra[entry.slot]) continue;
-                out.extraTracks.push({
+                const trackOut = {
                     slot: entry.slot,
                     name: entry.name,
                     lastModified: entry.lastModified,
@@ -435,7 +508,9 @@
                     peaks: entry.peaks,
                     timelineStartSec: entry.timelineStartSec,
                     blobKey: 'extra' + entry.slot,
-                });
+                };
+                appendExtraTrackRegionFields(trackOut, entry);
+                out.extraTracks.push(trackOut);
             }
         }
         if (row.mBlob && media.includeVideo) out.videoBlobKey = 'video';
@@ -467,6 +542,14 @@
                 const key = 'extra' + entry.slot;
                 blobs[key] = await blobToArrayBuffer(entry.blob);
                 order.push(key);
+                if (Array.isArray(entry.clips)) {
+                    for (const clip of entry.clips) {
+                        if (!clip || clip.id === 'main' || !clip.blob) continue;
+                        const clipKey = extraClipBlobKey(entry.slot, clip.id);
+                        blobs[clipKey] = await blobToArrayBuffer(clip.blob);
+                        order.push(clipKey);
+                    }
+                }
             }
         }
         return { blobs, order };
@@ -600,7 +683,7 @@
                 const key = e.blobKey || 'extra' + e.slot;
                 const ab = blobs[key];
                 if (!ab || ab.byteLength < 1) continue;
-                row.extraTracks.push({
+                const trackRow = {
                     slot: e.slot,
                     name: e.name,
                     lastModified: e.lastModified,
@@ -609,7 +692,31 @@
                     peaks: e.peaks,
                     timelineStartSec: e.timelineStartSec,
                     blob: new Blob([ab]),
-                });
+                };
+                appendExtraTrackRegionFields(trackRow, e);
+                if (Array.isArray(e.clips) && e.clips.length) {
+                    trackRow.clips = [];
+                    for (const clip of e.clips) {
+                        if (!clip || !clip.id || clip.id === 'main') continue;
+                        const clipKey = clip.blobKey || extraClipBlobKey(e.slot, clip.id);
+                        const clipAb = blobs[clipKey];
+                        if (!clipAb || clipAb.byteLength < 1) continue;
+                        trackRow.clips.push({
+                            id: clip.id,
+                            name: clip.name,
+                            lastModified: clip.lastModified,
+                            byteLength:
+                                typeof clip.byteLength === 'number'
+                                    ? clip.byteLength
+                                    : clipAb.byteLength,
+                            duration: clip.duration,
+                            peaks: clip.peaks,
+                            blob: new Blob([clipAb]),
+                        });
+                    }
+                    if (!trackRow.clips.length) delete trackRow.clips;
+                }
+                row.extraTracks.push(trackRow);
             }
         }
         const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;

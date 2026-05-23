@@ -55,7 +55,10 @@
         if (typeof applyPendingRangeLoopRestore === 'function') {
             applyPendingRangeLoopRestore();
         }
-        if (typeof applyPendingPlaybackRegionRestore === 'function') {
+        if (
+            typeof applyPendingPlaybackRegionRestore === 'function' &&
+            !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress())
+        ) {
             applyPendingPlaybackRegionRestore();
         }
         if (typeof showFirstVideoFrame === 'function') {

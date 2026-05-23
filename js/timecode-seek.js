@@ -942,17 +942,22 @@
         if (typeof prepareReviewMixForNewVideoLoad === 'function') {
             prepareReviewMixForNewVideoLoad();
         }
-        revokeAll();
+        if (typeof prepareMarkersForVideoSwitch === 'function') {
+            prepareMarkersForVideoSwitch();
+        } else if (typeof saveMarkersToCache === 'function') {
+            saveMarkersToCache();
+        }
+        if (typeof replaceVideoMediaForLoad === 'function') {
+            replaceVideoMediaForLoad();
+        } else {
+            revokeAll();
+        }
         firstFramePrimedForUrl = '';
-        pendingRestoreTime = null;
-        if (typeof resetTransportPlaybackClock === 'function') resetTransportPlaybackClock();
         if (opt && opt.rangeLoop && typeof setPendingRangeLoopRestore === 'function') {
             setPendingRangeLoopRestore(opt.rangeLoop);
         }
         if (opt && opt.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(opt.playbackRegion);
-        } else if (typeof clearRangeLoopPlayback === 'function') {
-            clearRangeLoopPlayback({ silent: true });
         }
         fileMain = f;
         urlMain = URL.createObjectURL(f);
@@ -964,17 +969,13 @@
         nameMain.textContent = f.name;
         updatePanelInfoLine();
         setLoaded(panelMain, true);
-        if (typeof applySavedWaveformLaneUi === 'function') {
-            const laneSnap =
-                typeof pendingLaneUiRestore !== 'undefined' && pendingLaneUiRestore
-                    ? pendingLaneUiRestore
-                    : null;
-            applySavedWaveformLaneUi(laneSnap);
+        if (
+            typeof pendingLaneUiRestore !== 'undefined' &&
+            pendingLaneUiRestore &&
+            typeof applySavedWaveformLaneUi === 'function'
+        ) {
+            applySavedWaveformLaneUi(pendingLaneUiRestore);
             pendingLaneUiRestore = null;
-        } else if (typeof restoreExtraTrackLanesForNewVideo === 'function') {
-            restoreExtraTrackLanesForNewVideo();
-        } else if (typeof restoreVideoAudioLaneForNewVideo === 'function') {
-            restoreVideoAudioLaneForNewVideo();
         }
         void refreshContainerFpsForCurrentFiles().then(() => {
             if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {

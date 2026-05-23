@@ -354,6 +354,63 @@
         return Math.max(0, n);
     }
 
+    function collectRegionMoveSnapStops(exclude) {
+        const stops = collectRegionSnapStops(exclude, -1);
+        if (typeof collectMarkerVideoEndSnapStops === 'function') {
+            const markerStops = collectMarkerVideoEndSnapStops();
+            for (let i = 0; i < markerStops.length; i++) {
+                stops.push(markerStops[i]);
+            }
+        }
+        return stops;
+    }
+
+    /** リージョン平行移動: In/Out 両端のうち近い方でマーカー・他トラック In/Out・動画終端へスナップ */
+    function snapRegionMoveRegionInSec(desiredRegionIn, track, segmentIndex, opt) {
+        const n = snapTimelineSec(Number(desiredRegionIn) || 0);
+        const threshold = regionSnapThresholdSec();
+        const exclude =
+            opt && opt.exclude
+                ? opt.exclude
+                : { slot: track.slot, segmentIndex };
+        const baseRegionIn =
+            opt && Number.isFinite(opt.dragStartRegionIn)
+                ? opt.dragStartRegionIn
+                : getSegmentRegionTimelineIn(track, segmentIndex);
+        const baseAnchor =
+            opt && Number.isFinite(opt.dragStartAnchor)
+                ? opt.dragStartAnchor
+                : getSegmentTimelineStart(track, segmentIndex);
+        const seg = getTrackSegments(track)[segmentIndex];
+        if (!seg) return snapRegionTransportSec(n, { exclude, sameSlotOnly: -1 });
+
+        const segDur = Math.max(
+            PLAYBACK_REGION_MIN_SEC,
+            seg.sourceOutSec - seg.sourceInSec,
+        );
+        const outOffsetFromIn = baseAnchor - baseRegionIn + segDur;
+        const rawOut = n + outOffsetFromIn;
+        const stops = collectRegionMoveSnapStops(exclude);
+
+        let bestRegionIn = n;
+        let bestDist = threshold + 1;
+        for (let i = 0; i < stops.length; i++) {
+            const stop = stops[i];
+            if (!Number.isFinite(stop)) continue;
+            const dIn = Math.abs(stop - n);
+            if (dIn <= threshold && dIn < bestDist) {
+                bestDist = dIn;
+                bestRegionIn = stop;
+            }
+            const dOut = Math.abs(stop - rawOut);
+            if (dOut <= threshold && dOut < bestDist) {
+                bestDist = dOut;
+                bestRegionIn = stop - outOffsetFromIn;
+            }
+        }
+        return Math.max(REGION_IN_MIN_TRANSPORT_SEC, snapTimelineSec(bestRegionIn));
+    }
+
     function maxSegmentSourceOutSec(track, segmentIndex) {
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
@@ -2179,13 +2236,21 @@
         if (Math.abs(delta) < 0.00001) return;
         let newAnchor = baseAnchor + delta;
         let newRegionIn = baseRegionIn + delta;
-        const maxRegionIn = newAnchor + segDur - PLAYBACK_REGION_MIN_SEC;
-        const minPlayIn = newAnchor + PLAYBACK_REGION_MIN_SEC;
-        newRegionIn = Math.max(
-            REGION_IN_MIN_TRANSPORT_SEC,
-            minPlayIn,
-            Math.min(maxRegionIn, newRegionIn),
-        );
+        const isParallelMove =
+            opt &&
+            Number.isFinite(opt.dragStartRegionIn) &&
+            Number.isFinite(opt.dragStartAnchor);
+        if (!isParallelMove) {
+            const maxRegionIn = newAnchor + segDur - PLAYBACK_REGION_MIN_SEC;
+            const minPlayIn = newAnchor + PLAYBACK_REGION_MIN_SEC;
+            newRegionIn = Math.max(
+                REGION_IN_MIN_TRANSPORT_SEC,
+                minPlayIn,
+                Math.min(maxRegionIn, newRegionIn),
+            );
+        } else {
+            newRegionIn = Math.max(REGION_IN_MIN_TRANSPORT_SEC, newRegionIn);
+        }
         if (
             Math.abs(newAnchor - oldAnchor) < 0.00001 &&
             Math.abs(newRegionIn - oldRegionIn) < 0.00001
@@ -2225,8 +2290,10 @@
         if (opt && opt.skipSnap) {
             desiredRegionIn = snapTimelineSec(Number(sec) || 0);
         } else {
-            desiredRegionIn = snapRegionTransportSec(sec, {
+            desiredRegionIn = snapRegionMoveRegionInSec(sec, track, segmentIndex, {
                 exclude: { slot: track.slot, segmentIndex },
+                dragStartRegionIn: opt && opt.dragStartRegionIn,
+                dragStartAnchor: opt && opt.dragStartAnchor,
             });
         }
         const delta = desiredRegionIn - dragStartRegionIn;
@@ -2372,47 +2439,9 @@
     }
 
     function resolveMixTargetFromActiveRegion(clientX, clientY) {
-        let regionEl = hoveredPlaybackRegionEl;
-        if (
-            !regionEl &&
-            Number.isFinite(clientX) &&
-            Number.isFinite(clientY)
-        ) {
-            const hit = document.elementFromPoint(clientX, clientY);
-            regionEl = hit
-                ? hit.closest('.audio-waveform-lane__playback-region')
-                : null;
-        }
-        if (regionEl) {
-            const lane = regionEl.closest('.audio-waveform-lane--extra');
-            const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-            if (m) {
-                const slot = parseInt(m[1], 10);
-                const track = { type: 'extra', slot };
-                if (isTrackRegionActive(track)) {
-                    return { kind: 'extra', slot };
-                }
-            }
-        }
-        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-            return null;
-        }
-        let slot = -1;
-        if (typeof waveformExtraLaneSlotFromClientY === 'function') {
-            slot = waveformExtraLaneSlotFromClientY(clientY);
-        }
-        if (slot < 0) return null;
-        const track = { type: 'extra', slot };
-        if (!isTrackRegionActive(track)) return null;
-        const transportSec =
-            typeof transportSecFromClientX === 'function'
-                ? transportSecFromClientX(clientX)
-                : null;
-        if (
-            Number.isFinite(transportSec) &&
-            mapTransportToSegment(track, transportSec)
-        ) {
-            return { kind: 'extra', slot };
+        void clientX;
+        if (typeof resolveMixTargetFromPointer === 'function') {
+            return resolveMixTargetFromPointer(clientY);
         }
         return null;
     }
@@ -2442,20 +2471,23 @@
             clientY = getWaveformPointerClientY();
         }
 
-        const target = resolveMixTargetFromActiveRegion(clientX, clientY);
-        if (!target || target.kind !== 'extra') return false;
+        const idx =
+            typeof window.resolveActiveMixLaneDisplayIndex === 'function'
+                ? window.resolveActiveMixLaneDisplayIndex(clientX, clientY)
+                : -1;
+        if (idx < 0) return false;
 
         e.preventDefault();
         if (e.code === 'KeyS') {
-            if (typeof window.toggleExtraTrackSolo === 'function') {
-                window.toggleExtraTrackSolo(target.slot);
+            if (typeof window.toggleMixSoloByDisplayIndex === 'function') {
+                window.toggleMixSoloByDisplayIndex(idx);
                 return true;
             }
             return false;
         }
         if (e.code === 'KeyM') {
-            if (typeof window.toggleExtraTrackMute === 'function') {
-                window.toggleExtraTrackMute(target.slot);
+            if (typeof window.toggleMixMuteByDisplayIndex === 'function') {
+                window.toggleMixMuteByDisplayIndex(idx);
                 return true;
             }
             return false;
@@ -2789,6 +2821,7 @@
 
     function restorePlaybackRegionFromPersist(data, opt) {
         if (!data || typeof data !== 'object') return false;
+        let restoreFailed = false;
         regionUndoPaused = true;
         try {
         if (Array.isArray(data.extra)) {
@@ -2796,11 +2829,19 @@
                 if (!entry || typeof entry.slot !== 'number') continue;
                 const track = { type: 'extra', slot: entry.slot };
                 if (Array.isArray(entry.segments) && entry.segments.length) {
-                    setTrackSegments(
+                    const loaded =
+                        typeof isExtraTrackLoaded === 'function' &&
+                        isExtraTrackLoaded(entry.slot);
+                    if (!loaded) continue;
+                    const ok = setTrackSegments(
                         track,
                         entry.segments,
                         Object.assign({ silent: true, skipUndo: true }, opt || {}),
                     );
+                    if (!ok) {
+                        restoreFailed = true;
+                        continue;
+                    }
                     const state = getPlaybackRegionsState(track);
                     if (state) {
                         if (Number.isFinite(entry.headPadSec)) {
@@ -2826,11 +2867,16 @@
                     Number.isFinite(entry.sourceInSec) &&
                     Number.isFinite(entry.sourceOutSec)
                 ) {
-                    setTrackSegments(
+                    const loaded =
+                        typeof isExtraTrackLoaded === 'function' &&
+                        isExtraTrackLoaded(entry.slot);
+                    if (!loaded) continue;
+                    const ok = setTrackSegments(
                         track,
                         [{ sourceInSec: entry.sourceInSec, sourceOutSec: entry.sourceOutSec }],
                         Object.assign({ silent: true, skipUndo: true }, opt || {}),
                     );
+                    if (!ok) restoreFailed = true;
                 }
             }
         }
@@ -2841,17 +2887,18 @@
             typeof isExtraTrackLoaded === 'function' &&
             isExtraTrackLoaded(0)
         ) {
-            setTrackSegments(
+            const ok = setTrackSegments(
                 { type: 'extra', slot: 0 },
                 [{ sourceInSec: data.inSec, sourceOutSec: data.outSec }],
                 Object.assign({ silent: true, skipUndo: true }, opt || {}),
             );
+            if (!ok) restoreFailed = true;
         }
         updateAllPlaybackRegionOverlays();
         if (!(opt && opt.keepUndoHistory)) {
             clearRegionUndoStack();
         }
-        return true;
+        return !restoreFailed;
         } finally {
             regionUndoPaused = false;
         }
@@ -2865,8 +2912,9 @@
     function applyPendingPlaybackRegionRestore() {
         if (!pendingPlaybackRegionRestore) return false;
         const data = pendingPlaybackRegionRestore;
-        pendingPlaybackRegionRestore = null;
-        return restorePlaybackRegionFromPersist(data, { silent: true });
+        const ok = restorePlaybackRegionFromPersist(data, { silent: true });
+        if (ok) pendingPlaybackRegionRestore = null;
+        return ok;
     }
 
     function initPlaybackRegionHoverUi() {

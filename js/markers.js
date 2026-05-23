@@ -289,6 +289,17 @@
         if (k) markersByVideoKey.set(k, getMarkersSnapshot());
     }
 
+    /** 動画差し替え前: 現行マーカーをキャッシュへ退避し、表示中リストだけ空にする */
+    function prepareMarkersForVideoSwitch() {
+        saveMarkersToCache();
+        pendingRangeStartSec = null;
+        activeMarkerId = null;
+        currentMarkers = [];
+    }
+
+    window.saveMarkersToCache = saveMarkersToCache;
+    window.prepareMarkersForVideoSwitch = prepareMarkersForVideoSwitch;
+
     function applyMarkersSnapshotToMemory(arr, cacheKey) {
         if (!Array.isArray(arr)) {
             currentMarkers = [];
@@ -1958,20 +1969,28 @@
         }
     }
 
+    /** マーカー In/Out・点・動画終端（リージョン移動スナップ用） */
+    function collectMarkerVideoEndSnapStops() {
+        const stops = [];
+        if (!markersDisplayHidden) {
+            for (const m of currentMarkers) {
+                if (m.type === 'range') {
+                    if (Number.isFinite(m.startSec)) stops.push(m.startSec);
+                    if (markerHasOutTc(m) && Number.isFinite(m.endSec)) stops.push(m.endSec);
+                } else if (Number.isFinite(m.timeSec)) {
+                    stops.push(m.timeSec);
+                }
+            }
+        }
+        appendVideoEndSnapStop(stops);
+        return stops;
+    }
+
     /** マーカー In/Out・点・動画終端（リージョン／トラックオフセットドラッグ用） */
     function snapSecToMarkerInOut(sec, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n)) return 0;
-        const stops = [];
-        for (const m of currentMarkers) {
-            if (m.type === 'range') {
-                if (Number.isFinite(m.startSec)) stops.push(m.startSec);
-                if (markerHasOutTc(m) && Number.isFinite(m.endSec)) stops.push(m.endSec);
-            } else if (Number.isFinite(m.timeSec)) {
-                stops.push(m.timeSec);
-            }
-        }
-        appendVideoEndSnapStop(stops);
+        const stops = collectMarkerVideoEndSnapStops();
         if (!stops.length) return n;
         const threshold =
             opt && Number.isFinite(opt.thresholdSec) && opt.thresholdSec > 0
@@ -1990,6 +2009,7 @@
     }
 
     window.snapSecToMarkerInOut = snapSecToMarkerInOut;
+    window.collectMarkerVideoEndSnapStops = collectMarkerVideoEndSnapStops;
 
     function markerNavStopIndexForCurrent(stops) {
         if (!stops || stops.length === 0) return -1;

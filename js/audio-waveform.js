@@ -420,6 +420,23 @@
 
     window.waveformExtraLaneSlotFromClientY = waveformExtraLaneSlotFromClientY;
 
+    /** ポインタ Y 座標直下のミックス対象レーン（Video / Ex）。リージョンは見ない。 */
+    function resolveMixTargetFromPointer(clientY) {
+        if (!Number.isFinite(clientY)) return null;
+        const videoLane = document.getElementById('audioWaveformLaneVideo');
+        if (videoLane && !videoLane.hidden) {
+            const rect = videoLane.getBoundingClientRect();
+            if (clientY >= rect.top && clientY <= rect.bottom) {
+                return { kind: 'video' };
+            }
+        }
+        const slot = waveformExtraLaneSlotFromClientY(clientY);
+        if (slot >= 0) return { kind: 'extra', slot };
+        return null;
+    }
+
+    window.resolveMixTargetFromPointer = resolveMixTargetFromPointer;
+
     /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
     function waveformExtraLaneSlotFromPointer(ev) {
         if (!ev) return -1;
@@ -851,7 +868,6 @@
                         skipPersist: true,
                         forceAudio: true,
                         skipUndo: true,
-                        skipSnap: true,
                         dragStartRegionIn: waveformOffsetDragStartTimelineSec,
                         dragStartAnchor: waveformOffsetDragStartAnchorSec,
                         preserveInPadSec: waveformOffsetDragPreserveInPadSec,
@@ -1247,7 +1263,7 @@
         abortWaveformDecodeInFlight();
         waveformPeaks = null;
         waveformAudioBuffer = null;
-        restoreVideoAudioLaneForNewVideo();
+        refreshVideoAudioLaneVisibility();
         setAudioWaveformLoaded(!!urlMain);
         if (!urlMain) {
             setAudioWaveformStatus('Not Loaded');
