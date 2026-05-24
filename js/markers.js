@@ -2348,7 +2348,7 @@
         return best;
     }
 
-    function markerNavStopIndexForCurrent(stops) {
+    function markerNavStopIndexForCurrent(stops, dir) {
         if (!stops || stops.length === 0) return -1;
         const t = currentTransportSec();
         const eps = markerNavStopEpsilonSec();
@@ -2370,9 +2370,22 @@
                     }
                 } else if (m.type !== 'range') {
                     const i = stops.findIndex((s) => s.marker.id === m.id);
-                    if (i >= 0) return i;
+                    if (i >= 0 && Math.abs(t - m.timeSec) <= eps) return i;
                 }
             }
+        }
+        // Shift+↓（手前）: 再生中は次の停止点を基準にしないと、
+        // 通過済みの停止点で idx が決まり 2 つ分戻ってしまう
+        if (dir < 0) {
+            for (let i = 0; i < stops.length; i++) {
+                if (stops[i].sec > t - eps) return i;
+            }
+            let best = -1;
+            for (let i = 0; i < stops.length; i++) {
+                if (stops[i].sec <= t + eps) best = i;
+                else break;
+            }
+            return best;
         }
         let best = -1;
         for (let i = 0; i < stops.length; i++) {
@@ -2713,7 +2726,7 @@
         const stops = buildMarkerNavStops();
         const n = stops.length;
         if (n === 0) return false;
-        const idx = markerNavStopIndexForCurrent(stops);
+        const idx = markerNavStopIndexForCurrent(stops, dir);
         let next;
         if (idx < 0) {
             if (dir <= 0) return false;
