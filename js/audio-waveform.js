@@ -844,12 +844,6 @@
         }
         isSeeking = false;
         updateSeekUiFromVideo();
-        if (
-            (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
-            (videoMain && !videoMain.paused)
-        ) {
-            if (!rafId && typeof tick === 'function') rafId = requestAnimationFrame(tick);
-        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 

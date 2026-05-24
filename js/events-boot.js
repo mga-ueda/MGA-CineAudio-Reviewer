@@ -550,7 +550,7 @@
                     : !videoMain.paused;
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
-                    await seekTransportToAndWait(target);
+                    await seekTransportToAndWait(target, { resumeAfter: wasPlaying });
                 } else {
                     applyTimeToVideo(target);
                 }
@@ -565,9 +565,6 @@
                         '/10)'
                 );
                 flashSeekHint('Jump ' + d + '/10', formatTimecodeForTransport(target));
-                if (wasPlaying && typeof startVideoPlayback === 'function') {
-                    await startVideoPlayback({ force: true });
-                }
             })();
             return;
         }
@@ -618,22 +615,13 @@
                 stepSec = masterFrameSec;
             }
             const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
-            if (oneFrameStep && wasPlaying) {
-                transportPlayGeneration += 1;
-                transportPlayInFlight = null;
-                videoMain.pause();
-                setPlayingUi(false);
-                stopRaf();
-                updateSeekUiFromVideo();
-                if (typeof syncExtraAudioToTransport === 'function') {
-                    syncExtraAudioToTransport();
-                }
-            }
             let t = (parseFloat(seekBar.value) || 0) + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
-                    await seekTransportToAndWait(t);
+                    await seekTransportToAndWait(t, {
+                        resumeAfter: wasPlaying && !oneFrameStep,
+                    });
                 } else {
                     applyTimeToVideo(t);
                     currentTimeEl.textContent = formatTimecodeForTransport(t);
@@ -676,9 +664,6 @@
                     deltaTxt = dir > 0 ? '+1f' : '−1f';
                 }
                 flashSeekHint(sym, deltaTxt);
-                if (!oneFrameStep && wasPlaying && typeof startVideoPlayback === 'function') {
-                    await startVideoPlayback({ force: true });
-                }
             })();
         }
     });

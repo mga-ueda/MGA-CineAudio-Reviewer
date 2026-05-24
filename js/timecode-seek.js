@@ -64,9 +64,9 @@
         return needs;
     }
 
-    function applyTimeToVideo(t) {
+    function applyTimeToVideo(t, opt) {
         if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(t);
+            applyTransportAtSec(t, Object.assign({ resumeAfter: false }, opt || {}));
             return;
         }
         const x = transportTargetSec(t);
@@ -409,14 +409,85 @@
         });
     }
 
-    async function seekTransportToAndWait(sec) {
+    /** 再生中・トランスポート時計稼働中か（明示シーク前の判定用） */
+    function captureTransportWasActive() {
+        if (
+            typeof isTransportUiClockActive === 'function' &&
+            isTransportUiClockActive()
+        ) {
+            return true;
+        }
+        if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
+            return true;
+        }
+        return !!(videoMain && !videoMain.paused);
+    }
+
+    /** シーク・ジャンプ前に一度トランスポートを止める */
+    function pauseTransportBeforeSeek() {
+        const active = captureTransportWasActive();
+        if (!active && !(videoMain && !videoMain.paused)) return false;
+        if (typeof transportPlayGeneration !== 'undefined') {
+            transportPlayGeneration += 1;
+        }
+        if (typeof transportPlayInFlight !== 'undefined') {
+            transportPlayInFlight = null;
+        }
+        if (typeof clearTransportTailPlayback === 'function') {
+            clearTransportTailPlayback();
+        }
+        if (videoMain) {
+            try {
+                videoMain.pause();
+            } catch (_) {}
+        }
+        if (typeof stopAllExtraTrackSources === 'function') {
+            stopAllExtraTrackSources();
+        }
+        if (typeof setPlayingUi === 'function') setPlayingUi(false);
+        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport();
+        }
+        return active;
+    }
+
+    async function resumeTransportAfterExplicitSeek(sec) {
+        const t =
+            sec != null && typeof transportTargetSec === 'function'
+                ? transportTargetSec(sec)
+                : typeof getTransportSec === 'function'
+                  ? getTransportSec()
+                  : sec;
+        if (
+            typeof shouldStartMasterTransportTailPlayback === 'function' &&
+            shouldStartMasterTransportTailPlayback(t) &&
+            typeof startMasterTransportTailPlayback === 'function'
+        ) {
+            await startMasterTransportTailPlayback();
+            return;
+        }
+        if (typeof startVideoPlayback === 'function') {
+            await startVideoPlayback({ force: true });
+        }
+    }
+
+    async function seekTransportToAndWait(sec, opt) {
+        const wantResume = !(opt && opt.resumeAfter === false);
+        const wasActive = wantResume ? captureTransportWasActive() : false;
+        if (wasActive || (videoMain && !videoMain.paused)) {
+            pauseTransportBeforeSeek();
+        }
         applyTimeToVideo(sec);
         if (typeof videoReady === 'function' && videoReady()) {
             await waitForVideoSeekIdle(3000);
         }
         updateSeekUiFromVideo();
         if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport();
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (wasActive && wantResume) {
+            await resumeTransportAfterExplicitSeek(sec);
         }
     }
 
@@ -829,7 +900,7 @@
         if (videoMain) videoMain.pause();
         if (typeof stopAllExtraTrackSources === 'function') stopAllExtraTrackSources();
         if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(0, { markers: true });
+            applyTransportAtSec(0, { markers: true, resumeAfter: false });
         } else {
             applyTimeToVideo(0);
         }
@@ -870,17 +941,18 @@
                 if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
                 if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
                 if (typeof jumpToRangeLoopInSec === 'function') {
-                    jumpToRangeLoopInSec();
+                    await jumpToRangeLoopInSec({ resumeAfter: true });
+                } else if (typeof seekTransportToAndWait === 'function') {
+                    await seekTransportToAndWait(inSec, { resumeAfter: true });
                 } else if (typeof applyTransportAtSec === 'function') {
-                    applyTransportAtSec(inSec, { markers: true });
+                    applyTransportAtSec(inSec, { markers: true, resumeAfter: true });
                 } else {
                     applyTimeToVideo(inSec);
+                    if (typeof startVideoPlayback === 'function') {
+                        await startVideoPlayback({ force: true });
+                    }
                 }
                 schedulePersistSession();
-                setPlayingUi(true);
-                if (typeof startVideoPlayback === 'function') {
-                    await startVideoPlayback({ force: true });
-                }
                 return true;
             }
             if (typeof getLoopPlaybackEnabled === 'function' && getLoopPlaybackEnabled()) {
@@ -890,12 +962,16 @@
                 }
                 if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
                 if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
-                applyTimeToVideo(0);
-                schedulePersistSession();
-                setPlayingUi(true);
-                if (typeof startVideoPlayback === 'function') {
-                    await startVideoPlayback({ force: true });
+                if (typeof seekTransportToAndWait === 'function') {
+                    await seekTransportToAndWait(0, { resumeAfter: true });
+                } else {
+                    applyTimeToVideo(0);
+                    setPlayingUi(true);
+                    if (typeof startVideoPlayback === 'function') {
+                        await startVideoPlayback({ force: true });
+                    }
                 }
+                schedulePersistSession();
                 return true;
             }
             stopPlaybackReturnTransportToHead();

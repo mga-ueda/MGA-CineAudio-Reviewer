@@ -2130,7 +2130,7 @@
         }
     }
 
-    function commitMarkerTransportSeek(target) {
+    function commitMarkerTransportSeek(target, opt) {
         const dur = masterDurForTimelineMarkers();
         const t = Math.max(0, Math.min(dur - 0.001, target));
         const vd =
@@ -2149,7 +2149,7 @@
             suppressRangeLoopSnapForExplicitSeek();
         }
         if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(t);
+            applyTransportAtSec(t, Object.assign({ resumeAfter: false }, opt || {}));
         } else {
             if (typeof transportPlaybackSec !== 'undefined') {
                 transportPlaybackSec = t;
@@ -2188,12 +2188,7 @@
         const edgeLabel = opt.seekIn ? 'In' : 'Out';
         if (opt.seekEnd) markerActiveTcEdge = 'out';
         else if (opt.seekIn) markerActiveTcEdge = 'in';
-        if (!videoMain.paused) {
-            videoMain.pause();
-            setPlayingUi(false);
-            stopRaf();
-        }
-        const t = commitMarkerTransportSeek(target);
+        const t = commitMarkerTransportSeek(target, { resumeAfter: false });
         syncMarkerSeekTransportUi(t);
         renderSeekBarMarkers();
         if (!quiet) {
@@ -2440,27 +2435,7 @@
             target = opt.targetSec;
         } else if (m.type === 'range') target = seekEnd ? m.endSec : m.startSec;
         else target = m.timeSec;
-        const wasPlaying =
-            typeof isTransportPlaying === 'function'
-                ? isTransportPlaying()
-                : !videoMain.paused;
-        transportPlayGeneration += 1;
-        transportPlayInFlight = null;
-        if (resumeAfter && wasPlaying) {
-            stopRaf();
-            try {
-                videoMain.pause();
-            } catch (_) {}
-        } else if (!resumeAfter && wasPlaying) {
-            videoMain.pause();
-            setPlayingUi(false);
-            stopRaf();
-            updateSeekUiFromVideo();
-            if (typeof syncExtraAudioToTransport === 'function') {
-                syncExtraAudioToTransport();
-            }
-        }
-        const t = commitMarkerTransportSeek(target);
+        const t = commitMarkerTransportSeek(target, { resumeAfter: resumeAfter });
         syncMarkerSeekTransportUi(t);
         activeMarkerId = m.id;
         updateMarkerListRowClasses();
@@ -2475,21 +2450,6 @@
                 : '';
         writeLog('Marker: seek to ' + hintTc + hintSuffix);
         flashSeekHint('Marker', hintTc + hintSuffix);
-        if (resumeAfter && wasPlaying) {
-            if (
-                typeof shouldStartMasterTransportTailPlayback === 'function' &&
-                shouldStartMasterTransportTailPlayback(t) &&
-                typeof startMasterTransportTailPlayback === 'function'
-            ) {
-                if (typeof setTransportSessionPlaying === 'function') {
-                    setTransportSessionPlaying(true);
-                }
-                setPlayingUi(true);
-                void startMasterTransportTailPlayback();
-            } else {
-                void resumeTransportPlaybackAfterSeek();
-            }
-        }
         if (focusComment) {
             suppressMarkerRowHoverSeek(300);
             focusMarkerCommentField(m.id, { sync: true });

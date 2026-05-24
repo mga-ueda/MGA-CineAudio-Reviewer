@@ -150,7 +150,7 @@
         loopRangeActive = true;
         updateRangeLoopOverlay();
         if (!(opt && opt.skipJump)) {
-            jumpToRangeLoopInSec();
+            void jumpToRangeLoopInSec({ resumeAfter: false });
         }
         if (!(opt && opt.silent)) {
             writeLog(
@@ -225,61 +225,24 @@
         dismissRangeLoopLikeEscape();
     }
 
-    function jumpToRangeLoopInSec() {
-        if (!isRangeLoopPlaybackActive()) return false;
+    function jumpToRangeLoopInSec(opt) {
+        if (!isRangeLoopPlaybackActive()) return Promise.resolve(false);
         const inSec = loopRangeInSec;
-        if (typeof transportPlaybackSec !== 'undefined') {
-            transportPlaybackSec = inSec;
-            transportPlaybackLastTs = performance.now();
-        }
-        if (typeof setTransportSec === 'function') {
-            setTransportSec(inSec);
-        }
-        const vd =
-            typeof getVideoPlaybackEndSec === 'function'
-                ? getVideoPlaybackEndSec()
-                : typeof getVideoTransportDurationSec === 'function'
-                  ? getVideoTransportDurationSec()
-                  : 0;
-        if (vd > 0 && inSec < vd - 0.001) {
-            if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
-        }
-        if (typeof applyVideoTimeForTransportSec === 'function') {
-            applyVideoTimeForTransportSec(inSec, { force: true });
-        } else if (videoMain) {
-            try {
-                const vt =
-                    typeof videoSecForTransportSec === 'function'
-                        ? videoSecForTransportSec(inSec)
-                        : inSec;
-                videoMain.currentTime = vt;
-            } catch (_) {}
-        }
-        if (typeof resetExtraMixScheduleTime === 'function') {
-            resetExtraMixScheduleTime();
-        }
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
-        }
         const resume =
-            (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
-            (typeof isTransportUiClockActive === 'function' && isTransportUiClockActive());
-        if (
-            resume &&
-            videoMain &&
-            videoMain.paused &&
-            vd > 0 &&
-            inSec < vd - 0.001
-        ) {
-            const p = videoMain.play();
-            if (p && typeof p.catch === 'function') p.catch(() => {});
+            !(opt && opt.resumeAfter === false) &&
+            ((typeof captureTransportWasActive === 'function' &&
+                captureTransportWasActive()) ||
+                (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
+                (typeof isTransportUiClockActive === 'function' &&
+                    isTransportUiClockActive()));
+        if (typeof seekTransportToAndWait === 'function') {
+            return seekTransportToAndWait(inSec, { resumeAfter: resume }).then(() => true);
         }
-        if (typeof updateSeekUiFromVideo === 'function') {
-            updateSeekUiFromVideo();
-        } else if (typeof updateAllWaveformPlayheads === 'function') {
-            updateAllWaveformPlayheads();
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(inSec, { markers: true, resumeAfter: resume });
+            return Promise.resolve(true);
         }
-        return true;
+        return Promise.resolve(false);
     }
 
     let suppressLoopSnapUntil = 0;
