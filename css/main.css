@@ -3423,6 +3423,26 @@
             opacity: 0.45;
         }
 
+        /* ボタン以外のラベル・数値・リンクは通常の字幅 */
+        .transport-bar .transport-time-row .time-display,
+        .transport-bar .transport-time-row__sep,
+        .transport-bar .transport-opt-label,
+        .transport-bar .transport-opt-value,
+        .transport-bar .transport-opt-chip,
+        .transport-bar .master-vol-container.transport-opt-chip,
+        .transport-bar .monitor-floor-options.transport-opt-chip,
+        .transport-bar #masterVolDisp,
+        .transport-bar .transport-select,
+        .transport-bar .monitor-floor-select,
+        .transport-bar .transport-drift-prefix,
+        .transport-bar .transport-drift-suffix,
+        .transport-bar .transport-drift-ms,
+        .transport-bar .transport-compact-lbl,
+        .transport-bar .transport-compact-lbl--row,
+        .transport-bar .transport-shortcuts-link.transport-opt-chip {
+            font-weight: 400;
+        }
+
         /* Spectrum + level meters (controls live in transport bar) */
         .review-mix-monitor {
             width: 100%;
