@@ -3,6 +3,30 @@
     const EXPORT_FORMAT = 'mgacr-session-v1';
     const EXPORT_FILE_EXT = '.mgacr';
 
+    function reviewFileExtLower(name) {
+        const s = String(name || '').toLowerCase();
+        const dot = s.lastIndexOf('.');
+        if (dot < 0) return '';
+        return s.slice(dot);
+    }
+
+    function isMgacrReviewFile(file) {
+        if (!file || !file.name) return false;
+        return reviewFileExtLower(file.name) === EXPORT_FILE_EXT;
+    }
+
+    function assertMgacrReviewFile(file) {
+        if (!file || file.size < 1) {
+            throw new Error('Empty file');
+        }
+        if (!isMgacrReviewFile(file)) {
+            const name = file.name || 'unknown';
+            throw new Error(
+                'Import Review は .mgacr ファイルのみ読み込めます（選択: "' + name + '"）',
+            );
+        }
+    }
+
     function formatByteSize(bytes) {
         const n = Number(bytes);
         if (!Number.isFinite(n) || n < 1) return '0 B';
@@ -916,9 +940,7 @@
     async function importSessionPackage(file) {
         pauseTransportForImportReview();
         try {
-            if (!file || file.size < 1) {
-                throw new Error('Empty file');
-            }
+            assertMgacrReviewFile(file);
             const maxBytes = 4 * 1024 * 1024 * 1024;
             if (file.size > maxBytes) {
                 throw new Error('File exceeds 4 GB limit');
@@ -1130,6 +1152,18 @@
         importFile.addEventListener('change', () => {
             const f = importFile.files && importFile.files[0];
             if (!f) return;
+            if (!isMgacrReviewFile(f)) {
+                const msg =
+                    'Import Review は .mgacr ファイルのみ読み込めます（選択: "' +
+                    (f.name || 'unknown') +
+                    '"）';
+                writeLog('Import Review: rejected — ' + msg);
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert('インポートできません', msg);
+                }
+                importFile.value = '';
+                return;
+            }
             importBtn.disabled = true;
             importSessionPackage(f)
                 .catch((e) => {
