@@ -536,18 +536,30 @@
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
-        const playPromise = videoMain.play();
-        if (playPromise && typeof playPromise.then === 'function') {
-            await playPromise;
+        const delaySec =
+            typeof getVideoFrameDelaySec === 'function' ? getVideoFrameDelaySec() : 0;
+        const holdVideoForDelay = delaySec > 0 && startT + 0.0005 < delaySec;
+        if (holdVideoForDelay) {
+            try {
+                videoMain.pause();
+            } catch (_) {}
+            if (typeof applyVideoTimeForTransportSec === 'function') {
+                applyVideoTimeForTransportSec(startT, { force: true });
+            }
+        } else {
+            const playPromise = videoMain.play();
+            if (playPromise && typeof playPromise.then === 'function') {
+                await playPromise;
+            }
         }
         if (playGen != null && playGen !== transportPlayGeneration) return false;
-        if (videoMain.paused) {
+        if (!holdVideoForDelay && videoMain.paused) {
             throw new Error('video remains paused after play()');
         }
-        if (!(await waitUntilVideoPlaying(60))) {
+        if (!holdVideoForDelay && !(await waitUntilVideoPlaying(60))) {
             throw new Error('video stuck while starting playback');
         }
-        if (!(await waitUntilVideoTimeAdvances(2500))) {
+        if (!holdVideoForDelay && !(await waitUntilVideoTimeAdvances(2500))) {
             const vd =
                 typeof getVideoPlaybackEndSec === 'function'
                     ? getVideoPlaybackEndSec()

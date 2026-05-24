@@ -1053,23 +1053,36 @@
     function triggerAllClear(allClearBtn) {
         const btn = allClearBtn || document.getElementById('sessionAllClearBtn');
         if (!btn || btn.disabled) return;
-        btn.disabled = true;
-        const run =
-            typeof clearEntireSession === 'function' ? clearEntireSession() : Promise.resolve();
-        Promise.resolve(run)
-            .catch((e) => {
-                const msg = e && e.message ? e.message : String(e);
-                if (typeof clearLog === 'function') clearLog();
-                writeLog('Session: All Clear failed — ' + msg);
-                if (typeof showAppAlert === 'function') {
-                    showAppAlert('All Clear に失敗しました', msg);
-                }
-            })
-            .finally(() => {
-                if (typeof updateSessionAllClearButton === 'function') {
-                    updateSessionAllClearButton();
-                }
-            });
+        const confirmPromise =
+            typeof requestAppConfirm === 'function'
+                ? requestAppConfirm(
+                      'All Clear',
+                      '読み込んだ動画・追加音声・マーカーなど、すべての読み込み情報が失われます。よろしいですか？',
+                      'All Clear: cancelled',
+                  )
+                : Promise.resolve(false);
+        void confirmPromise.then((confirmed) => {
+            if (!confirmed) return;
+            btn.disabled = true;
+            const run =
+                typeof clearEntireSession === 'function'
+                    ? clearEntireSession()
+                    : Promise.resolve();
+            Promise.resolve(run)
+                .catch((e) => {
+                    const msg = e && e.message ? e.message : String(e);
+                    if (typeof clearLog === 'function') clearLog();
+                    writeLog('Session: All Clear failed — ' + msg);
+                    if (typeof showAppAlert === 'function') {
+                        showAppAlert('All Clear に失敗しました', msg);
+                    }
+                })
+                .finally(() => {
+                    if (typeof updateSessionAllClearButton === 'function') {
+                        updateSessionAllClearButton();
+                    }
+                });
+        });
     }
 
     function handleSessionIoShortcutKeydown(e) {
@@ -1109,7 +1122,7 @@
         const importBtn = document.getElementById('sessionImportBtn');
         const allClearBtn = document.getElementById('sessionAllClearBtn');
         const importFile = document.getElementById('sessionImportFile');
-        const sessionIoRow = document.querySelector('.transport-bar__row--session-io');
+        const sessionIoRow = document.querySelector('.transport-bar__row--links');
         if (!exportBtn || !importBtn || !importFile) return;
 
         applyExportMediaIncludePrefs(readExportMediaIncludePrefs());

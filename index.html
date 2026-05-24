@@ -28,6 +28,17 @@
         </div>
     </div>
 
+    <div id="appConfirmOverlay" class="app-confirm-overlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmBody">
+        <div class="app-confirm-overlay__box">
+            <p class="app-confirm-overlay__title" id="appConfirmTitle"></p>
+            <p class="app-confirm-overlay__body" id="appConfirmBody"></p>
+            <div class="app-confirm-overlay__actions">
+                <button type="button" id="appConfirmCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="appConfirmOk" class="session-io-btn session-io-btn--export">OK</button>
+            </div>
+        </div>
+    </div>
+
     <div class="layout-narrow">
     <header class="app-header">
         <div class="app-header-inner">
@@ -284,8 +295,29 @@
             <div class="transport-opt-box transport-opt-chip transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
                 <div class="transport-opt-cell transport-opt-cell--video-drift">
                     <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
-                        <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> ms</span>
+                        <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> f</span>
                     </span>
+                </div>
+            </div>
+            <div class="transport-opt-box transport-opt-chip transport-opt-box--video-delay">
+                <div class="transport-opt-cell transport-opt-cell--video-delay">
+                    <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label" for="videoFrameDelayInput">
+                        <span>Video Delay</span>
+                        <span class="transport-video-delay-field">
+                            <input
+                                type="text"
+                                id="videoFrameDelayInput"
+                                class="transport-video-delay-input"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="2"
+                                value="0"
+                                aria-label="Video delay (frames)"
+                                title="Delay video playback behind audio by this many frames (0–99)"
+                            >
+                            <span class="transport-video-delay-suffix" aria-hidden="true">f</span>
+                        </span>
+                    </label>
                 </div>
             </div>
             <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
@@ -296,19 +328,8 @@
                     </label>
                 </div>
             </div>
-            <a
-                href="guide.html"
-                id="transportGuideLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open How To in a new window"
-            >How To</a>
-            <a
-                href="shortcuts.html"
-                id="transportShortcutsLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open Shortcut reference in a new window"
-            >Shortcut</a>
             <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session (Alt+Shift+Ctrl+Del)">All Clear</button>
+            <button type="button" id="playStopBtn" disabled>Play</button>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume (double-click or Ctrl+Shift+V for 100%)">
@@ -334,9 +355,20 @@
                     <option value="-96">-96 dB</option>
                 </select>
             </div>
-            <button type="button" id="playStopBtn" disabled>Play</button>
         </div>
-        <div class="transport-bar__row transport-bar__row--session-io">
+        <div class="transport-bar__row transport-bar__row--links">
+            <a
+                href="guide.html"
+                id="transportGuideLink"
+                class="transport-shortcuts-link transport-opt-chip"
+                title="Open How To in a new window"
+            >How To</a>
+            <a
+                href="shortcuts.html"
+                id="transportShortcutsLink"
+                class="transport-shortcuts-link transport-opt-chip"
+                title="Open Shortcut reference in a new window"
+            >Shortcut</a>
             <div class="session-io-cluster" role="group" aria-label="Export media selection and review import/export">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
                     <span class="transport-opt-label">Include in export</span>

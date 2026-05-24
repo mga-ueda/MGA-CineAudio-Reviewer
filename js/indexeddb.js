@@ -252,6 +252,7 @@
         const row = {
             v: 4,
             loopPlayback: getLoopPlaybackEnabled(),
+            frameDelayFrames: getVideoFrameDelayFrames(),
         };
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
@@ -654,6 +655,7 @@
             applyMonitorUiPersistSnapshot(row.monitorPrefs);
         }
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
+        if (typeof row.frameDelayFrames === 'number') applySavedVideoFrameDelay(row.frameDelayFrames);
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);
         }
@@ -735,6 +737,7 @@
         return runSerializedSessionRestore(async () => {
             const prefs = readPrefs();
             applySavedLoopPlayback(prefs.loopPlayback);
+            applySavedVideoFrameDelay(prefs.frameDelayFrames);
 
             if (!window.indexedDB) {
                 writeLog('IndexedDB unavailable; skipped video blob restore.');

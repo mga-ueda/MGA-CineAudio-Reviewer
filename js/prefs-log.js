@@ -7,6 +7,80 @@
         window.alert(b ? t + '\n\n' + b : t);
     }
 
+    let appConfirmResolve = null;
+
+    function closeAppConfirm(result) {
+        const root = document.getElementById('appConfirmOverlay');
+        if (root) {
+            root.hidden = true;
+            root.setAttribute('aria-hidden', 'true');
+        }
+        if (appConfirmResolve) {
+            appConfirmResolve(!!result);
+            appConfirmResolve = null;
+        }
+    }
+
+    function showAppConfirm(title, body) {
+        const root = document.getElementById('appConfirmOverlay');
+        const titleEl = document.getElementById('appConfirmTitle');
+        const bodyEl = document.getElementById('appConfirmBody');
+        const cancelBtn = document.getElementById('appConfirmCancel');
+        if (!root || !titleEl || !bodyEl || !cancelBtn) return Promise.resolve(false);
+
+        const t = title != null ? String(title) : '';
+        const b = body != null && body !== '' ? String(body) : '';
+        writeLog(b ? t + ' — ' + b : t);
+
+        titleEl.textContent = t;
+        bodyEl.textContent = b;
+        root.hidden = false;
+        root.setAttribute('aria-hidden', 'false');
+
+        return new Promise((resolve) => {
+            appConfirmResolve = resolve;
+            requestAnimationFrame(() => {
+                cancelBtn.focus();
+            });
+        });
+    }
+
+    window.showAppConfirm = showAppConfirm;
+
+    function requestAppConfirm(title, body, cancelLogMsg) {
+        const promise =
+            typeof showAppConfirm === 'function'
+                ? showAppConfirm(title, body)
+                : Promise.resolve(
+                      window.confirm(
+                          (title != null ? String(title) : '') +
+                              (body != null && body !== '' ? '\n\n' + String(body) : ''),
+                      ),
+                  );
+        return promise.then((confirmed) => {
+            if (!confirmed && cancelLogMsg) writeLog(cancelLogMsg);
+            return confirmed;
+        });
+    }
+
+    window.requestAppConfirm = requestAppConfirm;
+
+    (function initAppConfirmOverlay() {
+        const root = document.getElementById('appConfirmOverlay');
+        const cancelBtn = document.getElementById('appConfirmCancel');
+        const okBtn = document.getElementById('appConfirmOk');
+        if (!root || !cancelBtn || !okBtn) return;
+
+        cancelBtn.addEventListener('click', () => closeAppConfirm(false));
+        okBtn.addEventListener('click', () => closeAppConfirm(true));
+        root.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                closeAppConfirm(false);
+            }
+        });
+    })();
+
     function clearLog() {
         if (!logEl) return;
         logEl.innerText = '';
@@ -110,6 +184,7 @@
             const prev = readPrefs();
             const payload = {
                 loopPlayback: getLoopPlaybackEnabled(),
+                frameDelayFrames: getVideoFrameDelayFrames(),
             };
             if (prev.exportMediaInclude && typeof prev.exportMediaInclude === 'object') {
                 payload.exportMediaInclude = prev.exportMediaInclude;

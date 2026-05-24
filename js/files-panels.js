@@ -676,7 +676,21 @@
     (function bindVideoClearButton() {
         const btn = document.getElementById('videoClearBtn');
         if (!btn) return;
-        btn.addEventListener('click', clearVideoPanel);
+        btn.addEventListener('click', () => {
+            if (btn.disabled) return;
+            const confirmPromise =
+                typeof requestAppConfirm === 'function'
+                    ? requestAppConfirm(
+                          'Video Clear',
+                          '読み込んだ動画をアンロードします。映像に関する情報が失われますが、よろしいですか？',
+                          'Video Clear: cancelled',
+                      )
+                    : Promise.resolve(false);
+            void confirmPromise.then((confirmed) => {
+                if (!confirmed) return;
+                clearVideoPanel();
+            });
+        });
         updateVideoClearButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     })();

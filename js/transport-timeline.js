@@ -52,8 +52,14 @@
         );
     }
 
-    function videoDriftThresholdMs() {
-        return Math.round(VIDEO_STEADY_FOLLOW_DRIFT_SEC * 1000);
+    function playbackDriftFrameSec() {
+        return typeof masterFrameSec === 'number' && masterFrameSec > 0
+            ? masterFrameSec
+            : 1 / 60;
+    }
+
+    function videoDriftThresholdFrames() {
+        return Math.max(1, Math.round(VIDEO_STEADY_FOLLOW_DRIFT_SEC / playbackDriftFrameSec()));
     }
 
     /** 映像 currentTime と音声マスターから求めた目標映像位置の差（秒, 符号付き）。 */
@@ -82,15 +88,16 @@
         updateVideoDriftPanelStatUi({ repaintCached: true });
     }
 
-    function playbackDriftMsFromSec(driftSec) {
-        return Math.min(9999, Math.round(Math.abs(driftSec) * 1000));
+    function playbackDriftFramesFromSec(driftSec) {
+        const frameSec = playbackDriftFrameSec();
+        return Math.min(9999, Math.round(Math.abs(driftSec) / frameSec));
     }
 
     /** @returns {'safe'|'warn'|'danger'} */
-    function playbackDriftToneFromMs(ms) {
-        const threshMs = videoDriftThresholdMs();
-        if (ms >= threshMs) return 'danger';
-        if (ms >= threshMs * 0.55) return 'warn';
+    function playbackDriftToneFromFrames(frames) {
+        const threshFrames = videoDriftThresholdFrames();
+        if (frames >= threshFrames) return 'danger';
+        if (frames >= Math.max(1, Math.round(threshFrames * 0.55))) return 'warn';
         return 'safe';
     }
 
@@ -109,7 +116,7 @@
         statEl.innerHTML =
             '<span class="transport-drift-prefix">Playback Drift - </span>' +
             '<span class="transport-drift-ms transport-drift-ms--safe">0000</span>' +
-            '<span class="transport-drift-suffix"> ms</span>';
+            '<span class="transport-drift-suffix"> f</span>';
     }
 
     function clearPlaybackDriftDisplay(statEl) {
@@ -120,8 +127,8 @@
     function setPlaybackDriftDisplay(statEl, absDriftSec) {
         ensurePlaybackDriftDisplayStructure(statEl);
         const msEl = playbackDriftMsEl(statEl);
-        const ms = playbackDriftMsFromSec(absDriftSec);
-        if (msEl) msEl.textContent = String(ms).padStart(4, '0');
+        const frames = playbackDriftFramesFromSec(absDriftSec);
+        if (msEl) msEl.textContent = String(frames).padStart(4, '0');
     }
 
     function setPlaybackDriftDisplayUnknown(statEl) {
@@ -145,7 +152,7 @@
         setPlaybackDriftDisplay(statEl, 0);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = 'Playback Drift: no session loaded (0 ms)';
+        statEl.title = 'Playback Drift: no session loaded (0 f)';
     }
 
     function applyPlaybackDriftPanelTone(statEl, tone) {
@@ -207,7 +214,7 @@
         if (!videoReady()) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: not available without video (shows ---- ms)',
+                'Playback Drift: not available without video (shows ---- f)',
             );
             return;
         }
@@ -253,25 +260,25 @@
         if (signed == null) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: no measurable drift (shows ---- ms)',
+                'Playback Drift: no measurable drift (shows ---- f)',
             );
             return;
         }
 
-        const ms = playbackDriftMsFromSec(signed);
-        const threshMs = videoDriftThresholdMs();
+        const frames = playbackDriftFramesFromSec(signed);
+        const threshFrames = videoDriftThresholdFrames();
         const corrected =
             !!(opt && opt.corrected) || performance.now() < videoDriftCorrectFlashUntil;
         if (driftBox) driftBox.hidden = false;
         setPlaybackDriftDisplay(statEl, signed);
-        applyPlaybackDriftPanelTone(statEl, playbackDriftToneFromMs(ms));
+        applyPlaybackDriftPanelTone(statEl, playbackDriftToneFromFrames(frames));
         if (driftBox) {
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
         }
         statEl.title = VIDEO_DRIFT_AUTO_CORRECT_ENABLED
             ? 'Playback Drift vs audio master (updates ~1s; corrects video when over ' +
-              threshMs +
-              ' ms).'
+              threshFrames +
+              ' f).'
             : 'Playback Drift vs audio master (updates ~1s; auto-correction disabled).';
     }
 
@@ -553,12 +560,33 @@
     }
 
     /** トランスポート位置に対応する映像 currentTime。 */
+    function videoFrameDelaySecForSync() {
+        if (typeof getVideoFrameDelaySec === 'function') return getVideoFrameDelaySec();
+        if (typeof getVideoFrameDelayFrames !== 'function') return 0;
+        const frames = getVideoFrameDelayFrames();
+        if (!frames || frames <= 0) return 0;
+        const frameSec =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 60;
+        return frames * frameSec;
+    }
+
+    function transportSecBeforeVideoDelayEnds(audioSec) {
+        const delaySec = videoFrameDelaySecForSync();
+        if (delaySec <= 0) return false;
+        const x = clampTransportSec(audioSec);
+        return x + 0.0005 < delaySec;
+    }
+
     function videoSecForTransportSec(audioSec) {
         const x = clampTransportSec(audioSec);
         const vd = getVideoPlaybackEndSec();
         if (!vd) return 0;
         if (x >= vd - 0.0005) return Math.max(0, vd - masterFrameSec);
-        return Math.max(0, Math.min(x, Math.max(0, vd - masterFrameSec)));
+        const mapped = Math.max(0, Math.min(x, Math.max(0, vd - masterFrameSec)));
+        const delaySec = videoFrameDelaySecForSync();
+        return Math.max(0, mapped - delaySec);
     }
 
     /** 映像 currentTime からトランスポート位置を推定（フォールバック用）。 */
@@ -604,11 +632,31 @@
         const target = videoSecForTransportSec(x);
         const cur = videoMain.currentTime || 0;
         const drift = Math.abs(cur - target);
+        const delaySec = videoFrameDelaySecForSync();
         const playing =
             typeof isTransportPlaying === 'function' && isTransportPlaying();
+        const holdForDelay = playing && transportSecBeforeVideoDelayEnds(x);
+        if (holdForDelay) {
+            if (Math.abs(cur - target) > 0.001) {
+                try {
+                    videoMain.currentTime = target;
+                } catch (_) {}
+            }
+            if (!videoMain.paused) {
+                try {
+                    videoMain.pause();
+                } catch (_) {}
+            }
+            const signed = sampleVideoDriftForPlayback(x, opt);
+            if (signed != null) {
+                refreshVideoDriftMonitorFromSample(x, signed);
+            }
+            return true;
+        }
         const steadyNativePlayback =
             !force &&
             playing &&
+            delaySec <= 0 &&
             !videoMain.seeking &&
             !videoMain.paused &&
             !videoMain.ended;
@@ -646,9 +694,15 @@
                 videoMain.currentTime = target;
             } catch (_) {}
         }
-        if (playing && videoMain.paused && !videoMain.ended && target > 0.001) {
-            const p = videoMain.play();
-            if (p && typeof p.catch === 'function') p.catch(() => {});
+        if (playing && videoMain.paused && !videoMain.ended) {
+            const mayStartVideo =
+                delaySec > 0
+                    ? !transportSecBeforeVideoDelayEnds(x)
+                    : target > 0.001;
+            if (mayStartVideo) {
+                const p = videoMain.play();
+                if (p && typeof p.catch === 'function') p.catch(() => {});
+            }
         }
         return needs;
     }

@@ -3620,7 +3620,21 @@
             });
         }
         if (markerClearAllBtn) {
-            markerClearAllBtn.addEventListener('click', () => clearAllMarkers());
+            markerClearAllBtn.addEventListener('click', () => {
+                if (markerClearAllBtn.disabled) return;
+                const confirmPromise =
+                    typeof requestAppConfirm === 'function'
+                        ? requestAppConfirm(
+                              'Markers Clear',
+                              'すべてのマーカーが削除されます。よろしいですか？',
+                              'Markers Clear: cancelled',
+                          )
+                        : Promise.resolve(false);
+                void confirmPromise.then((confirmed) => {
+                    if (!confirmed) return;
+                    clearAllMarkers();
+                });
+            });
         }
         updateMarkerHideViewButton();
         if (audioWaveformMarkers) {

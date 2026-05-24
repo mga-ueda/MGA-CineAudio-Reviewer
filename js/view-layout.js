@@ -1,3 +1,6 @@
+    let videoFrameDelayFrames = 0;
+    const VIDEO_FRAME_DELAY_MAX = 99;
+
     function getLoopPlaybackEnabled() {
         return !!(loopPlaybackCheckbox && loopPlaybackCheckbox.checked);
     }
@@ -13,4 +16,67 @@
         writeLog('Loop playback: ' + (on ? 'ON' : 'OFF'));
         flashSeekHint('Loop', on ? 'ON' : 'OFF', 'notice');
         flashTransportOptBox('playback');
+    }
+
+    function normalizeVideoFrameDelayFrames(n) {
+        const v = Math.round(Number(n));
+        if (!Number.isFinite(v) || v < 0) return 0;
+        return Math.min(VIDEO_FRAME_DELAY_MAX, v);
+    }
+
+    function getVideoFrameDelayFrames() {
+        if (videoFrameDelayInput) {
+            const raw = videoFrameDelayInput.value.trim();
+            if (raw !== '') return normalizeVideoFrameDelayFrames(raw);
+        }
+        return videoFrameDelayFrames;
+    }
+
+    function getVideoFrameDelaySec() {
+        const frames = getVideoFrameDelayFrames();
+        if (!frames || frames <= 0) return 0;
+        const frameSec =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 60;
+        return frames * frameSec;
+    }
+
+    window.getVideoFrameDelayFrames = getVideoFrameDelayFrames;
+    window.getVideoFrameDelaySec = getVideoFrameDelaySec;
+
+    function syncVideoFrameDelayInputFromState() {
+        if (!videoFrameDelayInput) return;
+        videoFrameDelayInput.value = String(videoFrameDelayFrames);
+    }
+
+    function applySavedVideoFrameDelay(frames) {
+        videoFrameDelayFrames = normalizeVideoFrameDelayFrames(frames);
+        syncVideoFrameDelayInputFromState();
+    }
+
+    function commitVideoFrameDelayFromInput() {
+        const raw = videoFrameDelayInput ? videoFrameDelayInput.value.trim() : '';
+        const next = normalizeVideoFrameDelayFrames(raw === '' ? 0 : raw);
+        const changed = next !== videoFrameDelayFrames;
+        videoFrameDelayFrames = next;
+        syncVideoFrameDelayInputFromState();
+        return changed;
+    }
+
+    function applyVideoFrameDelayToTransportNow() {
+        if (typeof applyVideoTimeForTransportSec !== 'function') return;
+        const t =
+            typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
+                ? transportPlaybackSec
+                : 0;
+        applyVideoTimeForTransportSec(t, { force: true });
+    }
+
+    function logAndPersistVideoFrameDelay() {
+        schedulePersistSession();
+        writeLog('Video delay: ' + videoFrameDelayFrames + ' f');
+        flashSeekHint('Video Delay', videoFrameDelayFrames + ' f', 'notice');
+        flashTransportOptBox('videoDelay');
+        applyVideoFrameDelayToTransportNow();
     }
