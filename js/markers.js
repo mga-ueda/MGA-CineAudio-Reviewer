@@ -951,12 +951,32 @@
 
     window.resetMarkersDisplayHidden = resetMarkersDisplayHidden;
 
+    function isWaveformMarkerHighlightEnabled() {
+        return !markersDisplayHidden;
+    }
+
+    function clearWaveformMarkerHighlightState() {
+        let changed = false;
+        if (waveformMarkerHoverId != null) {
+            waveformMarkerHoverId = null;
+            changed = true;
+        }
+        if (transportMarkerHighlightId != null) {
+            transportMarkerHighlightId = null;
+            changed = true;
+        }
+        if (changed) {
+            updateMarkerListRowClasses();
+        }
+    }
+
     function applyMarkersDisplayVisibility() {
         if (markerPanel) {
             markerPanel.classList.toggle('marker-panel--markers-hidden', markersDisplayHidden);
         }
         if (markersDisplayHidden) {
             hideMarkersVisualLayers();
+            clearWaveformMarkerHighlightState();
             return;
         }
         renderSeekBarMarkers();
@@ -1900,25 +1920,30 @@
             }
         }
         if (!isMarkerListPlaybackActive()) {
-            if (waveformMarkerHoverId) {
-                return waveformMarkerHoverId;
-            }
-            if (waveformLanesPointerInside) {
-                const pointerX =
-                    typeof getWaveformLanesPointerClientX === 'function'
-                        ? getWaveformLanesPointerClientX()
-                        : typeof getWaveformPointerClientX === 'function'
-                          ? getWaveformPointerClientX()
-                          : null;
-                const atPointer = markerIdForWaveformPointerClientX(pointerX);
-                if (atPointer) {
-                    return atPointer;
-                }
-                const playheadId = markerIdForTransportSec(currentTransportSec());
-                if (playheadId) {
-                    return playheadId;
-                }
+            if (waveformLanesPointerInside && !isWaveformMarkerHighlightEnabled()) {
                 return null;
+            }
+            if (isWaveformMarkerHighlightEnabled()) {
+                if (waveformMarkerHoverId) {
+                    return waveformMarkerHoverId;
+                }
+                if (waveformLanesPointerInside) {
+                    const pointerX =
+                        typeof getWaveformLanesPointerClientX === 'function'
+                            ? getWaveformLanesPointerClientX()
+                            : typeof getWaveformPointerClientX === 'function'
+                              ? getWaveformPointerClientX()
+                              : null;
+                    const atPointer = markerIdForWaveformPointerClientX(pointerX);
+                    if (atPointer) {
+                        return atPointer;
+                    }
+                    const playheadId = markerIdForTransportSec(currentTransportSec());
+                    if (playheadId) {
+                        return playheadId;
+                    }
+                    return null;
+                }
             }
             const playheadId = markerIdForTransportSec(currentTransportSec());
             if (playheadId) {
@@ -1928,7 +1953,7 @@
         if (markerPanelPointerInside && markerPanelHoverId) {
             return markerPanelHoverId;
         }
-        if (transportMarkerHighlightId) {
+        if (transportMarkerHighlightId && isWaveformMarkerHighlightEnabled()) {
             return transportMarkerHighlightId;
         }
         if (markerPanelPointerInside && activeMarkerId) {
@@ -1950,6 +1975,13 @@
     }
 
     function updateTransportMarkerHighlight(transportSecOpt) {
+        if (!isWaveformMarkerHighlightEnabled()) {
+            if (transportMarkerHighlightId != null) {
+                transportMarkerHighlightId = null;
+                updateMarkerListRowClasses();
+            }
+            return;
+        }
         if (!markerTimelineReady()) {
             if (transportMarkerHighlightId != null) {
                 transportMarkerHighlightId = null;
@@ -1990,11 +2022,13 @@
     function bindSeekBarMarkerListHighlight(el, markerId) {
         if (!el || !markerId) return;
         el.addEventListener('pointerenter', () => {
+            if (!isWaveformMarkerHighlightEnabled()) return;
             if (isMarkerListPlaybackActive()) return;
             waveformMarkerHoverId = markerId;
             updateMarkerListRowClasses();
         });
         el.addEventListener('pointerleave', (ev) => {
+            if (!isWaveformMarkerHighlightEnabled()) return;
             if (isMarkerListPlaybackActive()) return;
             const rel = ev.relatedTarget;
             if (rel && el.contains(rel)) return;
@@ -3629,7 +3663,13 @@
             lanes.addEventListener('pointerenter', () => setWaveformLanesPointerInside(true));
             lanes.addEventListener('pointerleave', () => setWaveformLanesPointerInside(false));
             lanes.addEventListener('pointermove', () => {
-                if (isMarkerListPlaybackActive() || !waveformLanesPointerInside) return;
+                if (
+                    !isWaveformMarkerHighlightEnabled() ||
+                    isMarkerListPlaybackActive() ||
+                    !waveformLanesPointerInside
+                ) {
+                    return;
+                }
                 if (markerListPointerMoveRaf) return;
                 markerListPointerMoveRaf = requestAnimationFrame(() => {
                     markerListPointerMoveRaf = 0;
