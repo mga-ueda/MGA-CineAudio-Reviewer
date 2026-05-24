@@ -864,27 +864,34 @@
             typeof isTransportPlaying === 'function'
                 ? isTransportPlaying()
                 : !!(typeof videoMain !== 'undefined' && videoMain && !videoMain.paused);
-        if (!playing) return;
-        if (typeof transportPlayGeneration !== 'undefined') {
-            transportPlayGeneration += 1;
+        if (playing) {
+            if (typeof transportPlayGeneration !== 'undefined') {
+                transportPlayGeneration += 1;
+            }
+            if (typeof transportPlayInFlight !== 'undefined') {
+                transportPlayInFlight = null;
+            }
+            if (typeof clearTransportTailPlayback === 'function') {
+                clearTransportTailPlayback();
+            }
+            if (typeof videoMain !== 'undefined' && videoMain) {
+                videoMain.pause();
+            }
+            if (typeof stopAllExtraTrackSources === 'function') {
+                stopAllExtraTrackSources();
+            }
+            if (typeof setPlayingUi === 'function') setPlayingUi(false);
+            if (typeof stopRaf === 'function') stopRaf();
         }
-        if (typeof transportPlayInFlight !== 'undefined') {
-            transportPlayInFlight = null;
-        }
-        if (typeof clearTransportTailPlayback === 'function') {
-            clearTransportTailPlayback();
-        }
-        if (typeof videoMain !== 'undefined' && videoMain) {
-            videoMain.pause();
-        }
-        if (typeof stopAllExtraTrackSources === 'function') {
-            stopAllExtraTrackSources();
-        }
-        if (typeof setPlayingUi === 'function') setPlayingUi(false);
-        if (typeof stopRaf === 'function') stopRaf();
-        if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport();
+        if (typeof applySessionTransportAtHead === 'function') {
+            applySessionTransportAtHead();
+        } else if (typeof setTransportSec === 'function') {
+            setTransportSec(0);
+            if (typeof seekBar !== 'undefined' && seekBar) seekBar.value = '0';
+            if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+            if (typeof updateAllWaveformPlayheads === 'function') {
+                updateAllWaveformPlayheads();
+            }
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
