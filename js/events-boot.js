@@ -316,6 +316,20 @@
         if (isTypingTarget(e.target)) return;
 
         if (
+            typeof handleSessionIoShortcutKeydown === 'function' &&
+            handleSessionIoShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
+            typeof handleMasterVolShortcutKeydown === 'function' &&
+            handleMasterVolShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handlePlaybackRegionDeleteKeydown === 'function' &&
             handlePlaybackRegionDeleteKeydown(e)
         ) {

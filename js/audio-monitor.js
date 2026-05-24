@@ -1484,5 +1484,17 @@ window.addEventListener('resize', () => {
         saveUiPrefsToLocalStorage();
     }
 
+    function handleMasterVolShortcutKeydown(e) {
+        if (!e || e.repeat) return false;
+        if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return false;
+        if (e.code !== 'KeyV') return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+        e.preventDefault();
+        applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, true);
+        saveUiPrefsToLocalStorage();
+        return true;
+    }
+
     window.resetMasterVolumeForSessionClear = resetMasterVolumeForSessionClear;
+    window.handleMasterVolShortcutKeydown = handleMasterVolShortcutKeydown;
 })();

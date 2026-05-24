@@ -998,6 +998,89 @@
     window.importSessionPackage = importSessionPackage;
     window.refreshExportMediaOptionsUi = refreshExportMediaOptionsUi;
 
+    function triggerExportReview(exportBtn) {
+        const btn = exportBtn || document.getElementById('sessionExportBtn');
+        if (!btn || btn.disabled) return;
+        refreshExportMediaOptionsUi();
+        btn.disabled = true;
+        exportSessionPackage()
+            .catch((e) => {
+                const msg = e && e.message ? e.message : String(e);
+                writeLog('Export Review: failed — ' + msg);
+                if (e && e.stack) {
+                    writeLog('Export Review: error detail — ' + String(e.stack).split('\n')[0]);
+                }
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert('エクスポートに失敗しました', msg);
+                }
+            })
+            .finally(() => {
+                btn.disabled = false;
+            });
+    }
+
+    function triggerImportReview(importBtn, importFile) {
+        const btn = importBtn || document.getElementById('sessionImportBtn');
+        const fileInput = importFile || document.getElementById('sessionImportFile');
+        if (!btn || !fileInput || btn.disabled) return;
+        pauseTransportForImportReview();
+        fileInput.value = '';
+        fileInput.click();
+    }
+
+    function triggerAllClear(allClearBtn) {
+        const btn = allClearBtn || document.getElementById('sessionAllClearBtn');
+        if (!btn || btn.disabled) return;
+        btn.disabled = true;
+        const run =
+            typeof clearEntireSession === 'function' ? clearEntireSession() : Promise.resolve();
+        Promise.resolve(run)
+            .catch((e) => {
+                const msg = e && e.message ? e.message : String(e);
+                writeLog('Session: All Clear failed — ' + msg);
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert('All Clear に失敗しました', msg);
+                }
+            })
+            .finally(() => {
+                if (typeof updateSessionAllClearButton === 'function') {
+                    updateSessionAllClearButton();
+                }
+            });
+    }
+
+    function handleSessionIoShortcutKeydown(e) {
+        if (!e || e.repeat) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+
+        if (
+            e.altKey &&
+            e.shiftKey &&
+            (e.ctrlKey || e.metaKey) &&
+            e.code === 'Delete'
+        ) {
+            e.preventDefault();
+            triggerAllClear();
+            return true;
+        }
+
+        if (e.altKey) return false;
+        if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return false;
+        if (e.code === 'KeyI') {
+            e.preventDefault();
+            triggerImportReview();
+            return true;
+        }
+        if (e.code === 'KeyE') {
+            e.preventDefault();
+            triggerExportReview();
+            return true;
+        }
+        return false;
+    }
+
+    window.handleSessionIoShortcutKeydown = handleSessionIoShortcutKeydown;
+
     function bindSessionIoUi() {
         const exportBtn = document.getElementById('sessionExportBtn');
         const importBtn = document.getElementById('sessionImportBtn');
@@ -1037,52 +1120,12 @@
         }
 
         if (allClearBtn) {
-            allClearBtn.addEventListener('click', () => {
-                allClearBtn.disabled = true;
-                const run =
-                    typeof clearEntireSession === 'function'
-                        ? clearEntireSession()
-                        : Promise.resolve();
-                Promise.resolve(run)
-                    .catch((e) => {
-                        const msg = e && e.message ? e.message : String(e);
-                        writeLog('Session: All Clear failed — ' + msg);
-                        if (typeof showAppAlert === 'function') {
-                            showAppAlert('All Clear に失敗しました', msg);
-                        }
-                    })
-                    .finally(() => {
-                        if (typeof updateSessionAllClearButton === 'function') {
-                            updateSessionAllClearButton();
-                        }
-                    });
-            });
+            allClearBtn.addEventListener('click', () => triggerAllClear(allClearBtn));
         }
 
-        exportBtn.addEventListener('click', () => {
-            refreshExportMediaOptionsUi();
-            exportBtn.disabled = true;
-            exportSessionPackage()
-                .catch((e) => {
-                    const msg = e && e.message ? e.message : String(e);
-                    writeLog('Export Review: failed — ' + msg);
-                    if (e && e.stack) {
-                        writeLog('Export Review: error detail — ' + String(e.stack).split('\n')[0]);
-                    }
-                    if (typeof showAppAlert === 'function') {
-                        showAppAlert('エクスポートに失敗しました', msg);
-                    }
-                })
-                .finally(() => {
-                    exportBtn.disabled = false;
-                });
-        });
+        exportBtn.addEventListener('click', () => triggerExportReview(exportBtn));
 
-        importBtn.addEventListener('click', () => {
-            pauseTransportForImportReview();
-            importFile.value = '';
-            importFile.click();
-        });
+        importBtn.addEventListener('click', () => triggerImportReview(importBtn, importFile));
 
         importFile.addEventListener('change', () => {
             const f = importFile.files && importFile.files[0];

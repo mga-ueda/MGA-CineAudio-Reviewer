@@ -300,12 +300,12 @@
                 class="transport-shortcuts-link transport-opt-chip"
                 title="Open Shortcut reference in a new window"
             >Shortcut</a>
-            <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session">All Clear</button>
+            <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session (Alt+Shift+Ctrl+Del)">All Clear</button>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
-            <div class="master-vol-container transport-opt-chip" id="masterVolWrap">
+            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume (double-click or Ctrl+Shift+V for 100%)">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
-                <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume">
+                <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="Double-click or Ctrl+Shift+V for 100%">
                 <span class="transport-opt-value" id="masterVolDisp">100% (0.0 dB)</span>
             </div>
             <div class="monitor-floor-options transport-opt-chip" role="group" aria-label="Analysis display lower limit">
@@ -350,8 +350,8 @@
                     </label>
                 </div>
                 <div class="session-io-actions" role="group" aria-label="Import and export review">
-                    <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file">Import Review</button>
-                    <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file">Export Review</button>
+                    <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file (Ctrl+Shift+I)">Import Review</button>
+                    <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file (Ctrl+Shift+E)">Export Review</button>
                 </div>
             </div>
         </div>
