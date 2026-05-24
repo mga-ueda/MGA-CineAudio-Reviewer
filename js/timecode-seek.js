@@ -435,9 +435,9 @@
         }
         if (isAudioOnlyTransportPlayback()) {
             if (typeof primeReviewMixForPlayback === 'function') {
-                primeReviewMixForPlayback();
+                await primeReviewMixForPlayback();
             } else if (typeof primeExtraAudioForPlayback === 'function') {
-                primeExtraAudioForPlayback();
+                await primeExtraAudioForPlayback();
             }
             return startMasterTransportTailPlayback(playGen);
         }
@@ -452,9 +452,9 @@
             return startMasterTransportTailPlayback(playGen);
         }
         if (typeof primeReviewMixForPlayback === 'function') {
-            primeReviewMixForPlayback();
+            await primeReviewMixForPlayback();
         } else if (typeof primeExtraAudioForPlayback === 'function') {
-            primeExtraAudioForPlayback();
+            await primeExtraAudioForPlayback();
         }
         const startT = getTransportSec();
         transportPlaybackSec = startT;
@@ -910,10 +910,13 @@
     }
 
     function updateControlsEnabled() {
+        const locked =
+            typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive();
         const ready =
-            typeof transportControlsReady === 'function'
+            !locked &&
+            (typeof transportControlsReady === 'function'
                 ? transportControlsReady()
-                : videoReady();
+                : videoReady());
         if (seekBar) seekBar.disabled = !ready;
         playStopBtn.disabled = !ready;
         if (!ready) {
@@ -963,8 +966,17 @@
         urlMain = URL.createObjectURL(f);
         videoMain.src = urlMain;
         videoMain.load();
-        if (typeof ensureReviewMixVideoRouting === 'function') {
-            ensureReviewMixVideoRouting();
+        if (typeof resetTransportPlaybackClock === 'function') {
+            resetTransportPlaybackClock();
+        } else {
+            transportPlaybackSec = 0;
+            transportPlaybackLastTs = 0;
+        }
+        if (typeof setTransportSec === 'function') {
+            setTransportSec(0);
+        }
+        if (typeof beginVideoLoadLock === 'function') {
+            beginVideoLoadLock(f && f.name ? f.name : '');
         }
         nameMain.textContent = f.name;
         updatePanelInfoLine();
@@ -976,8 +988,13 @@
         ) {
             applySavedWaveformLaneUi(pendingLaneUiRestore);
             pendingLaneUiRestore = null;
+        } else if (typeof restoreVideoAudioLaneForNewVideo === 'function') {
+            restoreVideoAudioLaneForNewVideo();
         }
         void refreshContainerFpsForCurrentFiles().then(() => {
+            if (typeof notifyVideoLoadLockVideoReady === 'function') {
+                notifyVideoLoadLockVideoReady();
+            }
             if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
                 ensureAtLeastOneWaveformLaneVisible();
             }

@@ -148,6 +148,9 @@
     }
 
     function revokeVideoMediaCore() {
+        if (typeof cancelVideoLoadLock === 'function') {
+            cancelVideoLoadLock();
+        }
         containerFps.main = null;
         containerSampleCount.main = null;
         containerStszSampleCount.main = null;
@@ -258,6 +261,7 @@
 
     async function clearEntireSession() {
         if (!sessionHasClearableContent()) {
+            if (typeof clearLog === 'function') clearLog();
             writeLog('Session: nothing to clear');
             return;
         }
@@ -297,6 +301,7 @@
             refreshExportMediaOptionsUi();
         }
         updateSessionAllClearButton();
+        if (typeof clearLog === 'function') clearLog();
         writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Session', 'All cleared', 'notice');

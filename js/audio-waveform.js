@@ -34,6 +34,12 @@
         return new Promise((resolve) => setTimeout(resolve, 0));
     }
 
+    function notifyVideoAudioLoadSettled() {
+        if (typeof notifyVideoLoadLockAudioReady === 'function') {
+            notifyVideoLoadLockAudioReady();
+        }
+    }
+
     function waveformDecodeLimitMb() {
         return Math.round(WAVEFORM_DECODE_MAX_BYTES / (1024 * 1024));
     }
@@ -68,6 +74,7 @@
         setAudioWaveformStatus('Too large (max ' + limitMb + ' MB)');
         drawAudioWaveformCanvas();
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
+        notifyVideoAudioLoadSettled();
     }
 
     function setAudioWaveformStatus(text) {
@@ -82,7 +89,7 @@
             const slotLabel =
                 typeof window.VIDEO_AUDIO_SLOT_LABEL === 'string'
                     ? window.VIDEO_AUDIO_SLOT_LABEL
-                    : 'Video Audio Track';
+                    : 'Video Audio';
             titleEl.textContent = slotLabel;
             const tip =
                 typeof laneStatusTooltip === 'function' ? laneStatusTooltip(text) : '';
@@ -202,7 +209,7 @@
         return false;
     }
 
-    /** 表示レーンが 0 になったら空き Ex スロットを 1 つ復活させる */
+    /** 表示レーンが 0 になったら Video Audio または空き Ex スロットを 1 つ復活させる */
     function ensureAtLeastOneWaveformLaneVisible() {
         if (containerHasAudio.main === false && !hasAnyVisibleExtraWaveformLane()) {
             if (typeof reviveOneEmptyExtraLane === 'function') {
@@ -210,7 +217,10 @@
             }
         }
         if (countVisibleWaveformLanes() > 0) return;
-        if (typeof reviveOneEmptyExtraLane === 'function') {
+        const hasVideo = typeof videoReady === 'function' && videoReady();
+        if (hasVideo && containerHasAudio.main !== false) {
+            restoreVideoAudioLaneForNewVideo();
+        } else if (typeof reviveOneEmptyExtraLane === 'function') {
             reviveOneEmptyExtraLane();
         } else {
             restoreVideoAudioLaneForNewVideo();
@@ -243,6 +253,9 @@
         if (typeof refreshReviewMixUi === 'function') refreshReviewMixUi();
         if (typeof refreshVideoAudioLaneFileName === 'function') {
             refreshVideoAudioLaneFileName();
+        }
+        if (typeof refreshExtraTrackAddLaneButtons === 'function') {
+            refreshExtraTrackAddLaneButtons();
         }
         ensureAtLeastOneWaveformLaneVisible();
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
@@ -1127,6 +1140,7 @@
             if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
                 ensureAtLeastOneWaveformLaneVisible();
             }
+            notifyVideoAudioLoadSettled();
             return;
         }
 
@@ -1186,6 +1200,7 @@
             writeLog('Waveform: decode failed — ' + msg);
             setAudioWaveformStatus('Waveform unavailable');
             drawAudioWaveformCanvas();
+            notifyVideoAudioLoadSettled();
             return;
         } finally {
             try {
@@ -1214,6 +1229,7 @@
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
+        notifyVideoAudioLoadSettled();
     }
 
     function onContainerMetaReadyForWaveform() {
@@ -1234,6 +1250,7 @@
         if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
             ensureAtLeastOneWaveformLaneVisible();
         }
+        notifyVideoAudioLoadSettled();
     }
 
     function detachWaveformPauseBuildListener() {
@@ -1266,8 +1283,16 @@
 
     function startWaveformBuildWhenReady() {
         if (!urlMain || !videoReady()) return;
-        if (!isVideoAudioLaneShown()) return;
-        if (waveformPeaks && waveformPeaks.length > 0) return;
+        if (!isVideoAudioLaneShown()) {
+            if (containerHasAudio.main === false) {
+                notifyVideoAudioLoadSettled();
+            }
+            return;
+        }
+        if (waveformPeaks && waveformPeaks.length > 0) {
+            notifyVideoAudioLoadSettled();
+            return;
+        }
 
         const run = () => {
             if (!urlMain || !videoReady()) return;

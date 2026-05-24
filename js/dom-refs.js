@@ -2,7 +2,10 @@
 
     const dropZone = document.getElementById('main-drop-zone');
     const filePicker = document.getElementById('filePicker');
-    const videoMain = document.getElementById('videoMain');
+    var videoMain = document.getElementById('videoMain');
+    window.setVideoMainElement = function setVideoMainElement(el) {
+        if (el) videoMain = el;
+    };
     const panelMain = document.getElementById('panelMain');
     const nameMain = document.getElementById('nameMain');
     const infoMain = document.getElementById('infoMain');

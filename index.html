@@ -21,6 +21,13 @@
         </div>
     </div>
 
+    <div id="videoLoadLockOverlay" class="video-load-lock-overlay" hidden aria-hidden="true" aria-live="polite">
+        <div class="video-load-lock-overlay__panel">
+            <p class="video-load-lock-overlay__title">Loading</p>
+            <p class="video-load-lock-overlay__status" id="videoLoadLockStatus">Loading video…</p>
+        </div>
+    </div>
+
     <div class="layout-narrow">
     <header class="app-header">
         <div class="app-header-inner">
@@ -97,7 +104,7 @@
             <div class="audio-waveform-composite__sidebar">
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
                     <div class="audio-waveform-lane-meta__row">
-                        <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio Track</span>
+                        <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
                         <div class="track-mix-actions">
                             <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo" aria-pressed="false">S</button>
                             <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute" aria-pressed="false">M</button>
@@ -117,6 +124,7 @@
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
+                    <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="Show next extra audio track">+ Add Track</button>
                 </div>
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta0" hidden>
                     <div class="audio-waveform-lane-meta__row">
@@ -449,6 +457,7 @@
     <script src="js/ui-helpers.js"></script>
     <script src="js/mp4-fps.js"></script>
     <script src="js/files-panels.js"></script>
+    <script src="js/video-load-lock.js"></script>
     <script src="js/transport-timeline.js"></script>
     <script src="js/player-timecode-overlay.js"></script>
     <script src="js/timecode-seek.js"></script>

@@ -1059,6 +1059,7 @@
         Promise.resolve(run)
             .catch((e) => {
                 const msg = e && e.message ? e.message : String(e);
+                if (typeof clearLog === 'function') clearLog();
                 writeLog('Session: All Clear failed — ' + msg);
                 if (typeof showAppAlert === 'function') {
                     showAppAlert('All Clear に失敗しました', msg);

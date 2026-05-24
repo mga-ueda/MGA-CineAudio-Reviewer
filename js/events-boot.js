@@ -44,9 +44,6 @@
         inferContainerFpsForSide('main');
         reconcileContainerSampleCountForSide('main');
         updatePanelInfoLine();
-        if (typeof ensureReviewMixVideoRouting === 'function') {
-            ensureReviewMixVideoRouting();
-        }
         if (typeof applyReviewMixVideoGain === 'function') {
             applyReviewMixVideoGain();
         }
@@ -64,6 +61,9 @@
         if (typeof showFirstVideoFrame === 'function') {
             showFirstVideoFrame();
         }
+        if (typeof notifyVideoLoadLockVideoReady === 'function') {
+            notifyVideoLoadLockVideoReady();
+        }
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
@@ -77,9 +77,7 @@
         onVideoMediaReady();
     }
 
-    videoMain.addEventListener('loadedmetadata', onMeta);
-    videoMain.addEventListener('loadeddata', onMeta);
-    videoMain.addEventListener('durationchange', onMeta);
+    let videoMainListenersAbort = null;
 
     let durationProgressRaf = 0;
     function onDurationMaybeProgress() {
@@ -92,7 +90,112 @@
             updateTimecodeOverlay();
         });
     }
-    videoMain.addEventListener('progress', onDurationMaybeProgress);
+
+    function bindVideoMainElementListeners(el) {
+        if (!el) return;
+        if (videoMainListenersAbort) {
+            videoMainListenersAbort.abort();
+        }
+        videoMainListenersAbort = new AbortController();
+        const sig = videoMainListenersAbort.signal;
+
+        el.addEventListener('loadedmetadata', onMeta, { signal: sig });
+        el.addEventListener('loadeddata', onMeta, { signal: sig });
+        el.addEventListener('durationchange', onMeta, { signal: sig });
+        el.addEventListener('progress', onDurationMaybeProgress, { signal: sig });
+
+        el.addEventListener(
+            'pause',
+            () => {
+                if (
+                    (typeof shouldHoldTransportPastVideoPause === 'function' &&
+                        shouldHoldTransportPastVideoPause()) ||
+                    (typeof shouldKeepPlayingPastVideoEnd === 'function' &&
+                        shouldKeepPlayingPastVideoEnd())
+                ) {
+                    pendingRestoreTime = null;
+                    if (typeof parkVideoAtTransportTail === 'function') parkVideoAtTransportTail();
+                    if (typeof forceTransportRafLoop === 'function') forceTransportRafLoop();
+                    else if (!rafId && typeof tick === 'function') rafId = requestAnimationFrame(tick);
+                    if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+                    return;
+                }
+                if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
+                stopRaf();
+                if (el.paused) setPlayingUi(false);
+                updateControlsEnabled();
+                if (typeof syncExtraAudioToTransport === 'function') {
+                    syncExtraAudioToTransport();
+                }
+                if (typeof tryScheduleWaveformBuildIfNeeded === 'function') {
+                    tryScheduleWaveformBuildIfNeeded(600);
+                }
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'play',
+            () => {
+                setPlayingUi(true);
+                updateControlsEnabled();
+                if (typeof applyReviewMixVideoGain === 'function') {
+                    applyReviewMixVideoGain();
+                }
+                if (!rafId && !el.paused) rafId = requestAnimationFrame(tick);
+                if (typeof tryScheduleWaveformBuildIfNeeded === 'function') {
+                    setTimeout(() => tryScheduleWaveformBuildIfNeeded(1500), 400);
+                }
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'playing',
+            () => {
+                if (typeof applyReviewMixVideoGain === 'function') {
+                    applyReviewMixVideoGain();
+                }
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'timeupdate',
+            () => {
+                if (typeof onVideoTimeUpdate === 'function') onVideoTimeUpdate();
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'waiting',
+            () => {
+                writeLog('Video: waiting for data (t=' + (el.currentTime || 0).toFixed(2) + ')');
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'stalled',
+            () => {
+                writeLog('Video: stalled (t=' + (el.currentTime || 0).toFixed(2) + ')');
+            },
+            { signal: sig },
+        );
+        el.addEventListener(
+            'error',
+            () => {
+                if (typeof cancelVideoLoadLock === 'function') {
+                    cancelVideoLoadLock();
+                }
+                writeLog('Video: load/decode error');
+                if (typeof updateControlsEnabled === 'function') {
+                    updateControlsEnabled();
+                }
+            },
+            { signal: sig },
+        );
+        el.addEventListener('ended', onVideoEnded, { signal: sig });
+    }
+
+    window.rebindVideoMainListeners = bindVideoMainElementListeners;
+    bindVideoMainElementListeners(videoMain);
 
     if (loopPlaybackCheckbox) {
         loopPlaybackCheckbox.addEventListener('change', () => {
@@ -135,6 +238,16 @@
         writeLog('Transport: play (button)');
         transportPlayInFlight = null;
         const playGen = ++transportPlayGeneration;
+        const mixCtx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        if (mixCtx && mixCtx.state === 'suspended') {
+            try {
+                await mixCtx.resume();
+            } catch (_) {}
+        }
+        if (typeof applyReviewMixVideoGain === 'function') {
+            applyReviewMixVideoGain();
+        }
         try {
             if (typeof runTransportPlay === 'function') {
                 await runTransportPlay(playGen);
@@ -156,49 +269,6 @@
             setPlayingUi(false);
             stopRaf();
         }
-    });
-
-    videoMain.addEventListener('pause', () => {
-        if (
-            (typeof shouldHoldTransportPastVideoPause === 'function' &&
-                shouldHoldTransportPastVideoPause()) ||
-            (typeof shouldKeepPlayingPastVideoEnd === 'function' &&
-                shouldKeepPlayingPastVideoEnd())
-        ) {
-            pendingRestoreTime = null;
-            if (typeof parkVideoAtTransportTail === 'function') parkVideoAtTransportTail();
-            if (typeof forceTransportRafLoop === 'function') forceTransportRafLoop();
-            else if (!rafId && typeof tick === 'function') rafId = requestAnimationFrame(tick);
-            if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
-            return;
-        }
-        if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
-        stopRaf();
-        if (videoMain.paused) setPlayingUi(false);
-        updateControlsEnabled();
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport();
-        }
-        if (typeof tryScheduleWaveformBuildIfNeeded === 'function') {
-            tryScheduleWaveformBuildIfNeeded(600);
-        }
-    });
-    videoMain.addEventListener('play', () => {
-        setPlayingUi(true);
-        updateControlsEnabled();
-        if (!rafId && !videoMain.paused) rafId = requestAnimationFrame(tick);
-        if (typeof tryScheduleWaveformBuildIfNeeded === 'function') {
-            setTimeout(() => tryScheduleWaveformBuildIfNeeded(1500), 400);
-        }
-    });
-    videoMain.addEventListener('timeupdate', () => {
-        if (typeof onVideoTimeUpdate === 'function') onVideoTimeUpdate();
-    });
-    videoMain.addEventListener('waiting', () => {
-        writeLog('Video: waiting for data (t=' + (videoMain.currentTime || 0).toFixed(2) + ')');
-    });
-    videoMain.addEventListener('stalled', () => {
-        writeLog('Video: stalled (t=' + (videoMain.currentTime || 0).toFixed(2) + ')');
     });
 
     async function onVideoEnded() {
@@ -237,7 +307,6 @@
         updateSeekUiFromVideo();
         writeLog('Playback: end reached (transport stopped)');
     }
-    videoMain.addEventListener('ended', onVideoEnded);
 
     window.addEventListener('keydown', (e) => {
         if (

@@ -1,6 +1,8 @@
     const EXTRA_TRACK_COUNT =
         typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
-    const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio Track';
+    const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio';
+    /** false = 動画は video 要素のネイティブ出力（Ex のみ Web Audio）。MediaElementSource 無音の回避。 */
+    const ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO = false;
     const EXTRA_TRACK_DEFAULT_LABELS = ['Ex 1 Track', 'Ex 2 Track', 'Ex 3 Track'];
 
     function setLaneWaveformFileNameEl(el, name, tip) {
@@ -396,6 +398,7 @@
     let reviewMixVideoDelayNode = null;
     let reviewMixVideoWired = false;
     let reviewMixVideoWireFailed = false;
+    let nativeVideoMixModeLogged = false;
     let extraMixScheduleCtxTime = 0;
     let videoAudioSoloBtn = null;
     let videoAudioMuteBtn = null;
@@ -550,10 +553,55 @@
         ) {
             return false;
         }
-        const t = getMasterTransportSecForAudioSync();
         const vd = getVideoTransportDurationSecForMix();
-        if (vd > 0 && t >= vd - 0.001) return false;
-        return true;
+        if (vd <= 0) return true;
+        if (videoMain && typeof videoReady === 'function' && videoReady()) {
+            const vt = videoMain.currentTime || 0;
+            if (Number.isFinite(vt) && vt < vd - 0.05) return true;
+        }
+        const t = getMasterTransportSecForAudioSync();
+        return t < vd - 0.001;
+    }
+
+    function useReviewMixVideoWebAudioRouting() {
+        return ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && !reviewMixVideoWireFailed;
+    }
+
+    /**
+     * Web Audio 経由時は video.muted=true だと MediaElementSource が無音になる実装がある。
+     * ネイティブ時は video 要素の volume でミックスする。
+     */
+    function syncVideoElementOutputForReviewMix() {
+        if (!videoMain) return;
+        if (reviewMixVideoWired) {
+            videoMain.muted = false;
+            videoMain.volume = 0;
+            return;
+        }
+        const g =
+            isVideoMixOutputActive() && isVideoAudioAudible()
+                ? clampTrackLaneGainLinear(videoMix.volLinear)
+                : 0;
+        if (g > 0) {
+            videoMain.muted = false;
+            videoMain.volume = Math.min(1, g);
+            return;
+        }
+        videoMain.volume = 0;
+        videoMain.muted = true;
+    }
+
+    function applyNativeVideoElementMix() {
+        if (videoMediaSrc) {
+            releaseReviewMixVideoWebAudioTap();
+        }
+        reviewMixVideoWired = false;
+        reviewMixVideoWireFailed = false;
+        syncVideoElementOutputForReviewMix();
+        if (!nativeVideoMixModeLogged) {
+            nativeVideoMixModeLogged = true;
+            writeLog('Review mix: video audio via element (native output)');
+        }
     }
 
     function ensureReviewMixMasterBus(ctx) {
@@ -563,12 +611,7 @@
             reviewMixMaster.gain.value = 1;
         }
         if (typeof ensureReviewMixMonitorOutput === 'function') {
-            const monitorWired =
-                typeof isReviewMixMonitorAnalyzersWired === 'function' &&
-                isReviewMixMonitorAnalyzersWired();
-            if (!monitorWired) {
-                ensureReviewMixMonitorOutput(ctx, reviewMixMaster);
-            }
+            ensureReviewMixMonitorOutput(ctx, reviewMixMaster);
         } else {
             try {
                 reviewMixMaster.disconnect(ctx.destination);
@@ -580,7 +623,7 @@
 
     /** Route video element audio through the same AudioContext as extra tracks. */
     function ensureReviewMixVideoRouting() {
-        if (reviewMixVideoWireFailed || !videoMain) return false;
+        if (!useReviewMixVideoWebAudioRouting() || !videoMain) return false;
         const ctx = ensureReviewMixCtx();
         if (!ctx) return false;
         const master = ensureReviewMixMasterBus(ctx);
@@ -611,11 +654,14 @@
         reviewMixVideoDelayNode.connect(master);
         applyReviewMixVideoDelay();
         if (!videoMediaSrc) {
+            if (!canBindReviewMixVideoMediaSource()) {
+                return false;
+            }
             try {
                 videoMediaSrc = ctx.createMediaElementSource(videoMain);
                 videoMediaSrc.connect(videoGainNode);
                 reviewMixVideoWired = true;
-                videoMain.muted = true;
+                syncVideoElementOutputForReviewMix();
                 writeLog('Review mix: video audio routed via Web Audio');
             } catch (err) {
                 reviewMixVideoWireFailed = true;
@@ -624,8 +670,12 @@
                     'Review mix: video Web Audio routing unavailable — ' +
                         (err && err.message ? err.message : String(err)),
                 );
+                syncVideoElementOutputForReviewMix();
                 return false;
             }
+        }
+        if (reviewMixVideoWired) {
+            syncVideoElementOutputForReviewMix();
         }
         return reviewMixVideoWired;
     }
@@ -639,24 +689,29 @@
 
     function applyReviewMixVideoGain() {
         if (!videoMain) return;
+        if (!useReviewMixVideoWebAudioRouting()) {
+            applyNativeVideoElementMix();
+            return;
+        }
         if (ensureReviewMixVideoRouting()) {
-            videoMain.muted = true;
+            syncVideoElementOutputForReviewMix();
             applyReviewMixVideoDelay();
             if (videoGainNode) {
                 const g = getVideoTrackEffectiveGain();
+                const ctx = ensureReviewMixCtx();
                 try {
-                    videoGainNode.gain.setTargetAtTime(
-                        g,
-                        ensureReviewMixCtx() ? ensureReviewMixCtx().currentTime : 0,
-                        0.02,
-                    );
+                    if (ctx && ctx.state === 'running') {
+                        videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
+                    } else {
+                        videoGainNode.gain.value = g;
+                    }
                 } catch (_) {
                     videoGainNode.gain.value = g;
                 }
             }
             return;
         }
-        videoMain.muted = !isVideoAudioAudible();
+        syncVideoElementOutputForReviewMix();
     }
 
     function applyVideoMixToElement() {
@@ -1480,7 +1535,6 @@
      * @returns {number} transport seconds to use for the tail clock
      */
     function handoffReviewMixToTransportTail() {
-        ensureReviewMixVideoRouting();
         applyReviewMixVideoGain();
         const ctx = ensureReviewMixCtx();
         const barT =
@@ -1791,13 +1845,72 @@
         }
     }
 
+    function canBindReviewMixVideoMediaSource() {
+        return !!(
+            videoMain &&
+            typeof urlMain !== 'undefined' &&
+            urlMain &&
+            typeof videoReady === 'function' &&
+            videoReady()
+        );
+    }
+
+    function releaseReviewMixVideoWebAudioTap() {
+        if (!videoMediaSrc) {
+            reviewMixVideoWired = false;
+            return;
+        }
+        resetReviewMixVideoElementForReviewMix();
+    }
+
+    /** createMediaElementSource は要素につき1回。起動時の空要素で作ると以降ずっと無音になる。 */
+    function resetReviewMixVideoElementForReviewMix() {
+        const frame =
+            typeof frameMain !== 'undefined' ? frameMain : document.getElementById('frameMain');
+        const old =
+            typeof videoMain !== 'undefined' ? videoMain : document.getElementById('videoMain');
+        if (!frame || !old || !old.parentNode) return;
+        const savedUrl = typeof urlMain !== 'undefined' && urlMain ? urlMain : '';
+        try {
+            if (videoMediaSrc) videoMediaSrc.disconnect();
+        } catch (_) {}
+        videoMediaSrc = null;
+        reviewMixVideoWired = false;
+        reviewMixVideoWireFailed = false;
+        videoGainNode = null;
+        videoAnalyser = null;
+        const nv = document.createElement('video');
+        nv.id = 'videoMain';
+        nv.setAttribute('playsinline', '');
+        nv.setAttribute('preload', 'auto');
+        frame.replaceChild(nv, old);
+        if (typeof setVideoMainElement === 'function') {
+            setVideoMainElement(nv);
+        }
+        if (typeof rebindVideoMainListeners === 'function') {
+            rebindVideoMainListeners(nv);
+        }
+        if (savedUrl) {
+            nv.src = savedUrl;
+            nv.load();
+        }
+        writeLog('Review mix: video element reset (Web Audio re-bind)');
+    }
+
     function prepareReviewMixForNewVideoLoad() {
         reviewMixVideoWireFailed = false;
+        const hadLoadedVideo = typeof fileMain !== 'undefined' && !!fileMain;
+        if (videoMediaSrc && !hadLoadedVideo) {
+            resetReviewMixVideoElementForReviewMix();
+        }
+        if (!ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && videoMediaSrc) {
+            releaseReviewMixVideoWebAudioTap();
+        }
     }
 
     async function finalizeReviewMixAfterSessionRestore() {
-        if (typeof ensureReviewMixVideoRouting === 'function') {
-            ensureReviewMixVideoRouting();
+        if (typeof applyReviewMixVideoGain === 'function') {
+            applyReviewMixVideoGain();
         }
         const ctx = ensureReviewMixCtx();
         if (ctx && ctx.state === 'suspended') {
@@ -1900,7 +2013,6 @@
         const playing = isTransportPlayingForExtra();
         const masterT = getMasterTransportSecForAudioSync();
         const audioT = getAudioSyncTransportSec();
-        ensureReviewMixVideoRouting();
         applyReviewMixVideoGain();
         if (!playing) {
             stopAllExtraTrackSources();
@@ -2017,13 +2129,36 @@
     }
 
     /** Schedule the full mix (video element + extras) before video.play(). */
-    function primeReviewMixForPlayback() {
-        ensureReviewMixVideoRouting();
+    async function primeReviewMixForPlayback() {
+        const ctx = ensureReviewMixCtx();
+        if (ctx && ctx.state === 'suspended') {
+            try {
+                await ctx.resume();
+            } catch (_) {}
+        }
+        applyReviewMixVideoGain();
+        if (ctx) {
+            const mode = reviewMixVideoWired ? 'Web Audio' : 'native element';
+            const g = reviewMixVideoWired
+                ? getVideoTrackEffectiveGain()
+                : videoMain
+                  ? videoMain.volume
+                  : 0;
+            writeLog(
+                'Review mix: play — ctx=' +
+                    ctx.state +
+                    ' video=' +
+                    (Number(g).toFixed ? Number(g).toFixed(3) : String(g)) +
+                    ' (' +
+                    mode +
+                    ')',
+            );
+        }
         syncReviewMixToTransport({ force: true });
     }
 
-    function primeExtraAudioForPlayback() {
-        primeReviewMixForPlayback();
+    async function primeExtraAudioForPlayback() {
+        return primeReviewMixForPlayback();
     }
 
     function decodeArrayBufferToAudioBuffer(ctx, ab) {
@@ -2428,7 +2563,18 @@
         return -1;
     }
 
+    function refreshVideoAudioAddTrackButton() {
+        const btn = document.getElementById('videoAudioAddTrackBtn');
+        if (!btn) return;
+        const videoLaneShown =
+            typeof isVideoAudioLaneShown === 'function' && isVideoAudioLaneShown();
+        const canAdd = canRevealNextExtraTrackLane(-1);
+        btn.hidden = !videoLaneShown || !canAdd;
+        btn.disabled = !canAdd;
+    }
+
     function refreshExtraTrackAddLaneButtons() {
+        refreshVideoAudioAddTrackButton();
         for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
             const ui = getExtraUi(slot);
             if (!ui || !ui.addTrackBtn) continue;
@@ -2917,10 +3063,6 @@
         videoMix.muted = false;
         videoMix.solo = false;
         videoMix.volLinear = 1;
-        if (videoGainNode) videoGainNode.gain.value = 0;
-        if (videoMain) {
-            videoMain.muted = reviewMixVideoWired ? true : false;
-        }
         refreshReviewMixUi();
     }
 
@@ -3390,6 +3532,13 @@
         if (videoAudioMuteBtn) {
             videoAudioMuteBtn.addEventListener('click', () => toggleVideoMute());
         }
+        const videoAddTrackBtn = document.getElementById('videoAudioAddTrackBtn');
+        if (videoAddTrackBtn) {
+            videoAddTrackBtn.addEventListener('click', () => {
+                revealNextExtraTrackLane(-1);
+                refreshExtraTrackAddLaneButtons();
+            });
+        }
 
         for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
             const meta = document.getElementById('extraAudioMeta' + slot);
@@ -3436,9 +3585,6 @@
         refreshReviewMixUi();
         if (typeof initTrackLaneControlsUi === 'function') {
             initTrackLaneControlsUi();
-        }
-        if (videoReady && videoReady()) {
-            ensureReviewMixVideoRouting();
         }
 
         if (typeof ResizeObserver !== 'undefined') {

@@ -2476,6 +2476,52 @@
             display: none !important;
         }
 
+        .video-load-lock-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 19990;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box;
+            background: rgba(6, 8, 12, 0.78);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            pointer-events: auto;
+            cursor: wait;
+        }
+        .video-load-lock-overlay[hidden] {
+            display: none !important;
+        }
+        .video-load-lock-overlay__panel {
+            max-width: 28rem;
+            text-align: center;
+            padding: 28px 32px 30px;
+            border-radius: 14px;
+            background: linear-gradient(165deg, #2e2e38 0%, #1c1c24 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+        .video-load-lock-overlay__title {
+            margin: 0 0 10px;
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            color: #f4f6fc;
+        }
+        .video-load-lock-overlay__status {
+            margin: 0;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: #b8c4dc;
+            font-variant-numeric: tabular-nums;
+        }
+        body.video-load-lock-active {
+            overflow: hidden;
+        }
+
         .export-blocking-overlay {
             position: fixed;
             inset: 0;

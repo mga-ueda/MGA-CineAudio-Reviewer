@@ -7,6 +7,12 @@
         window.alert(b ? t + '\n\n' + b : t);
     }
 
+    function clearLog() {
+        if (!logEl) return;
+        logEl.innerText = '';
+        logEl.scrollTop = 0;
+    }
+
     function writeLog(m) {
         if (!logEl) return;
         const now = new Date();
@@ -27,6 +33,8 @@
         logEl.innerText = lines.join('\n');
         logEl.scrollTop = logEl.scrollHeight;
     }
+
+    window.clearLog = clearLog;
 
     function logArrowSeekDebounced(msg) {
         const now = performance.now();
