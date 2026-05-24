@@ -94,8 +94,21 @@
     function applyVideoLoadLockUi(active) {
         const overlay = overlayEl();
         if (overlay) {
-            overlay.hidden = !active;
-            overlay.setAttribute('aria-hidden', active ? 'false' : 'true');
+            if (active) {
+                overlay.hidden = false;
+                overlay.setAttribute('aria-hidden', 'false');
+                if (!overlay.classList.contains('seek-flash--visible')) {
+                    requestAnimationFrame(() => {
+                        overlay.classList.add('seek-flash--visible');
+                    });
+                } else {
+                    overlay.classList.add('seek-flash--visible');
+                }
+            } else {
+                overlay.classList.remove('seek-flash--visible');
+                overlay.hidden = true;
+                overlay.setAttribute('aria-hidden', 'true');
+            }
         }
         document.body.classList.toggle('video-load-lock-active', !!active);
         refreshLockStatusText();
