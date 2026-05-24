@@ -76,7 +76,7 @@
         }
 
         const isNotice = kind === 'notice';
-        const holdMs = isNotice ? 2100 : 340;
+        const holdMs = isNotice ? 2100 : 680;
         const fadeOutMs = 820;
         seekFlashHideTimer = setTimeout(() => {
             root.classList.remove('seek-flash--visible');
