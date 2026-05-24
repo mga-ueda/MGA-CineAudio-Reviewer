@@ -519,11 +519,18 @@
         return getVideoTransportDurationSec();
     }
 
+    function getMainVideoAudioBuffer() {
+        return waveformAudioBuffer && waveformAudioBuffer.duration > 0.002
+            ? waveformAudioBuffer
+            : null;
+    }
+
     function getMainWaveformPeaksForDraw() {
         return waveformPeaks;
     }
 
     window.getWaveformAudioDurationSec = getWaveformAudioDurationSec;
+    window.getMainVideoAudioBuffer = getMainVideoAudioBuffer;
     window.getMainWaveformPeaksForDraw = getMainWaveformPeaksForDraw;
 
     function isAudioWaveformScrubActive() {
@@ -1382,6 +1389,9 @@
         if (waveformBuildGenerationStale(gen)) return;
 
         waveformAudioBuffer = buffer;
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport();
+        }
         const sized = syncAudioWaveformCanvasSize();
         const barCount = sized ? sized.barCount : 1200;
         waveformPeaks = peaksFromAudioBuffer(buffer, barCount);

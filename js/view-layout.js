@@ -65,12 +65,24 @@
     }
 
     function applyVideoFrameDelayToTransportNow() {
-        if (typeof applyVideoTimeForTransportSec !== 'function') return;
-        const t =
-            typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
-                ? transportPlaybackSec
-                : 0;
-        applyVideoTimeForTransportSec(t, { force: true });
+        if (typeof applyVideoTimeForTransportSec === 'function') {
+            const t =
+                typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
+                    ? transportPlaybackSec
+                    : 0;
+            applyVideoTimeForTransportSec(t, { force: true });
+        }
+        if (
+            getVideoFrameDelaySec() > 0.0005 &&
+            typeof getMainVideoAudioBuffer === 'function' &&
+            !getMainVideoAudioBuffer() &&
+            typeof ensureMainVideoWaveformBuildForLoad === 'function'
+        ) {
+            ensureMainVideoWaveformBuildForLoad();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
     }
 
     function logAndPersistVideoFrameDelay() {
