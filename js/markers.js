@@ -742,6 +742,9 @@
         if (markersDisplayHidden) {
             hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
             hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+            if (!isMarkerListPlaybackActive()) {
+                updateMarkerListRowClasses();
+            }
             return;
         }
         if (!markerTimelineReady()) {
@@ -1922,6 +1925,9 @@
         if (!isMarkerListPlaybackActive()) {
             if (waveformLanesPointerInside && !isWaveformMarkerHighlightEnabled()) {
                 return null;
+            }
+            if (markerPanelPointerInside && markerPanelHoverId) {
+                return markerPanelHoverId;
             }
             if (isWaveformMarkerHighlightEnabled()) {
                 if (waveformMarkerHoverId) {
