@@ -1,7 +1,11 @@
     const EXTRA_TRACK_COUNT =
         typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
     const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio';
-    /** false = 動画は video 要素のネイティブ出力（Ex のみ Web Audio）。MediaElementSource 無音の回避。 */
+    /**
+     * false = 動画は video 要素のネイティブ出力（確実に聴ける）。
+     * アナライザー／トラックメーターは captureStream タップ（ensureReviewMixVideoMonitorTap）。
+     * true にすると MediaElementSource 経由（環境によっては接続後も無音になる）。
+     */
     const ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO = false;
     const EXTRA_TRACK_DEFAULT_LABELS = ['Ex 1 Track', 'Ex 2 Track', 'Ex 3 Track'];
 
@@ -398,6 +402,12 @@
     let reviewMixVideoDelayNode = null;
     let reviewMixVideoWired = false;
     let reviewMixVideoWireFailed = false;
+    /** 0 dB 超: captureStream → GainNode → master（MediaElementSource は使わない） */
+    let reviewMixVideoBoostPlayback = false;
+    let reviewMixVideoBoostLogged = false;
+    let videoMonitorStream = null;
+    let videoMonitorStreamSrc = null;
+    let videoMonitorSinkGain = null;
     let nativeVideoMixModeLogged = false;
     let extraMixScheduleCtxTime = 0;
     let videoAudioSoloBtn = null;
@@ -502,7 +512,22 @@
     }
 
     function isVideoTrackLaneMeterSilent() {
-        return !isVideoMixOutputActive();
+        if (!isVideoAudioAudible()) return true;
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
+            return !isVideoMixOutputActive();
+        }
+        return !videoMonitorStreamSrc;
+    }
+
+    /** モニタータップ用ゲイン（ブースト／MES 時はフェーダー線形値、ネイティブ時は video.volume）。 */
+    function getVideoMonitorTapGainLinear() {
+        if (!isVideoAudioAudible()) return 0;
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
+            return getVideoTrackEffectiveGain();
+        }
+        if (!videoMain || videoMain.muted) return 0;
+        const vol = videoMain.volume;
+        return Number.isFinite(vol) && vol > 0 ? vol : 0;
     }
 
     function isExtraTrackLaneMeterSilent(slot) {
@@ -567,13 +592,54 @@
         return ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && !reviewMixVideoWireFailed;
     }
 
+    function videoMixNeedsWebAudioBoost() {
+        if (!isVideoAudioAudible()) return false;
+        return clampTrackLaneGainLinear(videoMix.volLinear) > 1.0001;
+    }
+
+    /** ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO 時のみ MediaElementSource 経由。 */
+    function shouldPlayVideoAudioViaWebAudio() {
+        if (reviewMixVideoWireFailed) return false;
+        if (!videoMediaSrc) return useReviewMixVideoWebAudioRouting();
+        return useReviewMixVideoWebAudioRouting() || reviewMixVideoWired;
+    }
+
+    function clearStaleReviewMixVideoWiredFlag() {
+        if (reviewMixVideoWired && !videoMediaSrc) {
+            reviewMixVideoWired = false;
+        }
+    }
+
+    /** 0 dB 超のブースト（captureStream → master、要素のネイティブ出力は止める）。 */
+    function shouldPlayVideoAudioViaCaptureBoost() {
+        if (reviewMixVideoWireFailed || useReviewMixVideoWebAudioRouting()) return false;
+        return videoMixNeedsWebAudioBoost();
+    }
+
+    /** 動画音声が video 要素のスピーカー直出力（Web Audio 未接続時のみ）。 */
+    function isVideoAudioPlaybackViaNativeElement() {
+        return !reviewMixVideoWired && !reviewMixVideoBoostPlayback;
+    }
+
+    function getVideoCaptureStreamFn() {
+        if (!videoMain) return null;
+        if (typeof videoMain.captureStream === 'function') {
+            return videoMain.captureStream.bind(videoMain);
+        }
+        if (typeof videoMain.mozCaptureStream === 'function') {
+            return videoMain.mozCaptureStream.bind(videoMain);
+        }
+        return null;
+    }
+
     /**
-     * Web Audio 経由時は video.muted=true だと MediaElementSource が無音になる実装がある。
-     * ネイティブ時は video 要素の volume でミックスする。
+     * MES 経由時は video.muted=true だと無音になる実装がある。
+     * ブースト時は capture 用に muted=false・volume=0（スピーカーは Web Audio のみ）。
+     * ネイティブ時は video.volume（最大 1.0 = 0 dB）でミックスする。
      */
     function syncVideoElementOutputForReviewMix() {
         if (!videoMain) return;
-        if (reviewMixVideoWired) {
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
             videoMain.muted = false;
             videoMain.volume = 0;
             return;
@@ -592,12 +658,15 @@
     }
 
     function applyNativeVideoElementMix() {
+        releaseReviewMixVideoBoostPlayback();
         if (videoMediaSrc) {
-            releaseReviewMixVideoWebAudioTap();
+            releaseReviewMixVideoWebAudioTap({ resetElement: true });
+        } else if (reviewMixVideoWired) {
+            reviewMixVideoWired = false;
+            reviewMixVideoWireFailed = false;
         }
-        reviewMixVideoWired = false;
-        reviewMixVideoWireFailed = false;
         syncVideoElementOutputForReviewMix();
+        applyReviewMixVideoMonitorTapGain();
         if (!nativeVideoMixModeLogged) {
             nativeVideoMixModeLogged = true;
             writeLog('Review mix: video audio via element (native output)');
@@ -623,7 +692,7 @@
 
     /** Route video element audio through the same AudioContext as extra tracks. */
     function ensureReviewMixVideoRouting() {
-        if (!useReviewMixVideoWebAudioRouting() || !videoMain) return false;
+        if (!shouldPlayVideoAudioViaWebAudio() || !videoMain) return false;
         const ctx = ensureReviewMixCtx();
         if (!ctx) return false;
         const master = ensureReviewMixMasterBus(ctx);
@@ -687,31 +756,301 @@
         } catch (_) {}
     }
 
-    function applyReviewMixVideoGain() {
-        if (!videoMain) return;
-        if (!useReviewMixVideoWebAudioRouting()) {
-            applyNativeVideoElementMix();
-            return;
+    function releaseReviewMixVideoCaptureGraph() {
+        reviewMixVideoBoostPlayback = false;
+        if (videoMonitorStreamSrc) {
+            try {
+                videoMonitorStreamSrc.disconnect();
+            } catch (_) {}
+            videoMonitorStreamSrc = null;
         }
-        if (ensureReviewMixVideoRouting()) {
-            syncVideoElementOutputForReviewMix();
-            applyReviewMixVideoDelay();
-            if (videoGainNode) {
-                const g = getVideoTrackEffectiveGain();
-                const ctx = ensureReviewMixCtx();
+        videoMonitorStream = null;
+        if (videoMonitorSinkGain) {
+            try {
+                videoMonitorSinkGain.disconnect();
+            } catch (_) {}
+        }
+        if (videoGainNode) {
+            try {
+                videoGainNode.disconnect();
+            } catch (_) {}
+        }
+        if (videoAnalyser) {
+            try {
+                videoAnalyser.disconnect();
+            } catch (_) {}
+        }
+        if (reviewMixVideoDelayNode) {
+            try {
+                reviewMixVideoDelayNode.disconnect();
+            } catch (_) {}
+        }
+    }
+
+    function releaseReviewMixVideoBoostPlayback() {
+        if (!reviewMixVideoBoostPlayback) return;
+        releaseReviewMixVideoCaptureGraph();
+    }
+
+    function releaseReviewMixVideoMonitorTap() {
+        releaseReviewMixVideoCaptureGraph();
+    }
+
+    function applyReviewMixVideoCapturePlaybackGain() {
+        if (!videoGainNode || !videoMonitorStreamSrc) return;
+        const g = getVideoTrackEffectiveGain();
+        const ctx = ensureReviewMixCtx();
+        try {
+            if (ctx && ctx.state === 'running') {
+                videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
+            } else {
+                videoGainNode.gain.value = g;
+            }
+        } catch (_) {
+            videoGainNode.gain.value = g;
+        }
+        if (ctx && ctx.state === 'suspended') {
+            void ctx.resume().catch(() => {});
+        }
+    }
+
+    function applyReviewMixVideoMonitorTapGain() {
+        if (!videoGainNode || !videoMonitorStreamSrc) return;
+        const g = getVideoMonitorTapGainLinear();
+        const ctx = ensureReviewMixCtx();
+        try {
+            if (ctx && ctx.state === 'running') {
+                videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
+            } else {
+                videoGainNode.gain.value = g;
+            }
+        } catch (_) {
+            videoGainNode.gain.value = g;
+        }
+    }
+
+    /**
+     * ネイティブ再生のまま captureStream でアナライザーへタップ（スピーカー二重出力なし）。
+     * Analyser は destination へ gain=0 で接続しないとグラフが進まないブラウザがある。
+     */
+    function ensureReviewMixVideoMonitorTap(opt) {
+        if (
+            !videoMain ||
+            shouldPlayVideoAudioViaWebAudio() ||
+            shouldPlayVideoAudioViaCaptureBoost()
+        ) {
+            return false;
+        }
+        if (containerHasAudio.main === false) {
+            releaseReviewMixVideoCaptureGraph();
+            return false;
+        }
+        if (typeof canBindReviewMixVideoMediaSource === 'function' && !canBindReviewMixVideoMediaSource()) {
+            return false;
+        }
+        const captureFn = getVideoCaptureStreamFn();
+        if (!captureFn) return false;
+        const ctx = ensureReviewMixCtx();
+        if (!ctx) return false;
+        if (!videoGainNode) videoGainNode = ctx.createGain();
+        if (!videoMonitorSinkGain) {
+            videoMonitorSinkGain = ctx.createGain();
+            videoMonitorSinkGain.gain.value = 0;
+        }
+        const vMeter = ensureVideoTrackAnalyser(ctx);
+        const forceRecapture = !!(opt && opt.forceRecapture);
+        try {
+            if (videoMonitorStreamSrc && forceRecapture) {
                 try {
-                    if (ctx && ctx.state === 'running') {
-                        videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
-                    } else {
+                    videoMonitorStreamSrc.disconnect();
+                } catch (_) {}
+                videoMonitorStreamSrc = null;
+                videoMonitorStream = null;
+            }
+            if (!videoMonitorStreamSrc) {
+                videoMonitorStream = captureFn();
+                if (!videoMonitorStream || !videoMonitorStream.getAudioTracks().length) {
+                    videoMonitorStream = null;
+                    return false;
+                }
+                videoMonitorStreamSrc = ctx.createMediaStreamSource(videoMonitorStream);
+            }
+            try {
+                videoMonitorStreamSrc.disconnect();
+            } catch (_) {}
+            try {
+                videoGainNode.disconnect();
+            } catch (_) {}
+            try {
+                if (vMeter) vMeter.disconnect();
+            } catch (_) {}
+            try {
+                videoMonitorSinkGain.disconnect();
+            } catch (_) {}
+            videoMonitorStreamSrc.connect(videoGainNode);
+            if (vMeter) {
+                videoGainNode.connect(vMeter);
+                vMeter.connect(videoMonitorSinkGain);
+                videoMonitorSinkGain.connect(ctx.destination);
+            } else {
+                videoGainNode.connect(videoMonitorSinkGain);
+                videoMonitorSinkGain.connect(ctx.destination);
+            }
+            reviewMixVideoBoostPlayback = false;
+            applyReviewMixVideoMonitorTapGain();
+            return true;
+        } catch (err) {
+            releaseReviewMixVideoCaptureGraph();
+            writeLog(
+                'Review mix: video monitor tap failed — ' +
+                    (err && err.message ? err.message : String(err)),
+            );
+            return false;
+        }
+    }
+
+    /**
+     * 0 dB 超: captureStream を master へ（MediaElementSource は無音になりやすいため使わない）。
+     */
+    function ensureReviewMixVideoBoostPlayback(opt) {
+        if (!videoMain || !shouldPlayVideoAudioViaCaptureBoost()) {
+            return false;
+        }
+        if (containerHasAudio.main === false) {
+            releaseReviewMixVideoBoostPlayback();
+            return false;
+        }
+        if (typeof canBindReviewMixVideoMediaSource === 'function' && !canBindReviewMixVideoMediaSource()) {
+            return false;
+        }
+        const captureFn = getVideoCaptureStreamFn();
+        if (!captureFn) return false;
+        const ctx = ensureReviewMixCtx();
+        if (!ctx) return false;
+        const master = ensureReviewMixMasterBus(ctx);
+        if (!master) return false;
+        if (!reviewMixVideoDelayNode) {
+            reviewMixVideoDelayNode = ctx.createDelay(120);
+            reviewMixVideoDelayNode.delayTime.value = 0;
+        }
+        if (!videoGainNode) videoGainNode = ctx.createGain();
+        const vMeter = ensureVideoTrackAnalyser(ctx);
+        const forceRecapture = !!(opt && opt.forceRecapture);
+        try {
+            if (videoMonitorStreamSrc && forceRecapture) {
+                try {
+                    videoMonitorStreamSrc.disconnect();
+                } catch (_) {}
+                videoMonitorStreamSrc = null;
+                videoMonitorStream = null;
+            }
+            if (!videoMonitorStreamSrc) {
+                videoMonitorStream = captureFn();
+                if (!videoMonitorStream || !videoMonitorStream.getAudioTracks().length) {
+                    videoMonitorStream = null;
+                    return false;
+                }
+                videoMonitorStreamSrc = ctx.createMediaStreamSource(videoMonitorStream);
+            }
+            try {
+                videoMonitorStreamSrc.disconnect();
+            } catch (_) {}
+            try {
+                videoGainNode.disconnect();
+            } catch (_) {}
+            try {
+                if (vMeter) vMeter.disconnect();
+            } catch (_) {}
+            try {
+                reviewMixVideoDelayNode.disconnect();
+            } catch (_) {}
+            try {
+                if (videoMonitorSinkGain) videoMonitorSinkGain.disconnect();
+            } catch (_) {}
+            videoMonitorStreamSrc.connect(videoGainNode);
+            if (vMeter) {
+                videoGainNode.connect(vMeter);
+                vMeter.connect(reviewMixVideoDelayNode);
+            } else {
+                videoGainNode.connect(reviewMixVideoDelayNode);
+            }
+            reviewMixVideoDelayNode.connect(master);
+            applyReviewMixVideoDelay();
+            reviewMixVideoBoostPlayback = true;
+            syncVideoElementOutputForReviewMix();
+            applyReviewMixVideoCapturePlaybackGain();
+            if (!reviewMixVideoBoostLogged) {
+                reviewMixVideoBoostLogged = true;
+                writeLog('Review mix: video boost via captureStream → master');
+            }
+            return true;
+        } catch (err) {
+            releaseReviewMixVideoBoostPlayback();
+            writeLog(
+                'Review mix: video capture boost failed — ' +
+                    (err && err.message ? err.message : String(err)),
+            );
+            return false;
+        }
+    }
+
+    function applyReviewMixVideoGain(opt) {
+        if (!videoMain) return;
+        clearStaleReviewMixVideoWiredFlag();
+        if (!ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && videoMediaSrc) {
+            releaseReviewMixVideoWebAudioTap({ resetElement: true });
+            reviewMixVideoWired = false;
+            reviewMixVideoWireFailed = false;
+        }
+        const forceRecapture = !!(opt && opt.forceRecapture);
+
+        if (shouldPlayVideoAudioViaCaptureBoost()) {
+            if (ensureReviewMixVideoBoostPlayback({ forceRecapture })) {
+                return;
+            }
+            writeLog('Review mix: video boost unavailable — output limited to 0 dB');
+            releaseReviewMixVideoBoostPlayback();
+        } else {
+            releaseReviewMixVideoBoostPlayback();
+        }
+
+        if (shouldPlayVideoAudioViaWebAudio()) {
+            releaseReviewMixVideoCaptureGraph();
+            if (ensureReviewMixVideoRouting()) {
+                syncVideoElementOutputForReviewMix();
+                applyReviewMixVideoDelay();
+                if (videoGainNode) {
+                    const g = getVideoTrackEffectiveGain();
+                    const ctx = ensureReviewMixCtx();
+                    try {
+                        if (ctx && ctx.state === 'running') {
+                            videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
+                        } else {
+                            videoGainNode.gain.value = g;
+                        }
+                    } catch (_) {
                         videoGainNode.gain.value = g;
                     }
-                } catch (_) {
-                    videoGainNode.gain.value = g;
                 }
+                return;
             }
-            return;
+            writeLog('Review mix: video Web Audio (MES) routing unavailable');
         }
-        syncVideoElementOutputForReviewMix();
+
+        applyNativeVideoElementMix();
+        ensureReviewMixVideoMonitorTap({ forceRecapture });
+        applyReviewMixVideoMonitorTapGain();
+    }
+
+    /** メタデータ準備後: Web Audio ルートまたはモニタータップを接続。 */
+    function tryWireReviewMixVideoAudioWhenReady() {
+        if (!videoMain || reviewMixVideoWireFailed) return false;
+        if (typeof canBindReviewMixVideoMediaSource === 'function' && !canBindReviewMixVideoMediaSource()) {
+            return false;
+        }
+        applyReviewMixVideoGain();
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) return true;
+        return !!videoMonitorStreamSrc;
     }
 
     function applyVideoMixToElement() {
@@ -732,7 +1071,7 @@
         }
         const videoAudioClearBtn = document.getElementById('videoAudioClearBtn');
         if (videoAudioClearBtn) {
-            videoAudioClearBtn.disabled = !videoReadyNow;
+            videoAudioClearBtn.disabled = true;
         }
         applyAllTrackLaneGains();
         applyVideoMixToElement();
@@ -1855,12 +2194,21 @@
         );
     }
 
-    function releaseReviewMixVideoWebAudioTap() {
+    function releaseReviewMixVideoWebAudioTap(opt) {
+        releaseReviewMixVideoMonitorTap();
         if (!videoMediaSrc) {
             reviewMixVideoWired = false;
             return;
         }
-        resetReviewMixVideoElementForReviewMix();
+        try {
+            videoMediaSrc.disconnect();
+        } catch (_) {}
+        videoMediaSrc = null;
+        reviewMixVideoWired = false;
+        reviewMixVideoWireFailed = false;
+        if (opt && opt.resetElement) {
+            resetReviewMixVideoElementForReviewMix();
+        }
     }
 
     /** createMediaElementSource は要素につき1回。起動時の空要素で作ると以降ずっと無音になる。 */
@@ -1877,6 +2225,7 @@
         videoMediaSrc = null;
         reviewMixVideoWired = false;
         reviewMixVideoWireFailed = false;
+        releaseReviewMixVideoMonitorTap();
         videoGainNode = null;
         videoAnalyser = null;
         const nv = document.createElement('video');
@@ -1899,12 +2248,11 @@
 
     function prepareReviewMixForNewVideoLoad() {
         reviewMixVideoWireFailed = false;
+        reviewMixVideoBoostLogged = false;
+        releaseReviewMixVideoMonitorTap();
         const hadLoadedVideo = typeof fileMain !== 'undefined' && !!fileMain;
-        if (videoMediaSrc && !hadLoadedVideo) {
-            resetReviewMixVideoElementForReviewMix();
-        }
-        if (!ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && videoMediaSrc) {
-            releaseReviewMixVideoWebAudioTap();
+        if (videoMediaSrc) {
+            releaseReviewMixVideoWebAudioTap({ resetElement: !hadLoadedVideo });
         }
     }
 
@@ -1931,6 +2279,9 @@
         }
         if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
             ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 40 });
+        }
+        if (typeof ensureMainVideoWaveformAfterSessionRestore === 'function') {
+            ensureMainVideoWaveformAfterSessionRestore();
         }
     }
 
@@ -2136,10 +2487,16 @@
                 await ctx.resume();
             } catch (_) {}
         }
-        applyReviewMixVideoGain();
+        applyReviewMixVideoGain({ forceRecapture: true });
         if (ctx) {
-            const mode = reviewMixVideoWired ? 'Web Audio' : 'native element';
-            const g = reviewMixVideoWired
+            const mode = reviewMixVideoBoostPlayback
+                ? 'capture boost'
+                : reviewMixVideoWired
+                  ? 'Web Audio (MES)'
+                  : videoMonitorStreamSrc
+                    ? 'native + monitor tap'
+                    : 'native element';
+            const g = reviewMixVideoBoostPlayback || reviewMixVideoWired
                 ? getVideoTrackEffectiveGain()
                 : videoMain
                   ? videoMain.volume
@@ -2709,7 +3066,7 @@
         }
     }
 
-    /** 新規動画読み込み時: 空き Ex レーンを 1 つだけ表示 */
+    /** 新規動画読み込み時: 空き Ex レーンは閉じる（追加は + Add Track またはドロップ） */
     function restoreExtraTrackLanesForNewVideo() {
         for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
             setExtraTrackLaneUiOpen(slot, false, {
@@ -2717,7 +3074,6 @@
                 skipPersist: true,
             });
         }
-        setExtraTrackLaneUiOpen(0, true, { deferLayout: true, skipPersist: true });
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -2729,6 +3085,25 @@
         }
     }
 
+    /** Video Audio 表示中は中身のない Ex レーンを閉じる（誤って開いた空レーンの後片付け） */
+    function hideEmptyExtraLanesWhenVideoAudioVisible() {
+        if (typeof isVideoAudioLaneShown !== 'function' || !isVideoAudioLaneShown()) {
+            return;
+        }
+        let changed = false;
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            if (extraTrackSlotHasContent(slot)) continue;
+            if (!extraLaneUiOpen[slot]) continue;
+            setExtraTrackLaneUiOpen(slot, false, { deferLayout: true, skipPersist: true });
+            changed = true;
+        }
+        if (changed && typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+    }
+
+    window.hideEmptyExtraLanesWhenVideoAudioVisible = hideEmptyExtraLanesWhenVideoAudioVisible;
+
     window.restoreExtraTrackLanesForNewVideo = restoreExtraTrackLanesForNewVideo;
     window.extraTrackBufferDuration = extraTrackBufferDuration;
     window.toggleExtraTrackSolo = toggleExtraSolo;
@@ -2739,7 +3114,6 @@
     window.adjustExtraTrackVolumeDb = adjustExtraTrackVolumeDb;
     window.clearExtraTrackVolumeUnityHold = clearExtraTrackVolumeUnityHold;
     window.isExtraTrackLoaded = isExtraTrackLoaded;
-    window.hasAnyExtraTrackLoaded = hasAnyExtraTrackLoaded;
     window.isPastAllLoadedTrackPlaybackEnds = isPastAllLoadedTrackPlaybackEnds;
     window.hasAnyExtraTrackTimelineContent = hasAnyExtraTrackTimelineContent;
     window.extraTrackSlotHasContent = extraTrackSlotHasContent;
@@ -2751,6 +3125,10 @@
     window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;
     window.finalizeReviewMixAfterSessionRestore = finalizeReviewMixAfterSessionRestore;
     window.prepareReviewMixForNewVideoLoad = prepareReviewMixForNewVideoLoad;
+    window.tryWireReviewMixVideoAudioWhenReady = tryWireReviewMixVideoAudioWhenReady;
+    window.ensureReviewMixVideoMonitorTap = ensureReviewMixVideoMonitorTap;
+    window.applyReviewMixVideoMonitorTapGain = applyReviewMixVideoMonitorTapGain;
+    window.isVideoAudioPlaybackViaNativeElement = isVideoAudioPlaybackViaNativeElement;
     window.applyExtraTrackPeaksPreview = applyExtraTrackPeaksPreview;
     window.buildExtraTrackPeaksPreviewFromWavBlob = buildExtraTrackPeaksPreviewFromWavBlob;
     window.refreshAllExtraTrackLaneVisibility = refreshAllExtraTrackLaneVisibility;
@@ -3445,6 +3823,8 @@
         }
         return false;
     }
+
+    window.hasAnyExtraTrackLoaded = hasAnyExtraTrackLoaded;
 
     /** デコード前の peaks プレビュー（restoreDurationHint）もタイムライン有効とみなす */
     function hasAnyExtraTrackTimelineContent() {

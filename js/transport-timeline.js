@@ -365,7 +365,8 @@
         if (transportTailPlaybackActive) return true;
         if (typeof videoReady === 'function' && !videoReady()) {
             return (
-                typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded()
+                typeof anyExtraTrackLoadedForTimeline === 'function' &&
+                    anyExtraTrackLoadedForTimeline()
             );
         }
         if (!hasMasterTransportTailBeyondVideo()) return false;
@@ -1110,7 +1111,8 @@
         }
         return (
             (typeof videoReady === 'function' && videoReady()) ||
-            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded())
+            (typeof anyExtraTrackLoadedForTimeline === 'function' &&
+                anyExtraTrackLoadedForTimeline())
         );
     }
 
@@ -1525,7 +1527,8 @@
         if (playheadWrap) {
             const show =
                 (typeof videoReady === 'function' && videoReady()) ||
-                (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
+                (typeof anyExtraTrackLoadedForTimeline === 'function' &&
+                anyExtraTrackLoadedForTimeline());
             playheadWrap.style.left = pct + '%';
             playheadWrap.hidden = !show;
         }
@@ -1535,14 +1538,17 @@
         if (lanes) lanes.setAttribute('aria-valuenow', String(Math.round(pct)));
     }
 
-    function hasAnyExtraTrackLoaded() {
-        if (typeof window.hasAnyExtraTrackLoaded === 'function') {
-            return window.hasAnyExtraTrackLoaded();
-        }
-        if (typeof isExtraTrackLoaded !== 'function') return false;
+    function anyExtraTrackLoadedForTimeline() {
+        const loadFn =
+            typeof window.isExtraTrackLoaded === 'function'
+                ? window.isExtraTrackLoaded
+                : typeof isExtraTrackLoaded === 'function'
+                  ? isExtraTrackLoaded
+                  : null;
+        if (!loadFn) return false;
         const n = typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
         for (let i = 0; i < n; i++) {
-            if (isExtraTrackLoaded(i)) return true;
+            if (loadFn(i)) return true;
         }
         return false;
     }

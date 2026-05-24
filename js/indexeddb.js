@@ -712,6 +712,9 @@
         await finishSessionRestoreFromRow(row, {
             restoreTransportSec: restoreTransportSec,
         });
+        if (typeof ensureMainVideoWaveformAfterSessionRestore === 'function') {
+            ensureMainVideoWaveformAfterSessionRestore();
+        }
         return true;
     }
 

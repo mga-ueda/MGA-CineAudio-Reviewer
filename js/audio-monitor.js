@@ -216,6 +216,8 @@
     let spectrumScratchBandLin = null;
     let spectrumScratchDisplayDb = null;
     let spectrumScratchBlurredLin = null;
+    let spectrumScratchVideoFloat = null;
+    let spectrumScratchVideoFloatLen = 0;
     /** スペクトラム帯域グリッドの下限 Hz（ラベル・帯境界の基準） */
     const SPECTRUM_GRID_FLOOR_HZ = 20;
     const SPECTRUM_INSET_LEFT_PX = 12;
@@ -667,9 +669,21 @@ window.addEventListener('resize', () => {
         if (!audioCtx) return;
         const ctxNow = audioCtx.currentTime;
 
-        const l = getMeterValues(anaL, 'l', ctxNow);
-        const r = getMeterValues(anaR, 'r', ctxNow);
-    
+        let l = getMeterValues(anaL, 'l', ctxNow);
+        let r = getMeterValues(anaR, 'r', ctxNow);
+        if (
+            typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
+            isVideoAudioPlaybackViaNativeElement() &&
+            typeof getVideoTrackAnalyser === 'function'
+        ) {
+            const vAna = getVideoTrackAnalyser();
+            if (vAna) {
+                const vm = getMeterValues(vAna, 'l', ctxNow);
+                l = mergeVideoAnalyserMeterIntoChannel(l, vm);
+                r = mergeVideoAnalyserMeterIntoChannel(r, vm);
+            }
+        }
+
         const maxPeakDb = Math.max(l.instPeakDb, r.instPeakDb);
         if (isFinite(maxPeakDb) && maxPeakDb > 0.15) {
             autoReduceGain(maxPeakDb);
@@ -1186,6 +1200,61 @@ window.addEventListener('resize', () => {
         syncMonitorAnalysisLayoutHeights();
     }
     
+    function mergeVideoAnalyserMeterIntoChannel(base, video) {
+        if (!video || !base) return base;
+        if (video.pPct <= base.pPct && video.rPct <= base.rPct && video.instPeakDb <= base.instPeakDb) {
+            return base;
+        }
+        return {
+            pPct: Math.max(base.pPct, video.pPct),
+            rPct: Math.max(base.rPct, video.rPct),
+            peakHoldBottomPct: Math.max(base.peakHoldBottomPct, video.peakHoldBottomPct),
+            rmsHoldBottomPct: Math.max(base.rmsHoldBottomPct, video.rmsHoldBottomPct),
+            peakDb: Math.max(base.peakDb, video.peakDb),
+            peakHeldDb: Math.max(base.peakHeldDb, video.peakHeldDb),
+            instPeakDb: Math.max(base.instPeakDb, video.instPeakDb),
+            rmsDb: Math.max(base.rmsDb, video.rmsDb),
+            rmsHeldDb: Math.max(base.rmsHeldDb, video.rmsHeldDb),
+            instRmsDb: Math.max(base.instRmsDb, video.instRmsDb),
+            rmsDbDisp: Math.max(base.rmsDbDisp, video.rmsDbDisp),
+            rawPeak: Math.max(base.rawPeak, video.rawPeak),
+            showPeakHoldLine: base.showPeakHoldLine || video.showPeakHoldLine,
+            showRmsHoldLine: base.showRmsHoldLine || video.showRmsHoldLine,
+            peakHoldLineColor: video.instPeakDb > base.instPeakDb ? video.peakHoldLineColor : base.peakHoldLineColor,
+            rmsHoldLineColor: video.instRmsDb > base.instRmsDb ? video.rmsHoldLineColor : base.rmsHoldLineColor,
+            peakHoldBorderColor:
+                video.instPeakDb > base.instPeakDb ? video.peakHoldBorderColor : base.peakHoldBorderColor,
+            rmsHoldBorderColor:
+                video.instRmsDb > base.instRmsDb ? video.rmsHoldBorderColor : base.rmsHoldBorderColor,
+        };
+    }
+
+    function mergeNativeVideoAnalyserIntoSpectrum(floatData, audioCtx) {
+        if (
+            typeof isVideoAudioPlaybackViaNativeElement !== 'function' ||
+            !isVideoAudioPlaybackViaNativeElement()
+        ) {
+            return;
+        }
+        const vAna =
+            typeof getVideoTrackAnalyser === 'function' ? getVideoTrackAnalyser() : null;
+        if (!vAna || !audioCtx) return;
+        const vLen = vAna.frequencyBinCount;
+        if (!spectrumScratchVideoFloat || spectrumScratchVideoFloatLen !== vLen) {
+            spectrumScratchVideoFloatLen = vLen;
+            spectrumScratchVideoFloat = new Float32Array(vLen);
+        }
+        const vData = spectrumScratchVideoFloat;
+        vAna.getFloatFrequencyData(vData);
+        const masterLen = floatData.length;
+        const nyquist = audioCtx.sampleRate / 2;
+        for (let i = 0; i < masterLen; i++) {
+            const f = (i / masterLen) * nyquist;
+            const vi = Math.min(vLen - 1, Math.max(0, Math.round((f / nyquist) * vLen)));
+            if (vData[vi] > floatData[i]) floatData[i] = vData[vi];
+        }
+    }
+
     function drawSpectrum() {
         const audioCtx = getReviewMixAudioCtx();
         if (!masterAnalyser || !audioCtx || !canvasCtx) return;
@@ -1200,6 +1269,7 @@ window.addEventListener('resize', () => {
         }
         const floatData = spectrumScratchFloat;
         masterAnalyser.getFloatFrequencyData(floatData);
+        mergeNativeVideoAnalyserIntoSpectrum(floatData, audioCtx);
     
         let tdPeakLin = 0;
         if (anaL && anaR) {

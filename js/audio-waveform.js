@@ -24,7 +24,14 @@
     let waveformLanesLastPointerY = null;
     let waveformTargetExtraSlot = -1;
     let waveformBuildTimer = 0;
+    let waveformLoadKickTimer = 0;
+    let waveformDecodeInFlight = false;
+    let waveformPresenceWatchTimer = 0;
+    let waveformPresenceWatchGen = 0;
     let waveformPauseBuildListener = null;
+    const WAVEFORM_PRESENCE_WATCH_INTERVAL_MS = 1500;
+    const WAVEFORM_PRESENCE_WATCH_MAX_TRIES = 40;
+    const WAVEFORM_PRESENCE_WATCH_FIRST_MS = 300;
     /** MP4 は先頭スライスでは decode できないため、フルファイルのみ（上限あり） */
     const WAVEFORM_DECODE_MAX_BYTES = 1024 * 1024 * 1024;
     const WAVEFORM_DECODE_TIMEOUT_MS = 90000;
@@ -38,6 +45,87 @@
         if (typeof notifyVideoLoadLockAudioReady === 'function') {
             notifyVideoLoadLockAudioReady();
         }
+    }
+
+    function isVideoLoadLockWaitingForAudio() {
+        return (
+            typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive()
+        );
+    }
+
+    function shouldRetryMainVideoWaveformBuild() {
+        if (!urlMain || containerHasAudio.main === false) return false;
+        if (waveformPeaks && waveformPeaks.length > 0) return false;
+        if (waveformDecodeInFlight) return false;
+        if (typeof videoReady !== 'function' || !videoReady()) return false;
+        const status = audioWaveformStatus ? audioWaveformStatus.textContent || '' : '';
+        if (status === 'No audio track' || status === 'Waveform unavailable') return false;
+        if (status.indexOf(' ch · ') >= 0) return false;
+        return true;
+    }
+
+    function stopMainVideoWaveformPresenceWatch() {
+        waveformPresenceWatchGen += 1;
+        if (waveformPresenceWatchTimer) {
+            clearTimeout(waveformPresenceWatchTimer);
+            waveformPresenceWatchTimer = 0;
+        }
+    }
+
+    /** 波形が未描画のままキックが失われた場合の自動再試行（セッション復元・競合対策）。 */
+    function scheduleMainVideoWaveformPresenceWatch(opt) {
+        if (!urlMain || containerHasAudio.main === false) return;
+        if (waveformPeaks && waveformPeaks.length > 0) return;
+        stopMainVideoWaveformPresenceWatch();
+        const watchGen = waveformPresenceWatchGen;
+        const intervalMs =
+            opt && opt.intervalMs > 0 ? opt.intervalMs : WAVEFORM_PRESENCE_WATCH_INTERVAL_MS;
+        const maxTries = opt && opt.maxTries > 0 ? opt.maxTries : WAVEFORM_PRESENCE_WATCH_MAX_TRIES;
+        const firstDelayMs =
+            opt && opt.firstDelayMs !== undefined ? opt.firstDelayMs : WAVEFORM_PRESENCE_WATCH_FIRST_MS;
+        let tries = 0;
+
+        const tick = () => {
+            waveformPresenceWatchTimer = 0;
+            if (watchGen !== waveformPresenceWatchGen) return;
+            if (!urlMain || containerHasAudio.main === false) return;
+            if (waveformPeaks && waveformPeaks.length > 0) return;
+            tries += 1;
+            if (typeof videoReady === 'function' && videoReady()) {
+                kickMainVideoWaveformBuild({ allowSettle: false });
+            }
+            if (waveformPeaks && waveformPeaks.length > 0) return;
+            if (tries >= maxTries) {
+                writeLog('Waveform: auto-retry stopped after ' + tries + ' attempts');
+                return;
+            }
+            waveformPresenceWatchTimer = setTimeout(tick, intervalMs);
+        };
+
+        waveformPresenceWatchTimer = setTimeout(tick, firstDelayMs);
+    }
+
+    function scheduleWaveformBuildRetryIfNeeded() {
+        if (!shouldRetryMainVideoWaveformBuild()) return;
+        if (waveformDecodeInFlight) return;
+        if (waveformLoadKickTimer) {
+            scheduleMainVideoWaveformPresenceWatch();
+            return;
+        }
+        if (waveformBuildTimer) {
+            clearTimeout(waveformBuildTimer);
+            waveformBuildTimer = 0;
+        }
+        waveformLoadKickTimer = setTimeout(() => {
+            waveformLoadKickTimer = 0;
+            kickMainVideoWaveformBuild({ allowSettle: false });
+        }, 60);
+    }
+
+    function waveformBuildGenerationStale(gen) {
+        if (gen === waveformBuildGen) return false;
+        scheduleWaveformBuildRetryIfNeeded();
+        return true;
     }
 
     function waveformDecodeLimitMb() {
@@ -126,9 +214,16 @@
 
     /** × で閉じていない限り表示。動画なし／解析待ちは枠のみ、音声なし確定時のみ非表示。 */
     let videoLaneUiOpen = true;
+    let refreshingVideoAudioLaneVisibility = false;
 
     function containerReportsVideoAudioTrack() {
         return containerHasAudio.main === true;
+    }
+
+    function notifyVideoAudioLoadSettledIfNoVideoAudio() {
+        if (containerHasAudio.main === false) {
+            notifyVideoAudioLoadSettled();
+        }
     }
 
     function isVideoAudioLaneShown() {
@@ -146,7 +241,9 @@
     /** 新規動画読み込み時に Video Audio 枠を再表示可能にする */
     function restoreVideoAudioLaneForNewVideo() {
         videoLaneUiOpen = true;
-        refreshVideoAudioLaneVisibility();
+        if (!refreshingVideoAudioLaneVisibility) {
+            refreshVideoAudioLaneVisibility();
+        }
     }
 
     /** @deprecated 互換: 枠を開いて visibility を更新 */
@@ -209,18 +306,42 @@
         return false;
     }
 
-    /** 表示レーンが 0 になったら Video Audio または空き Ex スロットを 1 つ復活させる */
-    function ensureAtLeastOneWaveformLaneVisible() {
-        if (containerHasAudio.main === false && !hasAnyVisibleExtraWaveformLane()) {
+    function hasMainVideoSourcePendingOrReady() {
+        return (
+            (typeof fileMain !== 'undefined' && !!fileMain) ||
+            (typeof urlMain !== 'undefined' && !!urlMain)
+        );
+    }
+
+    /** 動画に音声トラックが無いときは Video Audio を閉じ、空き Ex 1 を表示する */
+    function showExtraLaneForNoVideoAudio() {
+        if (containerHasAudio.main !== false) return;
+        videoLaneUiOpen = false;
+        if (!hasAnyVisibleExtraWaveformLane()) {
             if (typeof reviveOneEmptyExtraLane === 'function') {
                 reviveOneEmptyExtraLane();
             }
         }
+        refreshVideoAudioLaneVisibility({ skipEnsureAtLeastOne: true });
+    }
+
+    /** 表示レーンが 0 になったら Video Audio または空き Ex スロットを 1 つ復活させる */
+    function ensureAtLeastOneWaveformLaneVisible() {
+        const videoPending = hasMainVideoSourcePendingOrReady();
+        if (containerHasAudio.main === false) {
+            showExtraLaneForNoVideoAudio();
+            return;
+        }
         if (countVisibleWaveformLanes() > 0) return;
         const hasVideo = typeof videoReady === 'function' && videoReady();
-        if (hasVideo && containerHasAudio.main !== false) {
+        if ((hasVideo || videoPending) && containerHasAudio.main !== false) {
             restoreVideoAudioLaneForNewVideo();
-        } else if (typeof reviveOneEmptyExtraLane === 'function') {
+            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                refreshWaveformCompositeLaneLayout();
+            }
+            return;
+        }
+        if (typeof reviveOneEmptyExtraLane === 'function') {
             reviveOneEmptyExtraLane();
         } else {
             restoreVideoAudioLaneForNewVideo();
@@ -231,10 +352,21 @@
     }
 
     window.ensureAtLeastOneWaveformLaneVisible = ensureAtLeastOneWaveformLaneVisible;
+    window.showExtraLaneForNoVideoAudio = showExtraLaneForNoVideoAudio;
     window.countVisibleWaveformLanes = countVisibleWaveformLanes;
 
     /** containerHasAudio と手動クリア状態を踏まえ Video Audio レーンの表示を反映 */
-    function refreshVideoAudioLaneVisibility() {
+    function refreshVideoAudioLaneVisibility(opt) {
+        if (refreshingVideoAudioLaneVisibility) return;
+        refreshingVideoAudioLaneVisibility = true;
+        try {
+            refreshVideoAudioLaneVisibilityCore(opt);
+        } finally {
+            refreshingVideoAudioLaneVisibility = false;
+        }
+    }
+
+    function refreshVideoAudioLaneVisibilityCore(opt) {
         const show = isVideoAudioLaneShown();
         if (audioWaveformPanel) {
             audioWaveformPanel.hidden = !show;
@@ -257,7 +389,15 @@
         if (typeof refreshExtraTrackAddLaneButtons === 'function') {
             refreshExtraTrackAddLaneButtons();
         }
-        ensureAtLeastOneWaveformLaneVisible();
+        if (!opt || !opt.skipEnsureAtLeastOne) {
+            ensureAtLeastOneWaveformLaneVisible();
+        }
+        if (
+            show &&
+            typeof hideEmptyExtraLanesWhenVideoAudioVisible === 'function'
+        ) {
+            hideEmptyExtraLanesWhenVideoAudioVisible();
+        }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -364,6 +504,7 @@
     window.isVideoAudioLaneShown = isVideoAudioLaneShown;
     window.dismissVideoAudioLane = dismissVideoAudioLane;
     window.refreshVideoAudioLaneVisibility = refreshVideoAudioLaneVisibility;
+    window.notifyVideoAudioLoadSettledIfNoVideoAudio = notifyVideoAudioLoadSettledIfNoVideoAudio;
     window.refreshWaveformCompositeLaneLayout = refreshWaveformCompositeLaneLayout;
 
     function getWaveformAudioDurationSec() {
@@ -843,6 +984,7 @@
     window.getWaveformTargetExtraSlot = getWaveformTargetExtraSlot;
 
     function clearAudioWaveform() {
+        stopMainVideoWaveformPresenceWatch();
         waveformBuildGen += 1;
         waveformPeaks = null;
         waveformAudioBuffer = null;
@@ -1146,26 +1288,30 @@
 
     async function buildAudioWaveformForCurrentVideo() {
         const gen = ++waveformBuildGen;
-        if (!urlMain || !videoReady()) {
+        if (!urlMain) {
             clearAudioWaveform();
             return;
         }
+        if (!videoReady()) {
+            scheduleWaveformBuildRetryIfNeeded();
+            return;
+        }
+        waveformDecodeInFlight = true;
         if (containerHasAudio.main === false) {
+            waveformDecodeInFlight = false;
             waveformPeaks = null;
-            setAudioWaveformLoaded(true);
-            setAudioWaveformStatus('No audio track');
+            setAudioWaveformLoaded(false);
+            setAudioWaveformStatus('Not Loaded');
             drawAudioWaveformCanvas();
             updateAllWaveformPlayheads();
             if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
-            refreshVideoAudioLaneVisibility();
-            if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-                ensureAtLeastOneWaveformLaneVisible();
-            }
+            showExtraLaneForNoVideoAudio();
             notifyVideoAudioLoadSettled();
             return;
         }
 
         if (fileMain && fileMain.size > WAVEFORM_DECODE_MAX_BYTES) {
+            waveformDecodeInFlight = false;
             reportWaveformFileTooLarge(fileMain.size);
             return;
         }
@@ -1176,7 +1322,9 @@
 
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) {
+            waveformDecodeInFlight = false;
             setAudioWaveformStatus('AudioContext unavailable');
+            notifyVideoAudioLoadSettled();
             return;
         }
 
@@ -1184,10 +1332,10 @@
         const ctx = new Ctx();
         try {
             let ab = await readArrayBufferForWaveformDecode();
-            if (gen !== waveformBuildGen) return;
+            if (waveformBuildGenerationStale(gen)) return;
             setAudioWaveformStatus('Decoding audio…');
             await yieldToBrowser();
-            if (gen !== waveformBuildGen) return;
+            if (waveformBuildGenerationStale(gen)) return;
             try {
                 buffer = await decodeArrayBufferToAudioBuffer(ctx, ab);
             } catch (err1) {
@@ -1195,17 +1343,17 @@
                 const res = await fetch(urlMain);
                 if (!res.ok) throw err1;
                 ab = await res.arrayBuffer();
-                if (gen !== waveformBuildGen) return;
+                if (waveformBuildGenerationStale(gen)) return;
                 await yieldToBrowser();
                 buffer = await decodeArrayBufferToAudioBuffer(ctx, ab);
             }
-            if (gen !== waveformBuildGen) return;
+            if (waveformBuildGenerationStale(gen)) return;
             const videoDur = getDuration(videoMain);
             if (videoDur > 0 && buffer.duration > videoDur + 0.5) {
                 buffer = clipAudioBufferToDuration(buffer, videoDur);
             }
         } catch (err) {
-            if (gen !== waveformBuildGen) return;
+            if (waveformBuildGenerationStale(gen)) return;
             if (isWaveformFileTooLargeError(err)) {
                 const n =
                     fileMain && fileMain.size
@@ -1224,6 +1372,7 @@
             notifyVideoAudioLoadSettled();
             return;
         } finally {
+            waveformDecodeInFlight = false;
             try {
                 if (typeof ctx.close === 'function') await ctx.close();
             } catch (_) {
@@ -1231,7 +1380,7 @@
             }
         }
 
-        if (gen !== waveformBuildGen) return;
+        if (waveformBuildGenerationStale(gen)) return;
 
         waveformAudioBuffer = buffer;
         const sized = syncAudioWaveformCanvasSize();
@@ -1251,27 +1400,25 @@
             notifyMasterTransportDurationChanged();
         }
         notifyVideoAudioLoadSettled();
+        stopMainVideoWaveformPresenceWatch();
     }
 
     function onContainerMetaReadyForWaveform() {
         if (!urlMain) return;
-        refreshVideoAudioLaneVisibility();
         if (containerHasAudio.main !== false) return;
         waveformBuildGen += 1;
+        notifyVideoAudioLoadSettled();
         waveformPeaks = null;
         waveformAudioBuffer = null;
-        setAudioWaveformLoaded(true);
-        setAudioWaveformStatus('No audio track');
+        setAudioWaveformLoaded(false);
+        setAudioWaveformStatus('Not Loaded');
         drawAudioWaveformCanvas();
         updateAllWaveformPlayheads();
         if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
-        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-            ensureAtLeastOneWaveformLaneVisible();
-        }
-        notifyVideoAudioLoadSettled();
+        showExtraLaneForNoVideoAudio();
     }
 
     function detachWaveformPauseBuildListener() {
@@ -1283,12 +1430,17 @@
 
     function abortWaveformDecodeInFlight() {
         waveformBuildGen += 1;
+        waveformDecodeInFlight = false;
     }
 
     function abortWaveformSchedule() {
         if (waveformBuildTimer) {
             clearTimeout(waveformBuildTimer);
             waveformBuildTimer = 0;
+        }
+        if (waveformLoadKickTimer) {
+            clearTimeout(waveformLoadKickTimer);
+            waveformLoadKickTimer = 0;
         }
         detachWaveformPauseBuildListener();
     }
@@ -1302,9 +1454,36 @@
         abortWaveformBuildInFlight();
     }
 
+    function shouldBuildMainVideoWaveform() {
+        if (containerHasAudio.main === false) return false;
+        if (isVideoAudioLaneShown()) return true;
+        return containerHasAudio.main === true || containerHasAudio.main === null;
+    }
+
+    function waitForVideoReadyThenBuild() {
+        if (!videoMain || !urlMain) return;
+        const retry = () => {
+            videoMain.removeEventListener('loadedmetadata', retry);
+            videoMain.removeEventListener('durationchange', retry);
+            videoMain.removeEventListener('loadeddata', retry);
+            startWaveformBuildWhenReady();
+        };
+        videoMain.addEventListener('loadedmetadata', retry, { once: true });
+        videoMain.addEventListener('durationchange', retry, { once: true });
+        videoMain.addEventListener('loadeddata', retry, { once: true });
+    }
+
     function startWaveformBuildWhenReady() {
-        if (!urlMain || !videoReady()) return;
-        if (!isVideoAudioLaneShown()) {
+        if (!urlMain) return;
+        if (containerHasAudio.main === false) {
+            notifyVideoAudioLoadSettled();
+            return;
+        }
+        if (!videoReady()) {
+            waitForVideoReadyThenBuild();
+            return;
+        }
+        if (!shouldBuildMainVideoWaveform()) {
             if (containerHasAudio.main === false) {
                 notifyVideoAudioLoadSettled();
             }
@@ -1316,8 +1495,15 @@
         }
 
         const run = () => {
-            if (!urlMain || !videoReady()) return;
-            if (waveformPeaks && waveformPeaks.length > 0) return;
+            if (!urlMain) return;
+            if (!videoReady()) {
+                waitForVideoReadyThenBuild();
+                return;
+            }
+            if (waveformPeaks && waveformPeaks.length > 0) {
+                notifyVideoAudioLoadSettled();
+                return;
+            }
             void buildAudioWaveformForCurrentVideo();
         };
 
@@ -1330,29 +1516,88 @@
             return;
         }
 
-        if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(run, { timeout: 6000 });
-        } else {
-            setTimeout(run, 0);
-        }
+        setTimeout(run, 0);
     }
 
     function scheduleBackgroundWaveformBuild(delayMs) {
         abortWaveformSchedule();
         if (!urlMain) return;
-        const delay = delayMs > 0 ? delayMs : WAVEFORM_BG_BUILD_DELAY_MS;
+        let delay = delayMs > 0 ? delayMs : WAVEFORM_BG_BUILD_DELAY_MS;
+        if (typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive()) {
+            delay =
+                typeof videoReady === 'function' && videoReady()
+                    ? Math.min(delay, 80)
+                    : 0;
+        }
         setAudioWaveformLoaded(true);
         setAudioWaveformStatus('Loading waveform…');
         drawAudioWaveformCanvas();
-        waveformBuildTimer = setTimeout(() => {
+        const run = () => {
             waveformBuildTimer = 0;
             startWaveformBuildWhenReady();
-        }, delay);
+        };
+        if (delay <= 0) {
+            run();
+            return;
+        }
+        waveformBuildTimer = setTimeout(run, delay);
     }
 
-    function resetAudioWaveformForNewVideo() {
+    /** 動画メタ／コンテナ解析後に波形ビルドを開始（重複キックはまとめる）。 */
+    function ensureMainVideoWaveformAfterSessionRestore() {
+        if (!urlMain) return;
+        if (containerHasAudio.main === false) return;
+        kickMainVideoWaveformBuild({ allowSettle: false });
+    }
+
+    function kickMainVideoWaveformBuild(opt) {
+        if (!urlMain) return;
+        if (containerHasAudio.main === false) {
+            stopMainVideoWaveformPresenceWatch();
+            if (!opt || opt.allowSettle) notifyVideoAudioLoadSettled();
+            return;
+        }
+        if (waveformPeaks && waveformPeaks.length > 0) {
+            stopMainVideoWaveformPresenceWatch();
+            if (!opt || opt.allowSettle) notifyVideoAudioLoadSettled();
+            return;
+        }
+        if (waveformDecodeInFlight) {
+            scheduleWaveformBuildRetryIfNeeded();
+            scheduleMainVideoWaveformPresenceWatch();
+            return;
+        }
+        if (waveformLoadKickTimer) {
+            scheduleMainVideoWaveformPresenceWatch();
+            return;
+        }
+        if (waveformBuildTimer) {
+            clearTimeout(waveformBuildTimer);
+            waveformBuildTimer = 0;
+        }
+        waveformLoadKickTimer = setTimeout(() => {
+            waveformLoadKickTimer = 0;
+            startWaveformBuildWhenReady();
+        }, 0);
+        scheduleMainVideoWaveformPresenceWatch();
+    }
+
+    /** 読み込みロック中のみキック（ロック解除待ちの波形用）。 */
+    function ensureMainVideoWaveformBuildForLoad() {
+        if (!isVideoLoadLockWaitingForAudio()) return;
+        kickMainVideoWaveformBuild({ allowSettle: true });
+    }
+
+    /** ロック解除後も波形が未完了なら再キック。 */
+    function kickMainVideoWaveformAfterLoadLock() {
+        kickMainVideoWaveformBuild({ allowSettle: false });
+    }
+
+    function resetAudioWaveformForNewVideo(opt) {
+        stopMainVideoWaveformPresenceWatch();
         abortWaveformSchedule();
         abortWaveformDecodeInFlight();
+        waveformDecodeInFlight = false;
         waveformPeaks = null;
         waveformAudioBuffer = null;
         refreshVideoAudioLaneVisibility();
@@ -1366,7 +1611,9 @@
         setAudioWaveformStatus('Loading waveform…');
         drawAudioWaveformCanvas();
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
-        scheduleBackgroundWaveformBuild(WAVEFORM_BG_BUILD_DELAY_MS);
+        if (!opt || !opt.skipScheduleBuild) {
+            scheduleBackgroundWaveformBuild(WAVEFORM_BG_BUILD_DELAY_MS);
+        }
     }
 
     /** @deprecated 互換用 */
@@ -1385,7 +1632,7 @@
         if (label === 'No audio track' || label === 'Waveform unavailable') return;
         if (label.indexOf(' ch · ') >= 0) return;
         if (waveformBuildTimer) return;
-        if (label.indexOf('Decoding') >= 0) return;
+        if (label.indexOf('Decoding') >= 0 && waveformDecodeInFlight) return;
         scheduleBackgroundWaveformBuild(delayMs > 0 ? delayMs : 600);
     }
 
@@ -1413,10 +1660,7 @@
 
         const videoAudioClearBtn = document.getElementById('videoAudioClearBtn');
         if (videoAudioClearBtn) {
-            videoAudioClearBtn.addEventListener('click', () => {
-                dismissVideoAudioLane();
-                writeLog('Video audio: lane cleared (hidden)');
-            });
+            videoAudioClearBtn.disabled = true;
         }
 
         if (typeof ResizeObserver !== 'undefined') {
@@ -1544,6 +1788,13 @@
             applyTransportAtRatio(ratio, { logInput: true, flash: true });
         });
     }
+
+    window.onContainerMetaReadyForWaveform = onContainerMetaReadyForWaveform;
+    window.ensureMainVideoWaveformBuildForLoad = ensureMainVideoWaveformBuildForLoad;
+    window.kickMainVideoWaveformBuild = kickMainVideoWaveformBuild;
+    window.kickMainVideoWaveformAfterLoadLock = kickMainVideoWaveformAfterLoadLock;
+    window.ensureMainVideoWaveformAfterSessionRestore = ensureMainVideoWaveformAfterSessionRestore;
+    window.scheduleMainVideoWaveformPresenceWatch = scheduleMainVideoWaveformPresenceWatch;
 
     initAudioWaveformUi();
     refreshVideoAudioLaneVisibility();

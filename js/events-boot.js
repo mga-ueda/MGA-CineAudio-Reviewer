@@ -47,6 +47,9 @@
         if (typeof applyReviewMixVideoGain === 'function') {
             applyReviewMixVideoGain();
         }
+        if (typeof tryWireReviewMixVideoAudioWhenReady === 'function') {
+            tryWireReviewMixVideoAudioWhenReady();
+        }
         syncSeekMax();
         updateControlsEnabled();
         if (typeof applyPendingRangeLoopRestore === 'function') {
@@ -63,6 +66,15 @@
         }
         if (typeof notifyVideoLoadLockVideoReady === 'function') {
             notifyVideoLoadLockVideoReady();
+        }
+        if (typeof notifyVideoAudioLoadSettledIfNoVideoAudio === 'function') {
+            notifyVideoAudioLoadSettledIfNoVideoAudio();
+        }
+        if (typeof kickMainVideoWaveformBuild === 'function') {
+            kickMainVideoWaveformBuild({ allowSettle: false });
+        }
+        if (typeof scheduleMainVideoWaveformPresenceWatch === 'function') {
+            scheduleMainVideoWaveformPresenceWatch();
         }
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
@@ -152,7 +164,7 @@
             'playing',
             () => {
                 if (typeof applyReviewMixVideoGain === 'function') {
-                    applyReviewMixVideoGain();
+                    applyReviewMixVideoGain({ forceRecapture: true });
                 }
             },
             { signal: sig },
@@ -801,6 +813,15 @@
         onVideoMediaReady();
         if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
             await finalizeReviewMixAfterSessionRestore();
+        } else if (typeof ensureMainVideoWaveformAfterSessionRestore === 'function') {
+            ensureMainVideoWaveformAfterSessionRestore();
+        }
+        if (
+            typeof fileMain !== 'undefined' &&
+            fileMain &&
+            typeof scheduleMainVideoWaveformPresenceWatch === 'function'
+        ) {
+            scheduleMainVideoWaveformPresenceWatch({ firstDelayMs: 800 });
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();

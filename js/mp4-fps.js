@@ -492,7 +492,9 @@
                 containerStszSampleCount[side] = null;
                 containerTimelineFrameOffset[side] = 0;
                 containerMediaDurationSec[side] = null;
-                containerHasAudio[side] = null;
+                if (containerHasAudio[side] !== false) {
+                    containerHasAudio[side] = null;
+                }
                 return;
             }
             const meta = parseFirstVideoTrackMetaFromMoov(loc.buf, loc.moov0, loc.moov1);
@@ -514,7 +516,9 @@
             containerStszSampleCount[side] = null;
             containerTimelineFrameOffset[side] = 0;
             containerMediaDurationSec[side] = null;
-            containerHasAudio[side] = null;
+            if (containerHasAudio[side] !== false) {
+                containerHasAudio[side] = null;
+            }
         }
     }
 
@@ -535,8 +539,14 @@
         updatePanelInfoLine();
         syncSeekMax();
         updateSeekUiFromVideo();
-        if (typeof onContainerMetaReadyForWaveform === 'function') {
-            onContainerMetaReadyForWaveform();
+        const onWaveformContainerMeta =
+            typeof window.onContainerMetaReadyForWaveform === 'function'
+                ? window.onContainerMetaReadyForWaveform
+                : typeof onContainerMetaReadyForWaveform === 'function'
+                  ? onContainerMetaReadyForWaveform
+                  : null;
+        if (onWaveformContainerMeta) {
+            onWaveformContainerMeta();
         } else if (typeof refreshVideoAudioLaneVisibility === 'function') {
             refreshVideoAudioLaneVisibility();
         }
