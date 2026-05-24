@@ -678,7 +678,7 @@
         isSeeking = false;
         updateSeekUiFromVideo();
         if (
-            (typeof isTransportUiClockActive === 'function' && isTransportUiClockActive()) ||
+            (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
             (videoMain && !videoMain.paused)
         ) {
             if (!rafId && typeof tick === 'function') rafId = requestAnimationFrame(tick);

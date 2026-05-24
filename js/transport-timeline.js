@@ -668,8 +668,15 @@
         if (!scrubbing && hasMasterTransportTailBeyondVideo()) {
             const vd = getVideoPlaybackEndSec();
             const eps = masterTransportTailEpsilonSec();
+            const playing =
+                typeof isTransportPlaying === 'function' && isTransportPlaying();
             if (vd > 0 && x >= vd - eps) {
-                transportTailPlaybackActive = true;
+                /* 停止中のシークではトランスポート時計を回さない（映像パークは applyVideoTimeForTransportSec） */
+                if (playing) {
+                    transportTailPlaybackActive = true;
+                } else {
+                    clearTransportTailPlayback();
+                }
             } else if (transportTailPlaybackActive || videoParkedForTransportTail) {
                 clearTransportTailPlayback();
                 clearVideoParkedForTail();
