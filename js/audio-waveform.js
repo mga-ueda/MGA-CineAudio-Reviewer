@@ -612,6 +612,12 @@
         if (!t || !t.closest) return true;
         if (t.closest('.seek-bar-marker')) return true;
         if (t.closest('.audio-waveform-composite__seek-input')) return true;
+        if (
+            typeof isPointerOnAnyRegionResizeHandle === 'function' &&
+            isPointerOnAnyRegionResizeHandle(ev.clientX, ev.clientY)
+        ) {
+            return true;
+        }
         const regionHandle = t.closest('.audio-waveform-lane__playback-region__handle');
         if (regionHandle) {
             if (clickIsInPreTrackTimelineGap(ev.clientX, ev.clientY)) return false;

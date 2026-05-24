@@ -667,9 +667,11 @@
         }
     }
 
+    const REGION_HANDLE_HIT_PAD_PX = 4;
+
     function isPointerOnRegionResizeHandle(regionEl, clientX) {
         if (!regionEl || !Number.isFinite(clientX)) return false;
-        const pad = 2;
+        const pad = REGION_HANDLE_HIT_PAD_PX;
         const handleIn = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--in',
         );
@@ -683,6 +685,87 @@
         if (handleOut) {
             const r = handleOut.getBoundingClientRect();
             if (clientX >= r.left - pad && clientX <= r.right + pad) return true;
+        }
+        return false;
+    }
+
+    /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
+    function resolveRegionResizeHandleAtPointer(track, clientX, clientY) {
+        if (!isExtraTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return null;
+        }
+        const lane = document.getElementById('extraAudioLane' + track.slot);
+        if (!lane || lane.hidden) return null;
+        const laneRect = lane.getBoundingClientRect();
+        if (
+            clientY < laneRect.top ||
+            clientY > laneRect.bottom ||
+            clientX < laneRect.left ||
+            clientX > laneRect.right
+        ) {
+            return null;
+        }
+        const container = getPlaybackRegionsContainerEl(track);
+        if (!container || container.hidden) return null;
+
+        const pad = REGION_HANDLE_HIT_PAD_PX;
+        let best = null;
+        let bestDist = Infinity;
+        const regions = container.querySelectorAll('.audio-waveform-lane__playback-region');
+        for (let r = 0; r < regions.length; r++) {
+            const regionEl = regions[r];
+            const segmentIndex = Number(regionEl.dataset.segmentIndex);
+            if (!Number.isFinite(segmentIndex)) continue;
+            const candidates = [
+                {
+                    kind: 'in',
+                    el: regionEl.querySelector(
+                        '.audio-waveform-lane__playback-region__handle--in',
+                    ),
+                },
+                {
+                    kind: 'out',
+                    el: regionEl.querySelector(
+                        '.audio-waveform-lane__playback-region__handle--out',
+                    ),
+                },
+            ];
+            for (let c = 0; c < candidates.length; c++) {
+                const handleEl = candidates[c].el;
+                if (!handleEl) continue;
+                const rect = handleEl.getBoundingClientRect();
+                if (clientX < rect.left - pad || clientX > rect.right + pad) continue;
+                const cx = (rect.left + rect.right) * 0.5;
+                const dist = Math.abs(clientX - cx);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = { segmentIndex, kind: candidates[c].kind, regionEl };
+                }
+            }
+        }
+        return best;
+    }
+
+    function isPointerOnAnyRegionResizeHandle(clientX, clientY, opt) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const slots = [];
+        if (opt && Number.isFinite(opt.slot)) {
+            slots.push(opt.slot);
+        } else {
+            const n =
+                typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            for (let i = 0; i < n; i++) slots.push(i);
+        }
+        for (let i = 0; i < slots.length; i++) {
+            if (
+                resolveRegionResizeHandleAtPointer(
+                    { type: 'extra', slot: slots[i] },
+                    clientX,
+                    clientY,
+                )
+            ) {
+                return true;
+            }
         }
         return false;
     }
@@ -2282,7 +2365,31 @@
         }
     }
 
+    const REGION_HANDLE_HOVER_CURSOR_CLASS =
+        'audio-waveform-composite__lanes--region-handle-hover';
+
+    function updateRegionResizeHandleCursorFromPointer(clientX, clientY) {
+        const lanes = getWaveformLanesEl();
+        if (!lanes) return;
+        const clear = () => lanes.classList.remove(REGION_HANDLE_HOVER_CURSOR_CLASS);
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            clear();
+            return;
+        }
+        if (
+            regionHandleDragActive ||
+            lanes.classList.contains('audio-waveform-composite__lanes--offset-drag') ||
+            lanes.classList.contains('audio-waveform-composite__lanes--region-drag')
+        ) {
+            clear();
+            return;
+        }
+        const onHandle = isPointerOnAnyRegionResizeHandle(clientX, clientY);
+        lanes.classList.toggle(REGION_HANDLE_HOVER_CURSOR_CLASS, onHandle);
+    }
+
     function updatePlaybackRegionHoverFromPointer(clientX, clientY) {
+        updateRegionResizeHandleCursorFromPointer(clientX, clientY);
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             setHoveredPlaybackRegion(null);
             return;
@@ -2732,17 +2839,18 @@
         let segmentIndex = -1;
         let regionEl = null;
 
+        if (slotFromY >= 0) {
+            const handleHit = resolveRegionResizeHandleAtPointer(
+                { type: 'extra', slot: slotFromY },
+                clientX,
+                clientY,
+            );
+            if (handleHit) return null;
+        }
+
         const hit = document.elementFromPoint(clientX, clientY);
         if (hit) {
             if (hit.closest('.audio-waveform-lane__playback-region__handle--split')) {
-                return null;
-            }
-            const regionFromHandle = hit.closest('.audio-waveform-lane__playback-region');
-            if (
-                hit.closest('.audio-waveform-lane__playback-region__handle') &&
-                regionFromHandle &&
-                isPointerOnRegionResizeHandle(regionFromHandle, clientX)
-            ) {
                 return null;
             }
             regionEl = hit.closest('.audio-waveform-lane__playback-region');
@@ -3122,7 +3230,7 @@
 
     function isPlaybackRegionSplitKeyEvent(e) {
         if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
-        return e.code === 'Slash' || e.code === 'NumpadDivide';
+        return e.code === 'KeyX';
     }
 
     function handlePlaybackRegionSlashKeydown(e) {
@@ -3418,28 +3526,19 @@
                     }
                     return;
                 }
-                const handle = ev.target.closest(
-                    '.audio-waveform-lane__playback-region__handle',
+                const resizeHit = resolveRegionResizeHandleAtPointer(
+                    track,
+                    ev.clientX,
+                    ev.clientY,
                 );
-                if (!handle) return;
-                const regionEl = handle.closest('.audio-waveform-lane__playback-region');
-                if (!regionEl) return;
-                if (
-                    !handle.classList.contains(
-                        'audio-waveform-lane__playback-region__handle--split',
-                    ) &&
-                    !isPointerOnRegionResizeHandle(regionEl, ev.clientX)
-                ) {
-                    return;
+                if (resizeHit) {
+                    onRegionHandlePointerDown(
+                        ev,
+                        track,
+                        resizeHit.segmentIndex,
+                        resizeHit.kind,
+                    );
                 }
-                const segmentIndex = Number(regionEl.dataset.segmentIndex);
-                if (!Number.isFinite(segmentIndex)) return;
-                const kind = handle.classList.contains(
-                    'audio-waveform-lane__playback-region__handle--in',
-                )
-                    ? 'in'
-                    : 'out';
-                onRegionHandlePointerDown(ev, track, segmentIndex, kind);
             });
         });
     }
@@ -3525,6 +3624,7 @@
         shiftTrackAbsoluteRegionInsByDelta(track, newT0 - oldT0);
     };
     window.isPointerOnRegionResizeHandle = isPointerOnRegionResizeHandle;
+    window.isPointerOnAnyRegionResizeHandle = isPointerOnAnyRegionResizeHandle;
     window.snapRegionTransportSec = snapRegionTransportSec;
     window.snapSecToPlaybackRegionInOut = snapSecToPlaybackRegionInOut;
     window.collectRegionSnapStops = collectRegionSnapStops;

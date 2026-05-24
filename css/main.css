@@ -1949,6 +1949,12 @@
         .audio-waveform-composite__lanes--region-drag {
             cursor: ew-resize;
         }
+        /* 重なりで前面リージョン本体の grab が隠す In/Out 付近でも ↔ を示す */
+        .audio-waveform-composite__lanes--region-handle-hover,
+        .audio-waveform-composite__lanes--region-handle-hover
+            .audio-waveform-lane__playback-region {
+            cursor: ew-resize;
+        }
         .audio-waveform-composite__lanes--range-loop-drag {
             cursor: crosshair;
         }
