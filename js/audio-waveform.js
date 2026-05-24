@@ -351,9 +351,14 @@
         }
     }
 
+    function canHideAnyWaveformLane() {
+        return countVisibleWaveformLanes() > 1;
+    }
+
     window.ensureAtLeastOneWaveformLaneVisible = ensureAtLeastOneWaveformLaneVisible;
     window.showExtraLaneForNoVideoAudio = showExtraLaneForNoVideoAudio;
     window.countVisibleWaveformLanes = countVisibleWaveformLanes;
+    window.canHideAnyWaveformLane = canHideAnyWaveformLane;
 
     /** containerHasAudio と手動クリア状態を踏まえ Video Audio レーンの表示を反映 */
     function refreshVideoAudioLaneVisibility(opt) {

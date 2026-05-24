@@ -2930,6 +2930,22 @@
         btn.disabled = !canAdd;
     }
 
+    const EXTRA_CLEAR_TITLE_ENABLED = 'Clear (hide lane)';
+    const EXTRA_CLEAR_TITLE_DISABLED = '最後の1トラックは非表示にできません';
+
+    function refreshExtraTrackClearButtons() {
+        const canClear =
+            typeof canHideAnyWaveformLane === 'function' && canHideAnyWaveformLane();
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const ui = getExtraUi(slot);
+            if (!ui || !ui.clearBtn) continue;
+            const laneShown = isExtraTrackLaneShown(slot);
+            ui.clearBtn.disabled = !laneShown || !canClear;
+            ui.clearBtn.title =
+                canClear && laneShown ? EXTRA_CLEAR_TITLE_ENABLED : EXTRA_CLEAR_TITLE_DISABLED;
+        }
+    }
+
     function refreshExtraTrackAddLaneButtons() {
         refreshVideoAudioAddTrackButton();
         for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
@@ -2939,6 +2955,7 @@
             ui.addTrackBtn.disabled = !canAdd;
             ui.addTrackBtn.hidden = slot >= EXTRA_TRACK_COUNT - 1 && !canAdd;
         }
+        refreshExtraTrackClearButtons();
     }
 
     function applyExtraTrackLaneVisibility(slot) {
@@ -3061,6 +3078,7 @@
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             refreshExtraTrackLaneVisibility(i);
         }
+        refreshExtraTrackClearButtons();
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -3179,7 +3197,6 @@
             ui.muteBtn.disabled = !hasBuf;
             setMixBtnState(ui.muteBtn, !!(tr && tr.muted));
         }
-        if (ui.clearBtn) ui.clearBtn.disabled = false;
         drawExtraTrackWaveform(slot);
         if (hasBuf && typeof updateTrackRegionOverlay === 'function') {
             updateTrackRegionOverlay({ type: 'extra', slot });
@@ -3332,6 +3349,9 @@
     }
 
     function clearExtraTrack(slot) {
+        if (typeof canHideAnyWaveformLane === 'function' && !canHideAnyWaveformLane()) {
+            return;
+        }
         const tr = extraTrackBySlot(slot);
         if (!tr) return;
         const hadContent = extraTrackSlotHasContent(slot);
@@ -3389,9 +3409,6 @@
         refreshExtraTrackAddLaneButtons();
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
-        }
-        if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
-            ensureAtLeastOneWaveformLaneVisible();
         }
     }
 
@@ -3948,6 +3965,12 @@
             }
             if (ui.clearBtn) {
                 ui.clearBtn.addEventListener('click', () => {
+                    if (
+                        typeof canHideAnyWaveformLane === 'function' &&
+                        !canHideAnyWaveformLane()
+                    ) {
+                        return;
+                    }
                     clearExtraTrack(slot);
                     writeLog('Extra audio ' + (slot + 1) + ': cleared');
                 });
