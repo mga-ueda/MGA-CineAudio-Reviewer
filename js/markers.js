@@ -971,6 +971,9 @@
 
     function updateMarkerClearAllButton() {
         const timelineReady = markerTimelineReady();
+        if (markerPanel) {
+            markerPanel.classList.toggle('marker-panel--ready', timelineReady);
+        }
         if (markerClearAllBtn) {
             markerClearAllBtn.disabled = !(timelineReady && hasMarkerContentToClear());
         }
