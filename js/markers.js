@@ -3,6 +3,16 @@
     let currentMarkers = [];
     let pendingRangeStartSec = null;
     let activeMarkerId = null;
+    /** MARKERS パネル内ポインタ（枠外では行ホバー枠を出さない） */
+    let markerPanelPointerInside = false;
+    /** パネル内行ホバー（アクティブ化しない） */
+    let markerPanelHoverId = null;
+    /** 波形レーン上にポインタがある（MARKERS 外＋マーカー非ホバー時の再生ラッチ抑制用） */
+    let waveformLanesPointerInside = false;
+    /** 波形上マーカーホバー（アクティブ化しない） */
+    let waveformMarkerHoverId = null;
+    /** 再生ヘッドが踏んだマーカー（踏んだら次の踏み／別ハイライトまで維持） */
+    let transportMarkerHighlightId = null;
     /** In/Out 列ホバー・シークでどちらの TC を +/- 対象にするか（フォーカスが In のままのとき Out を直す） */
     let markerActiveTcEdge = 'in';
     let markerIdSeq = 0;
@@ -740,6 +750,10 @@
             return;
         }
         const t = currentTransportSec();
+        updateTransportMarkerHighlight(t);
+        if (!isMarkerListPlaybackActive()) {
+            updateMarkerListRowClasses();
+        }
         syncMarkerCommentOverlaySlot(
             markerCommentOverlayPoint,
             'point',
@@ -1144,7 +1158,10 @@
         normalizeAllMarkerRanges({ silent: true });
         sortMarkersInPlace();
         saveMarkersToCache();
-        if (!(opt && opt.skipMarkerList) && !isMarkerTcInputFocused()) {
+        if (
+            !(opt && opt.skipMarkerList) &&
+            (!isMarkerTcInputFocused() || (opt && opt.forceMarkerList))
+        ) {
             renderMarkerList();
         }
         renderSeekBarMarkers();
@@ -1406,7 +1423,7 @@
         delete m.endSec;
         sortMarkersInPlace();
         activeMarkerId = m.id;
-        persistMarkersAfterChange(opt);
+        persistMarkersAfterChange({ ...opt, forceMarkerList: true });
         writeLog('Marker: Out TC cleared -> point at ' + tcLabelForSec(t));
         flashSeekHint('Marker', 'Out cleared', 'notice');
         return true;
@@ -1760,7 +1777,7 @@
             suppressMarkerRowHoverSeek(800);
             markerActiveTcEdge = edge === 'out' ? 'out' : 'in';
             activeMarkerId = m.id;
-            updateMarkerRowActiveClass(m.id);
+            updateMarkerListRowClasses();
             if (m.type === 'range') {
                 tcEditRevert = {
                     type: 'range',
@@ -1819,15 +1836,208 @@
         return !!(m && m.type === 'range' && Number.isFinite(m.endSec));
     }
 
-    function updateMarkerRowActiveClass(activeId) {
+    function isMarkerListPlaybackActive() {
+        return typeof isTransportPlaying === 'function' && isTransportPlaying();
+    }
+
+    /**
+     * 指定時刻に対応するマーカー id（点は一致、範囲は In/Out および区間内。
+     * 範囲が重なるときは In が遅い方＝一覧で後ろの行を優先）
+     */
+    function markerIdForTransportSec(transportSec) {
+        if (!markerTimelineReady()) return null;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        const eps = markerNavStopEpsilonSec();
+        for (const m of currentMarkers) {
+            if (m.type !== 'range' && Number.isFinite(m.timeSec) && Math.abs(t - m.timeSec) <= eps) {
+                return m.id;
+            }
+        }
+        for (const m of currentMarkers) {
+            if (m.type === 'range') {
+                if (Math.abs(t - m.startSec) <= eps) return m.id;
+                if (markerHasOutTc(m) && Math.abs(t - m.endSec) <= eps) return m.id;
+            }
+        }
+        let best = null;
+        let bestStart = -Infinity;
+        let bestIdx = -1;
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (m.type !== 'range' || !markerHasOutTc(m)) continue;
+            const start = Number(m.startSec);
+            const end = Number(m.endSec);
+            if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+            if (t <= start + eps || t >= end - eps) continue;
+            if (start > bestStart || (start === bestStart && i > bestIdx)) {
+                bestStart = start;
+                bestIdx = i;
+                best = m.id;
+            }
+        }
+        return best;
+    }
+
+    function markerIdForWaveformPointerClientX(clientX) {
+        if (clientX == null || !Number.isFinite(clientX)) return null;
+        return markerIdForTransportSec(transportSecFromWaveformClientX(clientX));
+    }
+
+    /** MARKERS 一覧のオレンジ枠は常に最大 1 行。優先度の高い条件だけ採用する */
+    function resolveMarkerListHighlightId() {
+        if (markerDragState && markerDragState.m && markerDragState.m.id) {
+            return markerDragState.m.id;
+        }
+        if (isMarkerTcInputFocused() && activeMarkerId) {
+            return activeMarkerId;
+        }
+        const ae = document.activeElement;
+        if (ae && ae.closest) {
+            const comment = ae.closest('.marker-table__comment[data-marker-comment]');
+            if (comment && comment.dataset.markerComment) {
+                return comment.dataset.markerComment;
+            }
+        }
+        if (!isMarkerListPlaybackActive()) {
+            if (waveformMarkerHoverId) {
+                return waveformMarkerHoverId;
+            }
+            if (waveformLanesPointerInside) {
+                const pointerX =
+                    typeof getWaveformLanesPointerClientX === 'function'
+                        ? getWaveformLanesPointerClientX()
+                        : typeof getWaveformPointerClientX === 'function'
+                          ? getWaveformPointerClientX()
+                          : null;
+                const atPointer = markerIdForWaveformPointerClientX(pointerX);
+                if (atPointer) {
+                    return atPointer;
+                }
+                const playheadId = markerIdForTransportSec(currentTransportSec());
+                if (playheadId) {
+                    return playheadId;
+                }
+                return null;
+            }
+            const playheadId = markerIdForTransportSec(currentTransportSec());
+            if (playheadId) {
+                return playheadId;
+            }
+        }
+        if (markerPanelPointerInside && markerPanelHoverId) {
+            return markerPanelHoverId;
+        }
+        if (transportMarkerHighlightId) {
+            return transportMarkerHighlightId;
+        }
+        if (markerPanelPointerInside && activeMarkerId) {
+            return activeMarkerId;
+        }
+        return null;
+    }
+
+    function updateMarkerListRowClasses() {
         if (!markerTableBody) return;
+        const highlightId = resolveMarkerListHighlightId();
         const rows = markerTableBody.querySelectorAll('tr[data-marker-id]');
         rows.forEach((tr) => {
             tr.classList.toggle(
                 'marker-table__row--active',
-                activeId != null && tr.dataset.markerId === activeId
+                highlightId != null && tr.dataset.markerId === highlightId,
             );
         });
+    }
+
+    function updateTransportMarkerHighlight(transportSecOpt) {
+        if (!markerTimelineReady()) {
+            if (transportMarkerHighlightId != null) {
+                transportMarkerHighlightId = null;
+                updateMarkerListRowClasses();
+            }
+            return;
+        }
+        const t =
+            transportSecOpt != null && Number.isFinite(transportSecOpt)
+                ? transportSecOpt
+                : currentTransportSec();
+        const steppedId = markerIdForTransportSec(t);
+        if (
+            transportMarkerHighlightId &&
+            !currentMarkers.some((m) => m.id === transportMarkerHighlightId)
+        ) {
+            transportMarkerHighlightId = null;
+            updateMarkerListRowClasses();
+            return;
+        }
+        if (steppedId != null && transportMarkerHighlightId !== steppedId) {
+            transportMarkerHighlightId = steppedId;
+            updateMarkerListRowClasses();
+        } else if (!isMarkerListPlaybackActive()) {
+            updateMarkerListRowClasses();
+        }
+    }
+
+    function setWaveformLanesPointerInside(inside) {
+        if (waveformLanesPointerInside === inside) return;
+        waveformLanesPointerInside = inside;
+        if (!inside) {
+            waveformMarkerHoverId = null;
+        }
+        updateMarkerListRowClasses();
+    }
+
+    function bindSeekBarMarkerListHighlight(el, markerId) {
+        if (!el || !markerId) return;
+        el.addEventListener('pointerenter', () => {
+            if (isMarkerListPlaybackActive()) return;
+            waveformMarkerHoverId = markerId;
+            updateMarkerListRowClasses();
+        });
+        el.addEventListener('pointerleave', (ev) => {
+            if (isMarkerListPlaybackActive()) return;
+            const rel = ev.relatedTarget;
+            if (rel && el.contains(rel)) return;
+            if (waveformMarkerHoverId === markerId) {
+                waveformMarkerHoverId = null;
+                updateMarkerListRowClasses();
+            }
+        });
+    }
+
+    /** ドラッグ中など、一覧の再生成なしで In/Out/長さ表示だけモデルに合わせる */
+    function syncMarkerListRowFromModel(m) {
+        if (!markerTableBody || !m || !m.id) return;
+        const row = markerTableBody.querySelector('tr[data-marker-id="' + m.id + '"]');
+        if (!row) return;
+        const inInput = row.querySelector(
+            '.marker-table__tc-input[data-marker-tc-edge="in"]',
+        );
+        const outInput = row.querySelector(
+            '.marker-table__tc-input[data-marker-tc-edge="out"]',
+        );
+        const durCell = row.querySelector('.marker-table__dur');
+        if (inInput) {
+            inInput.value =
+                m.type === 'range' ? tcLabelForSec(m.startSec) : tcLabelForSec(m.timeSec);
+        }
+        if (outInput) {
+            if (m.type === 'range') {
+                outInput.value = tcLabelForSec(m.endSec);
+                outInput.title =
+                    'Out TC: [+][-] ±1f · [Shift][+][-] ±1s · [Del] clear Out (Enter/Esc to finish)';
+            } else {
+                outInput.value = '';
+                outInput.title = 'Out TC: [+][-] sets range Out (±1f / Shift ±1s)';
+            }
+        }
+        if (durCell) {
+            durCell.textContent = markerDurationLabel(m);
+            durCell.className =
+                m.type === 'range'
+                    ? 'marker-table__dur'
+                    : 'marker-table__dur marker-table__dur--empty';
+        }
     }
 
     function isMarkerHoverBlockedByCommentFocus(targetMarkerId) {
@@ -1873,7 +2083,11 @@
         if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
-        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') {
+            updateMarkerCommentOverlay();
+        } else {
+            updateTransportMarkerHighlight(t);
+        }
     }
 
     function commitMarkerTransportSeek(target) {
@@ -1919,8 +2133,12 @@
     /** In / Out 列上でシーク（seekIn / seekEnd を指定） */
     function syncSeekToMarkerRow(m, opt) {
         if (!markerTimelineReady() || !m || !opt) return;
-        activeMarkerId = m.id;
-        updateMarkerRowActiveClass(m.id);
+        if (opt.fromRowHover) {
+            markerPanelHoverId = m.id;
+        } else {
+            activeMarkerId = m.id;
+        }
+        updateMarkerListRowClasses();
         if (!opt.seekIn && !opt.seekEnd) return;
         if (opt.fromRowHover && isMarkerRowHoverSeekSuppressed()) return;
         if (opt.fromRowHover && isMarkerRowHoverSeekBlocked()) return;
@@ -2152,7 +2370,7 @@
         const t = commitMarkerTransportSeek(target);
         syncMarkerSeekTransportUi(t);
         activeMarkerId = m.id;
-        updateMarkerRowActiveClass(m.id);
+        updateMarkerListRowClasses();
         renderSeekBarMarkers();
         schedulePersistSession();
         const hintTc = tcLabelForSec(t);
@@ -2243,6 +2461,7 @@
             if (!markerDragState) return;
             markerDragState.raf = 0;
             renderSeekBarMarkers();
+            syncMarkerListRowFromModel(markerDragState.m);
             if (typeof updateMarkerCommentOverlay === 'function') {
                 updateMarkerCommentOverlay();
             }
@@ -2257,8 +2476,9 @@
         markerDragState = null;
         setMarkerDragLanesActive(false);
         if (commit) {
+            collapseRangeMarkerToPointIfNarrow(st.m, { silent: true });
             sortMarkersInPlace();
-            persistMarkersAfterChange();
+            persistMarkersAfterChange({ forceMarkerList: true });
             writeLog('Marker: drag ' + markerTimeLabel(st.m));
             flashSeekHint('Marker', markerTimeLabel(st.m));
         }
@@ -2330,7 +2550,7 @@
                 onUp: null,
             };
             activeMarkerId = m.id;
-            updateMarkerRowActiveClass(m.id);
+            updateMarkerListRowClasses();
 
             markerDragState.onMove = (e) => {
                 if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
@@ -2358,7 +2578,7 @@
                 }
                 collapseRangeMarkerToPointIfNarrow(m, { silent: true });
                 sortMarkersInPlace();
-                persistMarkersAfterChange();
+                persistMarkersAfterChange({ forceMarkerList: true });
                 writeLog('Marker: drag ' + markerTimeLabel(m));
                 flashSeekHint('Marker', markerTimeLabel(m));
             };
@@ -2897,6 +3117,7 @@
             el.appendChild(handleOut);
             bindSeekBarMarkerDrag(handleIn, m, 'in', { bandEl: el });
             bindSeekBarMarkerDrag(handleOut, m, 'out', { bandEl: el });
+            bindSeekBarMarkerListHighlight(el, opt.id);
         }
         return el;
     }
@@ -2913,6 +3134,7 @@
             const m = opt.marker;
             el.title = (opt.title || '') + ' — drag to move';
             bindSeekBarMarkerDrag(el, m, 'point');
+            bindSeekBarMarkerListHighlight(el, opt.id);
         }
         return el;
     }
@@ -3071,8 +3293,10 @@
 
     function refreshMarkerUi(opt) {
         const skipList =
-            (opt && opt.skipMarkerList) || isMarkerTcInputFocused();
+            (opt && opt.skipMarkerList) ||
+            (isMarkerTcInputFocused() && !(opt && opt.forceMarkerList));
         if (!skipList) renderMarkerList();
+        else updateMarkerListRowClasses();
         renderAudioWaveformMarkers();
         updateMarkerRangeHint();
     }
@@ -3097,7 +3321,6 @@
         currentMarkers.forEach((m, idx) => {
             const tr = document.createElement('tr');
             tr.dataset.markerId = m.id;
-            if (m.id === activeMarkerId) tr.className = 'marker-table__row--active';
 
             const tdNum = document.createElement('td');
             tdNum.className = 'marker-table__num';
@@ -3185,12 +3408,17 @@
             tr.appendChild(tdAct);
             markerTableBody.appendChild(tr);
         });
+        updateMarkerListRowClasses();
     }
 
     function clearMarkersForRevoke() {
         resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
+        markerPanelHoverId = null;
+        waveformLanesPointerInside = false;
+        waveformMarkerHoverId = null;
+        transportMarkerHighlightId = null;
         pendingSessionMarkersForRestore = null;
         sessionMarkersRestorePayload = null;
         currentMarkers = [];
@@ -3289,6 +3517,15 @@
     function initMarkers() {
         const markerPanelEl = document.getElementById('markerPanel');
         if (markerPanelEl) {
+            markerPanelEl.addEventListener('pointerenter', () => {
+                markerPanelPointerInside = true;
+                updateMarkerListRowClasses();
+            });
+            markerPanelEl.addEventListener('pointerleave', () => {
+                markerPanelPointerInside = false;
+                markerPanelHoverId = null;
+                updateMarkerListRowClasses();
+            });
             markerPanelEl.addEventListener(
                 'keydown',
                 (e) => {
@@ -3341,6 +3578,19 @@
             typeof audioWaveformLanesTracks !== 'undefined'
                 ? audioWaveformLanesTracks
                 : null;
+        if (lanes) {
+            let markerListPointerMoveRaf = 0;
+            lanes.addEventListener('pointerenter', () => setWaveformLanesPointerInside(true));
+            lanes.addEventListener('pointerleave', () => setWaveformLanesPointerInside(false));
+            lanes.addEventListener('pointermove', () => {
+                if (isMarkerListPlaybackActive() || !waveformLanesPointerInside) return;
+                if (markerListPointerMoveRaf) return;
+                markerListPointerMoveRaf = requestAnimationFrame(() => {
+                    markerListPointerMoveRaf = 0;
+                    updateMarkerListRowClasses();
+                });
+            });
+        }
         if (lanes && typeof ResizeObserver !== 'undefined') {
             let markerResizeRaf = 0;
             const obs = new ResizeObserver(() => {
