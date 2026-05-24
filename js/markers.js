@@ -14,6 +14,11 @@
     /** renderMarkerList 直後など、ホバーシークが誤って元位置へ戻すのを防ぐ */
     let suppressMarkerRowHoverSeekUntil = 0;
     const MARKER_COMMENT_POINT_HOLD_SEC = 1;
+    const MARKER_INSERT_RANGE_HOLD_MS = 200;
+    let insertMarkerPressAtMs = null;
+    let insertMarkerPressSec = null;
+    let insertMarkerLongPressTimer = null;
+    let insertMarkerLongPressStarted = false;
 
     function nextMarkerId() {
         markerIdSeq += 1;
@@ -290,8 +295,19 @@
     }
 
     /** 動画差し替え前: 現行マーカーをキャッシュへ退避し、表示中リストだけ空にする */
+    function resetInsertMarkerPressState() {
+        if (insertMarkerLongPressTimer != null) {
+            clearTimeout(insertMarkerLongPressTimer);
+            insertMarkerLongPressTimer = null;
+        }
+        insertMarkerPressAtMs = null;
+        insertMarkerPressSec = null;
+        insertMarkerLongPressStarted = false;
+    }
+
     function prepareMarkersForVideoSwitch() {
         saveMarkersToCache();
+        resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
         currentMarkers = [];
@@ -342,6 +358,7 @@
     window.restoreMarkersFromSessionRow = restoreMarkersFromSessionRow;
 
     function loadMarkersForCurrentVideo(savedFromSession) {
+        resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
         const k = resolveMarkerCacheKey(savedFromSession);
@@ -1040,6 +1057,7 @@
             return;
         }
         const n = currentMarkers.length;
+        resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
         currentMarkers = [];
@@ -1162,12 +1180,12 @@
         addPointMarkerAtSec(currentTransportSec());
     }
 
-    function beginPendingRangeAtCurrentTime() {
+    function beginPendingRangeAtSec(sec) {
         if (!markerTimelineReady()) {
             writeLog('Marker: load a video first');
             return;
         }
-        const t = currentTransportSec();
+        const t = clampMarkerSec(sec);
         pendingRangeStartSec = t;
         updateMarkerRangeHint();
         updateMarkerClearAllButton();
@@ -1176,13 +1194,13 @@
         flashSeekHint('Range In', tcLabelForSec(t), 'notice');
     }
 
-    function completePendingRangeAtCurrentTime() {
-        if (!markerTimelineReady() || pendingRangeStartSec == null) return;
-        const t = currentTransportSec();
-        let start = pendingRangeStartSec;
-        let end = t;
-        pendingRangeStartSec = null;
-        updateMarkerRangeHint();
+    function beginPendingRangeAtCurrentTime() {
+        beginPendingRangeAtSec(currentTransportSec());
+    }
+
+    function addRangeMarkerBetweenSecs(startSec, endSec) {
+        let start = startSec;
+        let end = endSec;
         if (end < start) {
             const swap = start;
             start = end;
@@ -1211,6 +1229,14 @@
         persistMarkersAfterChange();
         writeLog('Marker: range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end));
         flashSeekHint('Range', tcLabelForSec(start) + ' – ' + tcLabelForSec(end), 'notice');
+    }
+
+    function completePendingRangeAtCurrentTime() {
+        if (!markerTimelineReady() || pendingRangeStartSec == null) return;
+        const start = pendingRangeStartSec;
+        pendingRangeStartSec = null;
+        updateMarkerRangeHint();
+        addRangeMarkerBetweenSecs(start, currentTransportSec());
     }
 
     function clampMarkerSec(sec) {
@@ -3162,6 +3188,7 @@
     }
 
     function clearMarkersForRevoke() {
+        resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
         pendingSessionMarkersForRestore = null;
@@ -3182,7 +3209,47 @@
         if (isTypingTarget(e.target)) return false;
         if (!markerTimelineReady()) return false;
         e.preventDefault();
-        addPointMarkerAtCurrentTime();
+        resetInsertMarkerPressState();
+        insertMarkerPressAtMs = performance.now();
+        insertMarkerPressSec = currentTransportSec();
+        insertMarkerLongPressTimer = setTimeout(() => {
+            insertMarkerLongPressTimer = null;
+            if (insertMarkerPressAtMs == null) return;
+            insertMarkerLongPressStarted = true;
+            beginPendingRangeAtSec(insertMarkerPressSec);
+        }, MARKER_INSERT_RANGE_HOLD_MS);
+        return true;
+    }
+
+    function handleMarkerKeyup(e) {
+        if (e.code !== 'Insert') return false;
+        if (insertMarkerPressAtMs == null) return false;
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
+
+        const pressAt = insertMarkerPressAtMs;
+        const pressSec = insertMarkerPressSec;
+        const longStarted = insertMarkerLongPressStarted;
+        resetInsertMarkerPressState();
+
+        if (!markerTimelineReady()) return true;
+        e.preventDefault();
+
+        const durationMs = performance.now() - pressAt;
+        if (durationMs < MARKER_INSERT_RANGE_HOLD_MS) {
+            if (longStarted || pendingRangeStartSec != null) {
+                cancelPendingRange();
+            }
+            addPointMarkerAtSec(pressSec);
+            return true;
+        }
+
+        if (pendingRangeStartSec != null) {
+            completePendingRangeAtCurrentTime();
+        } else {
+            pendingRangeStartSec = null;
+            updateMarkerRangeHint();
+            addRangeMarkerBetweenSecs(pressSec, currentTransportSec());
+        }
         return true;
     }
 

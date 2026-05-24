@@ -589,6 +589,10 @@
     });
 
     window.addEventListener('keyup', (e) => {
+        if (typeof handleMarkerKeyup === 'function' && handleMarkerKeyup(e)) {
+            return;
+        }
+
         if (e.code !== 'PageUp' && e.code !== 'PageDown') return;
         if (e.ctrlKey || e.altKey || e.metaKey) return;
         if (typeof window.clearExtraTrackVolumeUnityHold === 'function') {
