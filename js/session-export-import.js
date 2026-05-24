@@ -859,6 +859,36 @@
         logExportReviewDetails(manifest, blobs, packed, downloadName);
     }
 
+    function pauseTransportForImportReview() {
+        const playing =
+            typeof isTransportPlaying === 'function'
+                ? isTransportPlaying()
+                : !!(typeof videoMain !== 'undefined' && videoMain && !videoMain.paused);
+        if (!playing) return;
+        if (typeof transportPlayGeneration !== 'undefined') {
+            transportPlayGeneration += 1;
+        }
+        if (typeof transportPlayInFlight !== 'undefined') {
+            transportPlayInFlight = null;
+        }
+        if (typeof clearTransportTailPlayback === 'function') {
+            clearTransportTailPlayback();
+        }
+        if (typeof videoMain !== 'undefined' && videoMain) {
+            videoMain.pause();
+        }
+        if (typeof stopAllExtraTrackSources === 'function') {
+            stopAllExtraTrackSources();
+        }
+        if (typeof setPlayingUi === 'function') setPlayingUi(false);
+        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport();
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+    }
+
     function refreshTransportControlsAfterImport() {
         const tick = () => {
             if (typeof updateControlsEnabled === 'function') {
@@ -877,6 +907,7 @@
     }
 
     async function importSessionPackage(file) {
+        pauseTransportForImportReview();
         try {
             if (!file || file.size < 1) {
                 throw new Error('Empty file');
@@ -1041,6 +1072,7 @@
         });
 
         importBtn.addEventListener('click', () => {
+            pauseTransportForImportReview();
             importFile.value = '';
             importFile.click();
         });
