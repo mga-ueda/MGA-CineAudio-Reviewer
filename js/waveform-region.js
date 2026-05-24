@@ -356,9 +356,12 @@
         return raw.clipId || 'main';
     }
 
-    function snapTimelineSec(sec) {
+    function snapTimelineSec(sec, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n)) return 0;
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
         const step =
             typeof masterFrameSec === 'number' && masterFrameSec > 0
                 ? masterFrameSec
@@ -386,9 +389,12 @@
         return Math.max(step, (SNAP_PX / m.scrubW) * master);
     }
 
-    function snapToNearestStop(sec, stops, threshold) {
+    function snapToNearestStop(sec, stops, threshold, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n) || !stops || !stops.length) return n;
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return n;
+        }
         const th = Number.isFinite(threshold) && threshold > 0 ? threshold : regionSnapThresholdSec();
         let best = n;
         let bestDist = th + 1;
@@ -435,7 +441,10 @@
     }
 
     function snapRegionTransportSec(sec, opt) {
-        let n = snapTimelineSec(sec);
+        let n = snapTimelineSec(sec, opt);
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
         const threshold = regionSnapThresholdSec();
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
@@ -444,11 +453,28 @@
             n,
             collectRegionSnapStops(exclude, sameSlotOnly),
             threshold,
+            opt,
         );
         if (typeof snapSecToMarkerInOut === 'function') {
-            n = snapSecToMarkerInOut(n, { thresholdSec: threshold });
+            n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
         }
         return Math.max(0, n);
+    }
+
+    /** マーカードラッグ: 全 Ex トラックのリージョン In/Out へスナップ */
+    function snapSecToPlaybackRegionInOut(sec, opt) {
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            const n = Number(sec);
+            return Number.isFinite(n) ? Math.max(0, n) : 0;
+        }
+        const threshold =
+            opt && Number.isFinite(opt.thresholdSec) && opt.thresholdSec > 0
+                ? opt.thresholdSec
+                : regionSnapThresholdSec();
+        return Math.max(
+            0,
+            snapToNearestStop(sec, collectRegionSnapStops(null, -1), threshold, opt),
+        );
     }
 
     function collectRegionEndSnapStops(exclude, sameSlotOnly) {
@@ -474,7 +500,10 @@
 
     /** Out ハンドル: フレームスナップ＋他リージョンの終端（同一 Ex）へスナップ */
     function snapRegionOutTransportSec(sec, opt) {
-        let n = snapTimelineSec(sec);
+        let n = snapTimelineSec(sec, opt);
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
         const threshold = regionSnapThresholdSec();
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
@@ -483,9 +512,10 @@
             n,
             collectRegionEndSnapStops(exclude, sameSlotOnly),
             threshold,
+            opt,
         );
         if (typeof snapSecToMarkerInOut === 'function') {
-            n = snapSecToMarkerInOut(n, { thresholdSec: threshold });
+            n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
         }
         return Math.max(0, n);
     }
@@ -503,7 +533,11 @@
 
     /** リージョン平行移動: In/Out 両端のうち近い方でマーカー・他トラック In/Out・動画終端へスナップ */
     function snapRegionMoveRegionInSec(desiredRegionIn, track, segmentIndex, opt) {
-        const n = snapTimelineSec(Number(desiredRegionIn) || 0);
+        const raw = Number(desiredRegionIn) || 0;
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(REGION_IN_MIN_TRANSPORT_SEC, raw);
+        }
+        const n = snapTimelineSec(raw, opt);
         const threshold = regionSnapThresholdSec();
         const exclude =
             opt && opt.exclude
@@ -544,7 +578,7 @@
                 bestRegionIn = stop - outOffsetFromIn;
             }
         }
-        return Math.max(REGION_IN_MIN_TRANSPORT_SEC, snapTimelineSec(bestRegionIn));
+        return Math.max(REGION_IN_MIN_TRANSPORT_SEC, snapTimelineSec(bestRegionIn, opt));
     }
 
     function maxSegmentSourceOutSec(track, segmentIndex) {
@@ -2636,7 +2670,7 @@
                 : getSegmentRegionTimelineIn(track, segmentIndex);
         let desiredRegionIn;
         if (opt && opt.skipSnap) {
-            desiredRegionIn = snapTimelineSec(Number(sec) || 0);
+            desiredRegionIn = snapTimelineSec(Number(sec) || 0, opt);
         } else {
             desiredRegionIn = snapRegionMoveRegionInSec(sec, track, segmentIndex, {
                 exclude: { slot: track.slot, segmentIndex },
@@ -2923,6 +2957,9 @@
 
     function onSplitHandlePointerDown(ev, track, boundaryIndex) {
         if (ev.button !== 0) return;
+        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+            syncSnapSuppressionFromPointerEvent(ev);
+        }
         ev.preventDefault();
         ev.stopPropagation();
         if (typeof endAudioWaveformScrub === 'function') {
@@ -2940,6 +2977,9 @@
 
         regionHandleDragDocMove = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
+            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+                syncSnapSuppressionFromPointerEvent(e);
+            }
             e.preventDefault();
             const transportSec =
                 typeof transportSecFromClientX === 'function'
@@ -2963,6 +3003,9 @@
     }
 
     function onRegionHandlePointerDown(ev, track, segmentIndex, kind) {
+        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+            syncSnapSuppressionFromPointerEvent(ev);
+        }
         const segments = getTrackSegments(track);
         if (!segments[segmentIndex]) return;
         if (ev.button !== 0) return;
@@ -2995,6 +3038,9 @@
 
         regionHandleDragDocMove = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
+            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+                syncSnapSuppressionFromPointerEvent(e);
+            }
             e.preventDefault();
             const transportSec =
                 regionHandleDragKind === 'out'
@@ -3480,6 +3526,9 @@
     };
     window.isPointerOnRegionResizeHandle = isPointerOnRegionResizeHandle;
     window.snapRegionTransportSec = snapRegionTransportSec;
+    window.snapSecToPlaybackRegionInOut = snapSecToPlaybackRegionInOut;
+    window.collectRegionSnapStops = collectRegionSnapStops;
+    window.regionSnapThresholdSec = regionSnapThresholdSec;
     window.getTrackSegmentCount = function (slot) {
         return getSegmentCount({ type: 'extra', slot });
     };

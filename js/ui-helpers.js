@@ -87,3 +87,29 @@
             transportOptGlowClearTimers[which] = 0;
         }, 900);
     }
+
+    let altKeySnapSuppressed = false;
+
+    /** Alt 押下中はタイムライン／マーカー／リージョン等のスナップを無効化 */
+    function isSnapSuppressedByAlt(opt) {
+        if (opt && opt.altKey) return true;
+        if (opt && opt.noSnap) return true;
+        return altKeySnapSuppressed;
+    }
+
+    function setAltKeySnapSuppressed(v) {
+        altKeySnapSuppressed = !!v;
+    }
+
+    function syncSnapSuppressionFromPointerEvent(ev) {
+        if (!ev) return;
+        if (typeof ev.getModifierState === 'function') {
+            altKeySnapSuppressed = ev.getModifierState('Alt');
+        } else if ('altKey' in ev) {
+            altKeySnapSuppressed = !!ev.altKey;
+        }
+    }
+
+    window.isSnapSuppressedByAlt = isSnapSuppressedByAlt;
+    window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
+    window.syncSnapSuppressionFromPointerEvent = syncSnapSuppressionFromPointerEvent;

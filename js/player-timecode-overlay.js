@@ -375,6 +375,11 @@
 
     function onTcOverlayPointerMove(ev) {
         if (!tcOverlayDragState || ev.pointerId !== tcOverlayDragState.pointerId) return;
+        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+            syncSnapSuppressionFromPointerEvent(ev);
+        }
+        const suppressSnap =
+            typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt();
         const st = tcOverlayDragState;
         const fr = st.frame.getBoundingClientRect();
         const el = st.el;
@@ -387,14 +392,16 @@
 
         const overlayCenterX = fr.left + left + t.mw / 2;
         const frameCenterX = fr.left + fr.width / 2;
-        const snapX = Math.abs(overlayCenterX - frameCenterX) <= TC_OVERLAY_SNAP_X_PX;
+        const snapX =
+            !suppressSnap && Math.abs(overlayCenterX - frameCenterX) <= TC_OVERLAY_SNAP_X_PX;
         if (snapX) {
             left = Math.round(t.maxLeft / 2);
         }
 
         const overlayCenterY = fr.top + top + t.mh / 2;
         const frameCenterY = fr.top + fr.height / 2;
-        const snapY = Math.abs(overlayCenterY - frameCenterY) <= TC_OVERLAY_SNAP_Y_PX;
+        const snapY =
+            !suppressSnap && Math.abs(overlayCenterY - frameCenterY) <= TC_OVERLAY_SNAP_Y_PX;
         if (snapY) {
             bottom = Math.round(t.maxBottom / 2);
         }

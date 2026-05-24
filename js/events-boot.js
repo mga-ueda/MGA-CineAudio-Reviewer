@@ -588,6 +588,30 @@
         }
     });
 
+    document.addEventListener(
+        'keydown',
+        (e) => {
+            if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
+                setAltKeySnapSuppressed(true);
+            }
+        },
+        true,
+    );
+    document.addEventListener(
+        'keyup',
+        (e) => {
+            if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
+                setAltKeySnapSuppressed(false);
+            }
+        },
+        true,
+    );
+    window.addEventListener('blur', () => {
+        if (typeof setAltKeySnapSuppressed === 'function') {
+            setAltKeySnapSuppressed(false);
+        }
+    });
+
     window.addEventListener('keyup', (e) => {
         if (typeof handleMarkerKeyup === 'function' && handleMarkerKeyup(e)) {
             return;

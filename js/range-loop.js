@@ -290,6 +290,9 @@
     }
 
     function snapRangeLoopPlaybackIfNeeded() {
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt()) {
+            return false;
+        }
         if (performance.now() < suppressLoopSnapUntil) return false;
         if (!isRangeLoopPlaybackActive()) return false;
         const t =

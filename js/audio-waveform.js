@@ -913,6 +913,9 @@
     }
 
     function onWaveformTrackOffsetPointerDown(ev, slot, segmentIndex) {
+        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+            syncSnapSuppressionFromPointerEvent(ev);
+        }
         endAudioWaveformScrub({ force: true });
         isSeeking = false;
         if (typeof beginRegionUndoGesture === 'function') beginRegionUndoGesture();
@@ -962,6 +965,9 @@
 
         waveformOffsetDragDocMove = (e) => {
             if (!waveformOffsetDragActive || e.pointerId !== waveformOffsetDragPointerId) return;
+            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+                syncSnapSuppressionFromPointerEvent(e);
+            }
             const delta = timelineSecDeltaFromClientXDelta(
                 e.clientX,
                 waveformOffsetDragStartClientX,
