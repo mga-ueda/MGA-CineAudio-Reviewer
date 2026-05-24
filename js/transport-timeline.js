@@ -14,6 +14,8 @@
     let transportSessionPlaying = false;
     let transportTailPlaybackActive = false;
     let videoParkedForTransportTail = false;
+    /** 映像 currentTime の自動補正。false が既定（Playback Drift は表示のみ、補正は行わない）。 */
+    const VIDEO_DRIFT_AUTO_CORRECT_ENABLED = false;
     /** 通常再生中に currentTime を直す閾値（これ未満は映像の自然再生に任せる）。 */
     const VIDEO_STEADY_FOLLOW_DRIFT_SEC = 0.15;
     /** Playback Drift の測定・表示・補正判定（通常再生中）の最短間隔。 */
@@ -266,10 +268,11 @@
         if (driftBox) {
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
         }
-        statEl.title =
-            'Playback Drift vs audio master (updates ~1s; corrects video when over ' +
-            threshMs +
-            ' ms).';
+        statEl.title = VIDEO_DRIFT_AUTO_CORRECT_ENABLED
+            ? 'Playback Drift vs audio master (updates ~1s; corrects video when over ' +
+              threshMs +
+              ' ms).'
+            : 'Playback Drift vs audio master (updates ~1s; auto-correction disabled).';
     }
 
     window.refreshVideoDriftPanelStat = refreshVideoDriftPanelStat;
@@ -614,7 +617,10 @@
             if (signedDrift != null) {
                 const sampleDrift = Math.abs(signedDrift);
                 refreshVideoDriftMonitorFromSample(x, signedDrift);
-                if (sampleDrift > VIDEO_STEADY_FOLLOW_DRIFT_SEC) {
+                if (
+                    VIDEO_DRIFT_AUTO_CORRECT_ENABLED &&
+                    sampleDrift > VIDEO_STEADY_FOLLOW_DRIFT_SEC
+                ) {
                     try {
                         videoMain.currentTime = target;
                     } catch (_) {}
@@ -631,7 +637,10 @@
             }
         }
         const needs =
-            videoMain.ended || !Number.isFinite(cur) || drift > 0.001;
+            force ||
+            videoMain.ended ||
+            !Number.isFinite(cur) ||
+            (VIDEO_DRIFT_AUTO_CORRECT_ENABLED && drift > 0.001);
         if (needs) {
             try {
                 videoMain.currentTime = target;
