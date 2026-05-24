@@ -2872,7 +2872,42 @@
     }
 
     function clearAllExtraTracks() {
-        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) clearExtraTrack(i);
+        stopAllExtraTrackSources();
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            wipeExtraTrackSlotContent(i);
+            extraLaneUiOpen[i] = false;
+            setExtraTrackLaneUiOpen(i, false, { deferLayout: true, skipPersist: true });
+        }
+        if (typeof clearExtraTrackVolumeUnityHold === 'function') {
+            clearExtraTrackVolumeUnityHold();
+        }
+        if (typeof refreshTrackLaneControlsUi === 'function') {
+            refreshTrackLaneControlsUi();
+        }
+        if (typeof refreshReviewMixUi === 'function') {
+            refreshReviewMixUi();
+        }
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (typeof removeExtraTrackFromSession === 'function') {
+                void removeExtraTrackFromSession(i);
+            }
+        }
+        if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        refreshExtraTrackAddLaneButtons();
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
         if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
             ensureAtLeastOneWaveformLaneVisible();
         }

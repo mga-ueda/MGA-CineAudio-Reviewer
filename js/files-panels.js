@@ -196,7 +196,9 @@
         if (typeof clearAudioWaveform === 'function') clearAudioWaveform();
         if (typeof clearAllExtraTracks === 'function') clearAllExtraTracks();
         if (typeof resetVideoMix === 'function') resetVideoMix();
-        if (typeof showVideoAudioLane === 'function') {
+        if (typeof dismissVideoAudioLane === 'function') {
+            dismissVideoAudioLane();
+        } else if (typeof showVideoAudioLane === 'function') {
             showVideoAudioLane();
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
