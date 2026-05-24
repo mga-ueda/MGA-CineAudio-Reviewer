@@ -437,6 +437,40 @@
 
     window.resolveMixTargetFromPointer = resolveMixTargetFromPointer;
 
+    function isMixLaneTargetMatch(entry, target) {
+        if (!target || !entry || !entry.el || entry.el.hidden) return false;
+        if (target.kind === 'video') return entry.kind === 'video';
+        if (target.kind === 'extra') {
+            return entry.kind === 'extra' && entry.slot === target.slot;
+        }
+        return false;
+    }
+
+    function forEachWaveformLaneMeta(onMeta) {
+        if (audioWaveformPanel) {
+            onMeta({ kind: 'video', el: audioWaveformPanel });
+        }
+        for (let slot = 0; slot < extraTrackSlotCount(); slot++) {
+            const meta = document.getElementById('extraAudioMeta' + slot);
+            if (meta) onMeta({ kind: 'extra', slot, el: meta });
+        }
+    }
+
+    function refreshActiveMixLaneHighlight(clientY) {
+        const target =
+            Number.isFinite(clientY) && typeof resolveMixTargetFromPointer === 'function'
+                ? resolveMixTargetFromPointer(clientY)
+                : null;
+        forEachWaveformLaneMeta((entry) => {
+            entry.el.classList.toggle(
+                'audio-waveform-lane-meta--active',
+                isMixLaneTargetMatch(entry, target),
+            );
+        });
+    }
+
+    window.refreshActiveMixLaneHighlight = refreshActiveMixLaneHighlight;
+
     /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
     function waveformExtraLaneSlotFromPointer(ev) {
         if (!ev) return -1;
@@ -1408,6 +1442,15 @@
             }
             if (!waveformOffsetDragActive) hideHoverPlayhead();
         });
+
+        if (audioWaveformComposite) {
+            audioWaveformComposite.addEventListener('pointermove', (ev) => {
+                refreshActiveMixLaneHighlight(ev.clientY);
+            });
+            audioWaveformComposite.addEventListener('pointerleave', () => {
+                refreshActiveMixLaneHighlight(null);
+            });
+        }
 
         lanes.addEventListener('keydown', (ev) => {
             if (

@@ -1281,9 +1281,28 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            border-radius: 4px;
+            padding: 2px 6px;
+            box-sizing: border-box;
         }
         .audio-waveform-lane-meta.loaded .audio-waveform-lane-meta__title {
             color: #f2f4f8;
+        }
+        .audio-waveform-lane-meta--active .audio-waveform-lane-meta__title {
+            background: linear-gradient(
+                90deg,
+                rgba(232, 56, 88, 0.38) 0%,
+                rgba(196, 30, 58, 0.28) 32%,
+                rgba(80, 12, 24, 0.2) 62%,
+                rgba(0, 0, 0, 0.28) 100%
+            );
+            color: #ffe8ec;
+            box-shadow:
+                0 1px 3px rgba(0, 0, 0, 0.12),
+                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+        .audio-waveform-lane-meta--active.loaded .audio-waveform-lane-meta__title {
+            color: #fff4f6;
         }
         .audio-waveform-lane-meta__status {
             display: none;
