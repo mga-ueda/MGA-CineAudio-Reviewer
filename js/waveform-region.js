@@ -1571,6 +1571,13 @@
         }
     }
 
+    function suppressInvalidRegionOpNoticeForVideoAudio() {
+        return (
+            typeof pointerTargetsVideoAudioLane === 'function' &&
+            pointerTargetsVideoAudioLane()
+        );
+    }
+
     function resolveTargetExtraSlot() {
         if (typeof waveformExtraLaneSlotFromClientY !== 'function') return -1;
         let clientY = null;
@@ -1581,6 +1588,9 @@
             clientY = getWaveformPointerClientY();
         }
         if (clientY != null) {
+            if (suppressInvalidRegionOpNoticeForVideoAudio()) {
+                return -1;
+            }
             const slot = waveformExtraLaneSlotFromClientY(clientY);
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
                 return slot;
@@ -1676,8 +1686,10 @@
     function splitPlaybackRegionAtTargetSec() {
         const slot = resolveTargetExtraSlot();
         if (slot < 0) {
-            writeLog('Playback region: hover an Ex lane (1–3), then press X');
-            flashSeekHint('Region', 'Hover Ex lane', 'notice');
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog('Playback region: hover an Ex lane (1–3), then press X');
+                flashSeekHint('Region', 'Hover Ex lane', 'notice');
+            }
             return false;
         }
         if (!isExtraSlotUsableForRegion(slot)) {
@@ -2086,9 +2098,11 @@
     function copyRegionSegmentUnderCursor() {
         const slot = resolveTargetExtraSlot();
         if (slot < 0) {
-            writeLog('Playback region: hover an Ex lane, then Ctrl+C to copy');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover Ex lane', 'notice');
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog('Playback region: hover an Ex lane, then Ctrl+C to copy');
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Hover Ex lane', 'notice');
+                }
             }
             return false;
         }
@@ -2121,9 +2135,11 @@
 
     function pasteRegionSegmentToTrackEnd() {
         if (!regionSegmentClipboard) {
-            writeLog('Playback region: nothing to paste (Ctrl+C first)');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Copy a region first', 'notice');
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog('Playback region: nothing to paste (Ctrl+C first)');
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Copy a region first', 'notice');
+                }
             }
             return false;
         }
@@ -3177,9 +3193,11 @@
     function joinPlaybackRegionAtPointer() {
         const slot = resolveTargetExtraSlot();
         if (slot < 0) {
-            writeLog('Playback region: hover an Ex lane (1–3), then press B');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover Ex lane', 'notice');
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog('Playback region: hover an Ex lane (1–3), then press B');
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Hover Ex lane', 'notice');
+                }
             }
             return false;
         }
@@ -3215,6 +3233,7 @@
         if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
         if (e.code !== 'KeyB') return false;
         if (e.repeat) return false;
+        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         joinPlaybackRegionAtPointer();
         return true;
@@ -3223,6 +3242,7 @@
     function handlePlaybackRegionSplitKeydown(e) {
         if (!isPlaybackRegionSplitKeyEvent(e)) return false;
         if (e.repeat) return false;
+        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         splitPlaybackRegionAtTargetSec();
         return true;

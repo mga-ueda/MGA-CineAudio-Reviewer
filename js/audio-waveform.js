@@ -450,6 +450,27 @@
 
     window.resolveMixTargetFromPointer = resolveMixTargetFromPointer;
 
+    function isPointerOverVideoAudioLane(clientY) {
+        if (!Number.isFinite(clientY)) return false;
+        const target = resolveMixTargetFromPointer(clientY);
+        return !!(target && target.kind === 'video');
+    }
+
+    /** 波形レーン上の直近ポインタが Video Audio 行上か */
+    function pointerTargetsVideoAudioLane() {
+        let clientY = null;
+        if (typeof getWaveformLanesPointerClientY === 'function') {
+            clientY = getWaveformLanesPointerClientY();
+        }
+        if (clientY == null && typeof getWaveformPointerClientY === 'function') {
+            clientY = getWaveformPointerClientY();
+        }
+        return isPointerOverVideoAudioLane(clientY);
+    }
+
+    window.isPointerOverVideoAudioLane = isPointerOverVideoAudioLane;
+    window.pointerTargetsVideoAudioLane = pointerTargetsVideoAudioLane;
+
     function isMixLaneTargetMatch(entry, target) {
         if (!target || !entry || !entry.el || entry.el.hidden) return false;
         if (target.kind === 'video') return entry.kind === 'video';
@@ -1465,7 +1486,11 @@
             waveformLanesLastPointerX = ev.clientX;
             waveformLanesLastPointerY = ev.clientY;
             const exSlot = waveformExtraLaneSlotFromClientY(ev.clientY);
-            if (exSlot >= 0) waveformTargetExtraSlot = exSlot;
+            if (exSlot >= 0) {
+                waveformTargetExtraSlot = exSlot;
+            } else if (isPointerOverVideoAudioLane(ev.clientY)) {
+                waveformTargetExtraSlot = -1;
+            }
             if (typeof updatePlaybackRegionHoverFromPointer === 'function') {
                 updatePlaybackRegionHoverFromPointer(ev.clientX, ev.clientY);
             }
