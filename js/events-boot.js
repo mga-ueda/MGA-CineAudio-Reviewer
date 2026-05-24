@@ -347,7 +347,8 @@
                 e.code === 'KeyM' ||
                 e.code === 'KeyS' ||
                 e.code === 'KeyV' ||
-                e.code === 'KeyX' ||
+                e.code === 'Slash' ||
+                e.code === 'NumpadDivide' ||
                 e.code === 'KeyB' ||
                 e.code === 'KeyF' ||
                 e.code === 'KeyZ' ||
@@ -382,7 +383,8 @@
                 e.code === 'Minus' ||
                 e.code === 'NumpadAdd' ||
                 e.code === 'NumpadSubtract' ||
-                e.code === 'KeyX' ||
+                e.code === 'Slash' ||
+                e.code === 'NumpadDivide' ||
                 e.code === 'KeyB' ||
                 e.code === 'PageUp' ||
                 e.code === 'PageDown';

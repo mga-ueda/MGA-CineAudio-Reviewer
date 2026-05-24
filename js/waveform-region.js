@@ -3122,7 +3122,7 @@
 
     function isPlaybackRegionSplitKeyEvent(e) {
         if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
-        return e.code === 'KeyX';
+        return e.code === 'Slash' || e.code === 'NumpadDivide';
     }
 
     function handlePlaybackRegionSlashKeydown(e) {
