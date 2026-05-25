@@ -137,78 +137,7 @@
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
                     <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="Show next extra audio track">+ Add Track</button>
                 </div>
-                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta0" hidden>
-                    <div class="audio-waveform-lane-meta__row">
-                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle0">Ex 1 Track</span>
-                        <div class="track-mix-actions">
-                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn0" disabled title="Solo" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn0" disabled title="Mute" aria-pressed="false">M</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn0" title="Clear (hide lane)">×</button>
-                        </div>
-                    </div>
-                    <div class="track-lane-controls">
-                        <div class="track-lane-meter-row">
-                            <div class="track-lane-meter" aria-hidden="true">
-                                <div class="track-lane-meter__bar" id="trackLaneMeter0"></div>
-                            </div>
-                            <span class="track-lane-meter-db" id="trackLaneMeterDb0" aria-hidden="true">-96.0 dB</span>
-                        </div>
-                        <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader0" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio 1 volume">
-                            <span class="track-lane-fader-db" id="trackLaneFaderDb0">0.0 dB</span>
-                        </div>
-                    </div>
-                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus0" hidden></span>
-                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn0" title="Show next extra audio track">+ Add Track</button>
-                </div>
-                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta1" hidden>
-                    <div class="audio-waveform-lane-meta__row">
-                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle1">Ex 2 Track</span>
-                        <div class="track-mix-actions">
-                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn1" disabled title="Solo" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn1" disabled title="Mute" aria-pressed="false">M</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn1" title="Clear (hide lane)">×</button>
-                        </div>
-                    </div>
-                    <div class="track-lane-controls">
-                        <div class="track-lane-meter-row">
-                            <div class="track-lane-meter" aria-hidden="true">
-                                <div class="track-lane-meter__bar" id="trackLaneMeter1"></div>
-                            </div>
-                            <span class="track-lane-meter-db" id="trackLaneMeterDb1" aria-hidden="true">-96.0 dB</span>
-                        </div>
-                        <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader1" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio 2 volume">
-                            <span class="track-lane-fader-db" id="trackLaneFaderDb1">0.0 dB</span>
-                        </div>
-                    </div>
-                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus1" hidden></span>
-                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn1" title="Show next extra audio track">+ Add Track</button>
-                </div>
-                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--extra" id="extraAudioMeta2" hidden>
-                    <div class="audio-waveform-lane-meta__row">
-                        <span class="audio-waveform-lane-meta__title" id="extraAudioTitle2">Ex 3 Track</span>
-                        <div class="track-mix-actions">
-                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn2" disabled title="Solo" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn2" disabled title="Mute" aria-pressed="false">M</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn2" title="Clear (hide lane)">×</button>
-                        </div>
-                    </div>
-                    <div class="track-lane-controls">
-                        <div class="track-lane-meter-row">
-                            <div class="track-lane-meter" aria-hidden="true">
-                                <div class="track-lane-meter__bar" id="trackLaneMeter2"></div>
-                            </div>
-                            <span class="track-lane-meter-db" id="trackLaneMeterDb2" aria-hidden="true">-96.0 dB</span>
-                        </div>
-                        <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFader2" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio 3 volume">
-                            <span class="track-lane-fader-db" id="trackLaneFaderDb2">0.0 dB</span>
-                        </div>
-                    </div>
-                    <span class="audio-waveform-lane-meta__status" id="extraAudioStatus2" hidden></span>
-                    <button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn2" title="Show next extra audio track" hidden disabled>+ Add Track</button>
-                </div>
+                <div id="extraLaneMetaMount"></div>
             </div>
             <div
                 class="audio-waveform-composite__lanes"
@@ -226,33 +155,7 @@
                         <div class="audio-waveform-lane__content-end" id="audioWaveformContentEnd" hidden aria-hidden="true"></div>
                     </div>
                 </div>
-                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane0" hidden>
-                    <div class="audio-waveform-lane__track" id="extraAudioTrack0" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
-                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
-                        <canvas id="extraAudioCanvas0" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
-                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName0" hidden aria-hidden="true"></span>
-                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd0" hidden aria-hidden="true"></div>
-                    </div>
-                    <div class="audio-waveform-lane__playback-regions" data-track="extra:0" hidden aria-hidden="true"></div>
-                </div>
-                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane1" hidden>
-                    <div class="audio-waveform-lane__track" id="extraAudioTrack1" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
-                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
-                        <canvas id="extraAudioCanvas1" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
-                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName1" hidden aria-hidden="true"></span>
-                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd1" hidden aria-hidden="true"></div>
-                    </div>
-                    <div class="audio-waveform-lane__playback-regions" data-track="extra:1" hidden aria-hidden="true"></div>
-                </div>
-                <div class="audio-waveform-lane audio-waveform-lane--extra" id="extraAudioLane2" hidden>
-                    <div class="audio-waveform-lane__track" id="extraAudioTrack2" title="追加音声（ドロップエリアまたは波形枠から読み込み）">
-                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
-                        <canvas id="extraAudioCanvas2" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
-                        <span class="audio-waveform-lane__file-name" id="extraAudioFileName2" hidden aria-hidden="true"></span>
-                        <div class="audio-waveform-lane__content-end" id="extraAudioContentEnd2" hidden aria-hidden="true"></div>
-                    </div>
-                    <div class="audio-waveform-lane__playback-regions" data-track="extra:2" hidden aria-hidden="true"></div>
-                </div>
+                <div id="extraLaneTracksMount"></div>
                 <div
                     class="audio-waveform-composite__markers seek-bar-markers"
                     id="audioWaveformMarkers"
@@ -376,18 +279,7 @@
                         <input type="checkbox" id="sessionExportIncludeVideo" checked disabled>
                         <span>Video</span>
                     </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
-                        <input type="checkbox" id="sessionExportIncludeEx0" checked disabled>
-                        <span>Ex 1</span>
-                    </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
-                        <input type="checkbox" id="sessionExportIncludeEx1" checked disabled>
-                        <span>Ex 2</span>
-                    </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
-                        <input type="checkbox" id="sessionExportIncludeEx2" checked disabled>
-                        <span>Ex 3</span>
-                    </label>
+                    <span id="sessionExportExtraMount"></span>
                 </div>
                 <div class="session-io-actions" role="group" aria-label="Import and export review">
                     <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file (Ctrl+Shift+I)">Import Review</button>
@@ -484,6 +376,7 @@
     <script src="js/version.js"></script>
     <script src="js/dom-refs.js"></script>
     <script src="js/app-runtime.js"></script>
+    <script src="js/extra-lanes-dom.js"></script>
     <script src="js/apply-version.js"></script>
     <script src="js/session-state.js"></script>
     <script src="js/prefs-log.js"></script>

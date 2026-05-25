@@ -168,12 +168,27 @@
         flashSeekHint('Scrub', formatTimecodeForTransport(t));
     }
 
+    /** ブラウザ内ユーザー設定（Video Delay・モニター床・Loop 等）。Import/Export・IndexedDB セッションとは別。 */
     function readPrefs() {
         try {
             const raw = localStorage.getItem(LS_PREFS_KEY);
-            if (!raw) return {};
-            const j = JSON.parse(raw);
-            return j && typeof j === 'object' ? j : {};
+            let j = {};
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                j = parsed && typeof parsed === 'object' ? parsed : {};
+            }
+            if (!j.monitorPrefs && typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
+                try {
+                    const legRaw = localStorage.getItem(LS_MONITOR_PREFS_LEGACY_KEY);
+                    if (legRaw) {
+                        const leg = JSON.parse(legRaw);
+                        if (leg && typeof leg === 'object') {
+                            j.monitorPrefs = leg;
+                        }
+                    }
+                } catch (_) {}
+            }
+            return j;
         } catch (_) {
             return {};
         }
@@ -192,6 +207,16 @@
             if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
                 payload.laneUi = getWaveformLaneUiPersistSnapshot();
             }
+            if (typeof getMonitorUiPersistSnapshot === 'function') {
+                payload.monitorPrefs = getMonitorUiPersistSnapshot();
+            } else if (prev.monitorPrefs && typeof prev.monitorPrefs === 'object') {
+                payload.monitorPrefs = prev.monitorPrefs;
+            }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
+            if (typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
+                try {
+                    localStorage.removeItem(LS_MONITOR_PREFS_LEGACY_KEY);
+                } catch (_) {}
+            }
         } catch (_) {}
     }

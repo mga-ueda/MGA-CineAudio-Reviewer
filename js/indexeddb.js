@@ -241,9 +241,7 @@
                 await mergePrevExtraTracksDuringRestore(row);
             }
         }
-        if (typeof getMonitorUiPersistSnapshot === 'function') {
-            row.monitorPrefs = getMonitorUiPersistSnapshot();
-        }
+        /* Video Delay / スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
     }
 
     async function buildSessionPersistRow(opt) {
@@ -252,7 +250,6 @@
         const row = {
             v: 4,
             loopPlayback: getLoopPlaybackEnabled(),
-            frameDelayFrames: getVideoFrameDelayFrames(),
         };
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
@@ -648,14 +645,7 @@
     async function applySessionPersistRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
-        if (
-            row.monitorPrefs &&
-            typeof applyMonitorUiPersistSnapshot === 'function'
-        ) {
-            applyMonitorUiPersistSnapshot(row.monitorPrefs);
-        }
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
-        if (typeof row.frameDelayFrames === 'number') applySavedVideoFrameDelay(row.frameDelayFrames);
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);
         }
@@ -737,7 +727,13 @@
         return runSerializedSessionRestore(async () => {
             const prefs = readPrefs();
             applySavedLoopPlayback(prefs.loopPlayback);
-            applySavedVideoFrameDelay(prefs.frameDelayFrames);
+            if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                applyUserMonitorDisplayPrefsFromStorage(prefs);
+            } else if (typeof applyTransportPrefsFromStorage === 'function') {
+                applyTransportPrefsFromStorage(prefs);
+            } else {
+                applySavedVideoFrameDelay(prefs.frameDelayFrames);
+            }
 
             if (!window.indexedDB) {
                 writeLog('IndexedDB unavailable; skipped video blob restore.');
@@ -751,9 +747,12 @@
                 return;
             }
             if (!sessionRowHasRestorableContent(row)) {
-                writeLog('No stored session (playback prefs may still apply).');
+                writeLog('No stored session (user display prefs from localStorage).');
                 return;
             }
             await applySessionPersistRow(row);
+            if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                applyUserMonitorDisplayPrefsFromStorage(prefs);
+            }
         });
     }

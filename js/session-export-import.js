@@ -793,6 +793,7 @@
         } else if (typeof applySavedWaveformLaneUi === 'function') {
             applySavedWaveformLaneUi(p.laneUi || null);
         }
+        /* Video Delay・スペクトラム／メーター床は Import に含めない（localStorage のユーザー設定を維持） */
         const mp = manifest.monitorPrefs;
         if (
             mp &&

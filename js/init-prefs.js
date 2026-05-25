@@ -1,8 +1,12 @@
     (function initPrefsFromStorage() {
         try {
-            const p = readPrefs();
-            applySavedLoopPlayback(p.loopPlayback);
-            applySavedVideoFrameDelay(p.frameDelayFrames);
+            if (typeof applyTransportPrefsFromStorage === 'function') {
+                applyTransportPrefsFromStorage(readPrefs());
+            } else {
+                const p = readPrefs();
+                applySavedLoopPlayback(p.loopPlayback);
+                applySavedVideoFrameDelay(p.frameDelayFrames);
+            }
         } catch (_) {}
     })();
 

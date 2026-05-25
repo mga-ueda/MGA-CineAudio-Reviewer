@@ -4335,7 +4335,9 @@
         refreshAllExtraTrackLaneVisibility();
         refreshExtraTrackAddLaneButtons();
         refreshReviewMixUi();
-        if (typeof initTrackLaneControlsUi === 'function') {
+        if (typeof refreshTrackLaneControlsUi === 'function') {
+            refreshTrackLaneControlsUi();
+        } else if (typeof initTrackLaneControlsUi === 'function') {
             initTrackLaneControlsUi();
         }
 

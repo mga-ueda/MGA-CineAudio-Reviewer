@@ -1703,5 +1703,3 @@
         updateAllWaveformPlayheads();
     }
 
-    initWaveformTimelineZoomUi();
-

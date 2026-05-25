@@ -92,3 +92,40 @@
         flashTransportOptBox('videoDelay');
         applyVideoFrameDelayToTransportNow();
     }
+
+    /**
+     * ブラウザ localStorage のユーザー設定のみ適用（Video Delay・モニター床・Loop）。
+     * IndexedDB セッション復元や Import Review では上書きしない。
+     */
+    function applyTransportPrefsFromStorage(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        applySavedLoopPlayback(p.loopPlayback);
+        if (typeof p.frameDelayFrames === 'number') {
+            applySavedVideoFrameDelay(p.frameDelayFrames);
+        }
+        if (
+            p.monitorPrefs &&
+            typeof applyMonitorUiPersistSnapshot === 'function'
+        ) {
+            applyMonitorUiPersistSnapshot(p.monitorPrefs);
+        }
+    }
+
+    /** Video Delay とスペクトラム／メーター床のみ（Import・セッション行の影響を受けない） */
+    function applyUserMonitorDisplayPrefsFromStorage(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        if (typeof p.frameDelayFrames === 'number') {
+            applySavedVideoFrameDelay(p.frameDelayFrames);
+        }
+        const mp = p.monitorPrefs;
+        if (mp && typeof applyMonitorUiPersistSnapshot === 'function') {
+            applyMonitorUiPersistSnapshot({
+                spectrumFloor: mp.spectrumFloor,
+                meterFloor: mp.meterFloor,
+            });
+        }
+    }
+
+    window.applyUserMonitorDisplayPrefsFromStorage = applyUserMonitorDisplayPrefsFromStorage;
+
+    window.applyTransportPrefsFromStorage = applyTransportPrefsFromStorage;

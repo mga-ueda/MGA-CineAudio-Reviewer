@@ -8,27 +8,22 @@
             fader: document.getElementById('trackLaneFaderVideo'),
             faderDb: document.getElementById('trackLaneFaderDbVideo'),
         },
-        extra: [
-            {
-                meterBar: document.getElementById('trackLaneMeter0'),
-                meterDb: document.getElementById('trackLaneMeterDb0'),
-                fader: document.getElementById('trackLaneFader0'),
-                faderDb: document.getElementById('trackLaneFaderDb0'),
-            },
-            {
-                meterBar: document.getElementById('trackLaneMeter1'),
-                meterDb: document.getElementById('trackLaneMeterDb1'),
-                fader: document.getElementById('trackLaneFader1'),
-                faderDb: document.getElementById('trackLaneFaderDb1'),
-            },
-            {
-                meterBar: document.getElementById('trackLaneMeter2'),
-                meterDb: document.getElementById('trackLaneMeterDb2'),
-                fader: document.getElementById('trackLaneFader2'),
-                faderDb: document.getElementById('trackLaneFaderDb2'),
-            },
-        ],
+        extra: [],
     };
+
+    function ensureExtraLaneUiRefs() {
+        if (laneUi.extra.length > 0) return;
+        const n =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        for (let slot = 0; slot < n; slot++) {
+            laneUi.extra.push({
+                meterBar: document.getElementById('trackLaneMeter' + slot),
+                meterDb: document.getElementById('trackLaneMeterDb' + slot),
+                fader: document.getElementById('trackLaneFader' + slot),
+                faderDb: document.getElementById('trackLaneFaderDb' + slot),
+            });
+        }
+    }
 
     function defaultFaderPos() {
         return typeof TRACK_LANE_FADER_POS_UNITY === 'number'
@@ -125,6 +120,7 @@
     }
 
     function updateTrackLaneMeters() {
+        ensureExtraLaneUiRefs();
         const vAna =
             typeof getVideoTrackAnalyser === 'function' ? getVideoTrackAnalyser() : null;
         updateLaneMeter(laneUi.video, vAna, isVideoLaneMeterSilent());
@@ -139,6 +135,7 @@
     }
 
     function extinguishTrackLaneMeters() {
+        ensureExtraLaneUiRefs();
         updateLaneMeter(laneUi.video, null, true);
         for (let i = 0; i < laneUi.extra.length; i++) {
             updateLaneMeter(laneUi.extra[i], null, true);
@@ -153,6 +150,7 @@
     }
 
     function refreshTrackLaneControlsUi() {
+        ensureExtraLaneUiRefs();
         const videoReadyNow = typeof videoReady === 'function' && videoReady();
         if (laneUi.video.fader) {
             laneUi.video.fader.disabled = !videoReadyNow;
@@ -215,14 +213,21 @@
     }
 
     function bindTrackLaneFaders() {
+        ensureExtraLaneUiRefs();
         bindLaneFaderInputAndReset(laneUi.video.fader, 'video');
         for (let slot = 0; slot < laneUi.extra.length; slot++) {
             bindLaneFaderInputAndReset(laneUi.extra[slot].fader, slot);
         }
     }
 
+    let trackLaneControlsInitialized = false;
+
     function initTrackLaneControlsUi() {
-        bindTrackLaneFaders();
+        ensureExtraLaneUiRefs();
+        if (!trackLaneControlsInitialized) {
+            bindTrackLaneFaders();
+            trackLaneControlsInitialized = true;
+        }
         refreshTrackLaneControlsUi();
         refreshFaderDbLabels();
         extinguishTrackLaneMeters();

@@ -1,0 +1,130 @@
+/**
+ * Ex 音声レーンのサイドバー・波形・Export チェックボックスを EXTRA_TRACK_COUNT 分生成する。
+ * dom-refs / app-runtime 直後、他スクリプトより先に同期実行する。
+ */
+(function buildExtraLanesDom() {
+    const count =
+        typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+
+    function buildExtraLaneMeta(slot) {
+        const n = slot + 1;
+        const isLast = slot >= count - 1;
+        const addAttrs = isLast ? ' hidden disabled' : '';
+        const wrap = document.createElement('div');
+        wrap.className = 'audio-waveform-lane-meta audio-waveform-lane-meta--extra';
+        wrap.id = 'extraAudioMeta' + slot;
+        wrap.hidden = true;
+        wrap.innerHTML =
+            '<div class="audio-waveform-lane-meta__row">' +
+            '<span class="audio-waveform-lane-meta__title" id="extraAudioTitle' +
+            slot +
+            '">Ex ' +
+            n +
+            ' Track</span>' +
+            '<div class="track-mix-actions">' +
+            '<button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn' +
+            slot +
+            '" disabled title="Solo" aria-pressed="false">S</button>' +
+            '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
+            slot +
+            '" disabled title="Mute" aria-pressed="false">M</button>' +
+            '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
+            slot +
+            '" title="Clear (hide lane)">×</button>' +
+            '</div></div>' +
+            '<div class="track-lane-controls">' +
+            '<div class="track-lane-meter-row">' +
+            '<div class="track-lane-meter" aria-hidden="true">' +
+            '<div class="track-lane-meter__bar" id="trackLaneMeter' +
+            slot +
+            '"></div></div>' +
+            '<span class="track-lane-meter-db" id="trackLaneMeterDb' +
+            slot +
+            '" aria-hidden="true">-96.0 dB</span></div>' +
+            '<div class="track-lane-fader-row">' +
+            '<input type="range" class="track-lane-fader" id="trackLaneFader' +
+            slot +
+            '" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio ' +
+            n +
+            ' volume">' +
+            '<span class="track-lane-fader-db" id="trackLaneFaderDb' +
+            slot +
+            '">0.0 dB</span></div></div>' +
+            '<span class="audio-waveform-lane-meta__status" id="extraAudioStatus' +
+            slot +
+            '" hidden></span>' +
+            '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
+            slot +
+            '" title="Show next extra audio track"' +
+            addAttrs +
+            '>+ Add Track</button>';
+        return wrap;
+    }
+
+    function buildExtraLaneTrack(slot) {
+        const wrap = document.createElement('div');
+        wrap.className = 'audio-waveform-lane audio-waveform-lane--extra';
+        wrap.id = 'extraAudioLane' + slot;
+        wrap.hidden = true;
+        wrap.innerHTML =
+            '<div class="audio-waveform-lane__track" id="extraAudioTrack' +
+            slot +
+            '" title="追加音声（ドロップエリアまたは波形枠から読み込み）">' +
+            '<div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>' +
+            '<canvas id="extraAudioCanvas' +
+            slot +
+            '" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>' +
+            '<span class="audio-waveform-lane__file-name" id="extraAudioFileName' +
+            slot +
+            '" hidden aria-hidden="true"></span>' +
+            '<div class="audio-waveform-lane__content-end" id="extraAudioContentEnd' +
+            slot +
+            '" hidden aria-hidden="true"></div></div>' +
+            '<div class="audio-waveform-lane__playback-regions" data-track="extra:' +
+            slot +
+            '" hidden aria-hidden="true"></div>';
+        return wrap;
+    }
+
+    function buildExportExtraCheckbox(slot) {
+        const n = slot + 1;
+        const label = document.createElement('label');
+        label.className =
+            'transport-compact-lbl transport-compact-lbl--row session-export-media__item';
+        label.innerHTML =
+            '<input type="checkbox" id="sessionExportIncludeEx' +
+            slot +
+            '" checked disabled>' +
+            '<span>Ex ' +
+            n +
+            '</span>';
+        return label;
+    }
+
+    const metaMount = document.getElementById('extraLaneMetaMount');
+    if (metaMount) {
+        const frag = document.createDocumentFragment();
+        for (let slot = 0; slot < count; slot++) {
+            frag.appendChild(buildExtraLaneMeta(slot));
+        }
+        metaMount.replaceWith(frag);
+    }
+
+    const tracksMount = document.getElementById('extraLaneTracksMount');
+    if (tracksMount) {
+        const frag = document.createDocumentFragment();
+        for (let slot = 0; slot < count; slot++) {
+            frag.appendChild(buildExtraLaneTrack(slot));
+        }
+        tracksMount.replaceWith(frag);
+    }
+
+    const exportMount = document.getElementById('sessionExportExtraMount');
+    if (exportMount) {
+        const frag = document.createDocumentFragment();
+        for (let slot = 0; slot < count; slot++) {
+            frag.appendChild(buildExportExtraCheckbox(slot));
+        }
+        exportMount.replaceWith(frag);
+    }
+})();

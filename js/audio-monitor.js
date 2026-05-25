@@ -3,7 +3,10 @@
     const DEFAULT_SPECTRUM_FLOOR_DB = -50;
     const DEFAULT_METER_FLOOR_DB = -50;
 
-    const UI_PREFS_STORAGE_KEY = 'mga_cineaudio_reviewer_monitor_prefs_v1';
+    const UI_PREFS_STORAGE_KEY =
+        typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string'
+            ? LS_MONITOR_PREFS_LEGACY_KEY
+            : 'mga_cineaudio_reviewer_monitor_prefs_v1';
     const DEFAULT_MASTER_VOL_LINEAR = 1;
     const MASTER_VOL_UNITY_LINEAR = 1;
     const MASTER_VOL_SLIDER_STEP = 0.01;
@@ -107,6 +110,10 @@
     window.applyMonitorUiPersistSnapshot = applyMonitorUiPersistSnapshot;
 
     function saveUiPrefsToLocalStorage() {
+        if (typeof writePrefs === 'function') {
+            writePrefs();
+            return;
+        }
         try {
             localStorage.setItem(
                 UI_PREFS_STORAGE_KEY,
@@ -118,31 +125,34 @@
             );
         } catch (_) {}
     }
-    
+
     (function syncInitialTransportAndMonitorControls() {
         let loadedMasterVolFromStorage = false;
         try {
-            const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY);
-            if (raw) {
-                const o = JSON.parse(raw);
-                if (o && typeof o === 'object') {
-                    if (typeof o.spectrumFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(o.spectrumFloor)) {
-                        spectrumDisplayDbMin = o.spectrumFloor;
-                    }
-                    if (typeof o.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(o.meterFloor)) {
-                        meterDisplayDbMin = o.meterFloor;
-                    }
-                    if (typeof o.masterVol === 'number' && isFinite(o.masterVol)) {
-                        applyMasterVolToMix(o.masterVol, false);
+            if (typeof readPrefs === 'function') {
+                const prefs = readPrefs();
+                if (prefs.monitorPrefs && typeof prefs.monitorPrefs === 'object') {
+                    if (
+                        typeof prefs.monitorPrefs.masterVol === 'number' &&
+                        isFinite(prefs.monitorPrefs.masterVol)
+                    ) {
                         loadedMasterVolFromStorage = true;
+                    }
+                    applyMonitorUiPersistSnapshot(prefs.monitorPrefs);
+                }
+            } else {
+                const raw = localStorage.getItem(UI_PREFS_STORAGE_KEY);
+                if (raw) {
+                    const o = JSON.parse(raw);
+                    if (o && typeof o === 'object') {
+                        applyMonitorUiPersistSnapshot(o);
+                        if (typeof o.masterVol === 'number' && isFinite(o.masterVol)) {
+                            loadedMasterVolFromStorage = true;
+                        }
                     }
                 }
             }
         } catch (_) {}
-        const specSel = document.getElementById('spectrumFloorDbSelect');
-        const metSel = document.getElementById('meterFloorDbSelect');
-        if (specSel) specSel.value = String(spectrumDisplayDbMin);
-        if (metSel) metSel.value = String(meterDisplayDbMin);
         if (!loadedMasterVolFromStorage) {
             applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, false);
         }
