@@ -37,6 +37,7 @@
     const markerRangeHint = document.getElementById('markerRangeHint');
     const markerHideViewBtn = document.getElementById('markerHideViewBtn');
     const markerCopyBtn = document.getElementById('markerCopyBtn');
+    const markerPasteBtn = document.getElementById('markerPasteBtn');
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
     const videoClearBtn = document.getElementById('videoClearBtn');
     const audioWaveformPanel = document.getElementById('audioWaveformPanel');

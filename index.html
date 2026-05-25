@@ -39,6 +39,18 @@
         </div>
     </div>
 
+    <div id="markerPasteOverlay" class="app-confirm-overlay marker-paste-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="markerPasteOverlayTitle">
+        <div class="app-confirm-overlay__box marker-paste-overlay__box">
+            <p class="app-confirm-overlay__title" id="markerPasteOverlayTitle">Markers Paste</p>
+            <p class="app-confirm-overlay__body">Copy と同じ形式（# / In / Out / Feedback）の表を貼り付けて OK を押してください。</p>
+            <textarea id="markerPasteTextarea" class="marker-paste-overlay__textarea" rows="10" spellcheck="false" aria-label="Marker table text"></textarea>
+            <div class="app-confirm-overlay__actions">
+                <button type="button" id="markerPasteCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="markerPasteOk" class="session-io-btn session-io-btn--export">OK</button>
+            </div>
+        </div>
+    </div>
+
     <div class="layout-narrow">
     <header class="app-header">
         <div class="app-header-inner">
@@ -83,6 +95,7 @@
                     <div class="marker-panel__head-actions">
                         <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled title="Add markers to use Hide/View">Hide</button>
                         <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled title="Copy marker table as tab-separated text (no Length column)">Copy</button>
+                        <button type="button" id="markerPasteBtn" class="marker-panel__paste-btn" disabled title="Paste marker table from clipboard (same format as Copy; replaces all markers)">Paste</button>
                         <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="Delete all markers">Clear</button>
                     </div>
                 </div>

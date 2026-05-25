@@ -1025,6 +1025,10 @@
         if (markerCopyBtn) {
             markerCopyBtn.disabled = !(timelineReady && currentMarkers.length > 0);
         }
+        const pasteBtn = document.getElementById('markerPasteBtn');
+        if (pasteBtn) {
+            pasteBtn.disabled = !timelineReady;
+        }
         updateMarkerHideViewButton();
     }
 
@@ -1053,6 +1057,78 @@
     function markerOutLabelForCopy(m) {
         if (!m || m.type !== 'range' || !markerHasOutTc(m)) return '';
         return markerTcLabelForCopy(m.endSec);
+    }
+
+    const MARKER_PASTE_TC_RE = /^(\d+:\d{1,2}:\d{1,2}:\d{1,2})$/;
+
+    function isMarkerPasteTcString(s) {
+        return MARKER_PASTE_TC_RE.test(String(s ?? '').trim());
+    }
+
+    function markerPasteParseTcToFrameIndex(tcStr, fpsFloat) {
+        const parseFn =
+            typeof parseTimecodeStringToClipFrameIndex === 'function'
+                ? parseTimecodeStringToClipFrameIndex
+                : typeof window.parseTimecodeStringToClipFrameIndex === 'function'
+                  ? window.parseTimecodeStringToClipFrameIndex
+                  : null;
+        if (parseFn) {
+            return parseFn(tcStr, fpsFloat);
+        }
+        const m = String(tcStr || '')
+            .trim()
+            .match(/^(\d+):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        if (!m) return null;
+        const h = parseInt(m[1], 10);
+        const mi = parseInt(m[2], 10);
+        const s = parseInt(m[3], 10);
+        const ff = parseInt(m[4], 10);
+        if (![h, mi, s, ff].every((n) => Number.isFinite(n) && n >= 0)) return null;
+        const f = Number(fpsFloat);
+        const fMod =
+            Math.abs(f - 23.976) < 0.02 ||
+            Math.abs(f - 29.97) < 0.02 ||
+            Math.abs(f - 59.94) < 0.02
+                ? 30
+                : Math.max(1, Math.round(f));
+        if (ff >= fMod || mi >= 60 || s >= 60) return null;
+        return (h * 3600 + mi * 60 + s) * fMod + ff;
+    }
+
+    /** Copy 出力 TC → トランスポート秒（markerTcLabelForCopy と同じラベルへ復号） */
+    function transportSecFromMarkerCopyTcString(tcStr) {
+        const tc = String(tcStr || '').trim();
+        if (!tc || !markerTimelineReady()) return null;
+        const dur = masterDurForTimelineMarkers();
+        if (!dur || dur <= 0) return 0;
+        const frameSec = markerOneFrameSec();
+        if (!(frameSec > 0)) return null;
+
+        const fps = masterFpsFloatForTransport();
+        const targetIdx = markerPasteParseTcToFrameIndex(tc, fps);
+        if (targetIdx == null || !Number.isFinite(targetIdx)) return null;
+
+        const maxFrame = Math.max(0, Math.ceil(dur / frameSec) + 2);
+        const estFrame = Math.max(
+            0,
+            Math.min(maxFrame, Math.round(targetIdx / Math.max(1, fps) / frameSec)),
+        );
+        const windowFrames = Math.max(120, Math.ceil(2 / frameSec));
+
+        function scanFrames(startF, endF) {
+            for (let f = startF; f <= endF; f++) {
+                const t = Math.min(dur - 0.001, f * frameSec);
+                if (markerTcLabelForCopy(t) === tc) return clampMarkerSec(t);
+            }
+            return null;
+        }
+
+        const near = scanFrames(
+            Math.max(0, estFrame - windowFrames),
+            Math.min(maxFrame, estFrame + windowFrames),
+        );
+        if (near != null) return near;
+        return scanFrames(0, maxFrame);
     }
 
     /** マーカー一覧表（Length 列なし）をタブ区切り文字列にする */
@@ -1089,6 +1165,344 @@
         } catch (err) {
             writeLog('Marker: clipboard copy failed');
             flashSeekHint('Markers', 'Copy failed', 'error');
+        }
+    }
+
+    const MARKERS_PASTE_HEADERS = ['#', 'in', 'out', 'feedback'];
+
+    function normalizeMarkersPasteHeaderCell(raw) {
+        return String(raw ?? '')
+            .replace(/^\uFEFF/, '')
+            .trim()
+            .toLowerCase();
+    }
+
+    function normalizeMarkersPasteColumns(parts) {
+        const p = Array.from(parts || []);
+        while (p.length < 4) p.push('');
+        if (p.length > 4) {
+            return [p[0], p[1], p[2], p.slice(3).join('\t')];
+        }
+        return p;
+    }
+
+    function splitMarkersPasteLine(line) {
+        const s = String(line ?? '');
+        if (s.includes('\t')) {
+            return normalizeMarkersPasteColumns(s.split('\t'));
+        }
+        const trimmed = s.trim();
+        const rowMatch = trimmed.match(
+            /^(\S+)\s+(\d+:\d{1,2}:\d{1,2}:\d{1,2})(?:\s+(\d+:\d{1,2}:\d{1,2}:\d{1,2}))?(?:\s+(.*))?$/,
+        );
+        if (rowMatch) {
+            return normalizeMarkersPasteColumns([
+                rowMatch[1],
+                rowMatch[2],
+                rowMatch[3] || '',
+                rowMatch[4] || '',
+            ]);
+        }
+        const parts = trimmed.split(/\s+/);
+        if (parts[0] === '#' && parts.length >= 4) {
+            return normalizeMarkersPasteColumns([
+                parts[0],
+                parts[1],
+                parts[2],
+                parts.slice(3).join(' '),
+            ]);
+        }
+        return normalizeMarkersPasteColumns([trimmed]);
+    }
+
+    function isMarkersPasteHeaderRow(cells) {
+        if (!cells || cells.length < 4) return false;
+        const h = cells.map((c) => normalizeMarkersPasteHeaderCell(c));
+        if (h.some((x) => x === 'length')) return false;
+        for (let i = 0; i < MARKERS_PASTE_HEADERS.length; i++) {
+            if (h[i] !== MARKERS_PASTE_HEADERS[i]) return false;
+        }
+        return true;
+    }
+
+    function isMarkersPasteDataRow(cells) {
+        return cells && cells.length >= 2 && isMarkerPasteTcString(cells[1]);
+    }
+
+    /** Copy と同じ TSV（# / In / Out / Feedback、Length なし）を解析 */
+    function parseMarkersPasteTsv(text) {
+        const raw = String(text ?? '').trim();
+        if (!raw) {
+            return {
+                ok: false,
+                error: 'クリップボードが空です。Copy でコピーしたマーカー表を貼り付けてください。',
+            };
+        }
+        const lines = raw.split(/\r?\n/).filter((line) => String(line).trim() !== '');
+        if (!lines.length) {
+            return {
+                ok: false,
+                error: '貼り付けデータに行がありません。',
+            };
+        }
+        if (!markerTimelineReady()) {
+            return {
+                ok: false,
+                error: '動画または追加音声を読み込んでから貼り付けてください。',
+            };
+        }
+        const firstCells = splitMarkersPasteLine(lines[0]);
+        let dataStartRow = 0;
+        if (isMarkersPasteHeaderRow(firstCells)) {
+            dataStartRow = 1;
+            if (lines.length < 2) {
+                return {
+                    ok: false,
+                    error: 'マーカー行がありません（見出し行の下に 1 行以上必要です）。',
+                };
+            }
+        } else if (isMarkersPasteDataRow(firstCells)) {
+            dataStartRow = 0;
+        } else {
+            const norm0 = firstCells.map((c) => normalizeMarkersPasteHeaderCell(c));
+            if (norm0.some((h) => h === 'length')) {
+                return {
+                    ok: false,
+                    error:
+                        'Length 列は含めない形式です。# / In / Out / Feedback の 4 列（Copy と同じ）にしてください。',
+                };
+            }
+            return {
+                ok: false,
+                error:
+                    '見出し行は「#」「In」「Out」「Feedback」である必要があります（Copy と同じ形式）。先頭行に In のタイムコード（00:00:00:00 形式）が必要です。',
+            };
+        }
+        const markers = [];
+        for (let row = dataStartRow; row < lines.length; row++) {
+            const cols = splitMarkersPasteLine(lines[row]);
+            if (cols.length < 4) {
+                return {
+                    ok: false,
+                    error:
+                        '行 ' +
+                        row +
+                        ' の列数が不足しています（# / In / Out / Feedback の 4 列、タブ区切り推奨）。',
+                };
+            }
+            const inTc = String(cols[1] ?? '').trim();
+            const outTc = String(cols[2] ?? '').trim();
+            const comment = String(cols[3] ?? '');
+            if (!inTc) {
+                return {
+                    ok: false,
+                    error: '行 ' + row + ' の In タイムコードが空です。',
+                };
+            }
+            if (!isMarkerPasteTcString(inTc)) {
+                return {
+                    ok: false,
+                    error:
+                        '行 ' +
+                        row +
+                        ' の In タイムコードが不正です（00:00:00:00 形式）: ' +
+                        inTc,
+                };
+            }
+            const inSec = transportSecFromMarkerCopyTcString(inTc);
+            if (inSec == null) {
+                return {
+                    ok: false,
+                    error:
+                        '行 ' +
+                        row +
+                        ' の In を Copy と同じ形式で解釈できません: ' +
+                        inTc +
+                        '（タイムライン長・FPS を確認）',
+                };
+            }
+            if (!outTc) {
+                markers.push({
+                    id: nextMarkerId(),
+                    type: 'point',
+                    timeSec: inSec,
+                    comment,
+                });
+                continue;
+            }
+            if (!isMarkerPasteTcString(outTc)) {
+                return {
+                    ok: false,
+                    error:
+                        '行 ' +
+                        row +
+                        ' の Out タイムコードが不正です（00:00:00:00 形式）: ' +
+                        outTc,
+                };
+            }
+            const outSec = transportSecFromMarkerCopyTcString(outTc);
+            if (outSec == null) {
+                return {
+                    ok: false,
+                    error:
+                        '行 ' +
+                        row +
+                        ' の Out を Copy と同じ形式で解釈できません: ' +
+                        outTc,
+                };
+            }
+            markers.push({
+                id: nextMarkerId(),
+                type: 'range',
+                startSec: inSec,
+                endSec: outSec,
+                comment,
+            });
+        }
+        if (!markers.length) {
+            return {
+                ok: false,
+                error: 'マーカー行がありません。',
+            };
+        }
+        return { ok: true, markers };
+    }
+
+    function applyMarkersPasteSnapshot(arr) {
+        pendingRangeStartSec = null;
+        activeMarkerId = null;
+        sessionMarkersRestorePayload = null;
+        resetInsertMarkerPressState();
+        if (markersDisplayHidden) {
+            markersDisplayHidden = false;
+            applyMarkersDisplayVisibility();
+        }
+        setMarkersFromSnapshot(arr);
+        if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof flushPersistSessionNow === 'function') {
+            void flushPersistSessionNow().catch(() => {});
+        }
+        updateMarkerClearAllButton();
+        writeLog('Marker: pasted from clipboard (' + arr.length + ' item(s))');
+        flashSeekHint('Markers', 'Pasted', 'notice');
+    }
+
+    function showMarkersPasteFormatError(message) {
+        writeLog('Marker: paste format error — ' + message);
+        if (typeof showAppAlert === 'function') {
+            showAppAlert('Markers Paste', message);
+        } else {
+            window.alert('Markers Paste\n\n' + message);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Markers', 'Paste failed', 'error');
+        }
+    }
+
+    function readMarkersPasteTextFromOverlay() {
+        return new Promise((resolve) => {
+            const root = document.getElementById('markerPasteOverlay');
+            const textarea = document.getElementById('markerPasteTextarea');
+            const okBtn = document.getElementById('markerPasteOk');
+            const cancelBtn = document.getElementById('markerPasteCancel');
+            if (!root || !textarea || !okBtn || !cancelBtn) {
+                resolve(null);
+                return;
+            }
+            textarea.value = '';
+            root.hidden = false;
+            root.setAttribute('aria-hidden', 'false');
+            const finish = (value) => {
+                root.hidden = true;
+                root.setAttribute('aria-hidden', 'true');
+                okBtn.removeEventListener('click', onOk);
+                cancelBtn.removeEventListener('click', onCancel);
+                root.removeEventListener('keydown', onKey);
+                resolve(value);
+            };
+            const onOk = () => finish(textarea.value);
+            const onCancel = () => {
+                writeLog('Marker: paste cancelled (dialog)');
+                finish(null);
+            };
+            const onKey = (e) => {
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    onCancel();
+                }
+            };
+            okBtn.addEventListener('click', onOk);
+            cancelBtn.addEventListener('click', onCancel);
+            root.addEventListener('keydown', onKey);
+            requestAnimationFrame(() => textarea.focus());
+        });
+    }
+
+    async function readMarkersPasteClipboardText() {
+        if (navigator.clipboard && typeof navigator.clipboard.readText === 'function') {
+            try {
+                const text = await navigator.clipboard.readText();
+                if (String(text ?? '').trim()) {
+                    return text;
+                }
+                writeLog('Marker: clipboard empty — opening paste dialog');
+            } catch (err) {
+                writeLog(
+                    'Marker: clipboard read failed — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        } else {
+            writeLog('Marker: clipboard.readText unavailable — opening paste dialog');
+        }
+        return readMarkersPasteTextFromOverlay();
+    }
+
+    async function confirmMarkersPasteReplace(count) {
+        const body =
+            'マーカー ' +
+            count +
+            ' 件で、現在のマーカー一覧をすべて置き換えます。よろしいですか？';
+        if (typeof requestAppConfirm === 'function') {
+            return requestAppConfirm('Markers Paste', body, 'Markers Paste: cancelled');
+        }
+        return window.confirm('Markers Paste\n\n' + body);
+    }
+
+    async function pasteMarkersFromClipboard() {
+        try {
+            if (!markerTimelineReady()) {
+                showMarkersPasteFormatError(
+                    '動画または追加音声を読み込んでから貼り付けてください。',
+                );
+                return;
+            }
+            writeLog('Marker: paste started');
+            const text = await readMarkersPasteClipboardText();
+            if (text == null) return;
+            if (!String(text).trim()) {
+                showMarkersPasteFormatError(
+                    '貼り付けデータが空です。Copy でコピーした表を貼り付けてください。',
+                );
+                return;
+            }
+            const parsed = parseMarkersPasteTsv(text);
+            if (!parsed.ok) {
+                showMarkersPasteFormatError(parsed.error);
+                return;
+            }
+            const confirmed = await confirmMarkersPasteReplace(parsed.markers.length);
+            if (!confirmed) return;
+            applyMarkersPasteSnapshot(parsed.markers);
+        } catch (err) {
+            writeLog(
+                'Marker: paste failed — ' + (err && err.message ? err.message : String(err)),
+            );
+            showMarkersPasteFormatError(
+                '貼り付け処理中にエラーが発生しました。ログを確認してください。',
+            );
         }
     }
 
@@ -3768,6 +4182,18 @@
                 copyMarkersToClipboard();
             });
         }
+        const markerPasteBtnEl = document.getElementById('markerPasteBtn');
+        if (markerPasteBtnEl) {
+            markerPasteBtnEl.addEventListener('click', () => {
+                if (markerPasteBtnEl.disabled) {
+                    showMarkersPasteFormatError(
+                        '動画または追加音声を読み込んでから貼り付けてください。',
+                    );
+                    return;
+                }
+                void pasteMarkersFromClipboard();
+            });
+        }
         if (markerClearAllBtn) {
             markerClearAllBtn.addEventListener('click', () => {
                 if (markerClearAllBtn.disabled) return;
@@ -3836,3 +4262,5 @@
             obs.observe(lanes);
         }
     }
+
+    window.initMarkers = initMarkers;

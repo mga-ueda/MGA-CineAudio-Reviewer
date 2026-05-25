@@ -261,12 +261,11 @@
         }
         .marker-panel__title {
             margin: 0;
-            width: 100%;
             font-size: 0.78rem;
             font-weight: 400;
             letter-spacing: 0.14em;
             text-transform: uppercase;
-            text-align: center;
+            text-align: left;
             color: #8e96a8;
         }
         .marker-panel.marker-panel--ready .marker-panel__title {
@@ -287,6 +286,7 @@
         }
         .marker-panel__hide-view-btn,
         .marker-panel__copy-btn,
+        .marker-panel__paste-btn,
         .marker-panel__clear-btn {
             font-size: 0.68rem;
             font-weight: 400;
@@ -328,6 +328,19 @@
             color: #fff;
         }
         .marker-panel__copy-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .marker-panel__paste-btn {
+            border: 1px solid rgba(120, 170, 220, 0.45);
+            background: rgba(80, 130, 190, 0.18);
+            color: #d8e8f8;
+        }
+        .marker-panel__paste-btn:hover:not(:disabled) {
+            background: rgba(80, 130, 190, 0.35);
+            color: #fff;
+        }
+        .marker-panel__paste-btn:disabled {
             opacity: 0.4;
             cursor: not-allowed;
         }
@@ -814,8 +827,7 @@
         }
         .video-panel__head-row .video-panel-label {
             margin: 0;
-            width: 100%;
-            text-align: center;
+            text-align: left;
         }
         .video-panel-label {
             font-size: 0.72rem;
@@ -824,7 +836,7 @@
             text-transform: uppercase;
             color: #8e96a8;
             margin: 0 0 8px;
-            text-align: center;
+            text-align: left;
         }
         .video-panel.loaded .video-panel-label {
             color: var(--app-accent);
@@ -2532,6 +2544,26 @@
             justify-content: flex-end;
             gap: 8px;
             flex-wrap: wrap;
+        }
+        .marker-paste-overlay__box {
+            width: min(36rem, 92vw);
+        }
+        .marker-paste-overlay__textarea {
+            display: block;
+            width: 100%;
+            min-height: 10rem;
+            margin: 0 0 14px;
+            padding: 10px 12px;
+            box-sizing: border-box;
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            line-height: 1.45;
+            color: #e8ecf4;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            resize: vertical;
+            tab-size: 4;
         }
 
         .export-blocking-overlay {
