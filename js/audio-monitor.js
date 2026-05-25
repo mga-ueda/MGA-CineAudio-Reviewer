@@ -181,6 +181,17 @@
             rmsHeldDb: meterDisplayDbMin,
             rmsHoldUntil: -1e9,
             rmsHoldLineDb: meterDisplayDbMin
+        },
+        /* Native <video> analyser merge — must not share 'l' with anaL */
+        v: {
+            lastT: 0,
+            visPeakDb: meterDisplayDbMin,
+            visRmsDb: meterDisplayDbMin,
+            peakHeldDb: meterDisplayDbMin,
+            peakHoldUntil: -1e9,
+            rmsHeldDb: meterDisplayDbMin,
+            rmsHoldUntil: -1e9,
+            rmsHoldLineDb: meterDisplayDbMin
         }
     };
     function resetMeterChState() {
@@ -194,7 +205,7 @@
             rmsHoldUntil: -1e9,
             rmsHoldLineDb: meterDisplayDbMin
         });
-        meterChState = { l: z(), r: z() };
+        meterChState = { l: z(), r: z(), v: z() };
     }
     let lastReductionTime = 0;
     const REDUCTION_COOLDOWN = 450;
@@ -678,7 +689,7 @@ window.addEventListener('resize', () => {
         ) {
             const vAna = getVideoTrackAnalyser();
             if (vAna) {
-                const vm = getMeterValues(vAna, 'l', ctxNow);
+                const vm = getMeterValues(vAna, 'v', ctxNow);
                 l = mergeVideoAnalyserMeterIntoChannel(l, vm);
                 r = mergeVideoAnalyserMeterIntoChannel(r, vm);
             }
