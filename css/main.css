@@ -1065,30 +1065,27 @@
         .video-panel__status {
             flex: 0 0 auto;
             display: flex;
+            flex-direction: column;
             flex-wrap: nowrap;
             align-items: center;
             justify-content: center;
-            gap: 6px 10px;
+            gap: 1px;
             width: 100%;
-            margin-top: 8px;
-            padding: 2px 0;
+            margin-top: 6px;
+            padding: 0;
             min-width: 0;
             text-align: center;
-        }
-        .video-panel__status::before,
-        .video-panel__status::after {
-            content: '';
-            flex: 1 1 0;
-            min-width: 0;
+            line-height: 1.05;
         }
         .video-panel__status-tc.transport-time-row {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 4px;
             flex: 0 0 auto;
             min-width: 0;
             font-variant-numeric: tabular-nums;
+            line-height: 1.05;
         }
         .video-panel__status .time-display,
         .video-panel__status .time-display.transport-opt-value {
@@ -1108,23 +1105,26 @@
             background: transparent;
             box-shadow: none;
             font-family: var(--font-mono);
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
-            letter-spacing: 0.04em;
-            line-height: 1.2;
+            letter-spacing: 0.03em;
+            line-height: 1.05;
             text-align: inherit;
             color: #e4e8f0;
             -webkit-text-fill-color: #e4e8f0;
         }
         .video-panel__status .transport-time-row__sep {
             color: var(--transport-opt-label-color);
-            font-size: var(--transport-opt-font-size);
+            font-size: 12px;
             font-weight: 700;
+            line-height: 1.05;
         }
         .video-panel__status .transport-opt-box--video-drift {
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             flex: 0 0 auto;
+            width: 100%;
             height: auto;
             min-height: 0;
             max-height: none;
@@ -1147,8 +1147,9 @@
         }
         .video-panel__status .transport-drift-display {
             font-family: var(--font-mono);
-            font-size: var(--transport-opt-font-size);
+            font-size: 11px;
             font-weight: 700;
+            line-height: 1.05;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
         }
