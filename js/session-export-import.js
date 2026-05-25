@@ -828,14 +828,37 @@
         return s.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
     }
 
-    /** Video leaf name without extension, safe for download filenames. */
-    function videoBasenameWithoutExtension(name) {
+    /** Leaf name without extension, safe for download filenames. */
+    function exportBasenameWithoutExtension(name) {
         const safe = sanitizeExportPathChars(name);
         if (!safe) return '';
         const leaf = safe.replace(/^.*[/\\]/, '');
         const dot = leaf.lastIndexOf('.');
         if (dot > 0) return leaf.slice(0, dot);
         return leaf;
+    }
+
+    /** First loaded extra track waveform file name (full name with extension). */
+    function firstLoadedExtraTrackWaveformName() {
+        const count =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        if (typeof isExtraTrackLoaded !== 'function') return '';
+        for (let i = 0; i < count; i++) {
+            if (!isExtraTrackLoaded(i)) continue;
+            if (typeof getExtraTracksPersistSnapshot === 'function') {
+                const snap = getExtraTracksPersistSnapshot();
+                if (Array.isArray(snap)) {
+                    const entry = snap.find((e) => e && e.slot === i);
+                    if (entry && entry.name) return entry.name;
+                }
+            }
+            const el = document.getElementById('extraAudioFileName' + i);
+            if (el && el.textContent) {
+                const t = String(el.textContent).trim();
+                if (t) return t;
+            }
+        }
+        return '';
     }
 
     function buildExportDownloadFilename(manifest) {
@@ -846,7 +869,22 @@
         } else if (manifest && manifest.session && manifest.session.mName) {
             videoName = manifest.session.mName;
         }
-        const base = videoBasenameWithoutExtension(videoName);
+        let base = exportBasenameWithoutExtension(videoName);
+        if (!base) {
+            let trackName = firstLoadedExtraTrackWaveformName();
+            if (!trackName && manifest && manifest.session) {
+                const extras = manifest.session.extraTracks;
+                if (Array.isArray(extras) && extras.length > 0) {
+                    let first = null;
+                    for (const tr of extras) {
+                        if (!tr || typeof tr.slot !== 'number' || !tr.name) continue;
+                        if (!first || tr.slot < first.slot) first = tr;
+                    }
+                    if (first) trackName = first.name;
+                }
+            }
+            base = exportBasenameWithoutExtension(trackName);
+        }
         if (base) return base + '_' + stamp + EXPORT_FILE_EXT;
         return 'Review_' + stamp + EXPORT_FILE_EXT;
     }
