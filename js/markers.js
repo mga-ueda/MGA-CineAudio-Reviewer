@@ -17,6 +17,14 @@
     let waveformMarkerHoverId = null;
     /** 再生ヘッドが踏んだマーカー（踏んだら次の踏み／別ハイライトまで維持） */
     let transportMarkerHighlightId = null;
+    /** 再生ハイライト用の前回トランスポート秒（フレーム間の通過検出） */
+    let lastTransportSecForMarkerHighlight = null;
+    /** 1 フレームで複数踏んだマーカーを順にハイライト */
+    const markerHighlightCrossQueue = [];
+    let markerHighlightCrossRaf = 0;
+    const MARKER_HIGHLIGHT_CROSS_QUEUE_MAX = 32;
+    /** 一覧スクロール追従で最後に見せたハイライト行 */
+    let lastMarkerListHighlightScrollId = null;
     /** In/Out 列ホバー・シークでどちらの TC を +/- 対象にするか（フォーカスが In のままのとき Out を直す） */
     let markerActiveTcEdge = 'in';
     let markerIdSeq = 0;
@@ -1053,6 +1061,8 @@
             transportMarkerHighlightId = null;
             changed = true;
         }
+        lastTransportSecForMarkerHighlight = null;
+        resetMarkerHighlightCrossQueue();
         if (changed) {
             updateMarkerListRowClasses();
         }
@@ -2708,6 +2718,55 @@
         return null;
     }
 
+    function isMarkerListHighlightScrollBlocked() {
+        if (markerDragState && markerDragState.m && markerDragState.m.id) return true;
+        if (isMarkerTcInputFocused()) return true;
+        const ae = document.activeElement;
+        if (ae && ae.closest && ae.closest('.marker-table__comment[data-marker-comment]')) {
+            return true;
+        }
+        if (markerPanelPointerInside && markerPanelHoverId) return true;
+        return false;
+    }
+
+    function isMarkerListRowVisibleInWrap(markerId) {
+        if (!markerTableBody || !markerTableWrap || markerTableWrap.hidden) return true;
+        const row = markerTableBody.querySelector('tr[data-marker-id="' + markerId + '"]');
+        if (!row) return true;
+        const wrapRect = markerTableWrap.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const thead = markerTableWrap.querySelector('.marker-table thead');
+        const headH = thead ? thead.getBoundingClientRect().height : 0;
+        const margin = 2;
+        const visibleTop = wrapRect.top + headH + margin;
+        const visibleBottom = wrapRect.bottom - margin;
+        return rowRect.top >= visibleTop && rowRect.bottom <= visibleBottom;
+    }
+
+    function scrollMarkerListRowIntoView(markerId) {
+        if (!markerTableBody || !markerTableWrap || markerTableWrap.hidden) return false;
+        const row = markerTableBody.querySelector('tr[data-marker-id="' + markerId + '"]');
+        if (!row || !row.scrollIntoView) return false;
+        if (isMarkerListRowVisibleInWrap(markerId)) return false;
+        row.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+        return true;
+    }
+
+    function followMarkerListHighlightScroll(highlightId) {
+        if (highlightId == null) {
+            lastMarkerListHighlightScrollId = null;
+            return;
+        }
+        if (isMarkerListHighlightScrollBlocked()) return;
+        const idChanged = highlightId !== lastMarkerListHighlightScrollId;
+        const keepInViewDuringPlayback =
+            isMarkerListPlaybackActive() && !isMarkerListRowVisibleInWrap(highlightId);
+        if (!idChanged && !keepInViewDuringPlayback) return;
+        if (scrollMarkerListRowIntoView(highlightId)) {
+            lastMarkerListHighlightScrollId = highlightId;
+        }
+    }
+
     function updateMarkerListRowClasses() {
         if (!markerTableBody) return;
         const highlightId = resolveMarkerListHighlightId();
@@ -2718,6 +2777,94 @@
                 highlightId != null && tr.dataset.markerId === highlightId,
             );
         });
+        followMarkerListHighlightScroll(highlightId);
+    }
+
+    function markerTransportHighlightSeekThresholdSec() {
+        return Math.max(markerNavStopEpsilonSec() * 4, 0.05);
+    }
+
+    function resetMarkerHighlightCrossQueue() {
+        markerHighlightCrossQueue.length = 0;
+        if (markerHighlightCrossRaf) {
+            cancelAnimationFrame(markerHighlightCrossRaf);
+            markerHighlightCrossRaf = 0;
+        }
+    }
+
+    function enqueueMarkerHighlightCrossIds(ids) {
+        if (!ids || !ids.length) return;
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            if (!id) continue;
+            if (markerHighlightCrossQueue[markerHighlightCrossQueue.length - 1] === id) {
+                continue;
+            }
+            markerHighlightCrossQueue.push(id);
+        }
+        while (markerHighlightCrossQueue.length > MARKER_HIGHLIGHT_CROSS_QUEUE_MAX) {
+            markerHighlightCrossQueue.shift();
+        }
+        drainMarkerHighlightCrossQueue();
+    }
+
+    function drainMarkerHighlightCrossQueue() {
+        if (markerHighlightCrossRaf) return;
+        const step = () => {
+            markerHighlightCrossRaf = 0;
+            if (!markerHighlightCrossQueue.length) return;
+            const id = markerHighlightCrossQueue.shift();
+            applyTransportMarkerHighlightStep(id);
+            if (markerHighlightCrossQueue.length) {
+                markerHighlightCrossRaf = requestAnimationFrame(step);
+            }
+        };
+        markerHighlightCrossRaf = requestAnimationFrame(step);
+    }
+
+    /**
+     * 再生中に prevT→t で通過したマーカー停止（点・範囲 In/Out）を時系列順に返す。
+     * 同一時刻は一覧で後ろの行（idx 大）を後に並べ、後着を最後にハイライトする。
+     */
+    function markerIdsCrossedBetweenSec(prevT, t, forward) {
+        if (!Number.isFinite(prevT) || !Number.isFinite(t)) return [];
+        const eps = 1e-9;
+        const hits = [];
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            const push = (sec) => {
+                if (!Number.isFinite(sec)) return;
+                const crossed = forward
+                    ? sec > prevT + eps && sec <= t + eps
+                    : sec < prevT - eps && sec >= t - eps;
+                if (crossed) hits.push({ id: m.id, sec: sec, idx: i });
+            };
+            if (m.type !== 'range') {
+                push(Number(m.timeSec));
+            } else {
+                push(Number(m.startSec));
+                if (markerHasOutTc(m)) push(Number(m.endSec));
+            }
+        }
+        hits.sort((a, b) => {
+            if (a.sec !== b.sec) return forward ? a.sec - b.sec : b.sec - a.sec;
+            return a.idx - b.idx;
+        });
+        const ids = [];
+        for (let i = 0; i < hits.length; i++) {
+            const id = hits[i].id;
+            if (ids[ids.length - 1] !== id) ids.push(id);
+        }
+        return ids;
+    }
+
+    function applyTransportMarkerHighlightStep(steppedId) {
+        if (steppedId != null && transportMarkerHighlightId !== steppedId) {
+            transportMarkerHighlightId = steppedId;
+            updateMarkerListRowClasses();
+        } else if (!isMarkerListPlaybackActive()) {
+            updateMarkerListRowClasses();
+        }
     }
 
     function updateTransportMarkerHighlight(transportSecOpt) {
@@ -2726,6 +2873,8 @@
                 transportMarkerHighlightId = null;
                 updateMarkerListRowClasses();
             }
+            lastTransportSecForMarkerHighlight = null;
+            resetMarkerHighlightCrossQueue();
             return;
         }
         if (!markerTimelineReady()) {
@@ -2733,26 +2882,57 @@
                 transportMarkerHighlightId = null;
                 updateMarkerListRowClasses();
             }
+            lastTransportSecForMarkerHighlight = null;
+            resetMarkerHighlightCrossQueue();
             return;
         }
         const t =
             transportSecOpt != null && Number.isFinite(transportSecOpt)
                 ? transportSecOpt
                 : currentTransportSec();
-        const steppedId = markerIdForTransportSec(t);
         if (
             transportMarkerHighlightId &&
             !currentMarkers.some((m) => m.id === transportMarkerHighlightId)
         ) {
             transportMarkerHighlightId = null;
+            lastTransportSecForMarkerHighlight = null;
+            resetMarkerHighlightCrossQueue();
             updateMarkerListRowClasses();
             return;
         }
-        if (steppedId != null && transportMarkerHighlightId !== steppedId) {
-            transportMarkerHighlightId = steppedId;
-            updateMarkerListRowClasses();
-        } else if (!isMarkerListPlaybackActive()) {
-            updateMarkerListRowClasses();
+
+        const playing = isMarkerListPlaybackActive();
+        if (!playing) {
+            resetMarkerHighlightCrossQueue();
+            lastTransportSecForMarkerHighlight = t;
+            applyTransportMarkerHighlightStep(markerIdForTransportSec(t));
+            return;
+        }
+
+        const prevT = lastTransportSecForMarkerHighlight;
+        if (!Number.isFinite(prevT)) {
+            lastTransportSecForMarkerHighlight = t;
+            applyTransportMarkerHighlightStep(markerIdForTransportSec(t));
+            return;
+        }
+
+        if (Math.abs(t - prevT) > markerTransportHighlightSeekThresholdSec()) {
+            resetMarkerHighlightCrossQueue();
+            lastTransportSecForMarkerHighlight = t;
+            applyTransportMarkerHighlightStep(markerIdForTransportSec(t));
+            return;
+        }
+
+        const forward = t >= prevT;
+        const crossedIds = markerIdsCrossedBetweenSec(prevT, t, forward);
+        lastTransportSecForMarkerHighlight = t;
+        if (crossedIds.length > 0) {
+            enqueueMarkerHighlightCrossIds(crossedIds);
+            return;
+        }
+        const at = markerIdForTransportSec(t);
+        if (at != null) {
+            applyTransportMarkerHighlightStep(at);
         }
     }
 
@@ -4117,6 +4297,7 @@
 
         if (!markerTableBody) return;
         markerTableBody.innerHTML = '';
+        lastMarkerListHighlightScrollId = null;
 
         if (!hasRows) {
             return;
@@ -4226,6 +4407,9 @@
         waveformLanesPointerInside = false;
         waveformMarkerHoverId = null;
         transportMarkerHighlightId = null;
+        lastTransportSecForMarkerHighlight = null;
+        resetMarkerHighlightCrossQueue();
+        lastMarkerListHighlightScrollId = null;
         pendingSessionMarkersForRestore = null;
         sessionMarkersRestorePayload = null;
         sessionMarkerMemoRestorePayload = null;
