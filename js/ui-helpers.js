@@ -34,7 +34,8 @@
     }
 
     const TRANSPORT_OPT_BOX_SELECTOR = {
-        playback: '.transport-opt-box--playback',
+        playback:
+            '.transport-bar--playback .transport-opt-box--playback, .transport-opt-box--playback',
         videoDelay: '.transport-opt-box--video-delay',
     };
 

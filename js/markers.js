@@ -1,5 +1,9 @@
     // マーカー（点・範囲）とコメント、表一覧・シークバー表示
     const markersByVideoKey = new Map();
+    const markerMemoByVideoKey = new Map();
+    let currentMarkerMemo = '';
+    let sessionMarkerMemoRestorePayload = null;
+    const MARKER_MEMO_COPY_DELIMITER = '---MEMO---';
     let currentMarkers = [];
     let pendingRangeStartSec = null;
     let activeMarkerId = null;
@@ -46,6 +50,10 @@
             return MARKER_SESSION_AUDIO_ONLY_KEY;
         }
         if (currentMarkers.length > 0) {
+            return MARKER_SESSION_AUDIO_ONLY_KEY;
+        }
+        const memoCached = markerMemoByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
+        if ((memoCached && String(memoCached).trim()) || hasMarkerMemoText()) {
             return MARKER_SESSION_AUDIO_ONLY_KEY;
         }
         if (
@@ -315,8 +323,36 @@
         insertMarkerLongPressStarted = false;
     }
 
+    function loadMarkerMemoForCurrentVideo(savedFromSession) {
+        const k = resolveMarkerCacheKey(
+            typeof savedFromSession === 'string' ? undefined : savedFromSession,
+        );
+        if (typeof savedFromSession === 'string') {
+            currentMarkerMemo = savedFromSession;
+            sessionMarkerMemoRestorePayload = null;
+            if (k) markerMemoByVideoKey.set(k, currentMarkerMemo);
+        } else if (k && markerMemoByVideoKey.has(k)) {
+            currentMarkerMemo = markerMemoByVideoKey.get(k) || '';
+            sessionMarkerMemoRestorePayload = null;
+        } else if (
+            sessionMarkerMemoRestorePayload != null &&
+            String(sessionMarkerMemoRestorePayload)
+        ) {
+            currentMarkerMemo = String(sessionMarkerMemoRestorePayload);
+            if (k) markerMemoByVideoKey.set(k, currentMarkerMemo);
+            sessionMarkerMemoRestorePayload = null;
+        } else {
+            currentMarkerMemo = '';
+        }
+        syncMarkerMemoTextarea();
+        updateMarkerClearAllButton();
+    }
+
+    window.loadMarkerMemoForCurrentVideo = loadMarkerMemoForCurrentVideo;
+
     function prepareMarkersForVideoSwitch() {
         saveMarkersToCache();
+        saveMarkerMemoToCache();
         resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
@@ -342,15 +378,26 @@
         pendingSessionMarkersForRestore = null;
     }
 
-    /** セッション行の markers をメモリへ（音声のみ復元の本命パス） */
+    /** セッション行の markers / markerMemo をメモリへ（音声のみ復元の本命パス） */
     function restoreMarkersFromSessionRow(row) {
+        let did = false;
         const arr =
             row && Array.isArray(row.markers) && row.markers.length > 0
                 ? row.markers
                 : null;
-        if (!arr) return false;
-        stashSessionMarkersRestorePayload(arr);
-        applyMarkersSnapshotToMemory(arr, MARKER_SESSION_AUDIO_ONLY_KEY);
+        if (arr) {
+            stashSessionMarkersRestorePayload(arr);
+            applyMarkersSnapshotToMemory(arr, MARKER_SESSION_AUDIO_ONLY_KEY);
+            did = true;
+        }
+        if (row && typeof row.markerMemo === 'string') {
+            sessionMarkerMemoRestorePayload = row.markerMemo;
+            loadMarkerMemoForCurrentVideo(row.markerMemo);
+            did = true;
+        } else {
+            loadMarkerMemoForCurrentVideo();
+        }
+        if (!did) return false;
         if (typeof syncAudioOnlyMarkersUi === 'function') {
             syncAudioOnlyMarkersUi();
         } else {
@@ -399,6 +446,7 @@
             renderSeekBarMarkers();
             updateMarkerRangeHint();
             updateMarkerCommentOverlay();
+            loadMarkerMemoForCurrentVideo();
             if (typeof updateSessionAllClearButton === 'function') {
                 updateSessionAllClearButton();
             }
@@ -429,6 +477,7 @@
         renderSeekBarMarkers();
         updateMarkerRangeHint();
         updateMarkerCommentOverlay();
+        loadMarkerMemoForCurrentVideo();
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }
@@ -900,8 +949,53 @@
         updateMarkerClearAllButton();
     }
 
+    function getCurrentMarkerMemoText() {
+        if (markerMemoTextarea && typeof markerMemoTextarea.value === 'string') {
+            return markerMemoTextarea.value;
+        }
+        return currentMarkerMemo || '';
+    }
+
+    function syncMarkerMemoTextarea() {
+        if (!markerMemoTextarea) return;
+        const ready = markerTimelineReady();
+        markerMemoTextarea.disabled = !ready;
+        if (document.activeElement !== markerMemoTextarea) {
+            markerMemoTextarea.value = currentMarkerMemo || '';
+        }
+    }
+
+    function setMarkerMemoText(text, opt) {
+        currentMarkerMemo = String(text ?? '');
+        if (!(opt && opt.skipTextareaSync)) {
+            syncMarkerMemoTextarea();
+        }
+    }
+
+    function saveMarkerMemoToCache() {
+        const k = getVideoMarkerKey() || resolveMarkerCacheKey();
+        if (k) markerMemoByVideoKey.set(k, currentMarkerMemo);
+    }
+
+    function getMarkerMemoSnapshot() {
+        return getCurrentMarkerMemoText();
+    }
+
+    window.getMarkerMemoSnapshot = getMarkerMemoSnapshot;
+
+    function hasMarkerMemoText() {
+        return !!String(getCurrentMarkerMemoText() || '').trim();
+    }
+
     function hasMarkerContentToClear() {
         if (currentMarkers.length > 0 || pendingRangeStartSec != null) return true;
+        if (hasMarkerMemoText()) return true;
+        if (
+            sessionMarkerMemoRestorePayload &&
+            String(sessionMarkerMemoRestorePayload).trim()
+        ) {
+            return true;
+        }
         return hasSessionMarkersPendingRestore();
     }
 
@@ -1023,8 +1117,12 @@
             markerClearAllBtn.disabled = !(timelineReady && hasMarkerContentToClear());
         }
         if (markerCopyBtn) {
-            markerCopyBtn.disabled = !(timelineReady && currentMarkers.length > 0);
+            markerCopyBtn.disabled = !(
+                timelineReady &&
+                (currentMarkers.length > 0 || hasMarkerMemoText())
+            );
         }
+        syncMarkerMemoTextarea();
         const pasteBtn = document.getElementById('markerPasteBtn');
         if (pasteBtn) {
             pasteBtn.disabled = !timelineReady;
@@ -1131,6 +1229,25 @@
         return scanFrames(0, maxFrame);
     }
 
+    function splitMarkersCopyPasteText(text) {
+        const raw = String(text ?? '');
+        const delim = '\n' + MARKER_MEMO_COPY_DELIMITER + '\n';
+        const idx = raw.indexOf(delim);
+        if (idx >= 0) {
+            return {
+                markersText: raw.slice(0, idx),
+                memoText: raw.slice(idx + delim.length),
+            };
+        }
+        if (raw.startsWith(MARKER_MEMO_COPY_DELIMITER + '\n')) {
+            return {
+                markersText: '',
+                memoText: raw.slice(MARKER_MEMO_COPY_DELIMITER.length + 1),
+            };
+        }
+        return { markersText: raw, memoText: null };
+    }
+
     /** マーカー一覧表（Length 列なし）をタブ区切り文字列にする */
     function buildMarkersCopyTsvText() {
         const headers = ['#', 'In', 'Out', 'Feedback'];
@@ -1147,20 +1264,37 @@
         return lines.join('\n');
     }
 
-    async function copyMarkersToClipboard() {
+    function buildMarkersCopyClipboardText() {
+        const memo = getCurrentMarkerMemoText();
+        const memoTrim = String(memo || '').trim();
         if (!currentMarkers.length) {
+            if (!memoTrim) return '';
+            return MARKER_MEMO_COPY_DELIMITER + '\n' + memo;
+        }
+        let text = buildMarkersCopyTsvText();
+        if (memoTrim) {
+            text += '\n' + MARKER_MEMO_COPY_DELIMITER + '\n' + memo;
+        }
+        return text;
+    }
+
+    async function copyMarkersToClipboard() {
+        const text = buildMarkersCopyClipboardText();
+        if (!text) {
             writeLog('Marker: nothing to copy');
             return;
         }
-        const text = buildMarkersCopyTsvText();
         try {
             if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
                 throw new Error('clipboard unavailable');
             }
             await navigator.clipboard.writeText(text);
-            writeLog(
-                'Marker: copied to clipboard (' + currentMarkers.length + ' row(s))',
-            );
+            const parts = [];
+            if (currentMarkers.length) {
+                parts.push(currentMarkers.length + ' row(s)');
+            }
+            if (hasMarkerMemoText()) parts.push('memo');
+            writeLog('Marker: copied to clipboard (' + parts.join(', ') + ')');
             flashSeekHint('Markers', 'Copied', 'notice');
         } catch (err) {
             writeLog('Marker: clipboard copy failed');
@@ -1368,7 +1502,22 @@
         return { ok: true, markers };
     }
 
-    function applyMarkersPasteSnapshot(arr) {
+    function applyMarkerMemoPasteText(memoText, opt) {
+        if (memoText == null) return;
+        setMarkerMemoText(memoText);
+        saveMarkerMemoToCache();
+        if (!(opt && opt.skipPersist)) {
+            if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+            if (typeof flushPersistSessionNow === 'function') {
+                void flushPersistSessionNow().catch(() => {});
+            }
+        }
+        updateMarkerClearAllButton();
+    }
+
+    function applyMarkersPasteSnapshot(arr, opt) {
         pendingRangeStartSec = null;
         activeMarkerId = null;
         sessionMarkersRestorePayload = null;
@@ -1378,6 +1527,9 @@
             applyMarkersDisplayVisibility();
         }
         setMarkersFromSnapshot(arr);
+        if (opt && opt.memoText != null) {
+            applyMarkerMemoPasteText(opt.memoText, { skipPersist: true });
+        }
         if (typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
@@ -1385,7 +1537,11 @@
             void flushPersistSessionNow().catch(() => {});
         }
         updateMarkerClearAllButton();
-        writeLog('Marker: pasted from clipboard (' + arr.length + ' item(s))');
+        const parts = [arr.length + ' item(s)'];
+        if (opt && opt.memoText != null && String(opt.memoText).trim()) {
+            parts.push('memo');
+        }
+        writeLog('Marker: pasted from clipboard (' + parts.join(', ') + ')');
         flashSeekHint('Markers', 'Pasted', 'notice');
     }
 
@@ -1488,14 +1644,33 @@
                 );
                 return;
             }
-            const parsed = parseMarkersPasteTsv(text);
+            const split = splitMarkersCopyPasteText(text);
+            const markersPart = String(split.markersText || '').trim();
+            const memoPart = split.memoText;
+            if (!markersPart && memoPart == null) {
+                showMarkersPasteFormatError(
+                    '貼り付けデータが空です。Copy でコピーした表を貼り付けてください。',
+                );
+                return;
+            }
+            if (!markersPart && memoPart != null) {
+                const confirmedMemo = await confirmMarkersPasteReplace(0);
+                if (!confirmedMemo) return;
+                applyMarkerMemoPasteText(memoPart);
+                writeLog('Marker: memo pasted from clipboard');
+                flashSeekHint('Markers', 'Memo pasted', 'notice');
+                return;
+            }
+            const parsed = parseMarkersPasteTsv(split.markersText);
             if (!parsed.ok) {
                 showMarkersPasteFormatError(parsed.error);
                 return;
             }
             const confirmed = await confirmMarkersPasteReplace(parsed.markers.length);
             if (!confirmed) return;
-            applyMarkersPasteSnapshot(parsed.markers);
+            applyMarkersPasteSnapshot(parsed.markers, {
+                memoText: memoPart != null ? memoPart : undefined,
+            });
         } catch (err) {
             writeLog(
                 'Marker: paste failed — ' + (err && err.message ? err.message : String(err)),
@@ -1512,18 +1687,28 @@
             return;
         }
         const n = currentMarkers.length;
+        const hadMemo = hasMarkerMemoText();
         resetInsertMarkerPressState();
         pendingRangeStartSec = null;
         activeMarkerId = null;
+        sessionMarkerMemoRestorePayload = null;
         currentMarkers = [];
+        setMarkerMemoText('');
         if (markersDisplayHidden) {
             markersDisplayHidden = false;
             applyMarkersDisplayVisibility();
         }
         const k = getVideoMarkerKey();
-        if (k) markersByVideoKey.set(k, []);
+        if (k) {
+            markersByVideoKey.set(k, []);
+            markerMemoByVideoKey.set(k, '');
+        }
         persistMarkersAfterChange();
-        writeLog('Marker: all cleared (' + n + ' item(s))');
+        saveMarkerMemoToCache();
+        const parts = [];
+        if (n) parts.push(n + ' item(s)');
+        if (hadMemo) parts.push('memo');
+        writeLog('Marker: all cleared (' + parts.join(', ') + ')');
         flashSeekHint('Markers', 'Cleared', 'notice');
     }
 
@@ -4043,8 +4228,12 @@
         transportMarkerHighlightId = null;
         pendingSessionMarkersForRestore = null;
         sessionMarkersRestorePayload = null;
+        sessionMarkerMemoRestorePayload = null;
         currentMarkers = [];
+        currentMarkerMemo = '';
         markersByVideoKey.clear();
+        markerMemoByVideoKey.clear();
+        syncMarkerMemoTextarea();
         renderMarkerList();
         renderSeekBarMarkers();
         updateMarkerRangeHint();
@@ -4201,7 +4390,7 @@
                     typeof requestAppConfirm === 'function'
                         ? requestAppConfirm(
                               'Markers Clear',
-                              'すべてのマーカーが削除されます。よろしいですか？',
+                              'すべてのマーカーと Memo が削除されます。よろしいですか？',
                               'Markers Clear: cancelled',
                           )
                         : Promise.resolve(false);
@@ -4211,7 +4400,18 @@
                 });
             });
         }
+        if (markerMemoTextarea) {
+            markerMemoTextarea.addEventListener('input', () => {
+                currentMarkerMemo = markerMemoTextarea.value;
+                saveMarkerMemoToCache();
+                updateMarkerClearAllButton();
+                if (typeof schedulePersistSession === 'function') {
+                    schedulePersistSession();
+                }
+            });
+        }
         updateMarkerHideViewButton();
+        syncMarkerMemoTextarea();
         if (audioWaveformMarkers) {
             audioWaveformMarkers.replaceChildren();
             audioWaveformMarkers.style.display = 'none';

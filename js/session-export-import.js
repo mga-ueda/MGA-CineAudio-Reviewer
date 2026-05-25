@@ -300,6 +300,9 @@
                 mc.total +
                 (mc.total ? ' (' + mc.point + ' point, ' + mc.range + ' range)' : ''),
         );
+        if (row.markerMemo && String(row.markerMemo).trim()) {
+            writeLog('Import Review: session memo restored');
+        }
         if (row.rangeLoop && Number.isFinite(row.rangeLoop.inSec)) {
             writeLog(
                 'Import Review: range loop ' +
@@ -514,6 +517,7 @@
             mName: row.mName,
             mLastModified: row.mLastModified,
             markers: row.markers,
+            markerMemo: row.markerMemo,
             rangeLoop: row.rangeLoop,
             playbackRegion: row.playbackRegion,
             mix: row.mix,
@@ -693,6 +697,7 @@
             mName: sess.mName,
             mLastModified: sess.mLastModified,
             markers: sess.markers,
+            markerMemo: sess.markerMemo,
             rangeLoop: sess.rangeLoop,
             playbackRegion: sess.playbackRegion,
             mix: sess.mix,

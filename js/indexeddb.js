@@ -118,6 +118,16 @@
                 delete row.markers;
             }
         }
+        if (typeof getMarkerMemoSnapshot === 'function') {
+            const memo = getMarkerMemoSnapshot();
+            if (String(memo || '').trim()) {
+                row.markerMemo = memo;
+            } else if (sessionRowHasMarkerMemo(row)) {
+                /* 既存行の markerMemo は維持 */
+            } else {
+                delete row.markerMemo;
+            }
+        }
         if (!row.mBlob) {
             row.audioOnlySession = true;
             if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
@@ -179,6 +189,10 @@
         return Array.isArray(row.markers) && row.markers.length > 0;
     }
 
+    function sessionRowHasMarkerMemo(row) {
+        return !!(row && typeof row.markerMemo === 'string' && row.markerMemo.trim());
+    }
+
     function sessionRowHasRestorableContent(row) {
         if (!row || typeof row !== 'object') return false;
         if (row.mBlob && (row.mBlob.size || 0) > 0) return true;
@@ -188,7 +202,7 @@
         ) {
             return true;
         }
-        return sessionRowHasMarkers(row);
+        return sessionRowHasMarkers(row) || sessionRowHasMarkerMemo(row);
     }
 
     async function mergePrevExtraTracksDuringRestore(row) {
@@ -212,6 +226,17 @@
         } catch (_) {}
     }
 
+    async function mergePrevMarkerMemoDuringRestore(row) {
+        if (!sessionRestoreInProgress) return;
+        if (sessionRowHasMarkerMemo(row)) return;
+        try {
+            const prev = await idbGet(IDB_KEY_LAST);
+            if (prev && sessionRowHasMarkerMemo(prev)) {
+                row.markerMemo = prev.markerMemo;
+            }
+        } catch (_) {}
+    }
+
     async function attachWaveformSessionFieldsToRow(row) {
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
@@ -221,7 +246,16 @@
                 row.markers = [];
             }
         }
+        if (typeof getMarkerMemoSnapshot === 'function') {
+            const memo = getMarkerMemoSnapshot();
+            if (String(memo || '').trim()) {
+                row.markerMemo = memo;
+            } else if (!sessionRowHasMarkerMemo(row)) {
+                delete row.markerMemo;
+            }
+        }
         await mergePrevMarkersDuringRestore(row);
+        await mergePrevMarkerMemoDuringRestore(row);
         if (typeof getRangeLoopPersistSnapshot === 'function') {
             const rangeLoop = getRangeLoopPersistSnapshot();
             if (rangeLoop) row.rangeLoop = rangeLoop;
@@ -679,6 +713,7 @@
         loadVideoFile(f, {
             skipPersist: true,
             markers: Array.isArray(row.markers) ? row.markers : undefined,
+            markerMemo: typeof row.markerMemo === 'string' ? row.markerMemo : undefined,
             rangeLoop:
                 row.rangeLoop &&
                 Number.isFinite(row.rangeLoop.inSec) &&

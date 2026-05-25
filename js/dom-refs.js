@@ -38,6 +38,7 @@
     const markerCopyBtn = document.getElementById('markerCopyBtn');
     const markerPasteBtn = document.getElementById('markerPasteBtn');
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
+    const markerMemoTextarea = document.getElementById('markerMemoTextarea');
     const videoClearBtn = document.getElementById('videoClearBtn');
     const audioWaveformPanel = document.getElementById('audioWaveformPanel');
     const audioWaveformCanvas = document.getElementById('audioWaveformCanvas');

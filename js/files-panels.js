@@ -113,15 +113,45 @@
         }
     }
 
+    /** 実ピクセル比に合わせて枠を決め、object-fit: contain の上下黒帯を出さない */
+    function syncVideoFrameAspectRatio() {
+        const frame =
+            typeof frameMain !== 'undefined' && frameMain
+                ? frameMain
+                : document.getElementById('frameMain');
+        if (!frame) return;
+        const v = typeof videoMain !== 'undefined' ? videoMain : null;
+        const w = v && v.videoWidth > 0 ? v.videoWidth : 0;
+        const h = v && v.videoHeight > 0 ? v.videoHeight : 0;
+        if (w > 0 && h > 0) {
+            frame.style.aspectRatio = w + ' / ' + h;
+        } else {
+            frame.style.removeProperty('aspect-ratio');
+        }
+    }
+
+    function resetVideoFrameAspectRatio() {
+        const frame =
+            typeof frameMain !== 'undefined' && frameMain
+                ? frameMain
+                : document.getElementById('frameMain');
+        if (!frame) return;
+        frame.style.removeProperty('aspect-ratio');
+    }
+
+    window.syncVideoFrameAspectRatio = syncVideoFrameAspectRatio;
+
     function updatePanelInfoLine() {
         if (!fileMain) {
             infoMain.hidden = true;
             setInfoMainMetaText('');
+            resetVideoFrameAspectRatio();
             if (typeof refreshVideoDriftPanelStat === 'function') {
                 refreshVideoDriftPanelStat();
             }
             return;
         }
+        syncVideoFrameAspectRatio();
         const mod = 'Modified: ' + formatFileDateEn(fileMain.lastModified);
         const d = getDuration(videoMain);
         if (!d) {
@@ -167,6 +197,7 @@
         videoMain.load();
         nameMain.textContent = 'Not Loaded';
         setLoaded(panelMain, false);
+        resetVideoFrameAspectRatio();
     }
 
     /** Unload video only; markers and waveform lanes (incl. extra tracks) stay. */

@@ -1117,6 +1117,11 @@
                 }
             });
         loadMarkersForCurrentVideo(opt && opt.markers);
+        if (typeof loadMarkerMemoForCurrentVideo === 'function') {
+            loadMarkerMemoForCurrentVideo(
+                opt && typeof opt.markerMemo === 'string' ? opt.markerMemo : undefined,
+            );
+        }
         if (!opt || !opt.skipPersist) {
             schedulePersistSession();
         }

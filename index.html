@@ -73,12 +73,52 @@
                 <p class="panel-info-line panel-info-line--stacked" id="infoMain" hidden>
                     <span class="panel-info-line__row" id="infoMainMeta"></span>
                 </p>
-                <div class="video-frame" id="frameMain">
-                    <p class="file-drop-empty-hint" id="videoDropEmptyHint">Drop a video, or video and extra audio together</p>
-                    <video id="videoMain" playsinline preload="auto"></video>
-                    <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
-                    <div class="marker-comment-overlay marker-comment-overlay--point" id="markerCommentOverlayPoint" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
-                    <div class="marker-comment-overlay marker-comment-overlay--range" id="markerCommentOverlayRange" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
+                <div class="video-panel__stage">
+                    <div class="video-frame" id="frameMain">
+                        <p class="file-drop-empty-hint" id="videoDropEmptyHint">Drop a video, or video and extra audio together</p>
+                        <video id="videoMain" playsinline preload="auto"></video>
+                        <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
+                        <div class="marker-comment-overlay marker-comment-overlay--point" id="markerCommentOverlayPoint" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
+                        <div class="marker-comment-overlay marker-comment-overlay--range" id="markerCommentOverlayRange" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
+                    </div>
+                </div>
+                <div class="video-panel__status" aria-label="Playback status">
+                    <div class="video-panel__status-tc transport-time-row" aria-label="Playhead position">
+                        <span class="time-display transport-opt-value" id="currentTime">00:00:00:00</span>
+                        <span class="transport-time-row__sep" aria-hidden="true">-</span>
+                        <span class="time-display transport-opt-value" id="totalTime">00:00:00:00</span>
+                    </div>
+                    <div class="transport-opt-box transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
+                        <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
+                            <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> f</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div class="transport-bar transport-bar--playback" id="playerPlaybackBar">
+                <div class="transport-bar__row transport-bar__row--playback" role="group" aria-label="Playback controls">
+                    <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
+                        <div class="transport-opt-cell transport-opt-cell--playback">
+                            <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
+                                <input type="checkbox" id="loopPlaybackCheckbox" checked>
+                                <span>Loop</span>
+                            </label>
+                        </div>
+                    </div>
+                    <a
+                        href="guide.html"
+                        id="transportGuideLink"
+                        class="transport-shortcuts-link transport-opt-chip"
+                        title="Open How To in a new window"
+                    >How To</a>
+                    <a
+                        href="shortcuts.html"
+                        id="transportShortcutsLink"
+                        class="transport-shortcuts-link transport-opt-chip"
+                        title="Open Shortcut reference in a new window"
+                    >Shortcut</a>
+                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session (Alt+Shift+Ctrl+Del)">All Clear</button>
+                    <button type="button" id="playStopBtn" disabled>Play</button>
                 </div>
             </div>
         </div>
@@ -112,6 +152,19 @@
                     </table>
                 </div>
                 <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます（<kbd>Ins</kbd> ポイント、<kbd>[</kbd> <kbd>]</kbd> レンジ）</p>
+                <div class="marker-panel__memo">
+                    <label class="marker-panel__memo-label" for="markerMemoTextarea">Memo</label>
+                    <textarea
+                        id="markerMemoTextarea"
+                        class="marker-panel__memo-textarea"
+                        rows="6"
+                        spellcheck="true"
+                        wrap="soft"
+                        aria-label="Session memo"
+                        placeholder="自由記入（セッション保存・Import/Export 対象）"
+                        disabled
+                    ></textarea>
+                </div>
             </div>
         </aside>
     </div>
@@ -196,43 +249,8 @@
         </div>
     </section>
 
+    <div class="layout-narrow">
     <div class="transport-bar">
-        <div class="transport-bar__row transport-bar__row--primary">
-            <div class="transport-time-row transport-opt-chip" aria-label="Playhead position">
-                <span class="time-display transport-opt-value" id="currentTime">00:00:00:00</span>
-                <span class="transport-time-row__sep" aria-hidden="true">-</span>
-                <span class="time-display transport-opt-value" id="totalTime">00:00:00:00</span>
-            </div>
-            <div class="transport-opt-box transport-opt-chip transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
-                <div class="transport-opt-cell transport-opt-cell--video-drift">
-                    <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
-                        <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> f</span>
-                    </span>
-                </div>
-            </div>
-            <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
-                <div class="transport-opt-cell transport-opt-cell--playback">
-                    <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
-                        <input type="checkbox" id="loopPlaybackCheckbox" checked>
-                        <span>Loop</span>
-                    </label>
-                </div>
-            </div>
-            <a
-                href="guide.html"
-                id="transportGuideLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open How To in a new window"
-            >How To</a>
-            <a
-                href="shortcuts.html"
-                id="transportShortcutsLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open Shortcut reference in a new window"
-            >Shortcut</a>
-            <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session (Alt+Shift+Ctrl+Del)">All Clear</button>
-            <button type="button" id="playStopBtn" disabled>Play</button>
-        </div>
         <div class="transport-bar__row transport-bar__row--links">
             <div class="transport-opt-box transport-opt-chip transport-opt-box--video-delay">
                 <div class="transport-opt-cell transport-opt-cell--video-delay">
@@ -295,6 +313,7 @@
                 </select>
             </div>
         </div>
+    </div>
     </div>
 
     <section class="review-mix-monitor layout-narrow" id="reviewMixMonitor" aria-label="Spectrum and level meters">
