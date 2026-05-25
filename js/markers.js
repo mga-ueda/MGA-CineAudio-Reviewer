@@ -2405,13 +2405,16 @@
         );
     }
 
+    /** Shift+Equal は US 配列で「+」文字のための Shift。±1秒ではなく ±1f として扱う */
+    function markerTcNudgeBySeconds(ev, plus) {
+        if (!markerTcNudgeShiftHeld(ev)) return false;
+        if (plus && ev.code === 'Equal') return false;
+        return true;
+    }
+
     function handleMarkerPanelTcNudgeKeydown(ev) {
         if (ev.ctrlKey || ev.altKey || ev.metaKey) return false;
-        const shift = markerTcNudgeShiftHeld(ev);
-        const plus =
-            ev.code === 'NumpadAdd' ||
-            ev.key === '+' ||
-            (ev.code === 'Equal' && shift);
+        const plus = ev.code === 'NumpadAdd' || ev.key === '+';
         const minus = ev.code === 'NumpadSubtract' || ev.key === '-' || ev.code === 'Minus';
         if (!plus && !minus) return false;
         if (!markerTimelineReady()) return false;
@@ -2443,7 +2446,8 @@
         if (!m) return false;
 
         const sign = plus ? 1 : -1;
-        if (nudgeMarkerTcByEdge(m, edge, sign, shift, input)) {
+        const bySeconds = markerTcNudgeBySeconds(ev, plus);
+        if (nudgeMarkerTcByEdge(m, edge, sign, bySeconds, input)) {
             ev.preventDefault();
             return true;
         }
