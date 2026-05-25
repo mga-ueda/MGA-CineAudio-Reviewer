@@ -4205,9 +4205,13 @@
         return false;
     }
 
-    function isMainDropZoneTarget(target) {
+    /** 波形エリア全体へのドロップ（Ex レーン指定なし）— 複数ファイルはトラックごとに割当 */
+    function isBulkOneFilePerTrackDropTarget(target) {
         if (!target || !target.closest) return false;
-        return !!target.closest('#main-drop-zone');
+        if (extraSlotFromDropTarget(target) >= 0) return false;
+        return !!target.closest(
+            '#audioWaveformComposite, #audioWaveformLanesTracks, #audioWaveformLanesInner, #audioWaveformLaneVideo, #audioWaveformTrack, #audioWaveformPanel',
+        );
     }
 
     function resolveExtraSlotForAudioDrop(target) {
@@ -4235,14 +4239,14 @@
             writeLog('Extra audio: no playable audio in selection');
             return;
         }
-        if (isMainDropZoneTarget(dropTarget)) {
+        if (isBulkOneFilePerTrackDropTarget(dropTarget)) {
             const start = firstEmptyExtraSlot();
             if (start < 0) {
                 writeLog('Extra audio: all Ex slots are full — drop ignored');
                 return;
             }
             writeLog(
-                'Extra audio: drop zone — ' +
+                'Extra audio: waveform area — ' +
                     audios.length +
                     ' file(s) → one track each',
             );
@@ -4264,7 +4268,7 @@
 
     window.assignExtraAudioFiles = assignExtraAudioFiles;
     window.assignExtraAudioFilesFromDrop = assignExtraAudioFilesFromDrop;
-    window.isMainDropZoneTarget = isMainDropZoneTarget;
+    window.isBulkOneFilePerTrackDropTarget = isBulkOneFilePerTrackDropTarget;
     window.revealNextExtraTrackLane = revealNextExtraTrackLane;
     window.syncExtraLaneVisibilityAfterSessionRestore =
         syncExtraLaneVisibilityAfterSessionRestore;

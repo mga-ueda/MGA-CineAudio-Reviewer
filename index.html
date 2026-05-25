@@ -59,19 +59,12 @@
         </div>
     </header>
 
-    <div id="main-drop-zone" tabindex="0" role="button" aria-label="動画・追加音声ファイルをドロップして読み込み">
-        <strong class="drop-zone-title">レビューする動画・追加音声（WAV 等）をドロップ（またはクリックで選択）</strong>
-        <p class="drop-zone-note drop-zone-note--batch">動画と追加音声を<strong>まとめて</strong>ここにドロップ（または選択）すると、種類ごとに自動で読み込みます。</p>
-        <p class="drop-zone-note drop-zone-note--targets">個別に読み込む場合：動画は<strong>映像エリア</strong>へ、追加音声は<strong>音声トラックエリア（波形表示枠）</strong>へそれぞれドロップできます。</p>
-        <p class="drop-zone-note drop-zone-note--tracks">音声トラックエリアは<strong>4レーン</strong>（動画音声の Video Audio ＋ 追加用 Ex 1〜3）。ここへまとめてドロップした追加音声は<strong>ファイルごとに別トラック</strong>へ割り当てます（最大3トラック）。空きトラックが無い場合は読み込まれません。手動でトラックを増やすときは各 Ex レーン下の<strong>+ Add Track</strong>を使います。</p>
-        <p class="drop-zone-note">動画は<strong>ブラウザが再生できる形式</strong>、追加音声は <strong>WAV / FLAC / MP3 等</strong>。Google Chrome の利用を推奨します。</p>
-        <p class="drop-zone-note drop-zone-note--privacy">動画・音声は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。</p>
-    </div>
+    <p class="app-header-note app-header-note--privacy">動画・音声は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。</p>
     </div>
 
     <div class="player-stage layout-narrow" id="playerStage">
         <div class="player-stage__main" id="playerStageMain">
-            <div class="video-panel file-drop-target file-drop-target--video" id="panelMain" data-side="main" title="動画ファイルをドロップして読み込み">
+            <div class="video-panel file-drop-target file-drop-target--both" id="panelMain" data-side="main" title="動画・追加音声ファイルをドロップして読み込み">
                 <div class="video-panel__head-row">
                     <p class="video-panel-label">Video</p>
                     <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="Unload video">Clear</button>
@@ -81,6 +74,7 @@
                     <span class="panel-info-line__row" id="infoMainMeta"></span>
                 </p>
                 <div class="video-frame" id="frameMain">
+                    <p class="file-drop-empty-hint" id="videoDropEmptyHint">Drop a video, or video and extra audio together</p>
                     <video id="videoMain" playsinline preload="auto"></video>
                     <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
                     <div class="marker-comment-overlay marker-comment-overlay--point" id="markerCommentOverlayPoint" hidden aria-hidden="true"><span class="marker-comment-overlay__text"></span></div>
@@ -123,7 +117,7 @@
     </div>
 
     <div class="layout-narrow">
-    <section class="audio-waveform-composite file-drop-target file-drop-target--audio" id="audioWaveformComposite" aria-label="音声波形" title="追加音声ファイルをドロップして読み込み">
+    <section class="audio-waveform-composite file-drop-target file-drop-target--both" id="audioWaveformComposite" aria-label="音声波形" title="動画・追加音声ファイルをドロップして読み込み">
         <div class="audio-waveform-composite__grid">
             <div class="audio-waveform-composite__sidebar">
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
@@ -160,6 +154,7 @@
                 role="presentation"
             >
                 <div class="audio-waveform-composite__lanes-inner" id="audioWaveformLanesInner">
+                <p class="file-drop-empty-hint file-drop-empty-hint--audio" id="audioDropEmptyHint">Drop extra audio here</p>
                 <div class="audio-waveform-lane audio-waveform-lane--video" id="audioWaveformLaneVideo">
                     <div class="audio-waveform-lane__track" id="audioWaveformTrack">
                         <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>

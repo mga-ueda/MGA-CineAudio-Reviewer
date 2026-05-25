@@ -28,8 +28,8 @@
             window.assignExtraAudioFilesFromDrop(audios, dropTarget);
         } else if (typeof window.assignExtraAudioFiles === 'function') {
             const onePerTrack =
-                typeof window.isMainDropZoneTarget === 'function' &&
-                window.isMainDropZoneTarget(dropTarget);
+                typeof window.isBulkOneFilePerTrackDropTarget === 'function' &&
+                window.isBulkOneFilePerTrackDropTarget(dropTarget);
             window.assignExtraAudioFiles(
                 audios,
                 undefined,
@@ -133,25 +133,21 @@
         }
     }
 
-    bindFileDropTarget(dropZone, { kind: 'both', logLabel: 'Drop zone' });
-
-    dropZone.addEventListener('click', () => {
+    function openFilePickerFromDropArea(label) {
         pauseTransportBeforeOpenFilePicker();
-        writeLog('Drop zone: click -> open file picker');
+        writeLog(label + ': open file picker');
         filePicker.click();
-    });
-    dropZone.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            pauseTransportBeforeOpenFilePicker();
-            writeLog('Drop zone: Enter -> open file picker');
-            filePicker.click();
-        }
-    });
+    }
 
-    bindFileDropTarget(panelMain, { kind: 'video', logLabel: 'Video panel' });
+    bindFileDropTarget(panelMain, { kind: 'both', logLabel: 'Video panel' });
+    if (frameMain) {
+        frameMain.addEventListener('click', () => {
+            if (panelMain && panelMain.classList.contains('loaded')) return;
+            openFilePickerFromDropArea('Video area');
+        });
+    }
     bindFileDropTarget(audioWaveformComposite, {
-        kind: 'audio',
+        kind: 'both',
         logLabel: 'Waveform panel',
     });
     if (typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack) {
@@ -196,7 +192,6 @@
     document.addEventListener('drop', (e) => {
         if (!e.dataTransfer || !e.dataTransfer.files || e.dataTransfer.files.length === 0) return;
         if (isTypingTarget(e.target)) return;
-        if (dropZone && dropZone.contains(e.target)) return;
         if (panelMain && panelMain.contains(e.target)) return;
         if (audioWaveformComposite && audioWaveformComposite.contains(e.target)) return;
         e.preventDefault();

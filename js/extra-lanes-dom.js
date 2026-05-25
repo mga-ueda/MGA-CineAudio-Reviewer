@@ -69,7 +69,7 @@
         wrap.innerHTML =
             '<div class="audio-waveform-lane__track" id="extraAudioTrack' +
             slot +
-            '" title="追加音声（ドロップエリアまたは波形枠から読み込み）">' +
+            '" title="追加音声（波形枠へドロップして読み込み）">' +
             '<div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>' +
             '<canvas id="extraAudioCanvas' +
             slot +
