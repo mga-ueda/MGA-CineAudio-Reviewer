@@ -14,9 +14,9 @@
             --accent-glow: rgba(196, 30, 58, 0.5);
             --accent-glow-weak: rgba(196, 30, 58, 0.14);
             --accent-border: rgba(230, 100, 120, 0.45);
-            --accent-track-1: #1c070a;
-            --accent-track-2: #300810;
-            --accent-track-3: #4a0c18;
+            --accent-track-1: #2a090e;
+            --accent-track-2: #451018;
+            --accent-track-3: #641824;
             --transport-opt-font-size: 0.88em;
             --transport-opt-label-color: #9aa6bc;
             --transport-opt-value-color: var(--accent-ink);
@@ -1535,10 +1535,10 @@
         .audio-waveform-lane-meta--active .audio-waveform-lane-meta__title {
             background: linear-gradient(
                 90deg,
-                rgba(232, 56, 88, 0.38) 0%,
-                rgba(196, 30, 58, 0.28) 32%,
-                rgba(80, 12, 24, 0.2) 62%,
-                rgba(0, 0, 0, 0.28) 100%
+                rgba(255, 80, 104, 0.46) 0%,
+                rgba(228, 48, 72, 0.36) 32%,
+                rgba(120, 20, 36, 0.28) 62%,
+                rgba(36, 8, 14, 0.32) 100%
             );
             color: #ffe8ec;
             box-shadow:
@@ -2434,11 +2434,11 @@
                 var(--accent-track-1) 0%,
                 var(--accent-track-2) 21%,
                 var(--accent-track-3) 29%,
-                #140508 42%,
+                #1c0608 42%,
                 var(--accent-track-1) 50%,
                 var(--accent-track-2) 71%,
                 var(--accent-track-3) 79%,
-                #140508 92%,
+                #1c0608 92%,
                 var(--accent-track-1) 100%
             );
             background-size: 200% 100%;

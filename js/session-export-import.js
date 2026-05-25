@@ -1155,14 +1155,22 @@
             return true;
         }
 
-        if (e.altKey) return false;
-        if (!(e.ctrlKey || e.metaKey) || !e.shiftKey) return false;
-        if (e.code === 'KeyI') {
+        if (
+            e.altKey &&
+            e.shiftKey &&
+            (e.ctrlKey || e.metaKey) &&
+            e.code === 'KeyI'
+        ) {
             e.preventDefault();
             triggerImportReview();
             return true;
         }
-        if (e.code === 'KeyE') {
+        if (
+            e.altKey &&
+            e.shiftKey &&
+            (e.ctrlKey || e.metaKey) &&
+            e.code === 'KeyE'
+        ) {
             e.preventDefault();
             triggerExportReview();
             return true;

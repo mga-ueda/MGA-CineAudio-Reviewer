@@ -1239,23 +1239,36 @@
         return scanFrames(0, maxFrame);
     }
 
-    function splitMarkersCopyPasteText(text) {
-        const raw = String(text ?? '');
-        const delim = '\n' + MARKER_MEMO_COPY_DELIMITER + '\n';
-        const idx = raw.indexOf(delim);
+    function normalizeMarkersCopyPasteText(text) {
+        return String(text ?? '')
+            .replace(/^\uFEFF/, '')
+            .replace(/\r\n/g, '\n')
+            .replace(/\r/g, '\n');
+    }
+
+    /** Copy 形式の ---MEMO--- 区切り位置（CRLF や先頭のみメモにも対応） */
+    function findMarkerMemoDelimiterSplit(raw) {
+        const text = normalizeMarkersCopyPasteText(raw);
+        const inline = '\n' + MARKER_MEMO_COPY_DELIMITER + '\n';
+        const idx = text.indexOf(inline);
         if (idx >= 0) {
             return {
-                markersText: raw.slice(0, idx),
-                memoText: raw.slice(idx + delim.length),
+                markersText: text.slice(0, idx),
+                memoText: text.slice(idx + inline.length),
             };
         }
-        if (raw.startsWith(MARKER_MEMO_COPY_DELIMITER + '\n')) {
+        const memoOnlyPrefix = MARKER_MEMO_COPY_DELIMITER + '\n';
+        if (text.startsWith(memoOnlyPrefix)) {
             return {
                 markersText: '',
-                memoText: raw.slice(MARKER_MEMO_COPY_DELIMITER.length + 1),
+                memoText: text.slice(memoOnlyPrefix.length),
             };
         }
-        return { markersText: raw, memoText: null };
+        return { markersText: text, memoText: null };
+    }
+
+    function splitMarkersCopyPasteText(text) {
+        return findMarkerMemoDelimiterSplit(text);
     }
 
     /** マーカー一覧表（Length 列なし）をタブ区切り文字列にする */
@@ -1424,6 +1437,12 @@
         }
         const markers = [];
         for (let row = dataStartRow; row < lines.length; row++) {
+            const lineTrim = String(lines[row] ?? '')
+                .replace(/^\uFEFF/, '')
+                .trim();
+            if (lineTrim === MARKER_MEMO_COPY_DELIMITER) {
+                break;
+            }
             const cols = splitMarkersPasteLine(lines[row]);
             if (cols.length < 4) {
                 return {
