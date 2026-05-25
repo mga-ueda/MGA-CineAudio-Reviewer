@@ -275,6 +275,12 @@
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
+        if (
+            !(opt && opt.skipVolumeMarker) &&
+            typeof syncMarkerForRegionVolumeChange === 'function'
+        ) {
+            syncMarkerForRegionVolumeChange(track, segmentIndex, next, prev);
+        }
         return true;
     }
 
@@ -1648,6 +1654,61 @@
         return typeof transportPlaybackSec === 'number' ? transportPlaybackSec : 0;
     }
 
+    function transportSecFromSeekbar() {
+        if (typeof getTransportSec === 'function') {
+            return getTransportSec();
+        }
+        return typeof transportPlaybackSec === 'number' ? transportPlaybackSec : 0;
+    }
+
+    function extraSlotFromPlaybackRegionEl(regionEl) {
+        if (!regionEl) return -1;
+        const lane = regionEl.closest('.audio-waveform-lane--extra');
+        if (!lane || !lane.id) return -1;
+        const m = /^extraAudioLane(\d+)$/.exec(lane.id);
+        return m ? parseInt(m[1], 10) : -1;
+    }
+
+    function getActiveMixExtraSlotFromDom() {
+        const n =
+            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        for (let i = 0; i < n; i++) {
+            const meta = document.getElementById('extraAudioMeta' + i);
+            if (
+                meta &&
+                !meta.hidden &&
+                meta.classList.contains('audio-waveform-lane-meta--active')
+            ) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** スプリット対象 Ex：リージョン上 → そのリージョン／それ以外 → アクティブトラック（赤表示） */
+    function resolveSplitTargetExtraSlot() {
+        const { clientX, clientY } = waveformPointerClientXY();
+        const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
+        if (regionEl) {
+            const slot = extraSlotFromPlaybackRegionEl(regionEl);
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
+        if (typeof resolveMixTargetFromPointer === 'function' && Number.isFinite(clientY)) {
+            const target = resolveMixTargetFromPointer(clientY);
+            if (target && target.kind === 'extra') {
+                const slot = target.slot;
+                if (isExtraSlotUsableForRegion(slot)) return slot;
+            }
+        }
+        const domSlot = getActiveMixExtraSlotFromDom();
+        if (domSlot >= 0 && isExtraSlotUsableForRegion(domSlot)) return domSlot;
+        if (typeof getLastActiveMixExtraSlot === 'function') {
+            const slot = getLastActiveMixExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
+        return -1;
+    }
+
     function clampRegionEditTransportSec(track, sec) {
         const master =
             typeof getMasterTransportDurationSec === 'function'
@@ -1679,12 +1740,20 @@
         );
     }
 
-    function getRegionSplitTargetTransportSec(track) {
-        return clampRegionEditTransportSec(track, transportSecFromWaveformPointer());
+    function getRegionSplitTargetTransportSec(track, clientX, clientY) {
+        const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
+        if (regionEl && Number.isFinite(clientX)) {
+            const fromPointer = transportSecAtClientX(clientX);
+            if (Number.isFinite(fromPointer)) {
+                return clampRegionEditTransportSec(track, fromPointer);
+            }
+        }
+        return clampRegionEditTransportSec(track, transportSecFromSeekbar());
     }
 
     function splitPlaybackRegionAtTargetSec() {
-        const slot = resolveTargetExtraSlot();
+        const { clientX, clientY } = waveformPointerClientXY();
+        const slot = resolveSplitTargetExtraSlot();
         if (slot < 0) {
             if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
                 writeLog('Playback region: hover an Ex lane (1–3), then press X');
@@ -1698,7 +1767,7 @@
         }
         const track = { type: 'extra', slot };
 
-        const splitTransport = getRegionSplitTargetTransportSec(track);
+        const splitTransport = getRegionSplitTargetTransportSec(track, clientX, clientY);
         const hit = mapTransportToSegment(track, splitTransport);
         let segments = getTrackSegments(track);
         let splitIndex = -1;
@@ -3659,6 +3728,16 @@
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
     window.setSegmentGainDb = setSegmentGainDb;
+    window.getSegmentRegionTimelineBounds = function (slot, segmentIndex) {
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) return null;
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments[segmentIndex]) return null;
+        return {
+            startSec: getSegmentRegionTimelineIn(track, segmentIndex),
+            endSec: getSegmentTimelineEnd(track, segmentIndex),
+        };
+    };
     window.handlePlaybackRegionGainWheel = handlePlaybackRegionGainWheel;
     window.ensureDefaultTrackRegion = ensureDefaultTrackRegion;
     window.updatePlaybackRegionHoverFromPointer = updatePlaybackRegionHoverFromPointer;

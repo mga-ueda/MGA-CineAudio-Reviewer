@@ -896,16 +896,7 @@
     }
 
     function updateMarkerRangeHint() {
-        if (!markerRangeHint) return;
-        if (pendingRangeStartSec != null && Number.isFinite(pendingRangeStartSec)) {
-            markerRangeHint.hidden = false;
-            markerRangeHint.textContent =
-                'Range In: ' +
-                tcLabelForSec(pendingRangeStartSec) +
-                ' — press ] for Out (Esc to cancel)';
-        } else {
-            markerRangeHint.hidden = true;
-        }
+        if (markerRangeHint) markerRangeHint.hidden = true;
         updateMarkerClearAllButton();
     }
 
@@ -1251,7 +1242,7 @@
         beginPendingRangeAtSec(currentTransportSec());
     }
 
-    function addRangeMarkerBetweenSecs(startSec, endSec) {
+    function addRangeMarkerBetweenSecs(startSec, endSec, opt) {
         let start = startSec;
         let end = endSec;
         if (end < start) {
@@ -1261,6 +1252,8 @@
         }
         const oneFrame = markerOneFrameSec();
         const span = end - start;
+        const comment =
+            opt && opt.comment != null ? String(opt.comment) : '';
         const m =
             span > oneFrame + 1e-9
                 ? {
@@ -1268,21 +1261,156 @@
                       type: 'range',
                       startSec: start,
                       endSec: end,
-                      comment: '',
+                      comment,
                   }
                 : {
                       id: nextMarkerId(),
                       type: 'point',
                       timeSec: clampMarkerSec(start),
-                      comment: '',
+                      comment,
                   };
         currentMarkers.push(m);
         sortMarkersInPlace();
         activeMarkerId = m.id;
-        persistMarkersAfterChange();
-        writeLog('Marker: range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end));
-        flashSeekHint('Range', tcLabelForSec(start) + ' – ' + tcLabelForSec(end), 'notice');
+        persistMarkersAfterChange(opt);
+        if (!(opt && opt.silent)) {
+            writeLog('Marker: range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end));
+            flashSeekHint('Range', tcLabelForSec(start) + ' – ' + tcLabelForSec(end), 'notice');
+        }
     }
+
+    function formatRegionVolumeDbToken(db) {
+        if (typeof trackLaneFormatDbValue === 'function') {
+            return trackLaneFormatDbValue(db);
+        }
+        const s = db.toFixed(1);
+        return db > 0 ? '+' + s : s;
+    }
+
+    function formatRegionVolumeMarkerComment(gainDb, prevGainDb) {
+        let db = Number(gainDb);
+        if (!Number.isFinite(db)) db = 0;
+        let prev = Number(prevGainDb);
+        if (!Number.isFinite(prev)) prev = 0;
+        const token = formatRegionVolumeDbToken(db);
+        if (db > prev + 0.0005) {
+            const num = token.charAt(0) === '+' ? token.slice(1) : token;
+            return num + 'dB 上げる';
+        }
+        if (db < prev - 0.0005) {
+            return token + ' dB 下げる';
+        }
+        return token + ' dB';
+    }
+
+    function markerSecNearlyEqual(a, b) {
+        const frame = markerOneFrameSec();
+        const eps = Math.max(1e-6, frame * 0.5);
+        return Math.abs(Number(a) - Number(b)) <= eps;
+    }
+
+    function findRegionVolumeMarker(startSec, endSec) {
+        const oneFrame = markerOneFrameSec();
+        const narrow = endSec - startSec <= oneFrame + 1e-9;
+        for (let i = currentMarkers.length - 1; i >= 0; i--) {
+            const m = currentMarkers[i];
+            if (m.type === 'range') {
+                if (
+                    markerSecNearlyEqual(m.startSec, startSec) &&
+                    markerSecNearlyEqual(m.endSec, endSec)
+                ) {
+                    return m;
+                }
+            } else if (narrow && m.type === 'point') {
+                if (markerSecNearlyEqual(m.timeSec, startSec)) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    function removeRegionVolumeMarkerAtBounds(startSec, endSec, opt) {
+        let start = startSec;
+        let end = endSec;
+        if (end < start) {
+            const swap = start;
+            start = end;
+            end = swap;
+        }
+        start = clampMarkerSec(start);
+        end = clampMarkerSec(end);
+        const m = findRegionVolumeMarker(start, end);
+        if (!m) return;
+        currentMarkers = currentMarkers.filter((x) => x.id !== m.id);
+        if (activeMarkerId === m.id) activeMarkerId = null;
+        persistMarkersAfterChange(opt);
+    }
+
+    function upsertRegionVolumeMarker(startSec, endSec, gainDb, opt) {
+        if (!markerTimelineReady()) return;
+        let start = startSec;
+        let end = endSec;
+        if (end < start) {
+            const swap = start;
+            start = end;
+            end = swap;
+        }
+        start = clampMarkerSec(start);
+        end = clampMarkerSec(end);
+        const db = Number(gainDb);
+        if (!Number.isFinite(db) || Math.abs(db) < 0.0005) {
+            removeRegionVolumeMarkerAtBounds(start, end, opt);
+            return;
+        }
+        const comment = formatRegionVolumeMarkerComment(
+            gainDb,
+            opt && opt.prevGainDb,
+        );
+        const oneFrame = markerOneFrameSec();
+        const span = end - start;
+        const makeRange = span > oneFrame + 1e-9;
+
+        let m = findRegionVolumeMarker(start, end);
+        if (m) {
+            if (makeRange) {
+                m.type = 'range';
+                m.startSec = start;
+                m.endSec = end;
+                delete m.timeSec;
+            } else {
+                m.type = 'point';
+                m.timeSec = start;
+                delete m.startSec;
+                delete m.endSec;
+            }
+            m.comment = comment;
+            activeMarkerId = m.id;
+            persistMarkersAfterChange(opt);
+            return;
+        }
+
+        addRangeMarkerBetweenSecs(start, end, {
+            comment,
+            silent: true,
+            ...(opt || {}),
+        });
+    }
+
+    function syncMarkerForRegionVolumeChange(track, segmentIndex, gainDb, prevGainDb) {
+        if (!track || track.type !== 'extra' || !Number.isFinite(track.slot)) return;
+        if (typeof getSegmentRegionTimelineBounds !== 'function') return;
+        const bounds = getSegmentRegionTimelineBounds(track.slot, segmentIndex);
+        if (!bounds || !Number.isFinite(bounds.startSec) || !Number.isFinite(bounds.endSec)) {
+            return;
+        }
+        upsertRegionVolumeMarker(bounds.startSec, bounds.endSec, gainDb, {
+            silent: true,
+            prevGainDb,
+        });
+    }
+
+    window.syncMarkerForRegionVolumeChange = syncMarkerForRegionVolumeChange;
 
     function completePendingRangeAtCurrentTime() {
         if (!markerTimelineReady() || pendingRangeStartSec == null) return;

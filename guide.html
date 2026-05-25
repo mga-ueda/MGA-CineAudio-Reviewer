@@ -211,6 +211,7 @@
                     <li><span class="guide-kbd">Ins</span> を 0.2 秒以上押したまま離すと、押した位置から離した位置までの範囲マーカーになります。長押し中は In 待ちのプレビューが表示されます。</li>
                     <li><span class="guide-kbd">[</span> で In（開始）を設定し、続けて <span class="guide-kbd">]</span> で Out（終了）を設定します。In 設定中はパネルにヒントが出ます。</li>
                     <li>波形上のマーカー区間の端（ハンドル）をドラッグして In / Out を調整できます。</li>
+                    <li>④ の Ex リージョンで <span class="guide-kbd">Alt</span>+ホイールによる音量補正を行うと、そのリージョン幅の範囲マーカーと Feedback（<code>3.0dB 上げる</code> / <code>-3.0 dB 下げる</code> など）が自動で連動します。補正が <code>0.0 dB</code> に戻ったときは、同じ In／Out の自動付与マーカーを削除します（手動で付けた範囲マーカーと In／Out が一致している場合も同じ行を更新／削除します）。</li>
                     <li>表の In / Out 列をクリックするとタイムコードを直接編集できます（<span class="guide-kbd">+</span> / <span class="guide-kbd">−</span> でフレーム単位の微調整も可能）。</li>
                 </ul>
 
@@ -252,8 +253,10 @@
                 <ul>
                     <li>リージョンの<strong>上をクリック</strong>するとその位置へシークします。</li>
                     <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。</li>
-                    <li>リージョン上で <span class="guide-kbd">Alt</span>+ホイールすると ±1 dB 刻みでそのリージョンの音量補正（中央に赤い dB 表示）。</li>
+                    <li>リージョン上で <span class="guide-kbd">Alt</span>+ホイールすると ±1 dB 刻みでそのリージョンの音量補正（中央に赤い dB 表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの <strong>Feedback</strong> に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0 dB 下げる</code>）が入ります。<strong>0.0 dB</strong> に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In／Out と Feedback を更新します。</li>
                     <li>リージョン情報は <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">C</span> でコピーし、<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">V</span> で同じ Ex レーンの末尾にペーストできます。</li>
+                    <li><strong>スプリット</strong>（<span class="guide-kbd">X</span>）— リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Ex）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。</li>
+                    <li><strong>結合</strong>（<span class="guide-kbd">B</span>）— 隣接リージョンの境界上にポインタを置いてから実行。</li>
                 </ul>
 
                 <h3>範囲ループ（波形上）</h3>
@@ -277,7 +280,7 @@
                     <li><strong>Playback Drift</strong> — 映像と音声のズレ（フレーム数）。動画読み込み後に表示。</li>
                     <li><strong>Loop</strong> — 全体のループ再生のオン／オフ（<span class="guide-kbd">L</span>）。設定は次回起動時に復元されます。</li>
                     <li><strong>How To</strong> / <strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
-                    <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<span class="guide-kbd">Alt</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Del</span>、Mac では <span class="guide-kbd">Cmd</span> も可）。</li>
+                    <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<span class="guide-kbd">Alt</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Del</span>、Mac では <span class="guide-kbd">Cmd</span> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生／停止（<span class="guide-kbd">Space</span>）。右端。初回再生時は Video / Markers 行が見える位置へ自動スクロールします。</li>
                 </ul>
 

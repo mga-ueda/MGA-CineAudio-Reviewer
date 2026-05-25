@@ -1060,6 +1060,7 @@
     function triggerAllClear(allClearBtn) {
         const btn = allClearBtn || document.getElementById('sessionAllClearBtn');
         if (!btn || btn.disabled) return;
+        pauseTransportForImportReview();
         const confirmPromise =
             typeof requestAppConfirm === 'function'
                 ? requestAppConfirm(

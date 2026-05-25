@@ -23,6 +23,8 @@
     let waveformLanesLastPointerX = null;
     let waveformLanesLastPointerY = null;
     let waveformTargetExtraSlot = -1;
+    /** ミックス対象として最後にアクティブだった Ex スロット（スプリット等のフォールバック） */
+    let lastActiveMixExtraSlot = -1;
     let waveformBuildTimer = 0;
     let waveformLoadKickTimer = 0;
     let waveformDecodeInFlight = false;
@@ -648,6 +650,9 @@
             Number.isFinite(clientY) && typeof resolveMixTargetFromPointer === 'function'
                 ? resolveMixTargetFromPointer(clientY)
                 : null;
+        if (target && target.kind === 'extra') {
+            lastActiveMixExtraSlot = target.slot;
+        }
         forEachWaveformLaneMeta((entry) => {
             entry.el.classList.toggle(
                 'audio-waveform-lane-meta--active',
@@ -656,7 +661,12 @@
         });
     }
 
+    function getLastActiveMixExtraSlot() {
+        return lastActiveMixExtraSlot;
+    }
+
     window.refreshActiveMixLaneHighlight = refreshActiveMixLaneHighlight;
+    window.getLastActiveMixExtraSlot = getLastActiveMixExtraSlot;
 
     /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
     function waveformExtraLaneSlotFromPointer(ev) {
