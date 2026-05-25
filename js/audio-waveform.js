@@ -284,8 +284,7 @@
     window.setVideoLaneUiOpenFromPersist = setVideoLaneUiOpenFromPersist;
 
     function extraTrackSlotCount() {
-        const n = window.EXTRA_TRACK_COUNT;
-        return typeof n === 'number' && n > 0 ? n : 3;
+        return typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
     }
 
     function countVisibleWaveformLanes() {

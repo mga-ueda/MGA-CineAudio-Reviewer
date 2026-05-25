@@ -737,6 +737,9 @@
     });
 
     function persistOnPageExit() {
+        if (typeof haltTransportOnPageExit === 'function') {
+            haltTransportOnPageExit();
+        }
         writePrefs();
         if (typeof flushPersistSessionNow === 'function') {
             flushPersistSessionNow().catch(() => {});
@@ -747,6 +750,9 @@
 
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
+            if (typeof haltTransportOnPageExit === 'function') {
+                haltTransportOnPageExit();
+            }
             writePrefs();
             const p =
                 typeof flushPersistSessionNow === 'function'

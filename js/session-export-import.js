@@ -339,7 +339,7 @@
         if (!opt || typeof opt !== 'object') return base;
         const extra = Array.isArray(opt.includeExtra) ? opt.includeExtra : base.includeExtra;
         const count =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         const includeExtra = [];
         for (let i = 0; i < count; i++) {
             includeExtra.push(!!extra[i]);
@@ -423,7 +423,7 @@
             }
         }
         const count =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < count; i++) {
             const el = document.getElementById('sessionExportIncludeEx' + i);
             const loaded = isExportExtraSlotAvailable(i);
@@ -762,8 +762,9 @@
 
     async function clearLoadedVideoForImport(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        if (typeof setPlayingUi === 'function') setPlayingUi(false);
-        if (typeof stopRaf === 'function') stopRaf();
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true });
+        }
         if (typeof videoPanelHasVideo === 'function' && videoPanelHasVideo()) {
             if (typeof revokeVideoOnly === 'function') {
                 revokeVideoOnly();
@@ -888,7 +889,9 @@
             typeof isTransportPlaying === 'function'
                 ? isTransportPlaying()
                 : !!(typeof videoMain !== 'undefined' && videoMain && !videoMain.paused);
-        if (playing) {
+        if (playing && typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
+        } else if (playing) {
             if (typeof transportPlayGeneration !== 'undefined') {
                 transportPlayGeneration += 1;
             }

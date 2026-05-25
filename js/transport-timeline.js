@@ -544,7 +544,7 @@
         const vd = getVideoTransportDurationSec();
         if (vd > 0) m = vd;
         const extraCount =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < extraCount; i++) {
             const ed = getExtraTrackDurationSec(i);
             if (ed > m) m = ed;
@@ -1625,7 +1625,7 @@
                   ? isExtraTrackLoaded
                   : null;
         if (!loadFn) return false;
-        const n = typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             if (loadFn(i)) return true;
         }
@@ -1693,7 +1693,7 @@
     function updateLaneContentEndMarkers() {
         setLaneContentEndMarker(document.getElementById('audioWaveformContentEnd'), 0);
         const extraCount =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < extraCount; i++) {
             setLaneContentEndMarker(document.getElementById('extraAudioContentEnd' + i), 0);
         }

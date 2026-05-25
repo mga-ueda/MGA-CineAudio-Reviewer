@@ -265,13 +265,8 @@
             writeLog('Session: nothing to clear');
             return;
         }
-        if (typeof setPlayingUi === 'function') setPlayingUi(false);
-        if (typeof stopRaf === 'function') stopRaf();
-        if (typeof clearRangeLoopPlayback === 'function') {
-            clearRangeLoopPlayback({ silent: true });
-        }
-        if (typeof clearPlaybackRegion === 'function') {
-            clearPlaybackRegion({ silent: true });
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true });
         }
         if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
         if (typeof pendingLaneUiRestore !== 'undefined') pendingLaneUiRestore = null;
@@ -294,9 +289,6 @@
         }
         if (typeof syncSeekMax === 'function') syncSeekMax();
         if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
-        if (typeof deleteStoredSession === 'function') {
-            await deleteStoredSession();
-        }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
         }
@@ -327,13 +319,8 @@
             return;
         }
         const name = fileMain && fileMain.name ? fileMain.name : 'video';
-        if (typeof setPlayingUi === 'function') setPlayingUi(false);
-        if (typeof stopRaf === 'function') stopRaf();
-        if (typeof clearRangeLoopPlayback === 'function') {
-            clearRangeLoopPlayback({ silent: true });
-        }
-        if (typeof clearPlaybackRegion === 'function') {
-            clearPlaybackRegion({ silent: true });
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true });
         }
         revokeVideoOnly();
         if (typeof syncSeekMax === 'function') syncSeekMax();

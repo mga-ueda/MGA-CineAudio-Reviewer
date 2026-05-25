@@ -161,7 +161,7 @@
         });
     }
     const extraCount =
-        typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+        typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
     for (let slot = 0; slot < extraCount; slot++) {
         const track = document.getElementById('extraAudioTrack' + slot);
         const meta = document.getElementById('extraAudioMeta' + slot);

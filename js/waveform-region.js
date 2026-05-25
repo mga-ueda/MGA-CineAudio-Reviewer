@@ -36,7 +36,7 @@
 
     function captureRegionUndoSnapshot() {
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         const snap = [];
         for (let i = 0; i < n; i++) {
             const tr =
@@ -76,7 +76,7 @@
     function restoreRegionUndoSnapshot(snap) {
         regionUndoPaused = true;
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             const entry = snap.find((e) => e.slot === i);
             const tr =
@@ -427,7 +427,7 @@
     function collectRegionSnapStops(exclude, sameSlotOnly) {
         const stops = [];
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         const limitSlot =
             typeof sameSlotOnly === 'number' && sameSlotOnly >= 0 ? sameSlotOnly : -1;
         for (let slot = 0; slot < n; slot++) {
@@ -486,7 +486,7 @@
     function collectRegionEndSnapStops(exclude, sameSlotOnly) {
         const stops = [];
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         const limitSlot =
             typeof sameSlotOnly === 'number' && sameSlotOnly >= 0 ? sameSlotOnly : -1;
         for (let slot = 0; slot < n; slot++) {
@@ -610,7 +610,7 @@
     function getAllRegionTimelineIntervals(exclude) {
         const list = [];
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let slot = 0; slot < n; slot++) {
             const track = { type: 'extra', slot };
             if (!isTrackRegionActive(track)) continue;
@@ -759,7 +759,7 @@
             slots.push(opt.slot);
         } else {
             const n =
-                typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
             for (let i = 0; i < n; i++) slots.push(i);
         }
         for (let i = 0; i < slots.length; i++) {
@@ -1186,7 +1186,7 @@
 
     function isPlaybackRegionActive() {
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             if (isTrackRegionActive({ type: 'extra', slot: i })) return true;
         }
@@ -1298,7 +1298,7 @@
     function getActiveExtraSegmentsAtTransport(transportSec) {
         const all = [];
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return all;
         for (let slot = 0; slot < n; slot++) {
@@ -1568,7 +1568,7 @@
         }
         const childOpt = Object.assign({}, opt || {}, { skipUndo: true });
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             clearTrackRegion({ type: 'extra', slot: i }, childOpt);
         }
@@ -1671,7 +1671,7 @@
 
     function getActiveMixExtraSlotFromDom() {
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             const meta = document.getElementById('extraAudioMeta' + i);
             if (
@@ -2546,7 +2546,7 @@
 
     function updateAllPlaybackRegionOverlays() {
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             updateTrackRegionOverlays({ type: 'extra', slot: i });
         }
@@ -3418,7 +3418,7 @@
     function getPlaybackRegionPersistSnapshot() {
         const extras = [];
         const n =
-            typeof window.EXTRA_TRACK_COUNT === 'number' ? window.EXTRA_TRACK_COUNT : 3;
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         for (let i = 0; i < n; i++) {
             const track = { type: 'extra', slot: i };
             const segments = getTrackSegments(track);
