@@ -923,6 +923,7 @@
     }
 
     window.stopPlaybackReturnTransportToHead = stopPlaybackReturnTransportToHead;
+    window.pauseTransportBeforeSeek = pauseTransportBeforeSeek;
 
     async function handleMasterTransportEndReached() {
         if (handlingMasterTransportEnd) return false;
@@ -1099,6 +1100,9 @@
                 }
                 if (typeof ensureAtLeastOneWaveformLaneVisible === 'function') {
                     ensureAtLeastOneWaveformLaneVisible();
+                }
+                if (typeof refreshVideoAudioLaneVisibility === 'function') {
+                    refreshVideoAudioLaneVisibility();
                 }
             })
             .catch(() => {

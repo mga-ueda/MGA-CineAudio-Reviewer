@@ -1016,6 +1016,9 @@
             if (typeof resetMarkersDisplayHidden === 'function') {
                 resetMarkersDisplayHidden();
             }
+            if (typeof resetWaveformTimelineZoom === 'function') {
+                resetWaveformTimelineZoom();
+            }
             refreshTransportControlsAfterImport();
         }
     }

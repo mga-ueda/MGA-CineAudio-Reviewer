@@ -523,8 +523,10 @@
     }
 
     async function refreshContainerFpsForCurrentFiles() {
-        if (fileMain) {
-            await refreshContainerMetaForSide('main', fileMain);
+        const fileForParse = fileMain;
+        if (fileForParse) {
+            await refreshContainerMetaForSide('main', fileForParse);
+            if (fileMain !== fileForParse) return;
         } else {
             containerFps.main = null;
             containerSampleCount.main = null;

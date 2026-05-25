@@ -1414,20 +1414,23 @@
 
     function onContainerMetaReadyForWaveform() {
         if (!urlMain) return;
-        if (containerHasAudio.main !== false) return;
-        waveformBuildGen += 1;
-        notifyVideoAudioLoadSettled();
-        waveformPeaks = null;
-        waveformAudioBuffer = null;
-        setAudioWaveformLoaded(false);
-        setAudioWaveformStatus('Not Loaded');
-        drawAudioWaveformCanvas();
-        updateAllWaveformPlayheads();
-        if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
-        if (typeof notifyMasterTransportDurationChanged === 'function') {
-            notifyMasterTransportDurationChanged();
+        if (containerHasAudio.main === false) {
+            waveformBuildGen += 1;
+            notifyVideoAudioLoadSettled();
+            waveformPeaks = null;
+            waveformAudioBuffer = null;
+            setAudioWaveformLoaded(false);
+            setAudioWaveformStatus('Not Loaded');
+            drawAudioWaveformCanvas();
+            updateAllWaveformPlayheads();
+            if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+            showExtraLaneForNoVideoAudio();
+            return;
         }
-        showExtraLaneForNoVideoAudio();
+        refreshVideoAudioLaneVisibility();
     }
 
     function detachWaveformPauseBuildListener() {

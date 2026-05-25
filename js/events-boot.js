@@ -70,6 +70,13 @@
         if (typeof notifyVideoAudioLoadSettledIfNoVideoAudio === 'function') {
             notifyVideoAudioLoadSettledIfNoVideoAudio();
         }
+        if (
+            typeof urlMain !== 'undefined' &&
+            urlMain &&
+            typeof refreshVideoAudioLaneVisibility === 'function'
+        ) {
+            refreshVideoAudioLaneVisibility();
+        }
         if (typeof kickMainVideoWaveformBuild === 'function') {
             kickMainVideoWaveformBuild({ allowSettle: false });
         }

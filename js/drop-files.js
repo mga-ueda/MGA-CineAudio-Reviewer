@@ -127,15 +127,23 @@
         });
     }
 
+    function pauseTransportBeforeOpenFilePicker() {
+        if (typeof pauseTransportBeforeSeek === 'function') {
+            pauseTransportBeforeSeek();
+        }
+    }
+
     bindFileDropTarget(dropZone, { kind: 'both', logLabel: 'Drop zone' });
 
     dropZone.addEventListener('click', () => {
+        pauseTransportBeforeOpenFilePicker();
         writeLog('Drop zone: click -> open file picker');
         filePicker.click();
     });
     dropZone.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            pauseTransportBeforeOpenFilePicker();
             writeLog('Drop zone: Enter -> open file picker');
             filePicker.click();
         }
