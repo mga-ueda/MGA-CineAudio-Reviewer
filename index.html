@@ -299,27 +299,6 @@
                     </span>
                 </div>
             </div>
-            <div class="transport-opt-box transport-opt-chip transport-opt-box--video-delay">
-                <div class="transport-opt-cell transport-opt-cell--video-delay">
-                    <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label" for="videoFrameDelayInput">
-                        <span>Video Delay</span>
-                        <span class="transport-video-delay-field">
-                            <input
-                                type="text"
-                                id="videoFrameDelayInput"
-                                class="transport-video-delay-input"
-                                inputmode="numeric"
-                                pattern="[0-9]*"
-                                maxlength="2"
-                                value="0"
-                                aria-label="Video delay (frames)"
-                                title="Delay video playback behind audio by this many frames (0–99)"
-                            >
-                            <span class="transport-video-delay-suffix" aria-hidden="true">f</span>
-                        </span>
-                    </label>
-                </div>
-            </div>
             <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
                 <div class="transport-opt-cell transport-opt-cell--playback">
                     <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
@@ -328,6 +307,18 @@
                     </label>
                 </div>
             </div>
+            <a
+                href="guide.html"
+                id="transportGuideLink"
+                class="transport-shortcuts-link transport-opt-chip"
+                title="Open How To in a new window"
+            >How To</a>
+            <a
+                href="shortcuts.html"
+                id="transportShortcutsLink"
+                class="transport-shortcuts-link transport-opt-chip"
+                title="Open Shortcut reference in a new window"
+            >Shortcut</a>
             <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="Unload video, extra audio, markers, and saved session (Alt+Shift+Ctrl+Del)">All Clear</button>
             <button type="button" id="playStopBtn" disabled>Play</button>
         </div>
@@ -357,18 +348,27 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--links">
-            <a
-                href="guide.html"
-                id="transportGuideLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open How To in a new window"
-            >How To</a>
-            <a
-                href="shortcuts.html"
-                id="transportShortcutsLink"
-                class="transport-shortcuts-link transport-opt-chip"
-                title="Open Shortcut reference in a new window"
-            >Shortcut</a>
+            <div class="transport-opt-box transport-opt-chip transport-opt-box--video-delay">
+                <div class="transport-opt-cell transport-opt-cell--video-delay">
+                    <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label" for="videoFrameDelayInput">
+                        <span>Video Delay</span>
+                        <span class="transport-video-delay-field">
+                            <input
+                                type="text"
+                                id="videoFrameDelayInput"
+                                class="transport-video-delay-input"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="2"
+                                value="0"
+                                aria-label="Video delay (frames)"
+                                title="Delay video playback behind audio by this many frames (0–99)"
+                            >
+                            <span class="transport-video-delay-suffix" aria-hidden="true">f</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
             <div class="session-io-cluster" role="group" aria-label="Export media selection and review import/export">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
                     <span class="transport-opt-label">Include in export</span>
