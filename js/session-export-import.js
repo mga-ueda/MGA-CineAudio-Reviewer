@@ -964,6 +964,10 @@
                 writeLog('Import Review: waiting for any in-progress session restore…');
                 await whenSessionRestoreIdle();
             }
+            if (typeof clearEntireSession === 'function') {
+                writeLog('Import Review: All Clear before restore…');
+                await clearEntireSession();
+            }
             applyExportPrefs(manifest);
 
             const row = manifestToSessionRow(manifest, blobs);
