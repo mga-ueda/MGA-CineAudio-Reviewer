@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,12 +27,17 @@
                     <tr>
                         <td>テキスト入力中は下記の多くが無効</td>
                         <td>—</td>
-                        <td><kbd>Esc</kbd>の一部を除く</td>
+                        <td>入力欄・Feedback 欄・TC 欄など。一部 <kbd>Esc</kbd> は有効（優先順位は末尾参照）</td>
                     </tr>
                     <tr>
-                        <td>Mac での修飾キー</td>
-                        <td><kbd>Ctrl</kbd>/<kbd>Cmd</kbd></td>
-                        <td><kbd>Cmd</kbd>も可</td>
+                        <td>Mac（修飾キー）</td>
+                        <td>—</td>
+                        <td>表中の <kbd>Ctrl</kbd> は <kbd>Cmd</kbd> に読み替えてください</td>
+                    </tr>
+                    <tr>
+                        <td>Mac（削除キー）</td>
+                        <td>—</td>
+                        <td>Mac の場合は、表示「delete」のキー（⌫、Backspace 位置）は <kbd>Backspace</kbd> として届きます。表中の <kbd>Del</kbd> は Windows の Delete キーです。削除系で <kbd>Del</kbd> とある操作は、Mac では delete（⌫）キーを使ってください</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">ファイル</th>
@@ -40,25 +45,20 @@
                     <tr>
                         <td>ドロップゾーンでファイル選択</td>
                         <td><kbd>Enter</kbd></td>
-                        <td>フォーカス時</td>
+                        <td>ドロップゾーンにフォーカスがあるとき（<kbd>Tab</kbd> で移動可）</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">レビューの保存・共有（.mgacr）</th>
+                        <th scope="colgroup" colspan="3">再生（動画読込後）</th>
                     </tr>
                     <tr>
-                        <td>Import Review（インポート）</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td>
-                        <td>入力欄外</td>
+                        <td>ループのオン／オフ</td>
+                        <td><kbd>L</kbd></td>
+                        <td>トランスポート上段の Loop チェックと同じ。設定は次回起動時に復元</td>
                     </tr>
                     <tr>
-                        <td>Export Review（エクスポート）</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td>
-                        <td>入力欄外</td>
-                    </tr>
-                    <tr>
-                        <td>All Clear（全体クリア）</td>
-                        <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Del</kbd></td>
-                        <td>入力欄外</td>
+                        <td>再生／停止</td>
+                        <td><kbd>Space</kbd></td>
+                        <td>Play ボタンと同じ。動画未読込時は無効</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">ミックス</th>
@@ -66,94 +66,129 @@
                     <tr>
                         <td>マスター音量を 100％（0 dB）に</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td>
-                        <td>入力欄外。スライダー二重クリックと同じ</td>
-                    </tr>
-                    <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">再生（動画読込後）</th>
-                    </tr>
-                    <tr>
-                        <td>再生／停止</td>
-                        <td><kbd>Space</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>ループのオン／オフ</td>
-                        <td><kbd>L</kbd></td>
-                        <td></td>
+                        <td>トランスポート下段の Master Vol スライダー二重クリックと同じ</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">シーク・ジャンプ（動画読込後）</th>
                     </tr>
                     <tr>
-                        <td>１フレーム</td>
-                        <td><kbd>←</kbd><kbd>→</kbd></td>
-                        <td>再生中は一度停止してから</td>
+                        <td>1フレーム</td>
+                        <td><kbd>←</kbd>／<kbd>→</kbd></td>
+                        <td>再生中の ±1 フレームは一度停止してから（キーリピート有効）</td>
                     </tr>
                     <tr>
-                        <td>１秒</td>
-                        <td><kbd>Shift</kbd>+<kbd>←</kbd><kbd>Shift</kbd>+<kbd>→</kbd></td>
-                        <td></td>
+                        <td>1秒</td>
+                        <td><kbd>Shift</kbd>+<kbd>←</kbd>／<kbd>→</kbd></td>
+                        <td>再生中でもシーク後に再生を再開</td>
                     </tr>
                     <tr>
-                        <td>５秒</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>←</kbd><kbd>Ctrl</kbd>+<kbd>→</kbd></td>
-                        <td></td>
+                        <td>5秒</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>←</kbd>／<kbd>→</kbd></td>
+                        <td>—</td>
                     </tr>
                     <tr>
                         <td>10秒</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>→</kbd></td>
-                        <td></td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>／<kbd>→</kbd></td>
+                        <td>—</td>
                     </tr>
                     <tr>
-                        <td>位置ジャンプ ０〜90％</td>
-                        <td>テンキー<kbd>0</kbd>〜<kbd>9</kbd></td>
-                        <td></td>
+                        <td>位置ジャンプ 0〜90％</td>
+                        <td>テンキー <kbd>0</kbd>〜<kbd>9</kbd></td>
+                        <td>尺の 0/10〜9/10 へ（<kbd>9</kbd> は 90％）。テンキーのみ</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">波形レーンにフォーカス時</th>
+                        <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
                     </tr>
                     <tr>
-                        <td>先頭へ</td>
-                        <td><kbd>Home</kbd></td>
-                        <td></td>
+                        <td>In／Out ドラッグ</td>
+                        <td>ハンドル操作（波形上）</td>
+                        <td>波形タイムライン上のハンドル</td>
                     </tr>
                     <tr>
-                        <td>末尾へ</td>
-                        <td><kbd>End</kbd></td>
-                        <td></td>
+                        <td>タイムライン上の表示／非表示</td>
+                        <td><kbd>V</kbd></td>
+                        <td>Markers パネルの Hide/View と同じトグル</td>
                     </tr>
                     <tr>
-                        <td>１フレーム</td>
-                        <td><kbd>←</kbd><kbd>→</kbd></td>
-                        <td></td>
+                        <td>ポイント追加</td>
+                        <td><kbd>Ins</kbd>（短押し）</td>
+                        <td>押下から離すまで 0.2 秒未満</td>
+                    </tr>
+                    <tr>
+                        <td>範囲追加</td>
+                        <td><kbd>Ins</kbd>（長押し）</td>
+                        <td>0.2 秒以上押したまま離すと、押下〜離しの位置で範囲マーカー</td>
+                    </tr>
+                    <tr>
+                        <td>マーカーへ移動</td>
+                        <td><kbd>Shift</kbd>+<kbd>↑</kbd>／<kbd>↓</kbd></td>
+                        <td><kbd>↑</kbd>＝次のマーカー（時間が進む方向）、<kbd>↓</kbd>＝前のマーカー。再生中はシーク後に再生を再開</td>
+                    </tr>
+                    <tr>
+                        <td>Feedback 行の前後へ</td>
+                        <td><kbd>Alt</kbd>+<kbd>↑</kbd>／<kbd>↓</kbd></td>
+                        <td><kbd>↑</kbd>＝一覧で上の行、<kbd>↓</kbd>＝下の行（Feedback にフォーカス）</td>
+                    </tr>
+                    <tr>
+                        <td>選択中マーカー削除</td>
+                        <td><kbd>Del</kbd></td>
+                        <td>マーカー選択時のみ（<kbd>Del</kbd> は Ex リージョン削除を先に判定）</td>
+                    </tr>
+                    <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">マーカー TC 編集（In／Out 列）</th>
+                    </tr>
+                    <tr>
+                        <td>±1フレーム</td>
+                        <td><kbd>+</kbd>／<kbd>−</kbd>（テンキー可）</td>
+                        <td>In／Out 欄フォーカス、または Out 列ホバーで Out 対象。Out 空時は In を起点に Out を設定</td>
+                    </tr>
+                    <tr>
+                        <td>±1秒</td>
+                        <td><kbd>Shift</kbd>+<kbd>+</kbd>／<kbd>−</kbd>（テンキー可）</td>
+                        <td>同上（Out 空時も In 起点）</td>
+                    </tr>
+                    <tr>
+                        <td>Out クリア</td>
+                        <td><kbd>Del</kbd></td>
+                        <td>Out 欄フォーカス時のみ（範囲→点）</td>
+                    </tr>
+                    <tr>
+                        <td>確定</td>
+                        <td><kbd>Enter</kbd></td>
+                        <td>編集内容を確定</td>
+                    </tr>
+                    <tr>
+                        <td>編集取消</td>
+                        <td><kbd>Esc</kbd></td>
+                        <td>編集を破棄</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">波形タイムライン（動画または追加音声読込後）</th>
                     </tr>
                     <tr>
                         <td>シーク</td>
-                        <td>クリック</td>
-                        <td>波形上（リージョン上はクリックでシーク・ドラッグで移動）</td>
+                        <td>クリック（波形上）</td>
+                        <td>Ex レーンのリージョン上はクリックでシーク・ドラッグで移動（再生リージョン参照）</td>
                     </tr>
                     <tr>
                         <td>ズーム</td>
                         <td>ホイール（波形上）</td>
-                        <td>全体表示時もズームアウト可（最小 0.25×）</td>
+                        <td>全体表示（1×）からもズームアウト可（最小 0.25×、最大 24×）</td>
                     </tr>
                     <tr>
-                        <td>高速ズーム（３倍）</td>
-                        <td><kbd>Ctrl</kbd>+ホイール</td>
-                        <td></td>
+                        <td>高速ズーム（3倍）</td>
+                        <td><kbd>Ctrl</kbd>+ホイール（波形上）</td>
+                        <td>—</td>
                     </tr>
                     <tr>
                         <td>ズーム</td>
-                        <td><kbd>+</kbd><kbd>−</kbd></td>
-                        <td>マーカーパネル外・入力欄外</td>
+                        <td><kbd>+</kbd>／<kbd>−</kbd>（テンキー可）</td>
+                        <td>マーカーパネル内では無効。<kbd>Alt</kbd> 押下中も無効（Ex リージョン音量と競合しないよう）</td>
                     </tr>
                     <tr>
-                        <td>高速ズーム（３倍）</td>
-                        <td><kbd>Shift</kbd>+<kbd>+</kbd><kbd>Shift</kbd>+<kbd>−</kbd></td>
-                        <td></td>
+                        <td>高速ズーム（3倍）</td>
+                        <td><kbd>Shift</kbd>+<kbd>+</kbd>／<kbd>−</kbd>（テンキー可）</td>
+                        <td>同上。<kbd>Shift</kbd> または <kbd>Ctrl</kbd> 併用でも高速</td>
                     </tr>
                     <tr>
                         <td>波形全体表示（ズーム 1×）</td>
@@ -162,61 +197,107 @@
                     </tr>
                     <tr>
                         <td>横スクロール</td>
-                        <td><kbd>Shift</kbd>+ホイール</td>
-                        <td>ズーム時</td>
+                        <td><kbd>Shift</kbd>+ホイール（波形上）</td>
+                        <td>ズームして横スクロール可能なときのみ</td>
                     </tr>
                     <tr>
-                        <td>高速横スクロール（３倍）</td>
-                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+ホイール</td>
-                        <td>ズーム時</td>
+                        <td>高速横スクロール（3倍）</td>
+                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+ホイール（波形上）</td>
+                        <td>ズーム時のみ</td>
+                    </tr>
+                    <tr>
+                        <td>ソロ（ポインタ下の Video／Ex レーン）</td>
+                        <td><kbd>S</kbd></td>
+                        <td>波形レーン上にポインタがあるとき。左サイドバーの S ボタンと同じ</td>
+                    </tr>
+                    <tr>
+                        <td>ミュート（ポインタ下の Video／Ex レーン）</td>
+                        <td><kbd>M</kbd></td>
+                        <td>波形レーン上にポインタがあるとき。左サイドバーの M ボタンと同じ</td>
                     </tr>
                     <tr>
                         <td>アクティブトラック音量 ±1 dB</td>
-                        <td><kbd>PgUp</kbd><kbd>PgDn</kbd></td>
-                        <td>ポインタ下の Video / Ex レーン（0 dB をまたぐときは一度 0 dB で止まる）</td>
+                        <td><kbd>PgUp</kbd>／<kbd>PgDn</kbd></td>
+                        <td>ポインタ下の Video／Ex レーン（0 dB をまたぐときは一度 0 dB で止まる）</td>
                     </tr>
                     <tr>
                         <td>横スクロール</td>
-                        <td><kbd>PgUp</kbd><kbd>PgDn</kbd></td>
-                        <td>ズーム時のみ（上記音量が使えないとき）</td>
+                        <td><kbd>PgUp</kbd>／<kbd>PgDn</kbd></td>
+                        <td>ズーム時のみ。上記の音量操作が使えないとき（ポインタがレーン外など）</td>
                     </tr>
                     <tr>
-                        <td>高速横スクロール</td>
-                        <td><kbd>Shift</kbd>+<kbd>PgUp</kbd><kbd>Shift</kbd>+<kbd>PgDn</kbd></td>
+                        <td>高速横スクロール（3倍）</td>
+                        <td><kbd>Shift</kbd>+<kbd>PgUp</kbd>／<kbd>PgDn</kbd></td>
                         <td>ズーム時のみ</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">再生リージョン（追加音声 Ex のみ）</th>
+                        <th scope="colgroup" colspan="3">波形レーンにフォーカス時</th>
+                    </tr>
+                    <tr>
+                        <td>先頭へ</td>
+                        <td><kbd>Home</kbd></td>
+                        <td>波形レーン（<kbd>Tab</kbd> でフォーカス可）にフォーカスがあるとき</td>
+                    </tr>
+                    <tr>
+                        <td>末尾へ</td>
+                        <td><kbd>End</kbd></td>
+                        <td>同上</td>
+                    </tr>
+                    <tr>
+                        <td>1フレーム</td>
+                        <td><kbd>←</kbd>／<kbd>→</kbd></td>
+                        <td>同上。シーク・ジャンプの 1 フレームと同じ（レーンにフォーカスがあると他のショートカット用にフォーカスが外れる）</td>
+                    </tr>
+                    <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">範囲ループ（波形上）</th>
+                    </tr>
+                    <tr>
+                        <td>範囲指定</td>
+                        <td>右ドラッグ（波形上）</td>
+                        <td>指定区間のみループ再生。全体ループ（<kbd>L</kbd>）とは別</td>
+                    </tr>
+                    <tr>
+                        <td>解除</td>
+                        <td><kbd>Esc</kbd></td>
+                        <td>ドラッグ中・範囲ループ再生中</td>
+                    </tr>
+                    <tr>
+                        <td>解除</td>
+                        <td>右クリック（波形上）</td>
+                        <td>ドラッグ中・範囲ループ再生中</td>
+                    </tr>
+                    <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">再生リージョン（Ex のみ）</th>
                     </tr>
                     <tr>
                         <td>スプリット（2 リージョンに分割）</td>
                         <td><kbd>X</kbd></td>
-                        <td>対象の Ex レーン上にマウスを置いてから（リージョン内の位置で分割）</td>
+                        <td>対象の Ex レーン上にポインタを置いてから（リージョン内の位置で分割）</td>
                     </tr>
                     <tr>
                         <td>結合（隣接リージョンを 1 つに）</td>
                         <td><kbd>B</kbd></td>
-                        <td>ぴったり接している境界上にマウスを置いてから</td>
+                        <td>隣接境界上にポインタを置いてから</td>
                     </tr>
                     <tr>
                         <td>ソース In／Out・スプリット点</td>
-                        <td>Ex レーンのハンドル</td>
-                        <td>隣接時は境界を 1 本のスプリットハンドルで移動。離したあとは各リージョンに In/Out</td>
+                        <td>ハンドル操作（Ex レーン）</td>
+                        <td>隣接時は境界を 1 本のスプリットハンドルで移動。離した後は各リージョンに In／Out</td>
                     </tr>
                     <tr>
                         <td>クリップ開始位置（タイムライン）</td>
-                        <td>ドラッグ</td>
+                        <td>ドラッグ（Ex レーン）</td>
                         <td>リージョン上でドラッグ（他リージョン・動画終端・マーカーへスナップ可。重なり可・重なり部は等パワー・クロスフェード）</td>
                     </tr>
                     <tr>
                         <td>リージョン音量（補正 dB）</td>
-                        <td><kbd>Alt</kbd>+ホイール</td>
-                        <td>カーソル下の Ex リージョンを ±1 dB 刻み（上＝上げ・下＝下げ）。0 dB 以外はリージョン中央に赤文字表示。セッション保存・エクスポート／インポートに含む</td>
+                        <td><kbd>Alt</kbd>+ホイール（Ex レーン）</td>
+                        <td>ポインタ下の Ex リージョンを ±1 dB 刻み（上＝上げ・下＝下げ）。0 dB 以外はリージョン中央に赤文字表示。セッション保存・エクスポート／インポートに含む</td>
                     </tr>
                     <tr>
                         <td>リージョン情報をコピー</td>
                         <td><kbd>Ctrl</kbd>+<kbd>C</kbd></td>
-                        <td>カーソル下の Ex リージョン（ソース In/Out・クリップ・リードパッド・音量補正 dB 等）</td>
+                        <td>ポインタ下の Ex リージョン（ソース In／Out・クリップ・リードパッド・音量補正 dB 等）</td>
                     </tr>
                     <tr>
                         <td>リージョンをトラック末尾にペースト</td>
@@ -225,155 +306,79 @@
                     </tr>
                     <tr>
                         <td>同一 Ex レーンへの追加ファイル</td>
-                        <td>ドロップ</td>
+                        <td>ドロップ（Ex レーン）</td>
                         <td>読み込み済み Ex レーン上へドロップすると別クリップとして追加（トラックあたり複数波形ファイル可）</td>
                     </tr>
                     <tr>
                         <td>次の Ex トラックを表示</td>
                         <td>+ Add Track</td>
-                        <td>各 Ex レーン下部のボタン。空きトラックが無いときの自動表示はしません</td>
+                        <td>各 Ex レーン下部のボタン。空きトラックが無いときの自動表示はしない</td>
                     </tr>
                     <tr>
                         <td>リージョン削除</td>
                         <td><kbd>Del</kbd></td>
-                        <td>カーソル下の Ex リージョンを削除（最後の 1 つで全解除）</td>
+                        <td>ポインタ下の Ex リージョンを削除（最後の 1 つで全解除）。マーカー削除より先に判定</td>
                     </tr>
                     <tr>
                         <td>元に戻す（スプリット・削除・範囲変更など）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
-                        <td>リージョン編集の履歴をさかのぼる（<kbd>Cmd</kbd>+<kbd>Z</kbd> 可・回数無制限）</td>
+                        <td>リージョン編集の履歴をさかのぼる（回数無制限）</td>
                     </tr>
                     <tr>
                         <td>やり直し</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
-                        <td>Undo で戻した操作を進める（<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 可）</td>
+                        <td>元に戻すで戻した操作を進める</td>
                     </tr>
                     <tr>
                         <td>解除</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>ポインタ下の Ex レーン、または全 Ex</td>
-                    </tr>
-                    <tr>
-                        <td>ソロ（ポインタ下の Video / Ex レーン）</td>
-                        <td><kbd>S</kbd></td>
-                        <td>波形レーン上にマウスを置いた状態で</td>
-                    </tr>
-                    <tr>
-                        <td>ミュート（ポインタ下の Video / Ex レーン）</td>
-                        <td><kbd>M</kbd></td>
-                        <td>波形レーン上にマウスを置いた状態で</td>
+                        <td>ハンドル操作中はドラッグ取消。それ以外はポインタ下の Ex レーン、または全 Ex のリージョン解除</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">範囲ループ（波形上）</th>
+                        <th scope="colgroup" colspan="3">レビューの保存・共有（.mgacr）</th>
                     </tr>
                     <tr>
-                        <td>範囲指定</td>
-                        <td>右ドラッグ（波形上）</td>
-                        <td></td>
+                        <td>Import Review（インポート）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td>
+                        <td>トランスポート最下段の Import Review と同じ</td>
                     </tr>
                     <tr>
-                        <td>解除</td>
-                        <td><kbd>Esc</kbd></td>
-                        <td>ドラッグ中・ループ再生中</td>
+                        <td>Export Review（エクスポート）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td>
+                        <td>トランスポート最下段の Export Review と同じ</td>
                     </tr>
                     <tr>
-                        <td>解除</td>
-                        <td>右クリック</td>
-                        <td>ドラッグ中・ループ再生中</td>
+                        <td>All Clear（全体クリア）</td>
+                        <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Del</kbd></td>
+                        <td>動画・追加音声・マーカー・保存セッションをまとめて解除（トランスポート上段の All Clear と同じ）</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
+                        <th scope="colgroup" colspan="3"><kbd>Esc</kbd> の優先順位（入力欄でも有効なものあり）</th>
                     </tr>
                     <tr>
-                        <td>In／Out ドラッグ</td>
-                        <td>ハンドル操作（波形上）</td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>タイムライン上の表示／非表示</td>
-                        <td><kbd>V</kbd></td>
-                        <td>トグル（マーカーが 1 件以上あるとき）</td>
-                    </tr>
-                    <tr>
-                        <td>ポイント追加</td>
-                        <td><kbd>Ins</kbd>（短押し）</td>
-                        <td>押してから離すまで 0.2 秒未満・入力欄外</td>
-                    </tr>
-                    <tr>
-                        <td>範囲追加</td>
-                        <td><kbd>Ins</kbd>（長押し）</td>
-                        <td>0.2 秒以上押したまま離すと押下〜離しの位置で範囲マーカー・入力欄外</td>
-                    </tr>
-                    <tr>
-                        <td>範囲 In</td>
-                        <td><kbd>[</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>範囲 Out</td>
-                        <td><kbd>]</kbd></td>
-                        <td>In 設定後のみ</td>
-                    </tr>
-                    <tr>
-                        <td>マーカー停止点へ移動</td>
-                        <td><kbd>Shift</kbd>+<kbd>↑</kbd><kbd>Shift</kbd>+<kbd>↓</kbd></td>
-                        <td>入力欄外</td>
-                    </tr>
-                    <tr>
-                        <td>Feedback 行の前後へ</td>
-                        <td><kbd>Alt</kbd>+<kbd>↑</kbd><kbd>Alt</kbd>+<kbd>↓</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>選択中マーカー削除</td>
-                        <td><kbd>Del</kbd><kbd>Backspace</kbd></td>
-                        <td>入力欄外</td>
-                    </tr>
-                    <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">マーカー TC 編集（In／Out 列）</th>
-                    </tr>
-                    <tr>
-                        <td>±１フレーム</td>
-                        <td><kbd>+</kbd><kbd>−</kbd></td>
-                        <td>In / Out 欄フォーカス、または Out 列ホバーで Out 対象。Out 空時は In を起点に Out を設定</td>
-                    </tr>
-                    <tr>
-                        <td>±１秒</td>
-                        <td><kbd>Shift</kbd>+<kbd>+</kbd><kbd>Shift</kbd>+<kbd>−</kbd></td>
-                        <td>同上（Out 空時も In 起点）</td>
-                    </tr>
-                    <tr>
-                        <td>Out クリア</td>
-                        <td><kbd>Del</kbd></td>
-                        <td>Out 欄フォーカス時（範囲→点に戻す）</td>
-                    </tr>
-                    <tr>
-                        <td>確定</td>
-                        <td><kbd>Enter</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr>
-                        <td>編集取消</td>
+                        <td>1. 範囲マーカー In 確定待ちの取消</td>
                         <td><kbd>Esc</kbd></td>
-                        <td></td>
-                    </tr>
-                    <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">Esc の優先順位</th>
+                        <td><kbd>Ins</kbd> 長押しで In プレビュー中など</td>
                     </tr>
                     <tr>
-                        <td>１. 範囲 In 保留の取消</td>
+                        <td>2. 範囲ループの解除</td>
                         <td><kbd>Esc</kbd></td>
-                        <td></td>
+                        <td>右ドラッグ中・範囲ループ再生中</td>
                     </tr>
                     <tr>
-                        <td>２. 範囲ループの解除</td>
+                        <td>3. 再生リージョン</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>ドラッグ中・再生中</td>
+                        <td>ハンドル操作中はドラッグ取消。それ以外は Ex レーンまたは全 Ex のリージョン解除</td>
                     </tr>
                     <tr>
-                        <td>３. マーカー選択解除</td>
+                        <td>4. マーカー TC 欄の編集取消</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>選択中・コメント編集中・マーカーパネル内フォーカス時</td>
+                        <td>In／Out 欄を編集中</td>
+                    </tr>
+                    <tr>
+                        <td>5. マーカー選択解除</td>
+                        <td><kbd>Esc</kbd></td>
+                        <td>マーカー選択中・Feedback 編集中・マーカーパネル内フォーカス時</td>
                     </tr>
                 </tbody>
         </table>

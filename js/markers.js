@@ -1764,7 +1764,7 @@
             if (handleMarkerTcInputNudgeKey(ev, input, m, edge)) return;
             if (
                 edge === 'out' &&
-                (ev.key === 'Delete' || ev.code === 'Delete') &&
+                (ev.code === 'Delete' || ev.code === 'Backspace') &&
                 !ev.ctrlKey &&
                 !ev.altKey &&
                 !ev.metaKey &&
