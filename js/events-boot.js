@@ -222,31 +222,6 @@
         });
     }
 
-    if (videoFrameDelayInput) {
-        videoFrameDelayInput.addEventListener('input', () => {
-            const digits = videoFrameDelayInput.value.replace(/\D/g, '').slice(0, 2);
-            if (videoFrameDelayInput.value !== digits) videoFrameDelayInput.value = digits;
-            if (typeof commitVideoFrameDelayFromInput === 'function') {
-                if (commitVideoFrameDelayFromInput()) {
-                    applyVideoFrameDelayToTransportNow();
-                }
-            }
-        });
-        const commitFrameDelayFromInput = () => {
-            if (commitVideoFrameDelayFromInput()) {
-                logAndPersistVideoFrameDelay();
-            }
-        };
-        videoFrameDelayInput.addEventListener('change', commitFrameDelayFromInput);
-        videoFrameDelayInput.addEventListener('blur', commitFrameDelayFromInput);
-        videoFrameDelayInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                videoFrameDelayInput.blur();
-            }
-        });
-    }
-
     playStopBtn.addEventListener('click', async () => {
         const ready =
             typeof transportControlsReady === 'function'

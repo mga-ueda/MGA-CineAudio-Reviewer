@@ -168,7 +168,7 @@
         flashSeekHint('Scrub', formatTimecodeForTransport(t));
     }
 
-    /** ブラウザ内ユーザー設定（Video Delay・モニター床・Loop 等）。Import/Export・IndexedDB セッションとは別。 */
+    /** ブラウザ内ユーザー設定（モニター床・Loop 等）。Import/Export・IndexedDB セッションとは別。 */
     function readPrefs() {
         try {
             const raw = localStorage.getItem(LS_PREFS_KEY);
@@ -199,7 +199,6 @@
             const prev = readPrefs();
             const payload = {
                 loopPlayback: getLoopPlaybackEnabled(),
-                frameDelayFrames: getVideoFrameDelayFrames(),
             };
             if (prev.exportMediaInclude && typeof prev.exportMediaInclude === 'object') {
                 payload.exportMediaInclude = prev.exportMediaInclude;

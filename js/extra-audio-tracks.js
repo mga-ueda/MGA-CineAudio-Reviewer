@@ -399,7 +399,6 @@
     let videoMediaSrc = null;
     let videoGainNode = null;
     let videoAnalyser = null;
-    let reviewMixVideoDelayNode = null;
     let reviewMixVideoWired = false;
     let reviewMixVideoWireFailed = false;
     /** 0 dB 超: captureStream → GainNode → master（MediaElementSource は使わない） */
@@ -409,13 +408,6 @@
     let videoMonitorStreamSrc = null;
     let videoMonitorSinkGain = null;
     let nativeVideoMixModeLogged = false;
-    /** Video Delay > 0: 映像のみ element、内蔵音声は decode buffer → Web Audio（transport 同期） */
-    let reviewMixVideoBufferPlayback = false;
-    let reviewMixVideoBufferLogged = false;
-    let reviewMixVideoBufferRouted = false;
-    let videoBufferSource = null;
-    let videoBufferPlaybackAnchorTransportSec = null;
-    let videoBufferPlaybackAnchorCtxTime = null;
     let extraMixScheduleCtxTime = 0;
     let videoAudioSoloBtn = null;
     let videoAudioMuteBtn = null;
@@ -458,21 +450,6 @@
 
     function getVideoTrackEffectiveGain() {
         if (!isVideoAudioAudible()) return 0;
-        if (reviewMixVideoBufferPlayback || shouldUseVideoDelayBufferAudioPath()) {
-            const vd = getVideoTransportDurationSecForMix();
-            if (vd > 0) {
-                const t = getMasterTransportSecForAudioSync();
-                if (!Number.isFinite(t) || t >= vd - 0.001) return 0;
-            }
-            if (
-                isTransportPlayingForExtra() &&
-                typeof transportPlaybackIsInMasterTail === 'function' &&
-                transportPlaybackIsInMasterTail()
-            ) {
-                return 0;
-            }
-            return clampTrackLaneGainLinear(videoMix.volLinear);
-        }
         if (!isVideoMixOutputActive()) return 0;
         return clampTrackLaneGainLinear(videoMix.volLinear);
     }
@@ -536,11 +513,7 @@
 
     function isVideoTrackLaneMeterSilent() {
         if (!isVideoAudioAudible()) return true;
-        if (
-            reviewMixVideoBufferPlayback ||
-            reviewMixVideoWired ||
-            reviewMixVideoBoostPlayback
-        ) {
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
             return getVideoTrackEffectiveGain() <= 0;
         }
         return !videoMonitorStreamSrc;
@@ -549,11 +522,7 @@
     /** モニタータップ用ゲイン（ブースト／MES／buffer 時はフェーダー線形値、ネイティブ時は video.volume）。 */
     function getVideoMonitorTapGainLinear() {
         if (!isVideoAudioAudible()) return 0;
-        if (
-            reviewMixVideoBufferPlayback ||
-            reviewMixVideoWired ||
-            reviewMixVideoBoostPlayback
-        ) {
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
             return getVideoTrackEffectiveGain();
         }
         if (!videoMain || videoMain.muted) return 0;
@@ -613,12 +582,7 @@
         if (vd <= 0) return true;
         const t = getMasterTransportSecForAudioSync();
         if (Number.isFinite(t) && t < vd - 0.001) return true;
-        if (
-            videoMain &&
-            typeof videoReady === 'function' &&
-            videoReady() &&
-            getVideoFrameDelaySecForMix() <= 0.0005
-        ) {
+        if (videoMain && typeof videoReady === 'function' && videoReady()) {
             const vt = videoMain.currentTime || 0;
             if (Number.isFinite(vt) && vt < vd - 0.05) return true;
         }
@@ -649,14 +613,13 @@
 
     /** 0 dB 超のブースト（captureStream → master、要素のネイティブ出力は止める）。 */
     function shouldPlayVideoAudioViaCaptureBoost() {
-        if (shouldUseVideoDelayBufferAudioPath()) return false;
         if (reviewMixVideoWireFailed || useReviewMixVideoWebAudioRouting()) return false;
         return videoMixNeedsWebAudioBoost();
     }
 
     /** 動画音声が video 要素のスピーカー直出力（Web Audio 未接続時のみ）。 */
     function isVideoAudioPlaybackViaNativeElement() {
-        return !reviewMixVideoWired && !reviewMixVideoBoostPlayback && !reviewMixVideoBufferPlayback;
+        return !reviewMixVideoWired && !reviewMixVideoBoostPlayback;
     }
 
     function getVideoCaptureStreamFn() {
@@ -670,32 +633,6 @@
         return null;
     }
 
-    function getVideoFrameDelaySecForMix() {
-        return typeof getVideoFrameDelaySec === 'function' ? getVideoFrameDelaySec() : 0;
-    }
-
-    function getMainVideoAudioBufferForPlayback() {
-        if (typeof getMainVideoAudioBuffer === 'function') {
-            return getMainVideoAudioBuffer();
-        }
-        return null;
-    }
-
-    function hasMainVideoAudioBufferForPlayback() {
-        const buf = getMainVideoAudioBufferForPlayback();
-        return !!(buf && buf.duration > 0.002);
-    }
-
-    /** Video Delay 有効時は element 音声を止め、decode buffer 経由で transport に同期再生する。 */
-    function shouldUseVideoDelayBufferAudioPath() {
-        if (getVideoFrameDelaySecForMix() <= 0.0005) return false;
-        return isVideoAudioAudible();
-    }
-
-    function shouldPlayVideoAudioViaBuffer() {
-        return shouldUseVideoDelayBufferAudioPath() && hasMainVideoAudioBufferForPlayback();
-    }
-
     /**
      * MES 経由時は video.muted=true だと無音になる実装がある。
      * ブースト時は capture 用に muted=false・volume=0（スピーカーは Web Audio のみ）。
@@ -703,11 +640,6 @@
      */
     function syncVideoElementOutputForReviewMix() {
         if (!videoMain) return;
-        if (shouldUseVideoDelayBufferAudioPath()) {
-            videoMain.muted = true;
-            videoMain.volume = 0;
-            return;
-        }
         if (reviewMixVideoWired || reviewMixVideoBoostPlayback) {
             videoMain.muted = false;
             videoMain.volume = 0;
@@ -766,10 +698,6 @@
         if (!ctx) return false;
         const master = ensureReviewMixMasterBus(ctx);
         if (!master) return false;
-        if (!reviewMixVideoDelayNode) {
-            reviewMixVideoDelayNode = ctx.createDelay(120);
-            reviewMixVideoDelayNode.delayTime.value = 0;
-        }
         if (!videoGainNode) {
             videoGainNode = ctx.createGain();
         }
@@ -782,15 +710,10 @@
         } catch (_) {}
         if (vMeter) {
             videoGainNode.connect(vMeter);
-            vMeter.connect(reviewMixVideoDelayNode);
+            vMeter.connect(master);
         } else {
-            videoGainNode.connect(reviewMixVideoDelayNode);
+            videoGainNode.connect(master);
         }
-        try {
-            reviewMixVideoDelayNode.disconnect();
-        } catch (_) {}
-        reviewMixVideoDelayNode.connect(master);
-        applyReviewMixVideoDelay();
         if (!videoMediaSrc) {
             if (!canBindReviewMixVideoMediaSource()) {
                 return false;
@@ -818,215 +741,6 @@
         return reviewMixVideoWired;
     }
 
-    function applyReviewMixVideoDelay() {
-        if (!reviewMixVideoDelayNode) return;
-        try {
-            reviewMixVideoDelayNode.delayTime.value = 0;
-        } catch (_) {}
-    }
-
-    function stopVideoBufferAudioSource() {
-        if (!videoBufferSource) return;
-        try {
-            videoBufferSource.stop();
-        } catch (_) {}
-        try {
-            videoBufferSource.disconnect();
-        } catch (_) {}
-        videoBufferSource = null;
-        videoBufferPlaybackAnchorTransportSec = null;
-        videoBufferPlaybackAnchorCtxTime = null;
-    }
-
-    function clearReviewMixVideoBufferRouting() {
-        reviewMixVideoBufferRouted = false;
-    }
-
-    function applyReviewMixVideoGainForSync() {
-        if (shouldUseVideoDelayBufferAudioPath() && reviewMixVideoBufferRouted) {
-            reviewMixVideoBufferPlayback = true;
-            syncVideoElementOutputForReviewMix();
-            applyVideoBufferAudioGain();
-            return;
-        }
-        applyReviewMixVideoGain();
-    }
-
-    function ensureVideoBufferAudioRouting() {
-        if (reviewMixVideoBufferRouted && videoGainNode) return true;
-        const ctx = ensureReviewMixCtx();
-        if (!ctx) return false;
-        const master = ensureReviewMixMasterBus(ctx);
-        if (!master) return false;
-        if (!videoGainNode) videoGainNode = ctx.createGain();
-        const vMeter = ensureVideoTrackAnalyser(ctx);
-        try {
-            videoGainNode.disconnect();
-        } catch (_) {}
-        try {
-            if (vMeter) vMeter.disconnect();
-        } catch (_) {}
-        if (vMeter) {
-            videoGainNode.connect(vMeter);
-            vMeter.connect(master);
-        } else {
-            videoGainNode.connect(master);
-        }
-        reviewMixVideoBufferRouted = true;
-        return true;
-    }
-
-    function applyVideoBufferAudioGain() {
-        if (!videoGainNode) return;
-        const g = getVideoTrackEffectiveGain();
-        const ctx = ensureReviewMixCtx();
-        try {
-            if (ctx && ctx.state === 'running') {
-                videoGainNode.gain.setTargetAtTime(g, ctx.currentTime, 0.02);
-            } else {
-                videoGainNode.gain.value = g;
-            }
-        } catch (_) {
-            videoGainNode.gain.value = g;
-        }
-        if (ctx && ctx.state === 'suspended') {
-            void ctx.resume().catch(() => {});
-        }
-    }
-
-    function isVideoBufferSourceAudibleOnCtx(ctx) {
-        if (
-            !videoBufferSource ||
-            !Number.isFinite(videoBufferPlaybackAnchorCtxTime)
-        ) {
-            return false;
-        }
-        return ctx.currentTime >= videoBufferPlaybackAnchorCtxTime - 0.0005;
-    }
-
-    function expectedTransportSecForVideoBuffer(ctx) {
-        if (
-            !videoBufferSource ||
-            !Number.isFinite(videoBufferPlaybackAnchorTransportSec) ||
-            !Number.isFinite(videoBufferPlaybackAnchorCtxTime)
-        ) {
-            return null;
-        }
-        if (ctx.currentTime < videoBufferPlaybackAnchorCtxTime) {
-            return videoBufferPlaybackAnchorTransportSec;
-        }
-        return (
-            videoBufferPlaybackAnchorTransportSec +
-            (ctx.currentTime - videoBufferPlaybackAnchorCtxTime)
-        );
-    }
-
-    function shouldVideoBufferSourceBePlaying(audioT, buffer) {
-        if (!shouldPlayVideoAudioViaBuffer()) return false;
-        if (!isTransportPlayingForExtra()) return false;
-        const off = Number(audioT);
-        if (!Number.isFinite(off)) return false;
-        if (off < -0.0005 || off >= buffer.duration - 0.002) return false;
-        return true;
-    }
-
-    function videoBufferNeedsResync(targetSec, ctx) {
-        if (!shouldUseVideoDelayBufferAudioPath()) {
-            return videoBufferSource != null;
-        }
-        const buffer = getMainVideoAudioBufferForPlayback();
-        if (!buffer) {
-            return videoBufferSource != null;
-        }
-        const audioT = getAudioSyncTransportSec();
-        if (!shouldVideoBufferSourceBePlaying(audioT, buffer)) {
-            return videoBufferSource != null;
-        }
-        if (!videoBufferSource) return true;
-        if (!isVideoBufferSourceAudibleOnCtx(ctx)) return false;
-        const expected = expectedTransportSecForVideoBuffer(ctx);
-        return (
-            expected == null ||
-            Math.abs(expected - targetSec) > EXTRA_AUDIO_RESYNC_DRIFT_SEC
-        );
-    }
-
-    function startVideoBufferAudioSource(offsetSec, opt) {
-        stopVideoBufferAudioSource();
-        const buffer = getMainVideoAudioBufferForPlayback();
-        if (!buffer || !shouldPlayVideoAudioViaBuffer()) return;
-        const ctx = ensureReviewMixCtx();
-        if (!ctx) return;
-        ensureVideoBufferAudioRouting();
-        applyVideoBufferAudioGain();
-        const off = Math.max(0, Number(offsetSec) || 0);
-        const maxOff = Math.max(0, buffer.duration - 0.002);
-        const startAt = Math.min(off, maxOff);
-        let remain = buffer.duration - startAt;
-        if (opt && Number.isFinite(opt.playRemainSec)) {
-            remain = Math.min(remain, Math.max(0, opt.playRemainSec));
-        }
-        if (remain <= 0.002) return;
-        const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
-        const src = ctx.createBufferSource();
-        src.buffer = buffer;
-        src.connect(videoGainNode);
-        src.start(scheduleWhen, startAt, remain);
-        videoBufferSource = src;
-        videoBufferPlaybackAnchorTransportSec =
-            opt && Number.isFinite(opt.transportSec) ? opt.transportSec : off;
-        videoBufferPlaybackAnchorCtxTime = scheduleWhen;
-        src.onended = () => {
-            if (videoBufferSource === src) {
-                videoBufferSource = null;
-                videoBufferPlaybackAnchorTransportSec = null;
-                videoBufferPlaybackAnchorCtxTime = null;
-            }
-            scheduleMasterPlaybackFinishCheck();
-        };
-    }
-
-    function syncVideoBufferAudioToTransport(opt) {
-        const force = !!(opt && opt.force);
-        if (!isTransportPlayingForExtra()) {
-            stopVideoBufferAudioSource();
-            return;
-        }
-        if (!shouldUseVideoDelayBufferAudioPath()) {
-            stopVideoBufferAudioSource();
-            return;
-        }
-        ensureVideoBufferAudioRouting();
-        applyVideoBufferAudioGain();
-        const buffer = getMainVideoAudioBufferForPlayback();
-        if (!buffer) {
-            stopVideoBufferAudioSource();
-            return;
-        }
-        const ctx = ensureReviewMixCtx();
-        if (!ctx) return;
-        const masterT = getMasterTransportSecForAudioSync();
-        const audioT = getAudioSyncTransportSec();
-        if (!shouldVideoBufferSourceBePlaying(audioT, buffer)) {
-            stopVideoBufferAudioSource();
-            return;
-        }
-        const bufferOff = audioT;
-        let needsStart = force || !videoBufferSource;
-        if (!needsStart && videoBufferSource && isVideoBufferSourceAudibleOnCtx(ctx)) {
-            const expected = expectedTransportSecForVideoBuffer(ctx);
-            needsStart =
-                expected == null ||
-                Math.abs(expected - masterT) > EXTRA_AUDIO_RESYNC_DRIFT_SEC;
-        }
-        if (!needsStart) return;
-        startVideoBufferAudioSource(bufferOff, {
-            when: opt && opt.when,
-            transportSec: masterT,
-            playRemainSec: buffer.duration - bufferOff,
-        });
-    }
-
     function releaseReviewMixVideoCaptureGraph() {
         reviewMixVideoBoostPlayback = false;
         if (videoMonitorStreamSrc) {
@@ -1049,11 +763,6 @@
         if (videoAnalyser) {
             try {
                 videoAnalyser.disconnect();
-            } catch (_) {}
-        }
-        if (reviewMixVideoDelayNode) {
-            try {
-                reviewMixVideoDelayNode.disconnect();
             } catch (_) {}
         }
     }
@@ -1107,7 +816,6 @@
     function ensureReviewMixVideoMonitorTap(opt) {
         if (
             !videoMain ||
-            shouldUseVideoDelayBufferAudioPath() ||
             shouldPlayVideoAudioViaWebAudio() ||
             shouldPlayVideoAudioViaCaptureBoost()
         ) {
@@ -1201,10 +909,6 @@
         if (!ctx) return false;
         const master = ensureReviewMixMasterBus(ctx);
         if (!master) return false;
-        if (!reviewMixVideoDelayNode) {
-            reviewMixVideoDelayNode = ctx.createDelay(120);
-            reviewMixVideoDelayNode.delayTime.value = 0;
-        }
         if (!videoGainNode) videoGainNode = ctx.createGain();
         const vMeter = ensureVideoTrackAnalyser(ctx);
         const forceRecapture = !!(opt && opt.forceRecapture);
@@ -1234,20 +938,15 @@
                 if (vMeter) vMeter.disconnect();
             } catch (_) {}
             try {
-                reviewMixVideoDelayNode.disconnect();
-            } catch (_) {}
-            try {
                 if (videoMonitorSinkGain) videoMonitorSinkGain.disconnect();
             } catch (_) {}
             videoMonitorStreamSrc.connect(videoGainNode);
             if (vMeter) {
                 videoGainNode.connect(vMeter);
-                vMeter.connect(reviewMixVideoDelayNode);
+                vMeter.connect(master);
             } else {
-                videoGainNode.connect(reviewMixVideoDelayNode);
+                videoGainNode.connect(master);
             }
-            reviewMixVideoDelayNode.connect(master);
-            applyReviewMixVideoDelay();
             reviewMixVideoBoostPlayback = true;
             syncVideoElementOutputForReviewMix();
             applyReviewMixVideoCapturePlaybackGain();
@@ -1268,38 +967,10 @@
 
     function applyReviewMixVideoGain(opt) {
         if (!videoMain) {
-            stopVideoBufferAudioSource();
-            reviewMixVideoBufferPlayback = false;
             return;
         }
         clearStaleReviewMixVideoWiredFlag();
 
-        if (shouldUseVideoDelayBufferAudioPath()) {
-            if (!reviewMixVideoBufferRouted) {
-                releaseReviewMixVideoBoostPlayback();
-                releaseReviewMixVideoCaptureGraph();
-                if (!ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && videoMediaSrc) {
-                    releaseReviewMixVideoWebAudioTap({ resetElement: true });
-                    reviewMixVideoWired = false;
-                    reviewMixVideoWireFailed = false;
-                }
-            }
-            ensureVideoBufferAudioRouting();
-            syncVideoElementOutputForReviewMix();
-            applyVideoBufferAudioGain();
-            reviewMixVideoBufferPlayback = true;
-            if (!reviewMixVideoBufferLogged) {
-                reviewMixVideoBufferLogged = true;
-                writeLog(
-                    'Review mix: video audio via decoded buffer (Video Delay — picture only delayed)',
-                );
-            }
-            return;
-        }
-
-        reviewMixVideoBufferPlayback = false;
-        clearReviewMixVideoBufferRouting();
-        stopVideoBufferAudioSource();
         if (!ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO && videoMediaSrc) {
             releaseReviewMixVideoWebAudioTap({ resetElement: true });
             reviewMixVideoWired = false;
@@ -1321,7 +992,6 @@
             releaseReviewMixVideoCaptureGraph();
             if (ensureReviewMixVideoRouting()) {
                 syncVideoElementOutputForReviewMix();
-                applyReviewMixVideoDelay();
                 if (videoGainNode) {
                     const g = getVideoTrackEffectiveGain();
                     const ctx = ensureReviewMixCtx();
@@ -2057,10 +1727,6 @@
     function reviewMixNeedsPlaybackSync() {
         if (!isTransportPlayingForExtra()) return false;
         if (extraTrackRoutingMismatch()) return true;
-        const ctx = ensureReviewMixCtx();
-        if (ctx && videoBufferNeedsResync(getMasterTransportSecForAudioSync(), ctx)) {
-            return true;
-        }
         const audioT = getAudioSyncTransportSec();
         const active =
             typeof getActiveExtraSegmentsAtTransport === 'function'
@@ -2145,7 +1811,6 @@
     }
 
     function extraAudioSourcesActive() {
-        if (videoBufferSource) return true;
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
             if (!tr || !isExtraTrackAudible(i)) continue;
@@ -2163,22 +1828,6 @@
     function getTransportSecFromActiveExtraMix(ctx) {
         let best = null;
         let anyActive = false;
-        const buffer = getMainVideoAudioBufferForPlayback();
-        if (
-            videoBufferSource &&
-            buffer &&
-            shouldPlayVideoAudioViaBuffer() &&
-            isVideoBufferSourceAudibleOnCtx(ctx)
-        ) {
-            const audioT = getAudioSyncTransportSec();
-            if (shouldVideoBufferSourceBePlaying(audioT, buffer)) {
-                const expected = expectedTransportSecForVideoBuffer(ctx);
-                if (expected != null && Number.isFinite(expected)) {
-                    anyActive = true;
-                    best = expected;
-                }
-            }
-        }
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             if (!isExtraTrackAudible(i)) continue;
             if (!shouldExtraTrackSourceBePlaying(i)) continue;
@@ -2550,9 +2199,6 @@
         reviewMixVideoWired = false;
         reviewMixVideoWireFailed = false;
         releaseReviewMixVideoMonitorTap();
-        stopVideoBufferAudioSource();
-        reviewMixVideoBufferPlayback = false;
-        clearReviewMixVideoBufferRouting();
         videoGainNode = null;
         videoAnalyser = null;
         const nv = document.createElement('video');
@@ -2576,10 +2222,6 @@
     function prepareReviewMixForNewVideoLoad() {
         reviewMixVideoWireFailed = false;
         reviewMixVideoBoostLogged = false;
-        reviewMixVideoBufferLogged = false;
-        stopVideoBufferAudioSource();
-        reviewMixVideoBufferPlayback = false;
-        clearReviewMixVideoBufferRouting();
         releaseReviewMixVideoMonitorTap();
         const hadLoadedVideo = typeof fileMain !== 'undefined' && !!fileMain;
         if (videoMediaSrc) {
@@ -2695,10 +2337,9 @@
         const playing = isTransportPlayingForExtra();
         const masterT = getMasterTransportSecForAudioSync();
         const audioT = getAudioSyncTransportSec();
-        applyReviewMixVideoGainForSync();
+        applyReviewMixVideoGain();
         if (!playing) {
             stopAllExtraTrackSources();
-            stopVideoBufferAudioSource();
             return;
         }
         const ctx = ensureReviewMixCtx();
@@ -2708,30 +2349,25 @@
                 ? getActiveExtraSegmentsAtTransport(audioT)
                 : [];
         const crossfadeActive = reviewMixHasCrossfadeAtTransport(audioT);
-        const videoBufResync = videoBufferNeedsResync(masterT, ctx);
         if (
             !force &&
             crossfadeActive &&
             segmentSourcesReadyForActive(allActiveAtT) &&
-            !extraTracksNeedResync(masterT, ctx) &&
-            !videoBufResync
+            !extraTracksNeedResync(masterT, ctx)
         ) {
             applySegmentCrossfadeGains(ctx, allActiveAtT, audioT);
             pruneExtraSegmentSourcesToActive(allActiveAtT);
-            applyReviewMixVideoGainForSync();
-            syncVideoBufferAudioToTransport(opt);
+            applyReviewMixVideoGain();
             return;
         }
         if (
             !force &&
             !crossfadeActive &&
             !extraTracksNeedResync(masterT, ctx) &&
-            !videoBufResync &&
-            (extraAudioSourcesActive() || videoBufferSource)
+            extraAudioSourcesActive()
         ) {
             pruneExtraSegmentSourcesToActive(allActiveAtT);
-            applyReviewMixVideoGainForSync();
-            syncVideoBufferAudioToTransport(opt);
+            applyReviewMixVideoGain();
             return;
         }
         resetExtraMixScheduleTime();
@@ -2740,7 +2376,7 @@
         if (crossfadeActive) {
             applySegmentCrossfadeGains(ctx, allActiveAtT, audioT);
         }
-        applyReviewMixVideoGainForSync();
+        applyReviewMixVideoGain();
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             stopExtraTrackSourceIfPastPlayableEnd(i);
             const tr = extraTrackBySlot(i);
@@ -2813,10 +2449,6 @@
                 playRemainSec: tr.buffer.duration - bufferOff,
             });
         }
-        syncVideoBufferAudioToTransport({
-            force,
-            when: scheduleWhen,
-        });
     }
 
     function syncExtraAudioToTransport(opt) {
@@ -2833,17 +2465,14 @@
         }
         applyReviewMixVideoGain({ forceRecapture: true });
         if (ctx) {
-            const mode = reviewMixVideoBufferPlayback
-                ? 'decoded buffer (Video Delay)'
-                : reviewMixVideoBoostPlayback
-                  ? 'capture boost'
-                  : reviewMixVideoWired
-                    ? 'Web Audio (MES)'
-                    : videoMonitorStreamSrc
-                      ? 'native + monitor tap'
-                      : 'native element';
+            const mode = reviewMixVideoBoostPlayback
+                ? 'capture boost'
+                : reviewMixVideoWired
+                  ? 'Web Audio (MES)'
+                  : videoMonitorStreamSrc
+                    ? 'native + monitor tap'
+                    : 'native element';
             const g =
-                reviewMixVideoBufferPlayback ||
                 reviewMixVideoBoostPlayback ||
                 reviewMixVideoWired
                     ? getVideoTrackEffectiveGain()

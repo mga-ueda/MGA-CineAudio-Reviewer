@@ -560,33 +560,12 @@
     }
 
     /** トランスポート位置に対応する映像 currentTime。 */
-    function videoFrameDelaySecForSync() {
-        if (typeof getVideoFrameDelaySec === 'function') return getVideoFrameDelaySec();
-        if (typeof getVideoFrameDelayFrames !== 'function') return 0;
-        const frames = getVideoFrameDelayFrames();
-        if (!frames || frames <= 0) return 0;
-        const frameSec =
-            typeof masterFrameSec === 'number' && masterFrameSec > 0
-                ? masterFrameSec
-                : 1 / 60;
-        return frames * frameSec;
-    }
-
-    function transportSecBeforeVideoDelayEnds(audioSec) {
-        const delaySec = videoFrameDelaySecForSync();
-        if (delaySec <= 0) return false;
-        const x = clampTransportSec(audioSec);
-        return x + 0.0005 < delaySec;
-    }
-
     function videoSecForTransportSec(audioSec) {
         const x = clampTransportSec(audioSec);
         const vd = getVideoPlaybackEndSec();
         if (!vd) return 0;
         if (x >= vd - 0.0005) return Math.max(0, vd - masterFrameSec);
-        const mapped = Math.max(0, Math.min(x, Math.max(0, vd - masterFrameSec)));
-        const delaySec = videoFrameDelaySecForSync();
-        return Math.max(0, mapped - delaySec);
+        return Math.max(0, Math.min(x, Math.max(0, vd - masterFrameSec)));
     }
 
     /** 映像 currentTime からトランスポート位置を推定（フォールバック用）。 */
@@ -632,31 +611,11 @@
         const target = videoSecForTransportSec(x);
         const cur = videoMain.currentTime || 0;
         const drift = Math.abs(cur - target);
-        const delaySec = videoFrameDelaySecForSync();
         const playing =
             typeof isTransportPlaying === 'function' && isTransportPlaying();
-        const holdForDelay = playing && transportSecBeforeVideoDelayEnds(x);
-        if (holdForDelay) {
-            if (Math.abs(cur - target) > 0.001) {
-                try {
-                    videoMain.currentTime = target;
-                } catch (_) {}
-            }
-            if (!videoMain.paused) {
-                try {
-                    videoMain.pause();
-                } catch (_) {}
-            }
-            const signed = sampleVideoDriftForPlayback(x, opt);
-            if (signed != null) {
-                refreshVideoDriftMonitorFromSample(x, signed);
-            }
-            return true;
-        }
         const steadyNativePlayback =
             !force &&
             playing &&
-            delaySec <= 0 &&
             !videoMain.seeking &&
             !videoMain.paused &&
             !videoMain.ended;
@@ -695,11 +654,7 @@
             } catch (_) {}
         }
         if (playing && videoMain.paused && !videoMain.ended) {
-            const mayStartVideo =
-                delaySec > 0
-                    ? !transportSecBeforeVideoDelayEnds(x)
-                    : target > 0.001;
-            if (mayStartVideo) {
+            if (target > 0.001) {
                 const p = videoMain.play();
                 if (p && typeof p.catch === 'function') p.catch(() => {});
             }
@@ -825,8 +780,11 @@
             typeof getTransportSecFromActiveExtraMix === 'function'
         ) {
             const fromMix = getTransportSecFromActiveExtraMix(ctx);
-            if (fromMix != null && Number.isFinite(fromMix)) {
-                applyTransportPlaybackSecFromExtraMix(fromMix, master);
+            if (
+                fromMix != null &&
+                Number.isFinite(fromMix) &&
+                applyTransportPlaybackSecFromExtraMix(fromMix, master)
+            ) {
                 return;
             }
         }
@@ -860,7 +818,7 @@
                 ? EXTRA_AUDIO_RESYNC_DRIFT_SEC
                 : 0.045;
         if (fromMix + drift < transportPlaybackSec) {
-            return;
+            return false;
         }
         transportPlaybackSec = fromMix;
         transportPlaybackLastTs = performance.now();
@@ -874,11 +832,12 @@
             if (typeof handleMasterTransportEndReached === 'function') {
                 void handleMasterTransportEndReached();
             }
-            return;
+            return true;
         }
         if (typeof maybeFinishMasterTransportPlayback === 'function') {
             maybeFinishMasterTransportPlayback();
         }
+        return true;
     }
 
     function syncReviewMixPlaybackIfNeeded() {
@@ -920,8 +879,11 @@
             typeof getTransportSecFromActiveExtraMix === 'function'
         ) {
             const fromMix = getTransportSecFromActiveExtraMix(ctx);
-            if (fromMix != null && Number.isFinite(fromMix)) {
-                applyTransportPlaybackSecFromExtraMix(fromMix, master);
+            if (
+                fromMix != null &&
+                Number.isFinite(fromMix) &&
+                applyTransportPlaybackSecFromExtraMix(fromMix, master)
+            ) {
                 syncReviewMixPlaybackIfNeeded();
                 return;
             }

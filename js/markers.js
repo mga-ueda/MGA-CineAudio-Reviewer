@@ -1149,16 +1149,7 @@
             .trim();
     }
 
-    /** Copy 用 TC: Video Delay > 0 のとき In/Out に遅延分を加算（トランスポート位置の TC） */
     function markerTcLabelForCopy(transportSec) {
-        const delaySec =
-            typeof getVideoFrameDelaySec === 'function' ? getVideoFrameDelaySec() : 0;
-        if (delaySec > 0.0005 && typeof videoReady === 'function' && videoReady()) {
-            return formatTimecodeForSide(
-                markerVideoSecForTransportSec(transportSec) + delaySec,
-                'main',
-            );
-        }
         return tcLabelForSec(transportSec);
     }
 

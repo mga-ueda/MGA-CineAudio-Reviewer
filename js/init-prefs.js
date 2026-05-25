@@ -5,7 +5,6 @@
             } else {
                 const p = readPrefs();
                 applySavedLoopPlayback(p.loopPlayback);
-                applySavedVideoFrameDelay(p.frameDelayFrames);
             }
         } catch (_) {}
     })();

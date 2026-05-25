@@ -1,4 +1,4 @@
-    const transportOptGlowClearTimers = { playback: 0, videoDelay: 0 };
+    const transportOptGlowClearTimers = { playback: 0 };
     let videoPanelDriftGlowTimer = 0;
 
     const LANE_STATUS_HIDE_RE =
@@ -36,7 +36,6 @@
     const TRANSPORT_OPT_BOX_SELECTOR = {
         playback:
             '.transport-bar--playback .transport-opt-box--playback, .transport-opt-box--playback',
-        videoDelay: '.transport-opt-box--video-delay',
     };
 
     function flashVideoPanelDrift() {

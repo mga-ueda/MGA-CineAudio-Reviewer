@@ -11,7 +11,6 @@
     const infoMainMeta = document.getElementById('infoMainMeta');
     const videoDriftPanelStat = document.getElementById('videoDriftPanelStat');
     const videoDriftTransportBox = document.getElementById('videoDriftTransportBox');
-    const videoFrameDelayInput = document.getElementById('videoFrameDelayInput');
     const frameMain = document.getElementById('frameMain');
     const timecodeOverlayMain = document.getElementById('timecodeOverlayMain');
     const markerCommentOverlayPoint = document.getElementById('markerCommentOverlayPoint');

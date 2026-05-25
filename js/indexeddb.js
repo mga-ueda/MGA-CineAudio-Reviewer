@@ -275,7 +275,7 @@
                 await mergePrevExtraTracksDuringRestore(row);
             }
         }
-        /* Video Delay / スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
+        /* スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
     }
 
     async function buildSessionPersistRow(opt) {
@@ -766,8 +766,6 @@
                 applyUserMonitorDisplayPrefsFromStorage(prefs);
             } else if (typeof applyTransportPrefsFromStorage === 'function') {
                 applyTransportPrefsFromStorage(prefs);
-            } else {
-                applySavedVideoFrameDelay(prefs.frameDelayFrames);
             }
 
             if (!window.indexedDB) {
