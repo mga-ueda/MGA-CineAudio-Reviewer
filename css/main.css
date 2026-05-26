@@ -2607,9 +2607,9 @@
             padding-block: 0;
             padding-inline: 8px;
             line-height: 1;
-            background: linear-gradient(180deg, #e03050 0%, var(--accent-mid) 45%, #8a1830 100%);
+            background: linear-gradient(180deg, #5ab8ff 0%, #2a7ec8 48%, #1a5898 100%);
             color: #fff;
-            border: 1px solid var(--accent-border);
+            border: 1px solid rgba(120, 180, 255, 0.55);
             border-radius: 8px;
             font-size: 0.75em;
             font-weight: 700;
@@ -2617,7 +2617,7 @@
             white-space: nowrap;
             text-align: center;
             cursor: pointer;
-            box-shadow: 0 4px 14px rgba(180, 30, 50, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
+            box-shadow: 0 4px 14px rgba(30, 80, 180, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22);
             transition: background 0.2s, border-color 0.2s, box-shadow 0.2s, filter 0.2s;
         }
         #playStopBtn:hover:not(:disabled) {
@@ -2630,9 +2630,9 @@
             box-shadow: none;
         }
         #playStopBtn.transport-toggle--stop {
-            background: linear-gradient(180deg, #e02030 0%, #9a1020 100%);
-            border-color: rgba(255, 140, 150, 0.55);
-            box-shadow: 0 4px 16px rgba(180, 20, 40, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            background: linear-gradient(180deg, #5ad86a 0%, #2a9e3a 48%, #1a6e28 100%);
+            border-color: rgba(120, 220, 140, 0.55);
+            box-shadow: 0 4px 16px rgba(30, 120, 50, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.18);
         }
         #playStopBtn.transport-toggle--stop:hover:not(:disabled) {
             filter: brightness(1.1);
@@ -2652,22 +2652,25 @@
             width: auto;
             min-width: 5.25rem;
             max-width: none;
-            background: linear-gradient(180deg, #5ad86a 0%, #2a9e3a 48%, #1a6e28 100%);
-            border: 1px solid rgba(120, 220, 140, 0.55);
-            box-shadow: 0 1px 5px rgba(30, 120, 50, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+            background: linear-gradient(180deg, #5ab8ff 0%, #2a7ec8 48%, #1a5898 100%);
+            border: 1px solid rgba(120, 180, 255, 0.55);
+            box-shadow: 0 1px 5px rgba(30, 80, 180, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
             transition: filter 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
         }
         .transport-bar #playStopBtn:hover:not(:disabled) {
             filter: brightness(1.1);
         }
         .transport-bar #playStopBtn:focus-visible {
-            outline: 2px solid #7ee89a;
+            outline: 2px solid #7dd8ff;
             outline-offset: 2px;
         }
         .transport-bar #playStopBtn.transport-toggle--stop {
-            background: linear-gradient(180deg, #3cb85a 0%, #1f7a32 48%, #145422 100%);
-            border-color: rgba(90, 190, 110, 0.5);
-            box-shadow: 0 1px 5px rgba(20, 90, 40, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+            background: linear-gradient(180deg, #5ad86a 0%, #2a9e3a 48%, #1a6e28 100%);
+            border-color: rgba(120, 220, 140, 0.55);
+            box-shadow: 0 1px 5px rgba(30, 120, 50, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+        }
+        .transport-bar #playStopBtn.transport-toggle--stop:focus-visible {
+            outline-color: #7ee89a;
         }
         .transport-bar #playStopBtn.transport-toggle--stop:hover:not(:disabled) {
             filter: brightness(1.08);
