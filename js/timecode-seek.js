@@ -19,6 +19,9 @@
                 isTransportTailPlaybackActive()) ||
             (typeof isTransportPlaying === 'function' && isTransportPlaying())
         ) {
+            if (typeof getTransportPlaybackClockSec === 'function') {
+                return getTransportPlaybackClockSec();
+            }
             if (
                 typeof transportPlaybackSec === 'number' &&
                 Number.isFinite(transportPlaybackSec)
@@ -29,6 +32,27 @@
         if (!seekBar) return videoMain.currentTime || 0;
         const t = parseFloat(seekBar.value);
         return Number.isFinite(t) ? t : videoMain.currentTime || 0;
+    }
+
+    /** WebM 書き出し描画用: マスタークロックを進めつつ正しいトランスポート秒を返す。 */
+    function getTransportSecForVideoExport() {
+        if (
+            typeof syncTransportPlaybackClockFromAudio === 'function' &&
+            typeof isTransportUiClockActive === 'function' &&
+            isTransportUiClockActive()
+        ) {
+            syncTransportPlaybackClockFromAudio();
+        }
+        if (typeof getTransportPlaybackClockSec === 'function') {
+            const clockActive =
+                (typeof isTransportUiClockActive === 'function' &&
+                    isTransportUiClockActive()) ||
+                (typeof isTransportTailPlaybackActive === 'function' &&
+                    isTransportTailPlaybackActive()) ||
+                (typeof isTransportPlaying === 'function' && isTransportPlaying());
+            if (clockActive) return getTransportPlaybackClockSec();
+        }
+        return getTransportSec();
     }
 
     function setTransportSec(t) {
@@ -137,11 +161,15 @@
         }
         if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
     window.applySessionTransportAtHead = applySessionTransportAtHead;
     window.primePendingRestoreTransportUi = primePendingRestoreTransportUi;
     window.applyPendingTransportRestore = applyPendingTransportRestore;
     window.getTransportSec = getTransportSec;
+    window.getTransportSecForVideoExport = getTransportSecForVideoExport;
+    window.forceTransportRafLoop = forceTransportRafLoop;
+    window.startVideoPlayback = startVideoPlayback;
 
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {
@@ -784,6 +812,9 @@
             }
             const t = transportPlaybackSec;
             setTransportSec(t);
+            if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+                refreshVideoPastEndBlackoutUi();
+            }
             const inTailPark =
                 typeof isVideoParkedForTransportTail === 'function' &&
                 isVideoParkedForTransportTail();
@@ -914,6 +945,9 @@
     window.pauseTransportBeforeSeek = pauseTransportBeforeSeek;
 
     async function handleMasterTransportEndReached() {
+        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+            return false;
+        }
         if (handlingMasterTransportEnd) return false;
         const clockActive =
             typeof isTransportUiClockActive === 'function'
@@ -985,7 +1019,8 @@
 
     function updateControlsEnabled() {
         const locked =
-            typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive();
+            (typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive()) ||
+            (typeof isWebmExportActive === 'function' && isWebmExportActive());
         const ready =
             !locked &&
             (typeof transportControlsReady === 'function'
@@ -994,8 +1029,15 @@
         if (seekBar) seekBar.disabled = !ready;
         playStopBtn.disabled = !ready;
         if (!ready) {
-            setPlayingUi(false);
-            stopRaf();
+            const exportPlaybackActive =
+                typeof isWebmExportActive === 'function' &&
+                isWebmExportActive() &&
+                typeof isTransportPlaying === 'function' &&
+                isTransportPlaying();
+            if (!exportPlaybackActive) {
+                setPlayingUi(false);
+                stopRaf();
+            }
         } else {
             updateTimecodeOverlay();
             if (

@@ -440,6 +440,16 @@
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }
+        const exportVideoBtn = document.getElementById('sessionExportVideoBtn');
+        const exportLocked =
+            typeof isWebmExportActive === 'function' && isWebmExportActive();
+        if (exportVideoBtn) {
+            exportVideoBtn.disabled = !hasVideo || exportLocked;
+        }
+        const exportBtn = document.getElementById('sessionExportBtn');
+        const importBtn = document.getElementById('sessionImportBtn');
+        if (exportBtn) exportBtn.disabled = exportLocked;
+        if (importBtn) importBtn.disabled = exportLocked;
     }
 
     function bindExportMediaIncludeCheckboxPersistence() {
@@ -866,7 +876,7 @@
         return '';
     }
 
-    function buildExportDownloadFilename(manifest) {
+    function buildExportDownloadFilename(manifest, extOverride) {
         const stamp = exportDateStamp();
         let videoName = '';
         if (typeof fileMain !== 'undefined' && fileMain && fileMain.name) {
@@ -890,8 +900,24 @@
             }
             base = exportBasenameWithoutExtension(trackName);
         }
-        if (base) return base + '_' + stamp + EXPORT_FILE_EXT;
-        return 'Review_' + stamp + EXPORT_FILE_EXT;
+        const ext =
+            typeof extOverride === 'string' && extOverride.trim()
+                ? extOverride.trim()
+                : EXPORT_FILE_EXT;
+        if (base) return base + '_' + stamp + ext;
+        return 'Review_' + stamp + ext;
+    }
+
+    function buildVideoExportDownloadFilename() {
+        const manifest = {
+            session: {
+                mName:
+                    typeof fileMain !== 'undefined' && fileMain && fileMain.name
+                        ? fileMain.name
+                        : '',
+            },
+        };
+        return buildExportDownloadFilename(manifest, '.webm');
     }
 
     function triggerDownload(buffer, filename) {
@@ -1073,6 +1099,61 @@
     window.exportSessionPackage = exportSessionPackage;
     window.importSessionPackage = importSessionPackage;
     window.refreshExportMediaOptionsUi = refreshExportMediaOptionsUi;
+    window.buildVideoExportDownloadFilename = buildVideoExportDownloadFilename;
+    window.getExportMediaOptionsFromUi = getExportMediaOptionsFromUi;
+
+    function triggerExportVideo(exportVideoBtn) {
+        const btn = exportVideoBtn || document.getElementById('sessionExportVideoBtn');
+        if (!btn || btn.disabled) return;
+        refreshExportMediaOptionsUi();
+        const media = getExportMediaOptionsFromUi();
+        if (!isExportVideoAvailable()) {
+            if (typeof showAppAlert === 'function') {
+                showAppAlert(
+                    '動画をエクスポートできません',
+                    'エクスポートする動画を読み込んでください。',
+                );
+            }
+            return;
+        }
+        if (!media.includeVideo) {
+            const noticePromise =
+                typeof requestAppNotice === 'function'
+                    ? requestAppNotice(
+                          'Export WebM',
+                          'WebM をエクスポートするには、Include in export の Video にチェックを入れてください。',
+                          {
+                              logLine:
+                                  'Export WebM: Video not included in export selection (check Include in export → Video)',
+                          },
+                      )
+                    : Promise.resolve(true);
+            void noticePromise;
+            return;
+        }
+        if (typeof exportReviewVideoPackage !== 'function') {
+            if (typeof showAppAlert === 'function') {
+                showAppAlert(
+                    'WebM エクスポート不可',
+                    'このブラウザでは WebM エクスポート機能を利用できません。',
+                );
+            }
+            return;
+        }
+        btn.disabled = true;
+        exportReviewVideoPackage({ exportMedia: media })
+            .catch((e) => {
+                const msg = e && e.message ? e.message : String(e);
+                if (msg === 'Export cancelled') return;
+                writeLog('Export WebM: failed — ' + msg);
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert('WebM のエクスポートに失敗しました', msg);
+                }
+            })
+            .finally(() => {
+                btn.disabled = false;
+            });
+    }
 
     function triggerExportReview(exportBtn) {
         const btn = exportBtn || document.getElementById('sessionExportBtn');
@@ -1223,6 +1304,11 @@
         }
 
         exportBtn.addEventListener('click', () => triggerExportReview(exportBtn));
+
+        const exportVideoBtn = document.getElementById('sessionExportVideoBtn');
+        if (exportVideoBtn) {
+            exportVideoBtn.addEventListener('click', () => triggerExportVideo(exportVideoBtn));
+        }
 
         importBtn.addEventListener('click', () => triggerImportReview(importBtn, importFile));
 

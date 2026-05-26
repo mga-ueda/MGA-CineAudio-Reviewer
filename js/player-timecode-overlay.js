@@ -527,8 +527,175 @@
         refreshTimecodeOverlayInteractive();
     }
 
+    function getDisplayedVideoHeightInFrame(frame, video) {
+        if (!frame) return 0;
+        const fh = frame.clientHeight;
+        if (!video || !video.videoWidth || !video.videoHeight) return fh > 0 ? fh : 0;
+        const fw = frame.clientWidth;
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        if (!fw || !fh) return 0;
+        const scale = Math.min(fw / vw, fh / vh);
+        return vh * scale;
+    }
+
+    /** Preview video height → export canvas height (matches on-screen size vs picture). */
+    function getVideoExportLayoutScale(exportCanvasH) {
+        const el = getTcOverlayElement();
+        const frame = getTcOverlayFrame(el);
+        const video = typeof videoMain !== 'undefined' ? videoMain : null;
+        const displayH = getDisplayedVideoHeightInFrame(frame, video);
+        if (displayH > 0) return exportCanvasH / displayH;
+        const fh = frame && frame.clientHeight > 0 ? frame.clientHeight : 0;
+        if (fh > 0) return exportCanvasH / fh;
+        return 1;
+    }
+
+    function syncTcOverlayForExport(tcText) {
+        const el = getTcOverlayElement();
+        if (!el) return;
+        const parts = ensureTcOverlayStructure(el);
+        if (parts.textEl && tcText != null) parts.textEl.textContent = String(tcText);
+        applyTcOverlayAppearance();
+        applyTcOverlayPosition();
+        void el.offsetHeight;
+    }
+
+    function measureTcOverlayTextLayoutInBox(el) {
+        const textEl = el && el.querySelector('.video-timecode__text');
+        if (!el || !textEl || el.offsetHeight < 1) return null;
+        const boxRect = el.getBoundingClientRect();
+        const textRect = textEl.getBoundingClientRect();
+        if (boxRect.height < 1) return null;
+        return {
+            textTop: textRect.top - boxRect.top,
+            textLeft: textRect.left - boxRect.left,
+            textHeight: textRect.height,
+        };
+    }
+
+    function tcCanvasFontString(fontPx) {
+        return '700 ' + fontPx + 'px Consolas, Monaco, "Cascadia Mono", monospace';
+    }
+
+    function measureTcCanvasTextMetrics(ctx, text, fontPx) {
+        ctx.save();
+        ctx.font = tcCanvasFontString(fontPx);
+        const tm = ctx.measureText(text);
+        ctx.restore();
+        return {
+            width: tm.width,
+            ascent:
+                tm.actualBoundingBoxAscent > 0 ? tm.actualBoundingBoxAscent : fontPx * 0.8,
+            descent:
+                tm.actualBoundingBoxDescent > 0 ? tm.actualBoundingBoxDescent : fontPx * 0.2,
+        };
+    }
+
+    function tcOverlayPixelPosForExport(videoW, videoH, boxW, boxH) {
+        const maxLeft = Math.max(0, videoW - boxW);
+        const maxBottom = Math.max(0, videoH - boxH);
+        const el = getTcOverlayElement();
+        const frame = getTcOverlayFrame(el);
+        if (frame && el) ensureTcOverlayRatios(frame, el);
+        return tcOverlayPixelPosFromRatios(maxLeft, maxBottom);
+    }
+
+    /**
+     * Burn-in draw metrics scaled from the live preview overlay (Movie Compare Player pattern).
+     */
+    function getTcOverlayBurnInDrawMetrics(videoW, videoH, tcText, ctx) {
+        syncTcOverlayForExport(tcText);
+        const el = getTcOverlayElement();
+        const layoutScale = getVideoExportLayoutScale(videoH);
+        let fontPx;
+        let padL;
+        let padR;
+        let padT;
+        let padB;
+        let borderRadius = 6;
+        if (el) {
+            const cs = getComputedStyle(el);
+            fontPx = parseFloat(cs.fontSize) * layoutScale;
+            padL = parseFloat(cs.paddingLeft) * layoutScale;
+            padR = parseFloat(cs.paddingRight) * layoutScale;
+            padT = parseFloat(cs.paddingTop) * layoutScale;
+            padB = parseFloat(cs.paddingBottom) * layoutScale;
+            borderRadius = parseFloat(cs.borderRadius) * layoutScale;
+        } else {
+            const s = getTcOverlayUserScale();
+            fontPx = 14 * layoutScale * s;
+            padL = 8 * layoutScale * s;
+            padR = 8 * layoutScale * s;
+            padT = 4 * layoutScale * s;
+            padB = 4 * layoutScale * s;
+            borderRadius = 6 * layoutScale * s;
+        }
+        fontPx = Math.max(10, Math.round(fontPx));
+        padL = Math.max(2, Math.round(padL));
+        padR = Math.max(2, Math.round(padR));
+        padT = Math.max(2, Math.round(padT));
+        padB = Math.max(2, Math.round(padB));
+        borderRadius = Math.max(2, Math.round(borderRadius));
+
+        const measureCtx =
+            ctx || document.createElement('canvas').getContext('2d');
+        if (!measureCtx) return null;
+        const tm = measureTcCanvasTextMetrics(measureCtx, tcText, fontPx);
+        const textW = Math.ceil(tm.width);
+        const textH = Math.ceil(tm.ascent + tm.descent);
+        const minBoxW = textW + padL + padR;
+        const minBoxH = textH + padT + padB;
+        let boxW = minBoxW;
+        let boxH = minBoxH;
+        if (el && el.offsetWidth > 0 && el.offsetHeight > 0) {
+            boxW = Math.max(Math.ceil(el.offsetWidth * layoutScale), minBoxW);
+            boxH = Math.max(Math.ceil(el.offsetHeight * layoutScale), minBoxH);
+        }
+        // 実際の書き出し結果ではわずかに上寄りに見えるため、
+        // レイアウトスケールに応じてごく小さく下方向へオフセットしてバランスを取る。
+        const verticalNudge = Math.max(0, layoutScale * 0.35);
+        const textCenterY = boxH / 2 + verticalNudge;
+        const pos = tcOverlayPixelPosForExport(videoW, videoH, boxW, boxH);
+        return {
+            fontPx,
+            padL,
+            padR,
+            padT,
+            padB,
+            borderRadius,
+            boxW,
+            boxH,
+            textCenterX: boxW / 2,
+            textCenterY,
+            left: pos ? pos.left : 0,
+            bottom: pos ? pos.bottom : 0,
+            layoutScale,
+        };
+    }
+
+    /** @deprecated use getTcOverlayBurnInDrawMetrics */
+    function getTcOverlayBurnInLayout(videoW, videoH, tcText) {
+        const m = getTcOverlayBurnInDrawMetrics(videoW, videoH, tcText, null);
+        if (!m) return null;
+        return {
+            left: m.left,
+            bottom: m.bottom,
+            fontPx: m.fontPx,
+            padX: m.padL,
+            padY: m.padT,
+            borderR: m.borderRadius,
+            boxW: m.boxW,
+            boxH: m.boxH,
+            scale: m.layoutScale,
+        };
+    }
+
     window.getTimecodeOverlayPersistSnapshot = getTimecodeOverlayPersistSnapshot;
     window.applyTimecodeOverlayPersistSnapshot = applyTimecodeOverlayPersistSnapshot;
+    window.getVideoExportLayoutScale = getVideoExportLayoutScale;
+    window.getTcOverlayBurnInDrawMetrics = getTcOverlayBurnInDrawMetrics;
+    window.getTcOverlayBurnInLayout = getTcOverlayBurnInLayout;
 
     function initTimecodeOverlay() {
         loadTcOverlayPosition();

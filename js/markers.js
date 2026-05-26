@@ -625,6 +625,51 @@
         return { hit: hit, phase: phase };
     }
 
+    function markerExportOpacityForOverlayState(state, t) {
+        if (!state || !state.hit || state.phase === 'off') return 0;
+        if (state.phase === 'hold') return 1;
+        const m = state.hit.marker;
+        const fadeDur = markerCommentFadeOutDurationSec();
+        if (!Number.isFinite(fadeDur) || fadeDur <= 0) return 0;
+        if (m.type === 'range') {
+            const end = Number(m.endSec);
+            if (!Number.isFinite(end)) return 0;
+            return Math.max(0, 1 - (t - end) / fadeDur);
+        }
+        const start = Number(m.timeSec);
+        if (!Number.isFinite(start)) return 0;
+        const elapsed = t - start - MARKER_COMMENT_POINT_HOLD_SEC;
+        return Math.max(0, 1 - elapsed / fadeDur);
+    }
+
+    /** Burn-in data for video export at transportSec (respects markers hidden). */
+    function getVideoExportMarkerBurnIns(transportSec) {
+        if (markersDisplayHidden || !markerTimelineReady() || !Number.isFinite(transportSec)) {
+            return { point: null, range: null };
+        }
+        const t = transportSec;
+        function pack(state, bottomPct, isRange) {
+            if (!state.hit || state.phase === 'off') return null;
+            const opacity = markerExportOpacityForOverlayState(state, t);
+            if (opacity <= 0.001) return null;
+            const text = markerCommentOverlayDisplayText(state.hit.text, isRange);
+            if (!text) return null;
+            return { text, opacity, bottomPct, isRange };
+        }
+        return {
+            point: pack(
+                getMarkerCommentOverlayState(t, 'point'),
+                MARKER_VIDEO_COMMENT_POINT_BOTTOM_PCT,
+                false,
+            ),
+            range: pack(
+                getMarkerCommentOverlayState(t, 'range'),
+                MARKER_VIDEO_COMMENT_RANGE_BOTTOM_PCT,
+                true,
+            ),
+        };
+    }
+
     function markerCommentOverlayDisplayText(text, isRange) {
         const raw = typeof text === 'string' ? text : '';
         if (!raw.trim()) return '';
@@ -1046,6 +1091,40 @@
     }
 
     window.resetMarkersDisplayHidden = resetMarkersDisplayHidden;
+    function getMarkerCommentBurnInMetrics(exportCanvasH, isRange) {
+        const overlay = isRange ? markerCommentOverlayRange : markerCommentOverlayPoint;
+        const textEl = markerCommentOverlayTextEl(overlay);
+        const frame = typeof frameMain !== 'undefined' ? frameMain : null;
+        const video = typeof videoMain !== 'undefined' ? videoMain : null;
+        let layoutScale = 1;
+        if (typeof getVideoExportLayoutScale === 'function') {
+            layoutScale = getVideoExportLayoutScale(exportCanvasH);
+        } else if (frame && frame.clientHeight > 0) {
+            layoutScale = exportCanvasH / frame.clientHeight;
+        }
+        let fontPx = Math.max(12, Math.round(14 * layoutScale));
+        let lineHeightRatio = 1.3;
+        let strokePx = Math.max(1, 1.5 * layoutScale);
+        if (textEl) {
+            const cs = getComputedStyle(textEl);
+            const parsed = parseFloat(cs.fontSize);
+            if (Number.isFinite(parsed) && parsed > 0) fontPx = Math.max(10, Math.round(parsed * layoutScale));
+            const lh = parseFloat(cs.lineHeight);
+            if (Number.isFinite(lh) && lh > 0 && fontPx > 0) {
+                lineHeightRatio = lh / (parsed || fontPx / layoutScale);
+            }
+            strokePx = Math.max(1, 1.5 * layoutScale);
+        }
+        return {
+            fontPx,
+            lineHeightRatio,
+            strokePx,
+            layoutScale,
+        };
+    }
+
+    window.getVideoExportMarkerBurnIns = getVideoExportMarkerBurnIns;
+    window.getMarkerCommentBurnInMetrics = getMarkerCommentBurnInMetrics;
 
     function isWaveformMarkerHighlightEnabled() {
         return !markersDisplayHidden;

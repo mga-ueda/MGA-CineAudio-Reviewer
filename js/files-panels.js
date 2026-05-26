@@ -653,6 +653,8 @@
     window.hasPlayableWaveformTimeline = hasPlayableWaveformTimeline;
     window.transportControlsReady = transportControlsReady;
     window.parseTimecodeStringToClipFrameIndex = parseTimecodeStringToClipFrameIndex;
+    window.formatTimecodeForSide = formatTimecodeForSide;
+    window.videoReady = videoReady;
 
     function timecodeOverlayDisplaySec() {
         if (videoReady()) return videoMain.currentTime || 0;

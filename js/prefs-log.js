@@ -8,49 +8,70 @@
     }
 
     let appConfirmResolve = null;
+    let appConfirmOkOnly = false;
 
     function closeAppConfirm(result) {
         const root = document.getElementById('appConfirmOverlay');
+        const cancelBtn = document.getElementById('appConfirmCancel');
         if (root) {
             root.hidden = true;
             root.setAttribute('aria-hidden', 'true');
         }
+        if (cancelBtn) cancelBtn.hidden = false;
+        appConfirmOkOnly = false;
         if (appConfirmResolve) {
             appConfirmResolve(!!result);
             appConfirmResolve = null;
         }
     }
 
-    function showAppConfirm(title, body) {
+    function showAppConfirm(title, body, options) {
         const root = document.getElementById('appConfirmOverlay');
         const titleEl = document.getElementById('appConfirmTitle');
         const bodyEl = document.getElementById('appConfirmBody');
         const cancelBtn = document.getElementById('appConfirmCancel');
-        if (!root || !titleEl || !bodyEl || !cancelBtn) return Promise.resolve(false);
+        const okBtn = document.getElementById('appConfirmOk');
+        if (!root || !titleEl || !bodyEl || !cancelBtn || !okBtn) return Promise.resolve(false);
 
+        const opts = options && typeof options === 'object' ? options : {};
+        const okOnly = !!opts.okOnly;
         const t = title != null ? String(title) : '';
         const b = body != null && body !== '' ? String(body) : '';
-        writeLog(b ? t + ' — ' + b : t);
+        const logLine =
+            opts.logLine != null && String(opts.logLine).trim() !== ''
+                ? String(opts.logLine)
+                : b
+                  ? t + ' — ' + b
+                  : t;
+        writeLog(logLine);
 
         titleEl.textContent = t;
         bodyEl.textContent = b;
+        cancelBtn.hidden = okOnly;
+        appConfirmOkOnly = okOnly;
         root.hidden = false;
         root.setAttribute('aria-hidden', 'false');
 
         return new Promise((resolve) => {
             appConfirmResolve = resolve;
             requestAnimationFrame(() => {
-                cancelBtn.focus();
+                (okOnly ? okBtn : cancelBtn).focus();
             });
         });
     }
 
-    window.showAppConfirm = showAppConfirm;
+    function requestAppNotice(title, body, options) {
+        const opts = Object.assign({}, options, { okOnly: true });
+        return showAppConfirm(title, body, opts).then(() => true);
+    }
 
-    function requestAppConfirm(title, body, cancelLogMsg) {
+    window.showAppConfirm = showAppConfirm;
+    window.requestAppNotice = requestAppNotice;
+
+    function requestAppConfirm(title, body, cancelLogMsg, options) {
         const promise =
             typeof showAppConfirm === 'function'
-                ? showAppConfirm(title, body)
+                ? showAppConfirm(title, body, options)
                 : Promise.resolve(
                       window.confirm(
                           (title != null ? String(title) : '') +
@@ -76,7 +97,7 @@
         root.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 e.preventDefault();
-                closeAppConfirm(false);
+                closeAppConfirm(appConfirmOkOnly);
             }
         });
     })();

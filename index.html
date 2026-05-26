@@ -28,6 +28,25 @@
         </div>
     </div>
 
+    <div
+        id="exportBlockingOverlay"
+        class="export-blocking-overlay"
+        hidden
+        aria-hidden="true"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="exportBlockingTitle"
+        tabindex="-1"
+    >
+        <div class="export-blocking-overlay__panel">
+            <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>
+            <p class="export-blocking-overlay__esc-hint" id="exportBlockingEscHint">
+                操作はロックされています。<kbd>Esc</kbd> キーで書き出しをキャンセルできます。
+            </p>
+            <p class="export-blocking-overlay__sub" id="exportBlockingSub"></p>
+        </div>
+    </div>
+
     <div id="appConfirmOverlay" class="app-confirm-overlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmBody">
         <div class="app-confirm-overlay__box">
             <p class="app-confirm-overlay__title" id="appConfirmTitle"></p>
@@ -264,6 +283,7 @@
                 <div class="session-io-actions" role="group" aria-label="Import and export review">
                     <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file (Ctrl+Shift+Alt+I)">Import Review</button>
                     <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file (Ctrl+Shift+Alt+E)">Export Review</button>
+                    <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" title="Export WebM with burned-in timecode and marker comments (real-time)">Export WebM</button>
                 </div>
             </div>
         </div>
@@ -408,6 +428,8 @@
     <script src="js/drop-files.js"></script>
     <script src="js/view-layout.js"></script>
     <script src="js/indexeddb.js"></script>
+    <script src="js/export-blocking-lock.js"></script>
+    <script src="js/video-export-review.js"></script>
     <script src="js/session-export-import.js"></script>
     <script src="js/init-prefs.js"></script>
     <script src="js/events-boot.js"></script>

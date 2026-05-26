@@ -427,13 +427,57 @@
         return false;
     }
 
+    /** トランスポートが動画終端（終了フレーム）を過ぎたら映像を非表示。 */
+    function shouldBlackoutVideoForTransport(transportSec) {
+        if (typeof videoReady === 'function' && !videoReady()) return false;
+        const vd = getVideoPlaybackEndSec();
+        if (!(vd > 0)) return false;
+        let t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        if (typeof clampTransportSec === 'function') t = clampTransportSec(t);
+        return t >= vd;
+    }
+
+    /** プレビュー／書き出し共通: 映像を黒画面にするか（テール再生・パーク含む）。 */
+    function shouldBlackoutVideoPicture(transportSec) {
+        if (typeof videoReady === 'function' && !videoReady()) return false;
+        if (transportTailPlaybackActive || videoParkedForTransportTail) return true;
+        return shouldBlackoutVideoForTransport(transportSec);
+    }
+
+    function getTransportPlaybackClockSec() {
+        return Number.isFinite(transportPlaybackSec) ? transportPlaybackSec : 0;
+    }
+
+    function refreshVideoPastEndBlackoutUi() {
+        const frame =
+            typeof frameMain !== 'undefined' && frameMain
+                ? frameMain
+                : document.getElementById('frameMain');
+        if (!frame) return;
+        let t = getTransportPlaybackClockSec();
+        if (typeof getTransportSec === 'function') t = getTransportSec();
+        frame.classList.toggle('video-frame--past-end', shouldBlackoutVideoPicture(t));
+    }
+
     window.isAtMasterTransportEnd = isAtMasterTransportEnd;
+    window.getVideoPlaybackEndSec = getVideoPlaybackEndSec;
+    window.getMasterTransportDurationSec = getMasterTransportDurationSec;
+    window.shouldBlackoutVideoForTransport = shouldBlackoutVideoForTransport;
+    window.shouldBlackoutVideoPicture = shouldBlackoutVideoPicture;
+    window.getTransportPlaybackClockSec = getTransportPlaybackClockSec;
+    window.isTransportTailPlaybackActive = isTransportTailPlaybackActive;
+    window.isVideoParkedForTransportTail = isVideoParkedForTransportTail;
+    window.refreshVideoPastEndBlackoutUi = refreshVideoPastEndBlackoutUi;
 
     /**
      * 全トラックの BufferSource 終了後（特に映像なし）にマスター終端処理へ進める。
      * @returns {boolean} handleMasterTransportEndReached を起動した
      */
     function maybeFinishMasterTransportPlayback() {
+        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+            return false;
+        }
         if (typeof isTransportPlaying !== 'function' || !isTransportPlaying()) {
             return false;
         }
@@ -494,6 +538,7 @@
         transportPlaybackSec = Number.isFinite(tailT) ? tailT : Math.max(tailT, vd);
         transportPlaybackLastTs = performance.now();
         if (typeof parkVideoAtTransportTail === 'function') parkVideoAtTransportTail();
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
         setTransportSessionPlaying(true);
         if (typeof setPlayingUi === 'function') setPlayingUi(true);
         if (typeof forceTransportRafLoop === 'function') forceTransportRafLoop();
@@ -577,6 +622,7 @@
 
     function clearVideoParkedForTail() {
         videoParkedForTransportTail = false;
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
 
     function isVideoParkedForTransportTail() {
@@ -596,6 +642,7 @@
             } catch (_) {}
         }
         videoParkedForTransportTail = true;
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
 
     function applyVideoTimeForTransportSec(audioSec, opt) {
@@ -717,6 +764,7 @@
         if (typeof setTransportSec === 'function') setTransportSec(x);
         /* 動画終端以降へシークしても映像はパーク位置のまま（上記仕様コメント参照）。 */
         applyVideoTimeForTransportSec(x, { force: true });
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
         if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
         if (!(opt && opt.scrubbing) && typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });

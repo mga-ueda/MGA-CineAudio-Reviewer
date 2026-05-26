@@ -1724,10 +1724,43 @@ window.addEventListener('resize', () => {
         return !!masterAnalyser;
     }
 
+    let reviewMixExportDestination = null;
+
+    function beginReviewMixExportCapture() {
+        const ctx = getReviewMixAudioCtx();
+        if (!ctx || !reviewMixMasterNode) return null;
+        endReviewMixExportCapture();
+        reviewMixExportDestination = ctx.createMediaStreamDestination();
+        try {
+            reviewMixMasterNode.connect(reviewMixExportDestination);
+        } catch (_) {
+            reviewMixExportDestination = null;
+            return null;
+        }
+        return reviewMixExportDestination.stream;
+    }
+
+    function endReviewMixExportCapture() {
+        if (reviewMixExportDestination && reviewMixMasterNode) {
+            try {
+                reviewMixMasterNode.disconnect(reviewMixExportDestination);
+            } catch (_) {}
+        }
+        reviewMixExportDestination = null;
+    }
+
+    function getAnalyzeOn() {
+        return !!analyzeOn;
+    }
+
     window.ensureReviewMixMonitorOutput = ensureReviewMixMonitorOutput;
     window.isReviewMixMonitorAnalyzersWired = isReviewMixMonitorAnalyzersWired;
     window.setReviewMixMonitorTransportActive = setReviewMixMonitorTransportActive;
     window.resetReviewMixMonitorGain = resetReviewMixMonitorGain;
+    window.setAnalyzeOn = setAnalyzeOn;
+    window.getAnalyzeOn = getAnalyzeOn;
+    window.beginReviewMixExportCapture = beginReviewMixExportCapture;
+    window.endReviewMixExportCapture = endReviewMixExportCapture;
 
     /** All Clear 後: マスター音量を 0 dB（線形ゲイン 1.0）にリセット */
     function resetMasterVolumeForSessionClear() {

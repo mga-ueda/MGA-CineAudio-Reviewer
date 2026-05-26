@@ -327,7 +327,38 @@
         writeLog('Playback: end reached (transport stopped)');
     }
 
+    document.addEventListener(
+        'wheel',
+        (ev) => {
+            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+                ev.preventDefault();
+            }
+        },
+        { passive: false, capture: true },
+    );
+    document.addEventListener(
+        'touchmove',
+        (ev) => {
+            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+                ev.preventDefault();
+            }
+        },
+        { passive: false, capture: true },
+    );
+
     window.addEventListener('keydown', (e) => {
+        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+            if (e.code === 'Escape') {
+                e.preventDefault();
+                if (typeof tryCancelWebmExportFromEsc === 'function') {
+                    tryCancelWebmExportFromEsc();
+                }
+                return;
+            }
+            e.preventDefault();
+            return;
+        }
+
         if (
             typeof handleMarkerPendingRangeEscapeKeydown === 'function' &&
             handleMarkerPendingRangeEscapeKeydown(e)

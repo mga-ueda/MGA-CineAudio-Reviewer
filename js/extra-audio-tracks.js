@@ -393,6 +393,8 @@
     }
 
     const videoMix = { muted: false, solo: false, volLinear: 1 };
+    /** @type {{ includeVideo: boolean, includeExtra: boolean[] }|null} */
+    let videoExportAudioInclude = null;
     let sessionMixRestore = null;
     let reviewMixCtx = null;
     let reviewMixMaster = null;
@@ -449,12 +451,20 @@
     }
 
     function getVideoTrackEffectiveGain() {
+        if (videoExportAudioInclude && !videoExportAudioInclude.includeVideo) return 0;
         if (!isVideoAudioAudible()) return 0;
         if (!isVideoMixOutputActive()) return 0;
         return clampTrackLaneGainLinear(videoMix.volLinear);
     }
 
     function getExtraTrackEffectiveGain(slot) {
+        if (
+            videoExportAudioInclude &&
+            (!Array.isArray(videoExportAudioInclude.includeExtra) ||
+                !videoExportAudioInclude.includeExtra[slot])
+        ) {
+            return 0;
+        }
         if (!isExtraTrackAudible(slot)) return 0;
         const tr = extraTrackBySlot(slot);
         if (!tr) return 0;
@@ -1073,6 +1083,27 @@
             },
             extra,
         };
+    }
+
+    function beginVideoExportAudioFilter(opts) {
+        const count =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : EXTRA_TRACK_COUNT;
+        const includeExtra = [];
+        for (let i = 0; i < count; i++) {
+            includeExtra.push(
+                !!(opts && Array.isArray(opts.includeExtra) && opts.includeExtra[i]),
+            );
+        }
+        videoExportAudioInclude = {
+            includeVideo: !!(opts && opts.includeVideo),
+            includeExtra,
+        };
+        applyAllTrackLaneGains();
+    }
+
+    function endVideoExportAudioFilter() {
+        videoExportAudioInclude = null;
+        applyAllTrackLaneGains();
     }
 
     function setSessionMixRestore(mix) {
@@ -1753,6 +1784,10 @@
 
     window.reviewMixNeedsPlaybackSync = reviewMixNeedsPlaybackSync;
     window.applyReviewMixCrossfadeGainsIfNeeded = applyReviewMixCrossfadeGainsIfNeeded;
+    window.beginVideoExportAudioFilter = beginVideoExportAudioFilter;
+    window.endVideoExportAudioFilter = endVideoExportAudioFilter;
+    window.ensureReviewMixCtx = ensureReviewMixCtx;
+    window.primeReviewMixForPlayback = primeReviewMixForPlayback;
 
     function extraTracksNeedResync(targetSec, ctx) {
         if (extraTrackRoutingMismatch()) return true;

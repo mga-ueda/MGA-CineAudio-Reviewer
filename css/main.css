@@ -1159,6 +1159,13 @@
             object-fit: contain;
             display: block;
         }
+        .video-frame--past-end {
+            background: #000;
+        }
+        .video-frame--past-end video {
+            opacity: 0;
+            visibility: hidden;
+        }
         .video-frame--stack {
             background: #0a0a0e;
             border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1218,7 +1225,7 @@
             overflow: visible;
             display: inline-flex;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: center;
             font-family: 'Consolas', 'Monaco', 'Cascadia Mono', monospace;
             font-size: clamp(11px, 1.35vw, 14px);
             font-weight: 700;
@@ -1246,6 +1253,7 @@
             line-height: 1;
             margin: 0;
             padding: 0;
+            text-align: center;
         }
         .video-timecode--hidden {
             display: none !important;
@@ -2747,6 +2755,9 @@
         body.video-load-lock-active {
             overflow: hidden;
         }
+        body.export-blocking-active {
+            overflow: hidden;
+        }
 
         .app-confirm-overlay {
             position: fixed;
@@ -2826,7 +2837,7 @@
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
             pointer-events: auto;
-            cursor: default;
+            cursor: wait;
         }
         .export-blocking-overlay[hidden] {
             display: none !important;
@@ -3749,6 +3760,18 @@
         }
         .transport-bar .session-io-btn--export:focus-visible {
             outline: 2px solid var(--marker-orange-pale);
+            outline-offset: 2px;
+        }
+        .transport-bar .session-io-btn--export-video {
+            background: linear-gradient(180deg, #f06a6a 0%, #d42020 48%, #8a1010 100%);
+            border: 1px solid rgba(255, 120, 120, 0.55);
+            box-shadow: 0 1px 5px rgba(160, 20, 20, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        }
+        .transport-bar .session-io-btn--export-video:hover:not(:disabled) {
+            filter: brightness(1.1);
+        }
+        .transport-bar .session-io-btn--export-video:focus-visible {
+            outline: 2px solid #f0a0a0;
             outline-offset: 2px;
         }
         .transport-bar .session-io-btn:disabled {
