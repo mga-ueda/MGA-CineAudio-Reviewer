@@ -311,6 +311,11 @@
             if (typeof setWebmExportEmergencyCleanup === 'function') {
                 setWebmExportEmergencyCleanup(null);
             }
+            if (typeof applySessionTransportAtHead === 'function') {
+                applySessionTransportAtHead();
+            } else if (typeof stopPlaybackReturnTransportToHead === 'function') {
+                stopPlaybackReturnTransportToHead();
+            }
             if (typeof endWebmExportLock === 'function') endWebmExportLock();
         };
 
