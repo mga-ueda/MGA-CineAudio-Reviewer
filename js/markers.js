@@ -1149,85 +1149,111 @@
             .trim();
     }
 
-    function markerTcLabelForCopy(transportSec) {
-        return tcLabelForSec(transportSec);
+    function markerCopyPad2(n) {
+        return String(Math.max(0, n | 0)).padStart(2, '0');
     }
 
-    function markerOutLabelForCopy(m) {
+    function markerCopyPad3ms(n) {
+        return String(Math.max(0, n | 0)).padStart(3, '0');
+    }
+
+    /** Copy / Paste 用: 映像秒 → 00:00:00.000（ミリ秒は常に 3 桁） */
+    function formatMarkerCopyTimeMsFromVideoSec(videoSec) {
+        const sec = Math.max(0, Number(videoSec) || 0);
+        const totalMs = Math.round(sec * 1000);
+        const ms = totalMs % 1000;
+        const totalSec = Math.floor(totalMs / 1000);
+        const s = totalSec % 60;
+        const m = Math.floor(totalSec / 60) % 60;
+        const h = Math.floor(totalSec / 3600);
+        return (
+            markerCopyPad2(h) +
+            ':' +
+            markerCopyPad2(m) +
+            ':' +
+            markerCopyPad2(s) +
+            '.' +
+            markerCopyPad3ms(ms)
+        );
+    }
+
+    function markerTcHoursPartIsZero(tcLabel) {
+        const m = String(tcLabel ?? '')
+            .trim()
+            .match(/^(\d+):(\d{2}):(\d{2})\.(\d{3})$/);
+        if (!m) return false;
+        return parseInt(m[1], 10) === 0;
+    }
+
+    /** Copy 時: 全マーカーの In/Out TC の「時」が 00 なら MM:SS.mmm へ短縮する */
+    function allMarkerCopyTcsHaveZeroHours() {
+        if (!currentMarkers.length) return false;
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (!markerTcHoursPartIsZero(markerTcLabelForCopy(markerInSec(m)))) {
+                return false;
+            }
+            const outLabel = markerOutLabelForCopy(m);
+            if (outLabel && !markerTcHoursPartIsZero(outLabel)) return false;
+        }
+        return true;
+    }
+
+    function markerTcLabelForCopy(transportSec, opt) {
+        const videoSec = markerVideoSecForTransportSec(transportSec);
+        const full = formatMarkerCopyTimeMsFromVideoSec(videoSec);
+        if (opt && opt.omitZeroHours && markerTcHoursPartIsZero(full)) {
+            return full.replace(/^00:/, '');
+        }
+        return full;
+    }
+
+    function markerOutLabelForCopy(m, opt) {
         if (!m || m.type !== 'range' || !markerHasOutTc(m)) return '';
-        return markerTcLabelForCopy(m.endSec);
+        return markerTcLabelForCopy(m.endSec, opt);
     }
 
-    const MARKER_PASTE_TC_RE = /^(\d+:\d{1,2}:\d{1,2}:\d{1,2})$/;
+    const MARKER_PASTE_TC_MS_RE = /^(\d+):(\d{2}):(\d{2})\.(\d{3})$/;
+    const MARKER_PASTE_TC_MS_SHORT_RE = /^(\d{2}):(\d{2})\.(\d{3})$/;
 
     function isMarkerPasteTcString(s) {
-        return MARKER_PASTE_TC_RE.test(String(s ?? '').trim());
+        const t = String(s ?? '').trim();
+        return MARKER_PASTE_TC_MS_RE.test(t) || MARKER_PASTE_TC_MS_SHORT_RE.test(t);
     }
 
-    function markerPasteParseTcToFrameIndex(tcStr, fpsFloat) {
-        const parseFn =
-            typeof parseTimecodeStringToClipFrameIndex === 'function'
-                ? parseTimecodeStringToClipFrameIndex
-                : typeof window.parseTimecodeStringToClipFrameIndex === 'function'
-                  ? window.parseTimecodeStringToClipFrameIndex
-                  : null;
-        if (parseFn) {
-            return parseFn(tcStr, fpsFloat);
+    /** Copy で「時」を省略した MM:SS.mmm → 00:MM:SS.mmm へ復元 */
+    function normalizeMarkerPasteTcString(tcStr) {
+        const t = String(tcStr ?? '').trim();
+        if (MARKER_PASTE_TC_MS_SHORT_RE.test(t) && !MARKER_PASTE_TC_MS_RE.test(t)) {
+            return '00:' + t;
         }
-        const m = String(tcStr || '')
-            .trim()
-            .match(/^(\d+):(\d{1,2}):(\d{1,2}):(\d{1,2})$/);
+        return t;
+    }
+
+    /** Paste: 00:00:00.000 → 合計ミリ秒 */
+    function markerPasteParseMsTcToTotalMs(tcStr) {
+        const tc = normalizeMarkerPasteTcString(String(tcStr ?? '').trim());
+        const m = tc.match(MARKER_PASTE_TC_MS_RE);
         if (!m) return null;
         const h = parseInt(m[1], 10);
         const mi = parseInt(m[2], 10);
         const s = parseInt(m[3], 10);
-        const ff = parseInt(m[4], 10);
-        if (![h, mi, s, ff].every((n) => Number.isFinite(n) && n >= 0)) return null;
-        const f = Number(fpsFloat);
-        const fMod =
-            Math.abs(f - 23.976) < 0.02 ||
-            Math.abs(f - 29.97) < 0.02 ||
-            Math.abs(f - 59.94) < 0.02
-                ? 30
-                : Math.max(1, Math.round(f));
-        if (ff >= fMod || mi >= 60 || s >= 60) return null;
-        return (h * 3600 + mi * 60 + s) * fMod + ff;
+        const ms = parseInt(m[4], 10);
+        if (![h, mi, s, ms].every((n) => Number.isFinite(n) && n >= 0)) return null;
+        if (mi >= 60 || s >= 60 || ms >= 1000) return null;
+        return (h * 3600 + mi * 60 + s) * 1000 + ms;
     }
 
-    /** Copy 出力 TC → トランスポート秒（markerTcLabelForCopy と同じラベルへ復号） */
+    /** Paste: ミリ秒 TC → フレーム → トランスポート秒 */
     function transportSecFromMarkerCopyTcString(tcStr) {
-        const tc = String(tcStr || '').trim();
-        if (!tc || !markerTimelineReady()) return null;
-        const dur = masterDurForTimelineMarkers();
-        if (!dur || dur <= 0) return 0;
-        const frameSec = markerOneFrameSec();
-        if (!(frameSec > 0)) return null;
-
-        const fps = masterFpsFloatForTransport();
-        const targetIdx = markerPasteParseTcToFrameIndex(tc, fps);
+        const totalMs = markerPasteParseMsTcToTotalMs(tcStr);
+        if (totalMs == null || !markerTimelineReady()) return null;
+        const videoSec = totalMs / 1000;
+        const targetIdx = playbackFrameIndexForSide(videoSec, 'main');
         if (targetIdx == null || !Number.isFinite(targetIdx)) return null;
-
-        const maxFrame = Math.max(0, Math.ceil(dur / frameSec) + 2);
-        const estFrame = Math.max(
-            0,
-            Math.min(maxFrame, Math.round(targetIdx / Math.max(1, fps) / frameSec)),
-        );
-        const windowFrames = Math.max(120, Math.ceil(2 / frameSec));
-
-        function scanFrames(startF, endF) {
-            for (let f = startF; f <= endF; f++) {
-                const t = Math.min(dur - 0.001, f * frameSec);
-                if (markerTcLabelForCopy(t) === tc) return clampMarkerSec(t);
-            }
-            return null;
-        }
-
-        const near = scanFrames(
-            Math.max(0, estFrame - windowFrames),
-            Math.min(maxFrame, estFrame + windowFrames),
-        );
-        if (near != null) return near;
-        return scanFrames(0, maxFrame);
+        const transportSec = transportSecFromPlaybackFrameIndex(targetIdx);
+        if (transportSec == null) return null;
+        return clampMarkerSec(transportSec);
     }
 
     function normalizeMarkersCopyPasteText(text) {
@@ -1266,11 +1292,12 @@
     function buildMarkersCopyTsvText() {
         const headers = ['#', 'In', 'Out', 'Feedback'];
         const lines = [headers.map(markerCopyCellText).join('\t')];
+        const copyOpt = allMarkerCopyTcsHaveZeroHours() ? { omitZeroHours: true } : null;
         currentMarkers.forEach((m, idx) => {
             const row = [
                 String(idx + 1),
-                markerTcLabelForCopy(markerInSec(m)),
-                markerOutLabelForCopy(m),
+                markerTcLabelForCopy(markerInSec(m), copyOpt),
+                markerOutLabelForCopy(m, copyOpt),
                 m.comment || '',
             ];
             lines.push(row.map(markerCopyCellText).join('\t'));
@@ -1423,7 +1450,7 @@
             return {
                 ok: false,
                 error:
-                    '見出し行は「#」「In」「Out」「Feedback」である必要があります（Copy と同じ形式）。先頭行に In のタイムコード（00:00:00:00 形式）が必要です。',
+                    '見出し行は「#」「In」「Out」「Feedback」である必要があります（Copy と同じ形式）。先頭行に In のタイムコード（00:00:00.000 形式）が必要です。',
             };
         }
         const markers = [];
@@ -1459,7 +1486,7 @@
                     error:
                         '行 ' +
                         row +
-                        ' の In タイムコードが不正です（00:00:00:00 形式）: ' +
+                        ' の In タイムコードが不正です（00:00:00.000 形式、ミリ秒 3 桁）: ' +
                         inTc,
                 };
             }
@@ -1490,7 +1517,7 @@
                     error:
                         '行 ' +
                         row +
-                        ' の Out タイムコードが不正です（00:00:00:00 形式）: ' +
+                        ' の Out タイムコードが不正です（00:00:00.000 形式、ミリ秒 3 桁）: ' +
                         outTc,
                 };
             }
