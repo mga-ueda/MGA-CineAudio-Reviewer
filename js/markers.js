@@ -1872,6 +1872,19 @@
 
     window.isMarkerAreaKeyboardActive = isMarkerAreaKeyboardActive;
 
+    function isWaveformDrawingAreaActive(opt) {
+        const inWaveform = (el) =>
+            el &&
+            el.nodeType === 1 &&
+            el.closest &&
+            (el.closest('#audioWaveformComposite') ||
+                el.closest('#audioWaveformLanesTracks') ||
+                el.closest('#audioWaveformLanesInner'));
+        if (inWaveform(opt && opt.target)) return true;
+        if (waveformLanesPointerInside) return true;
+        return inWaveform(document.activeElement);
+    }
+
     function handleMarkerPendingRangeEscapeKeydown(e) {
         if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
         if (e.repeat) return false;
@@ -3753,7 +3766,6 @@
     }
 
     function handleMarkerNavigationKeydown(e) {
-        if (e.repeat) return false;
         if (!markerTimelineReady() || currentMarkers.length === 0) return false;
         if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return false;
         if (e.ctrlKey || e.metaKey) return false;
@@ -3767,8 +3779,10 @@
             return true;
         }
 
-        // Shift+↑↓: マーカー停止点ジャンプ（↑=次の停止点）。テキスト入力中は除外
-        if (e.shiftKey && !e.altKey) {
+        const inWaveformDraw = isWaveformDrawingAreaActive({ target: e.target });
+        // 波形描画エリア: ↑↓（↑=次、↓=前）。Markers パネル等: Shift+↑↓
+        const markerStopNav = !e.altKey && (inWaveformDraw || e.shiftKey);
+        if (markerStopNav) {
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             if (isTypingTarget(e.target)) return false;
             e.preventDefault();
