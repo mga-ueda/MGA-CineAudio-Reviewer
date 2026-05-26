@@ -302,6 +302,11 @@
 
     function setTransportSessionPlaying(playing) {
         transportSessionPlaying = !!playing;
+        if (playing) {
+            cancelWaveformHiresRedraw();
+        } else {
+            scheduleWaveformHiresRedrawAfterZoom();
+        }
     }
 
     function masterTransportTailEpsilonSec() {
@@ -1146,13 +1151,127 @@
         if (!scrollable || isWaveformTimelineAtFitZoom()) lanes.scrollLeft = 0;
     }
 
+    let waveformHiresTimer = 0;
+    let waveformHiresScrollTimer = 0;
+    const WAVEFORM_HIRES_DELAY_MS = 500;
+    const WAVEFORM_HIRES_BARS_PER_PX = 4;
+    const WAVEFORM_HIRES_BAR_MAX = 16384;
+
+    function cancelWaveformHiresRedraw() {
+        if (waveformHiresTimer) {
+            clearTimeout(waveformHiresTimer);
+            waveformHiresTimer = 0;
+        }
+        if (waveformHiresScrollTimer) {
+            clearTimeout(waveformHiresScrollTimer);
+            waveformHiresScrollTimer = 0;
+        }
+    }
+
+    function clearAllWaveformViewportPeaks() {
+        if (typeof clearMainWaveformViewportPeaks === 'function') {
+            clearMainWaveformViewportPeaks();
+        }
+        if (typeof clearAllExtraWaveformViewportPeaks === 'function') {
+            clearAllExtraWaveformViewportPeaks();
+        }
+    }
+
+    /** 停止中・拡大時の可視範囲（マスター時間）と高解像度バー数 */
+    function getWaveformViewportHiresSpec() {
+        if (isTransportPlaying()) return null;
+        if (isWaveformTimelineAtFitZoom()) return null;
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return null;
+        const m = waveformTimelineMetrics(lanes);
+        if (!m || !(m.scrubW > 0) || !(m.viewportW > 0)) return null;
+        const master = getMasterTransportDurationSec();
+        if (!(master > 0)) return null;
+        const scrollLeft = m.scrollable ? lanes.scrollLeft || 0 : 0;
+        const visW = m.viewportW;
+        const contentW = m.scrubW;
+        const masterStartSec = (scrollLeft / contentW) * master;
+        const masterEndSec = ((scrollLeft + visW) / contentW) * master;
+        const barCount = Math.min(
+            WAVEFORM_HIRES_BAR_MAX,
+            Math.max(1, Math.round(visW * WAVEFORM_HIRES_BARS_PER_PX)),
+        );
+        return { masterStartSec, masterEndSec, barCount, master };
+    }
+
+    function applyWaveformViewportHiresRedraw() {
+        if (isTransportPlaying()) return;
+        const spec = getWaveformViewportHiresSpec();
+        if (!spec) {
+            clearAllWaveformViewportPeaks();
+            return;
+        }
+        const run = () => {
+            if (isTransportPlaying()) return;
+            const live = getWaveformViewportHiresSpec();
+            if (!live) {
+                clearAllWaveformViewportPeaks();
+                if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+                if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                    redrawAllExtraTrackWaveforms();
+                }
+                return;
+            }
+            if (typeof rebuildMainWaveformViewportPeaks === 'function') {
+                rebuildMainWaveformViewportPeaks(live);
+            }
+            if (typeof rebuildAllExtraWaveformViewportPeaks === 'function') {
+                rebuildAllExtraWaveformViewportPeaks(live);
+            }
+            if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+            if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                redrawAllExtraTrackWaveforms();
+            }
+        };
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(run, { timeout: 4000 });
+        } else {
+            setTimeout(run, 0);
+        }
+    }
+
+    function scheduleWaveformHiresRedrawAfterZoom() {
+        cancelWaveformHiresRedraw();
+        if (isWaveformTimelineAtFitZoom()) {
+            clearAllWaveformViewportPeaks();
+            if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+            if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                redrawAllExtraTrackWaveforms();
+            }
+            return;
+        }
+        if (isTransportPlaying()) return;
+        clearAllWaveformViewportPeaks();
+        waveformHiresTimer = setTimeout(() => {
+            waveformHiresTimer = 0;
+            applyWaveformViewportHiresRedraw();
+        }, WAVEFORM_HIRES_DELAY_MS);
+    }
+
+    function cancelWaveformHiresOnPlayback() {
+        cancelWaveformHiresRedraw();
+        clearAllWaveformViewportPeaks();
+    }
+
+    window.cancelWaveformHiresOnPlayback = cancelWaveformHiresOnPlayback;
+    window.scheduleWaveformHiresRedrawAfterZoom = scheduleWaveformHiresRedrawAfterZoom;
+    window.isWaveformTimelineAtFitZoom = isWaveformTimelineAtFitZoom;
+    window.getWaveformViewportHiresSpec = getWaveformViewportHiresSpec;
+
     function refreshWaveformTimelineAfterZoomChange() {
+        clearAllWaveformViewportPeaks();
         applyWaveformTimelineZoomLayout();
         if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
         if (typeof redrawAllExtraTrackWaveforms === 'function') redrawAllExtraTrackWaveforms();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+        scheduleWaveformHiresRedrawAfterZoom();
     }
 
     function transportSecForWaveformZoomCenter() {
@@ -1267,6 +1386,12 @@
         if (typeof refreshHoverPlayheadFromLastPointer === 'function') {
             refreshHoverPlayheadFromLastPointer();
         }
+        if (isTransportPlaying() || isWaveformTimelineAtFitZoom()) return;
+        if (waveformHiresScrollTimer) clearTimeout(waveformHiresScrollTimer);
+        waveformHiresScrollTimer = setTimeout(() => {
+            waveformHiresScrollTimer = 0;
+            applyWaveformViewportHiresRedraw();
+        }, WAVEFORM_HIRES_DELAY_MS);
     }
 
     function isWaveformTimelineKeyboardReady() {
@@ -1648,6 +1773,77 @@
         return wCss * (contentDurSec / master);
     }
 
+    function getViewportPeakDrawRange(viewportPeaks, wCss, contentDurSec, drawOpt) {
+        if (!viewportPeaks || !viewportPeaks.peaks || viewportPeaks.peaks.length === 0) {
+            return null;
+        }
+        const master = getMasterTransportDurationSec();
+        if (!(master > 0)) return null;
+        const timelineStartSec =
+            drawOpt && Number.isFinite(drawOpt.timelineStartSec) && drawOpt.timelineStartSec > 0
+                ? drawOpt.timelineStartSec
+                : 0;
+        const trackEndSec = timelineStartSec + (contentDurSec > 0 ? contentDurSec : 0);
+        const t0 = Math.max(timelineStartSec, viewportPeaks.masterStartSec);
+        const t1 = Math.min(trackEndSec, viewportPeaks.masterEndSec);
+        if (t1 <= t0 + 1e-9) return null;
+        const x0 = (t0 / master) * wCss;
+        const x1 = (t1 / master) * wCss;
+        if (!(x1 > x0 + 0.5)) return null;
+        return { x0, x1 };
+    }
+
+    function drawPeaksBarsInRange(ctx, peaks, x0, drawW, hCss, fillStyle, skipX0, skipX1) {
+        if (!peaks || peaks.length === 0 || !(drawW > 0)) return;
+        const mid = hCss * 0.5;
+        const barW = drawW / peaks.length;
+        const hasSkip =
+            Number.isFinite(skipX0) && Number.isFinite(skipX1) && skipX1 > skipX0 + 0.5;
+        ctx.fillStyle = fillStyle || '#ffffff';
+        for (let i = 0; i < peaks.length; i++) {
+            const p = peaks[i];
+            const x = x0 + i * barW;
+            const w = Math.max(1, barW + 0.5);
+            if (hasSkip && x + w > skipX0 && x < skipX1) continue;
+            const top = mid - Math.max(0.5, p.max * (mid - 2));
+            const bot = mid - Math.min(-0.5, p.min * (mid - 2));
+            const h = Math.max(1, bot - top);
+            ctx.fillRect(x, top, w, h);
+        }
+    }
+
+    /** リージョン描画後など、可視範囲だけを背景で消して高解像度ピークを描く */
+    function drawViewportPeaksOnTimeline(
+        ctx,
+        viewportPeaks,
+        wCss,
+        hCss,
+        contentDurSec,
+        fillStyle,
+        drawOpt,
+    ) {
+        const range = getViewportPeakDrawRange(viewportPeaks, wCss, contentDurSec, drawOpt);
+        if (!range) return;
+        const vpW = range.x1 - range.x0;
+        ctx.fillStyle = TIMELINE_LANE_TRACK_BG;
+        ctx.fillRect(range.x0, 0, vpW, hCss);
+        const mid = hCss * 0.5;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(range.x0, mid);
+        ctx.lineTo(range.x1, mid);
+        ctx.stroke();
+        drawPeaksBarsInRange(
+            ctx,
+            viewportPeaks.peaks,
+            range.x0,
+            vpW,
+            hCss,
+            fillStyle,
+        );
+    }
+
     function drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, contentDurSec, fillStyle, drawOpt) {
         const mid = hCss * 0.5;
         ctx.clearRect(0, 0, wCss, hCss);
@@ -1659,6 +1855,15 @@
                 ? drawOpt.timelineStartSec
                 : 0;
         const startX = masterTimelineContentWidth(wCss, timelineStartSec);
+        const vpRange =
+            drawOpt && drawOpt.viewportPeaks
+                ? getViewportPeakDrawRange(
+                      drawOpt.viewportPeaks,
+                      wCss,
+                      contentDurSec,
+                      drawOpt,
+                  )
+                : null;
 
         if (!peaks || peaks.length === 0) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
@@ -1668,21 +1873,41 @@
             ctx.lineTo(wCss, mid);
             ctx.stroke();
             drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
+            if (vpRange) {
+                drawPeaksBarsInRange(
+                    ctx,
+                    drawOpt.viewportPeaks.peaks,
+                    vpRange.x0,
+                    vpRange.x1 - vpRange.x0,
+                    hCss,
+                    fillStyle,
+                );
+            }
             return;
         }
 
         const contentW = masterTimelineContentWidth(wCss, contentDurSec);
         const drawW = contentW > 0 ? contentW : wCss;
-        const barW = drawW / peaks.length;
-        ctx.fillStyle = fillStyle || '#ffffff';
+        drawPeaksBarsInRange(
+            ctx,
+            peaks,
+            startX,
+            drawW,
+            hCss,
+            fillStyle,
+            vpRange ? vpRange.x0 : null,
+            vpRange ? vpRange.x1 : null,
+        );
 
-        for (let i = 0; i < peaks.length; i++) {
-            const p = peaks[i];
-            const x = startX + i * barW;
-            const top = mid - Math.max(0.5, p.max * (mid - 2));
-            const bot = mid - Math.min(-0.5, p.min * (mid - 2));
-            const h = Math.max(1, bot - top);
-            ctx.fillRect(x, top, Math.max(1, barW + 0.5), h);
+        if (vpRange) {
+            drawPeaksBarsInRange(
+                ctx,
+                drawOpt.viewportPeaks.peaks,
+                vpRange.x0,
+                vpRange.x1 - vpRange.x0,
+                hCss,
+                fillStyle,
+            );
         }
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
@@ -1694,6 +1919,9 @@
 
         drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
     }
+
+    window.drawPeaksBarsInRange = drawPeaksBarsInRange;
+    window.drawViewportPeaksOnTimeline = drawViewportPeaksOnTimeline;
 
     function setLaneContentEndMarker(el, _contentDurSec) {
         if (!el) return;

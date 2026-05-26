@@ -1,4 +1,6 @@
     let waveformPeaks = null;
+    /** 可視範囲のみの高解像度ピーク（拡大停止時） */
+    let waveformViewportPeaks = null;
     let waveformAudioBuffer = null;
     let waveformBuildGen = 0;
     let waveformResizeObs = null;
@@ -999,9 +1001,13 @@
     window.getWaveformTargetExtraSlot = getWaveformTargetExtraSlot;
 
     function clearAudioWaveform() {
+        if (typeof cancelWaveformHiresOnPlayback === 'function') {
+            cancelWaveformHiresOnPlayback();
+        }
         stopMainVideoWaveformPresenceWatch();
         waveformBuildGen += 1;
         waveformPeaks = null;
+        waveformViewportPeaks = null;
         waveformAudioBuffer = null;
         waveformAudioBuffer = null;
         endAudioWaveformScrub({ force: true });
@@ -1040,6 +1046,34 @@
         return peaks;
     }
 
+    function peaksFromAudioBufferRange(buffer, startSec, endSec, barCount) {
+        if (!buffer || buffer.numberOfChannels < 1) return [];
+        const ch = buffer.getChannelData(0);
+        const sr = buffer.sampleRate;
+        const startSample = Math.max(0, Math.floor(startSec * sr));
+        const endSample = Math.min(ch.length, Math.ceil(endSec * sr));
+        if (endSample <= startSample) return [];
+        const len = endSample - startSample;
+        const bars = Math.max(1, barCount | 0);
+        const block = Math.max(1, Math.floor(len / bars));
+        const peaks = new Array(bars);
+        for (let i = 0; i < bars; i++) {
+            const blockStart = startSample + i * block;
+            const blockEnd = Math.min(endSample, blockStart + block);
+            let min = 0;
+            let max = 0;
+            for (let j = blockStart; j < blockEnd; j++) {
+                const v = ch[j];
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            peaks[i] = { min, max };
+        }
+        return peaks;
+    }
+
+    window.peaksFromAudioBufferRange = peaksFromAudioBufferRange;
+
     function syncAudioWaveformCanvasSize() {
         if (!audioWaveformCanvas || !audioWaveformTrack) return null;
         const wCss =
@@ -1056,8 +1090,44 @@
         audioWaveformCanvas.style.height = hCss + 'px';
         const ctx = audioWaveformCanvas.getContext('2d');
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, wCss, hCss, barCount: Math.min(4096, wCss) };
+        return { ctx, wCss, hCss, barCount: Math.min(4096, Math.max(64, wCss)) };
     }
+
+    function clearMainWaveformViewportPeaks() {
+        waveformViewportPeaks = null;
+    }
+
+    function rebuildMainWaveformViewportPeaks(spec) {
+        if (!waveformAudioBuffer || !spec) {
+            waveformViewportPeaks = null;
+            return;
+        }
+        const contentDur = getWaveformAudioDurationSec();
+        const timelineStartSec = 0;
+        const trackEndSec = timelineStartSec + contentDur;
+        const t0 = Math.max(timelineStartSec, spec.masterStartSec);
+        const t1 = Math.min(trackEndSec, spec.masterEndSec);
+        if (t1 <= t0 + 1e-9) {
+            waveformViewportPeaks = null;
+            return;
+        }
+        const audioStart = t0 - timelineStartSec;
+        const audioEnd = t1 - timelineStartSec;
+        const peaks = peaksFromAudioBufferRange(
+            waveformAudioBuffer,
+            audioStart,
+            audioEnd,
+            spec.barCount,
+        );
+        if (!peaks.length) {
+            waveformViewportPeaks = null;
+            return;
+        }
+        waveformViewportPeaks = { peaks, masterStartSec: t0, masterEndSec: t1 };
+    }
+
+    window.clearMainWaveformViewportPeaks = clearMainWaveformViewportPeaks;
+    window.rebuildMainWaveformViewportPeaks = rebuildMainWaveformViewportPeaks;
 
     function drawAudioWaveformCanvas() {
         if (!audioWaveformCanvas) return;
@@ -1077,7 +1147,9 @@
                       g.addColorStop(1, 'rgba(255, 255, 255, 0.42)');
                       return g;
                   })();
-        drawPeaksForMasterTimeline(ctx, waveformPeaks, wCss, hCss, contentDur, grad);
+        const drawOpt = {};
+        if (waveformViewportPeaks) drawOpt.viewportPeaks = waveformViewportPeaks;
+        drawPeaksForMasterTimeline(ctx, waveformPeaks, wCss, hCss, contentDur, grad, drawOpt);
     }
 
     function seekFromWaveformPointer(clientX, opt) {
@@ -1696,7 +1768,11 @@
                 }
                 const sized = syncAudioWaveformCanvasSize();
                 if (!sized) return;
-                waveformPeaks = peaksFromAudioBuffer(waveformAudioBuffer, sized.barCount);
+                // レイアウト変更時は常にデフォルト解像度でピークを再生成（元の挙動）。
+                waveformPeaks = peaksFromAudioBuffer(
+                    waveformAudioBuffer,
+                    sized.barCount,
+                );
                 drawAudioWaveformCanvas();
                 updateAllWaveformPlayheads();
                 if (typeof renderAudioWaveformMarkers === 'function') {

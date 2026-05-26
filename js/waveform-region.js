@@ -1393,13 +1393,161 @@
         return tr && tr.peaks ? tr.peaks : null;
     }
 
+    function viewportPeaksCoverMasterTime(vp, masterSec) {
+        if (!vp) return false;
+        if (masterSec + 1e-9 < vp.masterStartSec || masterSec - 1e-9 > vp.masterEndSec) {
+            return false;
+        }
+        if (!vp.segments || !vp.segments.length) {
+            return !!(vp.peaks && vp.peaks.length);
+        }
+        for (let i = 0; i < vp.segments.length; i++) {
+            const s = vp.segments[i];
+            if (
+                masterSec + 1e-9 >= s.masterStartSec &&
+                masterSec - 1e-9 <= s.masterEndSec &&
+                s.peaks &&
+                s.peaks.length
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function drawRegionViewportPeaks(ctx, wCss, hCss, master, vp, grad, track) {
+        if (!vp || !vp.segments || !vp.segments.length || !(master > 0) || !track) {
+            return;
+        }
+        const mid = hCss * 0.5;
+        const bg =
+            typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
+                ? TIMELINE_LANE_TRACK_BG
+                : '#161820';
+        const vpX0 = (vp.masterStartSec / master) * wCss;
+        const vpX1 = (vp.masterEndSec / master) * wCss;
+        const vpW = vpX1 - vpX0;
+        if (!(vpW > 0.5)) return;
+
+        ctx.fillStyle = bg;
+        ctx.fillRect(vpX0, 0, vpW, hCss);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(vpX0, mid);
+        ctx.lineTo(vpX1, mid);
+        ctx.stroke();
+
+        ctx.fillStyle = grad || '#ffffff';
+        for (let si = 0; si < vp.segments.length; si++) {
+            const s = vp.segments[si];
+            if (!s.peaks || !s.peaks.length) continue;
+            const segDur = s.masterEndSec - s.masterStartSec;
+            if (!(segDur > 1e-9)) continue;
+            const x0 = (s.masterStartSec / master) * wCss;
+            const x1 = (s.masterEndSec / master) * wCss;
+            const drawW = x1 - x0;
+            if (!(drawW > 0.5)) continue;
+            const barW = drawW / s.peaks.length;
+            const segIdx =
+                typeof s.segmentIndex === 'number' && s.segmentIndex >= 0 ? s.segmentIndex : si;
+            for (let p = 0; p < s.peaks.length; p++) {
+                const pk = s.peaks[p];
+                const x = x0 + p * barW;
+                const barTransport =
+                    s.masterStartSec + ((p + 0.5) / s.peaks.length) * segDur;
+                const gain =
+                    computeSegmentCrossfadeVisualGain(track, segIdx, barTransport) *
+                    getSegmentGainLinear(track, segIdx);
+                const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
+                const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
+                ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+            }
+        }
+    }
+
+    function rebuildExtraTrackRegionViewportPeaks(slot, spec) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr) return;
+        tr.viewportPeaks = null;
+        if (!spec) return;
+
+        const track = { type: 'extra', slot };
+        const viewportDur = spec.masterEndSec - spec.masterStartSec;
+        if (!(viewportDur > 1e-9)) return;
+        if (typeof peaksFromBufferRange !== 'function') return;
+
+        const segments = getTrackSegments(track);
+        if (!segments.length) {
+            const t0Track = getTrackTimelineStartSec(track);
+            const fullDur = getTrackSourceDurationSec(track);
+            if (!fullDur || !tr.buffer) return;
+            const trackEnd = t0Track + fullDur;
+            const t0 = Math.max(t0Track, spec.masterStartSec);
+            const t1 = Math.min(trackEnd, spec.masterEndSec);
+            if (t1 <= t0 + 1e-9) return;
+            const srcStart = t0 - t0Track;
+            const srcEnd = t1 - t0Track;
+            const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
+            const peaks = peaksFromBufferRange(tr.buffer, srcStart, srcEnd, bars);
+            if (!peaks.length) return;
+            tr.viewportPeaks = {
+                masterStartSec: spec.masterStartSec,
+                masterEndSec: spec.masterEndSec,
+                segments: [{ masterStartSec: t0, masterEndSec: t1, peaks }],
+            };
+            return;
+        }
+
+        const outSegs = [];
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const segT0 = getSegmentTimelineStart(track, i);
+            const segEnd = getSegmentTimelineEnd(track, i);
+            let t0 = Math.max(segT0, spec.masterStartSec);
+            let t1 = Math.min(segEnd, spec.masterEndSec);
+            if (t1 <= t0 + 1e-9) continue;
+            const playbackStart = getSegmentPlaybackTimelineStart(track, i);
+            t0 = Math.max(t0, playbackStart);
+            if (t1 <= t0 + 1e-9) continue;
+
+            const srcStart = segmentSourceSecFromTransport(track, i, t0);
+            const srcEnd = segmentSourceSecFromTransport(track, i, t1);
+            const clipId = seg.clipId || getSegmentClipId(track, i);
+            let buf = tr.buffer;
+            if (typeof getExtraTrackClipBuffer === 'function') {
+                buf = getExtraTrackClipBuffer(tr, clipId) || buf;
+            }
+            if (!buf) continue;
+
+            const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
+            const peaks = peaksFromBufferRange(buf, srcStart, srcEnd, bars);
+            if (!peaks.length) continue;
+            outSegs.push({ masterStartSec: t0, masterEndSec: t1, peaks, segmentIndex: i });
+        }
+
+        if (outSegs.length) {
+            tr.viewportPeaks = {
+                masterStartSec: spec.masterStartSec,
+                masterEndSec: spec.masterEndSec,
+                segments: outSegs,
+            };
+        }
+    }
+
     function drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad) {
         const track = { type: 'extra', slot };
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        const vp = tr ? tr.viewportPeaks : null;
         const t0 = getTrackTimelineStartSec(track);
         const segments = getTrackSegments(track);
         const mid = hCss * 0.5;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
 
         ctx.clearRect(0, 0, wCss, hCss);
         ctx.fillStyle =
@@ -1421,9 +1569,13 @@
                 return;
             }
             if (typeof drawPeaksForMasterTimeline === 'function') {
-                drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, fullDur, grad, {
-                    timelineStartSec: t0,
-                });
+                const drawOpt = { timelineStartSec: t0 };
+                if (vp && vp.segments && vp.segments.length === 1) {
+                    drawOpt.viewportPeaks = vp.segments[0];
+                } else if (vp && vp.peaks) {
+                    drawOpt.viewportPeaks = vp;
+                }
+                drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, fullDur, grad, drawOpt);
             }
             return;
         }
@@ -1466,6 +1618,9 @@
                 if (barTransport < waveformHideBefore - 0.0005) {
                     continue;
                 }
+                if (viewportPeaksCoverMasterTime(vp, barTransport)) {
+                    continue;
+                }
                 const gain =
                     computeSegmentCrossfadeVisualGain(track, i, barTransport) *
                     getSegmentGainLinear(track, i);
@@ -1474,6 +1629,8 @@
                 ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
             }
         }
+
+        drawRegionViewportPeaks(ctx, wCss, hCss, master, vp, grad, track);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
@@ -3640,6 +3797,7 @@
     window.getTrackRegionBounds = getTrackRegionBounds;
     window.getExtraTrackPlaybackAtTransport = mapTransportToSegmentForPlayback;
     window.drawExtraTrackWaveformRegions = drawExtraTrackWaveformRegions;
+    window.rebuildExtraTrackRegionViewportPeaks = rebuildExtraTrackRegionViewportPeaks;
     window.getTrackTimelineEndSec = getTrackTimelineEndSec;
     window.getTrackTimelineStartSec = getTrackTimelineStartSec;
     window.getExtraTrackMaxTimelineEndSec = function (slot) {

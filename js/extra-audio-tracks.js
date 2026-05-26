@@ -2641,9 +2641,14 @@
         const ui = getExtraUi(slot);
         if (!tr || !ui || !ui.track) return false;
         if (!tr.buffer) return hasExtraTrackWaveformPeaks(slot);
-        if (rawMasterTimelineWidthCss() < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
+        const layoutW =
+            typeof waveformTimelineViewportWidthCss === 'function'
+                ? waveformTimelineViewportWidthCss()
+                : rawMasterTimelineWidthCss();
+        if (layoutW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
         const sized = syncExtraCanvasSize(ui);
         if (!sized) return false;
+        // 元の挙動: レイアウトに合わせて固定解像度（最大 4096）でピーク生成。
         if (!tr.peaks || tr.peaks.length !== sized.barCount) {
             tr.peaks = peaksFromBuffer(tr.buffer, sized.barCount);
         }
@@ -2656,7 +2661,10 @@
         const ui = getExtraUi(slot);
         if (!tr || !ui || !ui.canvas) return false;
         if (!tr.peaks || tr.peaks.length < 1) return false;
-        const laneW = rawMasterTimelineWidthCss();
+        const laneW =
+            typeof waveformTimelineViewportWidthCss === 'function'
+                ? waveformTimelineViewportWidthCss()
+                : rawMasterTimelineWidthCss();
         if (laneW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
         const styleW = parseFloat(ui.canvas.style.width) || 0;
         return styleW >= EXTRA_WAVEFORM_LAYOUT_MIN_CSS;
@@ -2682,7 +2690,11 @@
         };
 
         const paintSlot = (slot) => {
-            if (rawMasterTimelineWidthCss() < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return;
+            const layoutW =
+                typeof waveformTimelineViewportWidthCss === 'function'
+                    ? waveformTimelineViewportWidthCss()
+                    : rawMasterTimelineWidthCss();
+            if (layoutW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return;
             if (!rebuildExtraTrackPeaksIfNeeded(slot)) return;
             drawExtraTrackWaveform(slot);
         };
@@ -2742,6 +2754,41 @@
         return peaks;
     }
 
+    function peaksFromBufferRange(buffer, startSec, endSec, barCount) {
+        if (!buffer || buffer.numberOfChannels < 1) return [];
+        const ch = buffer.getChannelData(0);
+        const sr = buffer.sampleRate;
+        const startSample = Math.max(0, Math.floor(startSec * sr));
+        const endSample = Math.min(ch.length, Math.ceil(endSec * sr));
+        if (endSample <= startSample) return [];
+        const len = endSample - startSample;
+        const bars = Math.max(1, barCount | 0);
+        const block = Math.max(1, Math.floor(len / bars));
+        const peaks = new Array(bars);
+        for (let i = 0; i < bars; i++) {
+            const blockStart = startSample + i * block;
+            const blockEnd = Math.min(endSample, blockStart + block);
+            let min = 0;
+            let max = 0;
+            for (let j = blockStart; j < blockEnd; j++) {
+                const v = ch[j];
+                if (v < min) min = v;
+                if (v > max) max = v;
+            }
+            peaks[i] = { min, max };
+        }
+        return peaks;
+    }
+
+    function getExtraTrackClipBuffer(tr, clipId) {
+        const clip = getExtraTrackClip(tr, clipId || 'main');
+        if (clip && clip.buffer) return clip.buffer;
+        return tr && tr.buffer ? tr.buffer : null;
+    }
+
+    window.getExtraTrackClipBuffer = getExtraTrackClipBuffer;
+    window.peaksFromBufferRange = peaksFromBufferRange;
+
     function syncExtraCanvasSize(ui) {
         if (!ui || !ui.canvas || !ui.track) return null;
         const wCss =
@@ -2758,7 +2805,7 @@
         ui.canvas.style.height = hCss + 'px';
         const ctx = ui.canvas.getContext('2d');
         if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, wCss, hCss, barCount: Math.min(4096, wCss) };
+        return { ctx, wCss, hCss, barCount: Math.min(4096, Math.max(64, wCss)) };
     }
 
     function drawExtraTrackWaveform(slot) {
@@ -2777,6 +2824,15 @@
             typeof timelineWaveformFillGradient === 'function'
                 ? timelineWaveformFillGradient(ctx, hCss, 'extra', audible)
                 : null;
+        const timelineStartSec = getExtraTrackTimelineStartSec(slot);
+        const drawOpt = { timelineStartSec };
+        if (tr && tr.viewportPeaks) {
+            if (tr.viewportPeaks.segments && tr.viewportPeaks.segments.length === 1) {
+                drawOpt.viewportPeaks = tr.viewportPeaks.segments[0];
+            } else if (tr.viewportPeaks.peaks) {
+                drawOpt.viewportPeaks = tr.viewportPeaks;
+            }
+        }
         if (typeof drawExtraTrackWaveformRegions === 'function') {
             drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad);
         } else {
@@ -2787,7 +2843,7 @@
                 hCss,
                 extraTrackContentDurationSec(slot),
                 grad,
-                { timelineStartSec: getExtraTrackTimelineStartSec(slot) },
+                drawOpt,
             );
         }
     }
@@ -2795,6 +2851,31 @@
     function redrawAllExtraTrackWaveforms() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) drawExtraTrackWaveform(i);
     }
+
+    function clearAllExtraWaveformViewportPeaks() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            const tr = extraTrackBySlot(i);
+            if (tr) tr.viewportPeaks = null;
+        }
+    }
+
+    function rebuildAllExtraWaveformViewportPeaks(spec) {
+        if (!spec) {
+            clearAllExtraWaveformViewportPeaks();
+            return;
+        }
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (typeof rebuildExtraTrackRegionViewportPeaks === 'function') {
+                rebuildExtraTrackRegionViewportPeaks(i, spec);
+            } else {
+                const tr = extraTrackBySlot(i);
+                if (tr) tr.viewportPeaks = null;
+            }
+        }
+    }
+
+    window.clearAllExtraWaveformViewportPeaks = clearAllExtraWaveformViewportPeaks;
+    window.rebuildAllExtraWaveformViewportPeaks = rebuildAllExtraWaveformViewportPeaks;
 
     /** レーン表示直後は clientWidth が 0 のことがあるため、レイアウト確定まで再試行する。 */
     function scheduleExtraTrackWaveformRedraw(slot, opt) {
