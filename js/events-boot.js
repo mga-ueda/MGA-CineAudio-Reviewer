@@ -418,6 +418,13 @@
         }
 
         if (
+            typeof handleAnalyzeShortcutKeydown === 'function' &&
+            handleAnalyzeShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handlePlaybackRegionDeleteKeydown === 'function' &&
             handlePlaybackRegionDeleteKeydown(e)
         ) {
@@ -446,6 +453,7 @@
                 e.code === 'ArrowRight' ||
                 /^Numpad[0-9]$/.test(e.code) ||
                 e.code === 'KeyL' ||
+                e.code === 'KeyA' ||
                 e.code === 'KeyM' ||
                 e.code === 'KeyS' ||
                 e.code === 'KeyV' ||
@@ -472,6 +480,7 @@
                 e.code === 'ArrowRight' ||
                 /^Numpad[0-9]$/.test(e.code) ||
                 e.code === 'KeyL' ||
+                e.code === 'KeyA' ||
                 e.code === 'KeyM' ||
                 e.code === 'KeyS' ||
                 e.code === 'KeyV' ||

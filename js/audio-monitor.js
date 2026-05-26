@@ -69,6 +69,7 @@
     let reviewMixMasterNode = null;
     let reviewMixMonitorSplitter = null;
     let reviewMixMasterLinearGain = 1;
+    let masterAnalyserConnected = false;
 
     let spectrumDisplayDbMin = DISPLAY_ANALYSIS_FLOOR_DB.includes(DEFAULT_SPECTRUM_FLOOR_DB)
         ? DEFAULT_SPECTRUM_FLOOR_DB
@@ -76,11 +77,51 @@
     let meterDisplayDbMin = DISPLAY_ANALYSIS_FLOOR_DB.includes(DEFAULT_METER_FLOOR_DB)
         ? DEFAULT_METER_FLOOR_DB
         : -50;
+    /** チェックあり = Analyze ON（スペクトラム／メーター表示）。初期は OFF。 */
+    let analyzeOn = false;
+
+    const analyzeOnCheckbox = document.getElementById('analyzeOnCheckbox');
+    const reviewMixMonitorEl = document.getElementById('reviewMixMonitor');
+    const monitorFloorOptionsEl = document.querySelector('.monitor-floor-options');
+
+    function applyAnalyzeUiVisibility() {
+        if (analyzeOnCheckbox) analyzeOnCheckbox.checked = !!analyzeOn;
+        if (reviewMixMonitorEl) reviewMixMonitorEl.hidden = !analyzeOn;
+        if (monitorFloorOptionsEl) monitorFloorOptionsEl.hidden = !analyzeOn;
+    }
+
+    function setAnalyzeOn(next, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const prev = analyzeOn;
+        analyzeOn = !!next;
+        applyAnalyzeUiVisibility();
+        syncMasterAnalyserConnectionForAnalyzeState();
+        if (!analyzeOn && prev) extinguishMonitorDisplays();
+        else if (analyzeOn && !prev && !requestAnimId) paintSpectrumIdle();
+        if (!o.skipSave) saveUiPrefsToLocalStorage();
+        if (!o.silent && typeof writeLog === 'function') {
+            writeLog('Analyze: ' + (analyzeOn ? 'ON' : 'OFF'));
+        }
+    }
+
+    function toggleAnalyzeOn() {
+        setAnalyzeOn(!analyzeOn);
+    }
+
+    function readAnalyzeOnFromPrefsSnap(snap) {
+        if (!snap || typeof snap !== 'object') return;
+        if (typeof snap.analyzeOn === 'boolean') {
+            analyzeOn = snap.analyzeOn;
+        } else if (typeof snap.analyzeOff === 'boolean') {
+            analyzeOn = !snap.analyzeOff;
+        }
+    }
     
     function getMonitorUiPersistSnapshot() {
         return {
             spectrumFloor: spectrumDisplayDbMin,
             meterFloor: meterDisplayDbMin,
+            analyzeOn: !!analyzeOn,
             masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
         };
     }
@@ -96,6 +137,7 @@
         if (typeof snap.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.meterFloor)) {
             meterDisplayDbMin = snap.meterFloor;
         }
+        readAnalyzeOnFromPrefsSnap(snap);
         const specSel = document.getElementById('spectrumFloorDbSelect');
         const metSel = document.getElementById('meterFloorDbSelect');
         if (specSel) specSel.value = String(spectrumDisplayDbMin);
@@ -103,6 +145,8 @@
         if (typeof snap.masterVol === 'number' && isFinite(snap.masterVol)) {
             applyMasterVolToMix(snap.masterVol, false);
         }
+        applyAnalyzeUiVisibility();
+        syncMasterAnalyserConnectionForAnalyzeState();
         saveUiPrefsToLocalStorage();
     }
 
@@ -120,6 +164,7 @@
                 JSON.stringify({
                     spectrumFloor: spectrumDisplayDbMin,
                     meterFloor: meterDisplayDbMin,
+                    analyzeOn: !!analyzeOn,
                     masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
                 }),
             );
@@ -156,6 +201,7 @@
         if (!loadedMasterVolFromStorage) {
             applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, false);
         }
+        applyAnalyzeUiVisibility();
     })();
 
     let masterAnalyser = null;
@@ -280,12 +326,9 @@
     function ensureReviewMixMonitorOutput(ctx, masterGainNode) {
         if (!ctx || !masterGainNode) return false;
         reviewMixMasterNode = masterGainNode;
-        if (!masterAnalyser) {
-            masterAnalyser = ctx.createAnalyser();
-            masterAnalyser.fftSize = 2048;
-            masterAnalyser.smoothingTimeConstant = 0.14;
-            masterAnalyser.minDecibels = -100;
-            masterAnalyser.maxDecibels = 0;
+        // auto-gain 判定（CLIP PROTECT）は time-domain の anaL/anaR を使うので、
+        // Analyze OFF でも anaL/anaR の音声送りは維持する（CLIP PROTECT 用）。
+        if (!reviewMixMonitorSplitter || !anaL || !anaR) {
             reviewMixMonitorSplitter = ctx.createChannelSplitter(2);
             anaL = ctx.createAnalyser();
             anaR = ctx.createAnalyser();
@@ -293,20 +336,64 @@
             anaR.fftSize = 1024;
             anaL.smoothingTimeConstant = 0.62;
             anaR.smoothingTimeConstant = 0.62;
-            masterGainNode.connect(masterAnalyser);
             masterGainNode.connect(reviewMixMonitorSplitter);
             reviewMixMonitorSplitter.connect(anaL, 0);
             reviewMixMonitorSplitter.connect(anaR, 1);
+        }
+
+        // スペクトラム描画側（frequency-domain）の masterAnalyser は Analyze ON のときのみ接続。
+        if (analyzeOn) {
+            if (!masterAnalyser) {
+                masterAnalyser = ctx.createAnalyser();
+                masterAnalyser.fftSize = 2048;
+                masterAnalyser.smoothingTimeConstant = 0.14;
+                masterAnalyser.minDecibels = -100;
+                masterAnalyser.maxDecibels = 0;
+            }
+            if (!masterAnalyserConnected) {
+                masterGainNode.connect(masterAnalyser);
+                masterAnalyserConnected = true;
+            }
+        } else if (masterAnalyser && masterAnalyserConnected) {
+            try {
+                masterGainNode.disconnect(masterAnalyser);
+            } catch (_) {}
+            masterAnalyserConnected = false;
         }
         try {
             masterGainNode.disconnect(ctx.destination);
         } catch (_) {}
         masterGainNode.connect(ctx.destination);
         applyMasterVolToMix(reviewMixMasterLinearGain, false, ctx);
-        if (monitorTransportActive && !requestAnimId && masterAnalyser) {
+        if (monitorTransportActive && !requestAnimId) {
             requestAnimationFrame(updateUIFrame);
         }
         return true;
+    }
+
+    function syncMasterAnalyserConnectionForAnalyzeState() {
+        const ctx = getReviewMixAudioCtx();
+        if (!ctx || !reviewMixMasterNode) return;
+        if (analyzeOn) {
+            if (!masterAnalyser) {
+                masterAnalyser = ctx.createAnalyser();
+                masterAnalyser.fftSize = 2048;
+                masterAnalyser.smoothingTimeConstant = 0.14;
+                masterAnalyser.minDecibels = -100;
+                masterAnalyser.maxDecibels = 0;
+            }
+            if (!masterAnalyserConnected) {
+                try {
+                    reviewMixMasterNode.connect(masterAnalyser);
+                    masterAnalyserConnected = true;
+                } catch (_) {}
+            }
+        } else if (masterAnalyser && masterAnalyserConnected) {
+            try {
+                reviewMixMasterNode.disconnect(masterAnalyser);
+            } catch (_) {}
+            masterAnalyserConnected = false;
+        }
     }
 
     function resetReviewMixMonitorGain() {
@@ -331,6 +418,16 @@
         });
     }
     bindMasterVolSlider();
+
+    function bindAnalyzeOnCheckbox() {
+        if (!analyzeOnCheckbox || analyzeOnCheckbox.dataset.bound === '1') return;
+        analyzeOnCheckbox.dataset.bound = '1';
+        applyAnalyzeUiVisibility();
+        analyzeOnCheckbox.addEventListener('change', () => {
+            setAnalyzeOn(!!analyzeOnCheckbox.checked);
+        });
+    }
+    bindAnalyzeOnCheckbox();
 
     function setReviewMixMonitorTransportActive(active) {
         monitorTransportActive = !!active;
@@ -513,7 +610,7 @@
             spectrumPeakHoldDb = null;
             spectrumPeakHoldUntil = null;
             lastSpectrumDrawT = 0;
-            if (!requestAnimId) paintSpectrumIdle();
+            if (analyzeOn && !requestAnimId) paintSpectrumIdle();
             writeLog(`Spectrum display floor: ${v} dB`);
             saveUiPrefsToLocalStorage();
         });
@@ -530,9 +627,11 @@
     }
     bindMonitorFloorControls();
     
-requestAnimationFrame(() => paintSpectrumIdle());
+requestAnimationFrame(() => {
+    if (analyzeOn) paintSpectrumIdle();
+});
 window.addEventListener('resize', () => {
-    if (!requestAnimId) paintSpectrumIdle();
+    if (analyzeOn && !requestAnimId) paintSpectrumIdle();
     else syncMonitorAnalysisLayoutHeights();
 });
     
@@ -684,11 +783,72 @@ window.addEventListener('resize', () => {
         }, 2000); 
     };
     
+    // Analyze OFF 時は UI 更新・スペクトラム描画を止め、
+    // auto-gain 判定に必要なピーク検出だけを軽量に回す。
+    let peakScratchL = null;
+    let peakScratchR = null;
+    let peakScratchV = null;
+
+    function peakDbFromAnalyser(analyser, scratch) {
+        if (!analyser) return { peakDb: -Infinity, scratch: scratch };
+        const len = analyser.fftSize | 0;
+        if (len <= 0) return { peakDb: -Infinity, scratch: scratch };
+        if (!scratch || !(scratch instanceof Float32Array) || scratch.length !== len) {
+            scratch = new Float32Array(len);
+        }
+        analyser.getFloatTimeDomainData(scratch);
+        let peak = 0;
+        for (let i = 0; i < scratch.length; i++) {
+            const v = Math.abs(scratch[i]);
+            if (v > peak) peak = v;
+        }
+        const instPeakDb = 20 * Math.log10(Math.max(peak, 1e-8));
+        return { peakDb: instPeakDb, scratch };
+    }
+
     const updateUIFrame = () => {
         if (!isReviewMixMonitorActive()) return;
         const audioCtx = getReviewMixAudioCtx();
         if (!audioCtx) return;
         const ctxNow = audioCtx.currentTime;
+
+        if (!analyzeOn) {
+            let maxPeakDb = -Infinity;
+            if (anaL) {
+                const res = peakDbFromAnalyser(anaL, peakScratchL);
+                peakScratchL = res.scratch;
+                maxPeakDb = Math.max(maxPeakDb, res.peakDb);
+            }
+            if (anaR) {
+                const res = peakDbFromAnalyser(anaR, peakScratchR);
+                peakScratchR = res.scratch;
+                maxPeakDb = Math.max(maxPeakDb, res.peakDb);
+            }
+
+            if (
+                typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
+                isVideoAudioPlaybackViaNativeElement() &&
+                typeof getVideoTrackAnalyser === 'function'
+            ) {
+                const vAna = getVideoTrackAnalyser();
+                if (vAna) {
+                    const res = peakDbFromAnalyser(vAna, peakScratchV);
+                    peakScratchV = res.scratch;
+                    maxPeakDb = Math.max(maxPeakDb, res.peakDb);
+                }
+            }
+
+            if (isFinite(maxPeakDb) && maxPeakDb > 0.15) {
+                autoReduceGain(maxPeakDb);
+            }
+
+            if (typeof updateTrackLaneMeters === 'function') {
+                updateTrackLaneMeters();
+            }
+
+            requestAnimId = requestAnimationFrame(updateUIFrame);
+            return;
+        }
 
         let l = getMeterValues(anaL, 'l', ctxNow);
         let r = getMeterValues(anaR, 'r', ctxNow);
@@ -1558,7 +1718,7 @@ window.addEventListener('resize', () => {
         spectrumPeakHoldDb = null;
         spectrumPeakHoldUntil = null;
         lastSpectrumDrawT = 0;
-        paintSpectrumIdle();
+        if (analyzeOn) paintSpectrumIdle();
     }
     function isReviewMixMonitorAnalyzersWired() {
         return !!masterAnalyser;
@@ -1586,6 +1746,18 @@ window.addEventListener('resize', () => {
         return true;
     }
 
+    function handleAnalyzeShortcutKeydown(e) {
+        if (!e || e.repeat) return false;
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return false;
+        if (e.code !== 'KeyA') return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+        e.preventDefault();
+        toggleAnalyzeOn();
+        return true;
+    }
+
     window.resetMasterVolumeForSessionClear = resetMasterVolumeForSessionClear;
     window.handleMasterVolShortcutKeydown = handleMasterVolShortcutKeydown;
+    window.handleAnalyzeShortcutKeydown = handleAnalyzeShortcutKeydown;
+    window.handleAnalyzeOffShortcutKeydown = handleAnalyzeShortcutKeydown;
 })();
