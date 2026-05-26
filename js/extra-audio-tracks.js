@@ -3184,9 +3184,9 @@
         refreshExtraTrackAddLaneButtons();
     }
 
-    function extraSlotHasContentAbove(slot) {
+    function extraSlotHasShownLanesAbove(slot) {
         for (let i = slot + 1; i < EXTRA_TRACK_COUNT; i++) {
-            if (extraTrackSlotHasContent(i)) return true;
+            if (isExtraTrackLaneShown(i)) return true;
         }
         return false;
     }
@@ -3306,9 +3306,11 @@
         stopAllExtraTrackSources();
         let dest = clearedSlot;
         for (let src = clearedSlot + 1; src < EXTRA_TRACK_COUNT; src++) {
-            if (!extraTrackSlotHasContent(src)) continue;
+            if (!isExtraTrackLaneShown(src)) continue;
             if (dest !== src) {
-                transferExtraTrackSlotContent(src, dest);
+                if (extraTrackSlotHasContent(src)) {
+                    transferExtraTrackSlotContent(src, dest);
+                }
                 extraLaneUiOpen[dest] = extraLaneUiOpen[src];
             }
             dest++;
@@ -3333,7 +3335,7 @@
         const tr = extraTrackBySlot(slot);
         if (!tr) return;
         const hadContent = extraTrackSlotHasContent(slot);
-        const shouldCompact = extraSlotHasContentAbove(slot);
+        const shouldCompact = extraSlotHasShownLanesAbove(slot);
 
         if (shouldCompact) {
             compactExtraTracksAfterClear(slot);
