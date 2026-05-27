@@ -328,8 +328,13 @@
             if (typeof writePrefs === 'function') writePrefs();
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }
-        if (!o.silent && typeof writeLog === 'function') {
-            writeLog('Musical Grid: ' + (musicalGridVisible ? 'ON' : 'OFF'));
+        if (!o.silent) {
+            if (typeof writeLog === 'function') {
+                writeLog('Musical Grid: ' + (musicalGridVisible ? 'ON' : 'OFF'));
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Tempo/Sig', musicalGridVisible ? 'ON' : 'OFF', 'notice');
+            }
         }
     }
 
@@ -352,8 +357,13 @@
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
         }
-        if (!o.silent && typeof writeLog === 'function') {
-            writeLog('Phrase tint: ' + (musicalGridPhraseFillVisible ? 'ON' : 'OFF'));
+        if (!o.silent) {
+            if (typeof writeLog === 'function') {
+                writeLog('Phrase tint: ' + (musicalGridPhraseFillVisible ? 'ON' : 'OFF'));
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Phrase', musicalGridPhraseFillVisible ? 'ON' : 'OFF', 'notice');
+            }
         }
     }
 

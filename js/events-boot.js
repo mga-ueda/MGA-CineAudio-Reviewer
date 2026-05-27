@@ -484,6 +484,26 @@
         }
 
         if (
+            !e.repeat &&
+            !e.ctrlKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.shiftKey &&
+            e.code === 'KeyC' &&
+            typeof togglePlayheadCenterLock === 'function'
+        ) {
+            if (
+                typeof isWaveformTimelineInteractionReady === 'function' &&
+                !isWaveformTimelineInteractionReady()
+            ) {
+                return;
+            }
+            e.preventDefault();
+            togglePlayheadCenterLock();
+            return;
+        }
+
+        if (
             typeof handlePlaybackRegionDeleteKeydown === 'function' &&
             handlePlaybackRegionDeleteKeydown(e)
         ) {

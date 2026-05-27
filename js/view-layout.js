@@ -22,6 +22,9 @@
     function applyTransportPrefsFromStorage(prefs) {
         const p = prefs && typeof prefs === 'object' ? prefs : {};
         applySavedLoopPlayback(p.loopPlayback);
+        if (typeof applySavedPlayheadCenterLock === 'function') {
+            applySavedPlayheadCenterLock(!!p.playheadCenterLock);
+        }
         if (
             p.monitorPrefs &&
             typeof applyMonitorUiPersistSnapshot === 'function'

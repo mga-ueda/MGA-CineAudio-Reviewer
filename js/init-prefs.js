@@ -5,6 +5,9 @@
             } else {
                 const p = readPrefs();
                 applySavedLoopPlayback(p.loopPlayback);
+                if (typeof applySavedPlayheadCenterLock === 'function') {
+                    applySavedPlayheadCenterLock(!!p.playheadCenterLock);
+                }
             }
         } catch (_) {}
     })();

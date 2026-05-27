@@ -1046,6 +1046,8 @@
     const WAVEFORM_TIMELINE_WHEEL_SPEED_FAST = 3;
     let waveformTimelineZoom = 1;
     let markerTcEditWaveformZoomActive = false;
+    /** 再生ヘッド（水色の縦線）をビューポート中央に追従させる（localStorage ユーザー設定）。 */
+    let playheadCenterLockActive = false;
 
     function clampWaveformTimelineZoom(z) {
         const n = Number(z);
@@ -1414,6 +1416,7 @@
         if (lanes) lanes.scrollLeft = scrollLeft;
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         refreshWaveformTimelineAfterZoomChange();
+        applyPlayheadCenterLockIfActive();
     }
 
     function isWaveformTimelineInteractionReady() {
@@ -1511,8 +1514,64 @@
         if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) return;
         const vw = waveformTimelineViewportWidthCss();
         const scrubW = waveformTimelineScrubWidthCss();
-        lanes.scrollLeft = scrollLeftToCenterTransportSec(scrubW, vw);
-        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        const next = scrollLeftToCenterTransportSec(scrubW, vw);
+        if (Math.abs((lanes.scrollLeft || 0) - next) > 0.5) {
+            lanes.scrollLeft = next;
+            if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        }
+    }
+
+    function isPlayheadCenterLockActive() {
+        return playheadCenterLockActive;
+    }
+
+    function syncPlayheadCenterLockUi() {
+        const cb = document.getElementById('playheadCenterLockCheckbox');
+        if (cb) cb.checked = playheadCenterLockActive;
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return;
+        lanes.classList.toggle(
+            'audio-waveform-composite__lanes--playhead-center-lock',
+            playheadCenterLockActive,
+        );
+    }
+
+    function applyPlayheadCenterLockIfActive() {
+        if (!playheadCenterLockActive) return;
+        centerWaveformTimelineOnTransport();
+    }
+
+    function setPlayheadCenterLockActive(enabled, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const next = !!enabled;
+        playheadCenterLockActive = next;
+        syncPlayheadCenterLockUi();
+        if (playheadCenterLockActive) centerWaveformTimelineOnTransport();
+        if (!o.silent) {
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Center lock', next ? 'ON' : 'OFF', 'notice');
+            }
+        }
+        if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
+        return playheadCenterLockActive;
+    }
+
+    function applySavedPlayheadCenterLock(enabled) {
+        setPlayheadCenterLockActive(!!enabled, { silent: true, persist: false });
+    }
+
+    function togglePlayheadCenterLock() {
+        return setPlayheadCenterLockActive(!playheadCenterLockActive);
+    }
+
+    function bindPlayheadCenterLockCheckbox() {
+        const cb = document.getElementById('playheadCenterLockCheckbox');
+        if (!cb || cb.dataset.playheadCenterLockBound === '1') return;
+        cb.dataset.playheadCenterLockBound = '1';
+        const onChange = () => {
+            setPlayheadCenterLockActive(!!cb.checked);
+        };
+        cb.addEventListener('change', onChange);
     }
 
     function beginMarkerTcEditWaveformZoom() {
@@ -1595,6 +1654,10 @@
     window.beginMarkerTcEditWaveformZoom = beginMarkerTcEditWaveformZoom;
     window.endMarkerTcEditWaveformZoom = endMarkerTcEditWaveformZoom;
     window.centerWaveformTimelineOnTransport = centerWaveformTimelineOnTransport;
+    window.isPlayheadCenterLockActive = isPlayheadCenterLockActive;
+    window.setPlayheadCenterLockActive = setPlayheadCenterLockActive;
+    window.applySavedPlayheadCenterLock = applySavedPlayheadCenterLock;
+    window.togglePlayheadCenterLock = togglePlayheadCenterLock;
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
@@ -1612,6 +1675,8 @@
             lanes.addEventListener('scroll', onWaveformLanesScroll, { passive: true });
         }
         applyWaveformTimelineZoomLayout();
+        bindPlayheadCenterLockCheckbox();
+        syncPlayheadCenterLockUi();
     }
 
     window.initWaveformTimelineZoomUi = initWaveformTimelineZoomUi;
@@ -1853,6 +1918,7 @@
         drawSeekPlaybackTrail();
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.setAttribute('aria-valuenow', String(Math.round(pct)));
+        applyPlayheadCenterLockIfActive();
     }
 
     function anyExtraTrackLoadedForTimeline() {

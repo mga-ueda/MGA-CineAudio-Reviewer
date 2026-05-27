@@ -99,8 +99,13 @@
         if (!analyzeOn && prev) extinguishMonitorDisplays();
         else if (analyzeOn && !prev && !requestAnimId) paintSpectrumIdle();
         if (!o.skipSave) saveUiPrefsToLocalStorage();
-        if (!o.silent && typeof writeLog === 'function') {
-            writeLog('Analyze: ' + (analyzeOn ? 'ON' : 'OFF'));
+        if (!o.silent) {
+            if (typeof writeLog === 'function') {
+                writeLog('Analyze: ' + (analyzeOn ? 'ON' : 'OFF'));
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Analyze', analyzeOn ? 'ON' : 'OFF', 'notice');
+            }
         }
     }
 

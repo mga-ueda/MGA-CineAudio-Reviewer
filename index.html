@@ -333,6 +333,22 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
+            <div
+                class="playhead-center-lock-options transport-opt-chip"
+                title="Keep the playhead centered in the waveform view when zoomed (C to toggle)"
+            >
+                <label
+                    class="transport-compact-lbl transport-compact-lbl--row transport-opt-label"
+                    id="playheadCenterLockLabel"
+                >
+                    <span>Center lock</span>
+                    <input
+                        type="checkbox"
+                        id="playheadCenterLockCheckbox"
+                        aria-label="Center lock (C to toggle)"
+                    >
+                </label>
+            </div>
             <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — spectrum and level meters (A to toggle). CLIP PROTECT stays active when off.">
                 <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
                 <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze (A to toggle)" title="Show spectrum and level meters (A to toggle)">

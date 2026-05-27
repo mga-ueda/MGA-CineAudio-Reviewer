@@ -220,6 +220,9 @@
             const prev = readPrefs();
             const payload = {
                 loopPlayback: getLoopPlaybackEnabled(),
+                playheadCenterLock:
+                    typeof isPlayheadCenterLockActive === 'function' &&
+                    isPlayheadCenterLockActive(),
             };
             if (prev.exportMediaInclude && typeof prev.exportMediaInclude === 'object') {
                 payload.exportMediaInclude = prev.exportMediaInclude;

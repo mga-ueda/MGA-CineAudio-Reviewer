@@ -3020,9 +3020,16 @@
             transition: border-color 0.35s ease-out, box-shadow 0.35s ease-out;
         }
         .transport-bar .master-vol-container.transport-opt-chip,
-        .transport-bar .monitor-floor-options.transport-opt-chip {
+        .transport-bar .monitor-floor-options.transport-opt-chip,
+        .transport-bar .playhead-center-lock-options.transport-opt-chip {
             font-size: 0.88em;
             font-weight: 700;
+        }
+        .transport-bar .playhead-center-lock-options {
+            gap: 6px 10px;
+        }
+        .transport-bar .playhead-center-lock-options__title {
+            flex-shrink: 0;
         }
         .transport-bar .master-vol-container {
             gap: 6px 8px;
@@ -3913,6 +3920,7 @@
         .transport-bar .transport-opt-chip,
         .transport-bar .master-vol-container.transport-opt-chip,
         .transport-bar .monitor-floor-options.transport-opt-chip,
+        .transport-bar .playhead-center-lock-options.transport-opt-chip,
         .transport-bar #masterVolDisp,
         .transport-bar .transport-select,
         .transport-bar .monitor-floor-select,
