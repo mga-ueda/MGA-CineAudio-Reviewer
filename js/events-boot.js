@@ -778,6 +778,9 @@
         (e) => {
             if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(true);
+                if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
+                    window.refreshPlaybackRegionHoverCursorLine();
+                }
             }
         },
         true,
@@ -787,6 +790,9 @@
         (e) => {
             if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(false);
+                if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
+                    window.refreshPlaybackRegionHoverCursorLine();
+                }
             }
         },
         true,

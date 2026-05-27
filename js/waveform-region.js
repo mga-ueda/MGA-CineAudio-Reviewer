@@ -2065,7 +2065,30 @@
         if (regionEl && Number.isFinite(clientX)) {
             const fromPointer = transportSecAtClientX(clientX);
             if (Number.isFinite(fromPointer)) {
-                return clampRegionEditTransportSec(track, fromPointer);
+                const thresholdSec = regionSnapThresholdSec();
+                const altSuppressed =
+                    typeof isSnapSuppressedByAlt === 'function'
+                        ? isSnapSuppressedByAlt()
+                        : false;
+                const markersShownOnWaveform =
+                    typeof audioWaveformMarkers !== 'undefined' &&
+                    audioWaveformMarkers &&
+                    !audioWaveformMarkers.hidden;
+                let snapped = fromPointer;
+                if (markersShownOnWaveform) {
+                    if (typeof snapSecToMarkerInOut === 'function') {
+                        snapped = snapSecToMarkerInOut(fromPointer, {
+                            thresholdSec,
+                            altKey: altSuppressed,
+                        });
+                    }
+                } else if (typeof snapRegionTransportSec === 'function') {
+                    snapped = snapRegionTransportSec(fromPointer, {
+                        sameSlotOnly: -1,
+                        altKey: altSuppressed,
+                    });
+                }
+                return clampRegionEditTransportSec(track, snapped);
             }
         }
         return clampRegionEditTransportSec(track, transportSecFromSeekbar());
@@ -2641,6 +2664,8 @@
     }
 
     let hoveredPlaybackRegionEl = null;
+    let lastRegionHoverClientX = null;
+    let lastRegionHoverClientY = null;
 
     function getWaveformLanesEl() {
         if (typeof waveformScrubTargetEl === 'function') {
@@ -2732,7 +2757,7 @@
         if (line) line.hidden = true;
     }
 
-    function updateRegionCursorLine(regionEl, clientX, clientY) {
+    function updateRegionCursorLine(regionEl, clientX, clientY, altKey) {
         const line = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__cursor-line',
         );
@@ -2749,7 +2774,79 @@
             line.hidden = true;
             return;
         }
-        const x = Math.max(0, Math.min(r.width, clientX - r.left));
+        const lane = regionEl.closest('.audio-waveform-lane--extra');
+        const laneMatch = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+        const slot = laneMatch ? parseInt(laneMatch[1], 10) : -1;
+        const segmentIndex = Number(regionEl.dataset && regionEl.dataset.segmentIndex);
+        const xRaw = Math.max(0, Math.min(r.width, clientX - r.left));
+        // Convert snapped transport sec back to px inside this region element.
+        // If we cannot resolve the track/segment context, fallback to raw cursor.
+        let x = xRaw;
+
+        // Pre-resolve this region's effective in/out transport range.
+        // (We snap to these boundaries for region-only snapping.)
+        const track =
+            slot >= 0 ? { type: 'extra', slot: slot } : null;
+        const thresholdSec = regionSnapThresholdSec();
+        let inTransport = null;
+        let outTransport = null;
+        if (
+            track &&
+            typeof getTrackTimelineStartSec === 'function' &&
+            typeof getSegmentRegionTimelineIn === 'function' &&
+            typeof getSegmentTimelineEnd === 'function' &&
+            Number.isFinite(segmentIndex)
+        ) {
+            const trackStart = getTrackTimelineStartSec(track);
+            inTransport = Math.max(
+                trackStart,
+                getSegmentRegionTimelineIn(track, segmentIndex),
+            );
+            outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        }
+
+        let tRaw = transportSecAtClientX(clientX);
+        let snappedTransportSec = tRaw;
+        if (
+            slot >= 0 &&
+            Number.isFinite(segmentIndex) &&
+            typeof getTrackTimelineStartSec === 'function' &&
+            typeof getSegmentRegionTimelineIn === 'function' &&
+            typeof getSegmentTimelineEnd === 'function' &&
+            Number.isFinite(snappedTransportSec)
+        ) {
+            if (Number.isFinite(inTransport) && outTransport > inTransport + 1e-6) {
+                const markersShownOnWaveform =
+                    typeof audioWaveformMarkers !== 'undefined' &&
+                    audioWaveformMarkers &&
+                    !audioWaveformMarkers.hidden;
+
+                if (markersShownOnWaveform) {
+                    // マーカー表示時: マーカー In/Out のみにスナップ
+                    if (
+                        typeof snapSecToMarkerInOut === 'function' &&
+                        Number.isFinite(tRaw)
+                    ) {
+                        snappedTransportSec = snapSecToMarkerInOut(tRaw, {
+                            thresholdSec,
+                            altKey: !!altKey,
+                        });
+                    }
+                } else {
+                    // リージョン表示のみ: 実際のリージョン操作と同じ snapRegionTransportSec を使用
+                    if (typeof snapRegionTransportSec === 'function' && Number.isFinite(tRaw)) {
+                        snappedTransportSec = snapRegionTransportSec(tRaw, {
+                            sameSlotOnly: -1,
+                            altKey: !!altKey,
+                        });
+                    }
+                }
+
+                // Allow snapped time to land outside the currently hovered region.
+                // The cursor line is positioned relative to this region element's local scale.
+                x = ((snappedTransportSec - inTransport) / (outTransport - inTransport)) * r.width;
+            }
+        }
         line.style.left = x + 'px';
         line.hidden = false;
     }
@@ -2793,18 +2890,35 @@
         lanes.classList.toggle(REGION_HANDLE_HOVER_CURSOR_CLASS, onHandle);
     }
 
-    function updatePlaybackRegionHoverFromPointer(clientX, clientY) {
+    function updatePlaybackRegionHoverFromPointer(clientX, clientY, altKey) {
         updateRegionResizeHandleCursorFromPointer(clientX, clientY);
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             setHoveredPlaybackRegion(null);
+            lastRegionHoverClientX = null;
+            lastRegionHoverClientY = null;
             return;
         }
         const region = findPlaybackRegionElAtPointer(clientX, clientY);
         setHoveredPlaybackRegion(region);
+        lastRegionHoverClientX = clientX;
+        lastRegionHoverClientY = clientY;
         if (region) {
-            updateRegionCursorLine(region, clientX, clientY);
+            updateRegionCursorLine(region, clientX, clientY, altKey);
         }
     }
+
+    function refreshPlaybackRegionHoverCursorLine() {
+        if (!hoveredPlaybackRegionEl) return;
+        if (!Number.isFinite(lastRegionHoverClientX) || !Number.isFinite(lastRegionHoverClientY)) return;
+        updateRegionCursorLine(
+            hoveredPlaybackRegionEl,
+            lastRegionHoverClientX,
+            lastRegionHoverClientY,
+            false,
+        );
+    }
+
+    window.refreshPlaybackRegionHoverCursorLine = refreshPlaybackRegionHoverCursorLine;
 
     function updateTrackRegionOverlays(track) {
         const container = getPlaybackRegionsContainerEl(track);
@@ -2820,9 +2934,7 @@
             typeof getWaveformLanesPointerClientY === 'function'
                 ? getWaveformLanesPointerClientY()
                 : null;
-        if (restoreHover) {
-            setHoveredPlaybackRegion(null);
-        }
+        if (restoreHover) setHoveredPlaybackRegion(null);
         container.replaceChildren();
         let segments = getTrackSegments(track);
         if (!segments.length && ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true })) {
@@ -2860,7 +2972,7 @@
             Number.isFinite(hoverClientX) &&
             Number.isFinite(hoverClientY)
         ) {
-            updatePlaybackRegionHoverFromPointer(hoverClientX, hoverClientY);
+            updatePlaybackRegionHoverFromPointer(hoverClientX, hoverClientY, false);
         }
     }
 
@@ -3906,7 +4018,7 @@
                     updatePlaybackRegionHoverFromPointer(null, null);
                     return;
                 }
-                updatePlaybackRegionHoverFromPointer(x, y);
+                updatePlaybackRegionHoverFromPointer(x, y, ev.altKey);
             });
         };
         document.addEventListener('pointermove', onPointerMove, { passive: true });
