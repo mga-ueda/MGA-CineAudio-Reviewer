@@ -496,23 +496,203 @@
         scheduleMusicalGridRedraw();
     }
 
-    function bumpMeterTempoBy(delta) {
+    /** comma 区切りリストでキャレットが属する要素インデックス（0 始まり）。alternate の () はラップのみ扱う。 */
+    function commaListEntryIndexAtCaret(raw, caret) {
+        const s = String(raw == null ? '' : raw).trim();
+        const c = Math.max(0, Math.min(s.length, caret | 0));
+        let inner = s;
+        let lead = 0;
+        const alt = /^\((.*)\)$/.exec(s);
+        if (alt) {
+            const open = s.indexOf('(');
+            const close = s.lastIndexOf(')');
+            lead = open + 1;
+            inner = alt[1];
+            if (c <= open) return 0;
+            if (c > close) {
+                let index = 0;
+                for (let i = 0; i < inner.length; i++) {
+                    if (inner[i] === ',') index++;
+                }
+                return index;
+            }
+            caret = c - lead;
+        } else {
+            caret = c;
+        }
+        const pos = Math.max(0, Math.min(inner.length, caret));
+        let index = 0;
+        for (let i = 0; i < pos; i++) {
+            if (inner[i] === ',') index++;
+        }
+        return index;
+    }
+
+    function commaListCaretPosForEntry(raw, entryIndex) {
+        const s = String(raw == null ? '' : raw).trim();
+        let inner = s;
+        let lead = 0;
+        const alt = /^\((.*)\)$/.exec(s);
+        if (alt) {
+            lead = s.indexOf('(') + 1;
+            inner = alt[1];
+        }
+        let idx = Math.max(0, entryIndex | 0);
+        let pos = 0;
+        while (idx > 0) {
+            const comma = inner.indexOf(',', pos);
+            if (comma < 0) break;
+            pos = comma + 1;
+            idx--;
+        }
+        return lead + pos;
+    }
+
+    /** @returns {{ start: number, end: number, text: string }} */
+    function commaListEntrySpan(raw, entryIndex) {
+        const s = String(raw == null ? '' : raw).trim();
+        let inner = s;
+        let lead = 0;
+        const alt = /^\((.*)\)$/.exec(s);
+        if (alt) {
+            lead = s.indexOf('(') + 1;
+            inner = alt[1];
+        }
+        let idx = Math.max(0, entryIndex | 0);
+        let start = 0;
+        let i = 0;
+        while (i < idx) {
+            const comma = inner.indexOf(',', start);
+            if (comma < 0) break;
+            start = comma + 1;
+            i++;
+        }
+        let end = inner.length;
+        const comma = inner.indexOf(',', start);
+        if (comma >= 0) end = comma;
+        return { start: lead + start, end: lead + end, text: inner.slice(start, end) };
+    }
+
+    /** @returns {'bpm'|'num'|'den'} */
+    function meterFieldAtCaretInEntry(entryText, caretInEntry) {
+        const entry = String(entryText == null ? '' : entryText);
+        const dash = entry.indexOf('-');
+        const slash = entry.indexOf('/');
+        const pos = Math.max(0, Math.min(entry.length, caretInEntry | 0));
+        if (dash < 0 || slash < 0 || slash <= dash) return 'bpm';
+        if (pos <= dash) return 'bpm';
+        if (pos < slash) return 'num';
+        return 'den';
+    }
+
+    function caretPosForMeterField(raw, entryIndex, field) {
+        const span = commaListEntrySpan(raw, entryIndex);
+        const entry = span.text;
+        const dash = entry.indexOf('-');
+        const slash = entry.indexOf('/');
+        if (field === 'num' && dash >= 0) return span.start + dash + 1;
+        if (field === 'den' && slash >= 0) return span.start + slash + 1;
+        if (field === 'bpm' && dash >= 0) return span.start + Math.max(0, dash - 1);
+        return span.start;
+    }
+
+    function setMusicalGridInputValuePreserveEntryCaret(input, text, entryIndex) {
+        if (!input) return;
+        input.value = text;
+        const pos = commaListCaretPosForEntry(text, entryIndex);
+        if (typeof input.setSelectionRange === 'function') {
+            input.setSelectionRange(pos, pos);
+        }
+    }
+
+    function setMeterInputValuePreserveFieldCaret(input, text, entryIndex, field) {
+        if (!input) return;
+        input.value = text;
+        const pos = caretPosForMeterField(text, entryIndex, field);
+        if (typeof input.setSelectionRange === 'function') {
+            input.setSelectionRange(pos, pos);
+        }
+    }
+
+    function clampMeterSigPart(n) {
+        return Math.max(1, Math.min(32, n | 0));
+    }
+
+    function bumpMeterFieldBy(delta, sigDelta) {
+        const input = musicalGridMeterInput;
+        const raw = input ? input.value : musicalGridMeterText;
+        const caret = input ? input.selectionStart : 0;
+        const entryIndex = commaListEntryIndexAtCaret(raw, caret);
+        const span = commaListEntrySpan(raw, entryIndex);
+        const field = meterFieldAtCaretInEntry(span.text, caret - span.start);
+        const step = field === 'bpm' ? delta : sigDelta;
         readMusicalGridFromInputs();
         clearMusicalGridPositionCache();
         let spec = parseMeterSpec(musicalGridMeterText);
+        let nextText;
         if (!spec) {
-            const cur = parseMusicalGridTempoBpm(musicalGridMeterText);
-            const next = Math.max(1, Math.min(999, (cur != null ? cur : 120) + delta));
-            musicalGridMeterText = formatBpmForMeter(next) + '-4/4';
+            const token = parseMeterToken(span.text);
+            if (token) {
+                if (field === 'bpm') {
+                    token.bpm = Math.max(1, Math.min(999, token.bpm + step));
+                } else if (field === 'num') {
+                    token.sig.num = clampMeterSigPart(token.sig.num + step);
+                } else {
+                    token.sig.den = clampMeterSigPart(token.sig.den + step);
+                }
+                nextText =
+                    formatBpmForMeter(token.bpm) + '-' + token.sig.num + '/' + token.sig.den;
+            } else if (field === 'bpm') {
+                const cur = parseMusicalGridTempoBpm(musicalGridMeterText);
+                const next = Math.max(1, Math.min(999, (cur != null ? cur : 120) + step));
+                nextText = formatBpmForMeter(next) + '-4/4';
+            } else {
+                const cur = parseMusicalGridTempoBpm(musicalGridMeterText);
+                const bpm = cur != null ? cur : 120;
+                let num = 4;
+                let den = 4;
+                if (field === 'num') num = clampMeterSigPart(num + step);
+                else den = clampMeterSigPart(den + step);
+                nextText = formatBpmForMeter(bpm) + '-' + num + '/' + den;
+            }
         } else {
-            const last = spec.entries.length - 1;
-            spec.entries[last].bpm = Math.max(
-                1,
-                Math.min(999, spec.entries[last].bpm + delta),
-            );
-            musicalGridMeterText = formatMeterSpec(spec);
+            const idx = Math.min(Math.max(0, entryIndex), spec.entries.length - 1);
+            const entry = spec.entries[idx];
+            if (field === 'bpm') {
+                entry.bpm = Math.max(1, Math.min(999, entry.bpm + step));
+            } else if (field === 'num') {
+                entry.sig.num = clampMeterSigPart(entry.sig.num + step);
+            } else {
+                entry.sig.den = clampMeterSigPart(entry.sig.den + step);
+            }
+            nextText = formatMeterSpec(spec);
         }
-        if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
+        musicalGridMeterText = nextText;
+        setMeterInputValuePreserveFieldCaret(input, nextText, entryIndex, field);
+        scheduleMusicalGridRedraw();
+    }
+
+    function bumpPhraseSizeBy(delta) {
+        const input = musicalGridPhraseInput;
+        const raw = input ? input.value : musicalGridPhraseText;
+        const caret = input ? input.selectionStart : 0;
+        const entryIndex = commaListEntryIndexAtCaret(raw, caret);
+        readMusicalGridFromInputs();
+        clearMusicalGridPositionCache();
+        let spec = parsePhraseGroupingSpec(musicalGridPhraseText);
+        let nextText;
+        if (!spec) {
+            const cur = parseInt(normalizeMusicalGridPhraseText(musicalGridPhraseText), 10);
+            const base = Number.isFinite(cur) && cur > 0 ? cur : 8;
+            const next = Math.max(1, Math.min(999, base + delta));
+            nextText = String(next);
+        } else {
+            const idx = Math.min(Math.max(0, entryIndex), spec.sizes.length - 1);
+            spec.sizes[idx] = Math.max(1, Math.min(999, spec.sizes[idx] + delta));
+            nextText = spec.sizes.join(',');
+        }
+        musicalGridPhraseText = normalizeMusicalGridPhraseText(nextText);
+        setMusicalGridInputValuePreserveEntryCaret(input, musicalGridPhraseText, entryIndex);
         scheduleMusicalGridRedraw();
     }
 
@@ -1438,8 +1618,10 @@
             musicalGridMeterInput.addEventListener('keydown', (e) => {
                 if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                     e.preventDefault();
-                    const step = e.shiftKey ? 10 : 1;
-                    bumpMeterTempoBy(e.key === 'ArrowUp' ? step : -step);
+                    const dir = e.key === 'ArrowUp' ? 1 : -1;
+                    const bpmStep = (e.shiftKey ? 10 : 1) * dir;
+                    const sigStep = dir;
+                    bumpMeterFieldBy(bpmStep, sigStep);
                     return;
                 }
                 if (e.key === 'Enter') {
@@ -1460,6 +1642,12 @@
             musicalGridPhraseInput.addEventListener('input', onInput);
             musicalGridPhraseInput.addEventListener('change', persistMusicalGridAndRedraw);
             musicalGridPhraseInput.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const step = e.shiftKey ? 10 : 1;
+                    bumpPhraseSizeBy(e.key === 'ArrowUp' ? step : -step);
+                    return;
+                }
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
