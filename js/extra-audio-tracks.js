@@ -3395,6 +3395,22 @@
         return -1;
     }
 
+    function handleExtraTrackAddShortcutKeydown(e) {
+        if (
+            e.repeat ||
+            !(e.ctrlKey || e.metaKey) ||
+            e.altKey ||
+            e.shiftKey ||
+            e.code !== 'KeyN'
+        ) {
+            return false;
+        }
+        e.preventDefault();
+        revealNextExtraTrackLane(-1);
+        refreshExtraTrackAddLaneButtons();
+        return true;
+    }
+
     function refreshVideoAudioAddTrackButton() {
         const btn = document.getElementById('videoAudioAddTrackBtn');
         if (!btn) return;
@@ -4407,6 +4423,7 @@
     window.assignExtraAudioFilesFromDrop = assignExtraAudioFilesFromDrop;
     window.isBulkOneFilePerTrackDropTarget = isBulkOneFilePerTrackDropTarget;
     window.revealNextExtraTrackLane = revealNextExtraTrackLane;
+    window.handleExtraTrackAddShortcutKeydown = handleExtraTrackAddShortcutKeydown;
     window.syncExtraLaneVisibilityAfterSessionRestore =
         syncExtraLaneVisibilityAfterSessionRestore;
 

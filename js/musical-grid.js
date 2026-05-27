@@ -763,7 +763,8 @@
             const bandW = x1 - x0;
             const cx = x0 + bandW * 0.5;
             const cy = h * 0.42;
-            const fontPx = Math.max(12, Math.min(h * 0.34, bandW * 0.5));
+            const baseFontPx = Math.max(12, Math.min(h * 0.34, 24));
+            const fontPx = Math.min(baseFontPx, Math.max(12, bandW * 0.5));
             const label = phraseGroupLabelForIndex(r.paletteIndex);
             ctx.save();
             ctx.font = '700 ' + fontPx + 'px system-ui, "Segoe UI", sans-serif';

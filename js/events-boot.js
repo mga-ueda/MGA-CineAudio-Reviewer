@@ -466,6 +466,13 @@
         }
 
         if (
+            typeof handleExtraTrackAddShortcutKeydown === 'function' &&
+            handleExtraTrackAddShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handleMasterVolShortcutKeydown === 'function' &&
             handleMasterVolShortcutKeydown(e)
         ) {
