@@ -2,7 +2,7 @@
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
     /** 結合境界のクロスフェード幅（分割点の手前のみ、境界以降は伸ばさない） */
-    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.1;
+    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.5;
     const REGION_GAIN_DB_MIN = -96;
     const REGION_GAIN_DB_MAX = 10;
 

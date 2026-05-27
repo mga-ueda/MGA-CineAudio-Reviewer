@@ -164,6 +164,8 @@
 
     /** 意図したクロスフェードとみなす最小重なり（境界接触のみは除外） */
     const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
+    /** 入側がこの等パワー係数に達するまで出側のフェードアウトを抑える（結合境界の途切れ防止） */
+    const INCOMING_CROSSFADE_AUDIBLE_FLOOR = 0.18;
 
     /** 重なりペアのフェードアウト／イン: タイムライン上で先に始まった方が cos（アウト）、後から始まった方が sin（イン）。 */
     function crossfadeOutInIndices(active, i, j) {
@@ -231,6 +233,53 @@
             gains.set(active[i].key, weights[i] * norm);
         }
         return gains;
+    }
+
+    /**
+     * 結合境界: 入側 BufferSource がまだ ctx 上で鳴り始めていない間は出側をフェードアウトしない。
+     * （先に左だけ下げると、右の開始まで一瞬途切れて聞こえる）
+     */
+    function withCrossfadeGainsDeferredUntilIncomingAudible(ctx, active, transportSec, gains) {
+        if (!ctx || !active || active.length < 2 || !gains) return gains;
+        const out = new Map(gains);
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return out;
+        for (let i = 0; i < active.length; i++) {
+            for (let j = i + 1; j < active.length; j++) {
+                if (active[i].slot !== active[j].slot) continue;
+                const oStart = Math.max(
+                    active[i].timelineStart,
+                    active[j].timelineStart,
+                );
+                const oEnd = Math.min(active[i].timelineEnd, active[j].timelineEnd);
+                if (
+                    oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC ||
+                    t < oStart ||
+                    t > oEnd
+                ) {
+                    continue;
+                }
+                const { out: outIdx, in: inIdx } = crossfadeOutInIndices(active, i, j);
+                const inHit = active[inIdx];
+                const outHit = active[outIdx];
+                const tr = extraTrackBySlot(inHit.slot);
+                const inEntry =
+                    tr && tr.segmentSources ? tr.segmentSources[inHit.key] : null;
+                if (!inEntry || !inEntry.src) continue;
+                const inCf = out.get(inHit.key) ?? gains.get(inHit.key) ?? 0;
+                if (!isSegmentSourceAudibleOnCtx(inEntry, ctx)) {
+                    out.set(outHit.key, 1);
+                    out.set(inHit.key, 0);
+                    continue;
+                }
+                if (inCf >= INCOMING_CROSSFADE_AUDIBLE_FLOOR) continue;
+                const outCf = gains.get(outHit.key) ?? 1;
+                const blend = inCf / INCOMING_CROSSFADE_AUDIBLE_FLOOR;
+                out.set(outHit.key, Math.max(outCf, 1 - (1 - outCf) * blend));
+                out.set(inHit.key, Math.min(inCf, INCOMING_CROSSFADE_AUDIBLE_FLOOR * blend));
+            }
+        }
+        return out;
     }
 
     function stopExtraTrackSegmentSourceEntry(entry) {
@@ -1874,8 +1923,13 @@
 
     function applySegmentCrossfadeGains(ctx, active, transportSec) {
         if (!ctx || !active || active.length < 2) return;
-        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
-        const rampSec = 0.006;
+        const gains = withCrossfadeGainsDeferredUntilIncomingAudible(
+            ctx,
+            active,
+            transportSec,
+            computeEqualPowerCrossfadeGains(active, transportSec),
+        );
+        const rampSec = 0.012;
         for (const segHit of active) {
             const tr = extraTrackBySlot(segHit.slot);
             const entry =
@@ -1986,7 +2040,12 @@
 
     function applyIncrementalRegionSegmentSync(ctx, masterT, mapT, allActiveAtT, opt) {
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
-        const crossfadeGains = computeEqualPowerCrossfadeGains(allActiveAtT, mapT);
+        const crossfadeGains = withCrossfadeGainsDeferredUntilIncomingAudible(
+            ctx,
+            allActiveAtT,
+            mapT,
+            computeEqualPowerCrossfadeGains(allActiveAtT, mapT),
+        );
         const crossfadeActive = reviewMixHasCrossfadeAtTransport(mapT);
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const trackRef = { type: 'extra', slot: i };
@@ -2060,7 +2119,7 @@
                         transportSec: mapT,
                     });
                 } else {
-                    const rampSec = crossfadeActive && activeAtT.length > 1 ? 0.006 : 0.05;
+                    const rampSec = crossfadeActive && activeAtT.length > 1 ? 0.012 : 0.05;
                     applySegmentEntryGain(existing, g, ctx, { rampSec });
                 }
             }
@@ -2744,7 +2803,12 @@
         }
         resetExtraMixScheduleTime();
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
-        const crossfadeGains = computeEqualPowerCrossfadeGains(allActiveAtT, mapT);
+        const crossfadeGains = withCrossfadeGainsDeferredUntilIncomingAudible(
+            ctx,
+            allActiveAtT,
+            mapT,
+            computeEqualPowerCrossfadeGains(allActiveAtT, mapT),
+        );
         if (crossfadeActive) {
             applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
         }
