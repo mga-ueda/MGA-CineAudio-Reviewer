@@ -984,7 +984,7 @@
             el.textContent = resolveMusicalGridPlayheadPositionText(sec);
             return;
         }
-        el.textContent = '---:--:--.---';
+        el.textContent = '---:--:--';
     }
     window.updateMusicalGridPlayheadDisplay = updateMusicalGridPlayheadDisplay;
 

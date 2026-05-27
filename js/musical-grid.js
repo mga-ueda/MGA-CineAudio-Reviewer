@@ -364,7 +364,7 @@
     }
 
     function formatMusicalGridPlayheadPosition(pos) {
-        if (!pos) return '---:--:--.---';
+        if (!pos) return '---:--:--';
         const sig = pos.entry.sig;
         const beatDur = beatDurationSec(sig, pos.entry.bpm);
         let beatInBar = Math.floor((pos.sec - pos.barStartSec) / beatDur);
@@ -375,25 +375,20 @@
         let quarterInBeat = Math.floor((pos.sec - beatStartSec) / quarterDur);
         if (!Number.isFinite(quarterInBeat)) quarterInBeat = 0;
         quarterInBeat = Math.max(0, Math.min(3, quarterInBeat));
-        const quarterStartSec = beatStartSec + quarterInBeat * quarterDur;
-        let ms = Math.round((pos.sec - quarterStartSec) * 1000);
-        if (!Number.isFinite(ms)) ms = 0;
-        ms = Math.max(0, Math.min(999, ms));
         const barText = String(pos.barIndex + 1).padStart(3, '0');
         const beatText = String(beatInBar + 1).padStart(2, '0');
         const quarterText = String(quarterInBeat + 1).padStart(2, '0');
-        const msText = String(ms).padStart(3, '0');
-        return barText + ':' + beatText + ':' + quarterText + '.' + msText;
+        return barText + ':' + beatText + ':' + quarterText;
     }
 
     function resolveMusicalGridPlayheadPositionText(sec) {
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.meterSpec) return '---:--:--.---';
+        if (!settings || !settings.meterSpec) return '---:--:--';
         const maxSec =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
-        if (!(maxSec > 0)) return '---:--:--.---';
+        if (!(maxSec > 0)) return '---:--:--';
         const pos = getMusicalGridBarBySec(settings.meterSpec, sec, maxSec);
         return formatMusicalGridPlayheadPosition(pos);
     }

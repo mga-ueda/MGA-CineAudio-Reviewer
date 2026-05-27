@@ -3095,7 +3095,7 @@
         }
         .transport-bar .transport-musical-pos {
             flex: 0 0 auto;
-            min-width: 11.5rem;
+            min-width: 8.75rem;
             justify-content: center;
             font-family: var(--font-mono);
             font-size: 1em;
