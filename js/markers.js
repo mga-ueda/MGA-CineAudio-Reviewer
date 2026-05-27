@@ -3405,9 +3405,11 @@
             if (m) {
                 if (m.type === 'range' && markerHasOutTc(m)) {
                     const startIdx = stops.findIndex(
-                        (s) => s.marker.id === m.id && s.edge === 'start'
+                        (s) => s.marker && s.marker.id === m.id && s.edge === 'start',
                     );
-                    const endIdx = stops.findIndex((s) => s.marker.id === m.id && s.edge === 'end');
+                    const endIdx = stops.findIndex(
+                        (s) => s.marker && s.marker.id === m.id && s.edge === 'end',
+                    );
                     if (startIdx >= 0 && endIdx >= 0) {
                         const inside =
                             t > m.startSec + eps && t < m.endSec - eps;
@@ -3417,7 +3419,7 @@
                         }
                     }
                 } else if (m.type !== 'range') {
-                    const i = stops.findIndex((s) => s.marker.id === m.id);
+                    const i = stops.findIndex((s) => s.marker && s.marker.id === m.id);
                     if (i >= 0 && Math.abs(t - m.timeSec) <= eps) return i;
                 }
             }
@@ -3766,12 +3768,19 @@
     }
 
     function handleMarkerNavigationKeydown(e) {
-        if (!markerTimelineReady() || currentMarkers.length === 0) return false;
+        if (!markerTimelineReady()) return false;
         if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return false;
         if (e.ctrlKey || e.metaKey) return false;
 
+        const inWaveformDraw = isWaveformDrawingAreaActive({ target: e.target });
+        // 波形描画エリア: ↑↓（↑=次、↓=前）。Markers パネル等: Shift+↑↓
+        // マーカー非表示時はフォーカス位置に関わらず ↑↓ でリージョン In/Out へ
+        const markerStopNav =
+            !e.altKey && (inWaveformDraw || e.shiftKey || markersDisplayHidden);
+
         // Alt+↑↓: 一覧内の Feedback 移動（↑=上の行、↓=下の行）
         if (e.altKey && !e.shiftKey) {
+            if (currentMarkers.length === 0) return false;
             const dir = e.code === 'ArrowUp' ? -1 : 1;
             e.preventDefault();
             suppressMarkerRowHoverSeek(300);
@@ -3779,23 +3788,28 @@
             return true;
         }
 
-        const inWaveformDraw = isWaveformDrawingAreaActive({ target: e.target });
-        // 波形描画エリア: ↑↓（↑=次、↓=前）。Markers パネル等: Shift+↑↓
-        const markerStopNav = !e.altKey && (inWaveformDraw || e.shiftKey);
         if (markerStopNav) {
             const dir = e.code === 'ArrowUp' ? 1 : -1;
             if (isTypingTarget(e.target)) return false;
-            e.preventDefault();
             const wasPlaying =
                 typeof isTransportUiClockActive === 'function'
                     ? isTransportUiClockActive()
                     : typeof isTransportPlaying === 'function'
                       ? isTransportPlaying()
                       : !videoMain.paused;
-            jumpToAdjacentMarkerStop(dir, {
+            const navOpt = {
                 focusComment: false,
                 resumeAfterSeek: wasPlaying,
-            });
+            };
+            if (markersDisplayHidden) {
+                if (typeof jumpToAdjacentRegionStop !== 'function') return false;
+                if (!jumpToAdjacentRegionStop(dir, navOpt)) return false;
+                e.preventDefault();
+                return true;
+            }
+            if (currentMarkers.length === 0) return false;
+            e.preventDefault();
+            jumpToAdjacentMarkerStop(dir, navOpt);
             return true;
         }
 

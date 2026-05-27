@@ -4039,6 +4039,175 @@
     window.snapSecToPlaybackRegionInOut = snapSecToPlaybackRegionInOut;
     window.collectRegionSnapStops = collectRegionSnapStops;
     window.regionSnapThresholdSec = regionSnapThresholdSec;
+
+    function sortRegionNavStops(stops) {
+        stops.sort((a, b) => {
+            if (a.sec !== b.sec) return a.sec - b.sec;
+            const edgeRank = { in: 0, out: 1 };
+            if (a.slot !== b.slot) return a.slot - b.slot;
+            if (a.segmentIndex !== b.segmentIndex) return a.segmentIndex - b.segmentIndex;
+            return (edgeRank[a.edge] || 0) - (edgeRank[b.edge] || 0);
+        });
+    }
+
+    function appendRangeLoopNavStops(stops) {
+        if (
+            typeof isRangeLoopPlaybackActive !== 'function' ||
+            !isRangeLoopPlaybackActive()
+        ) {
+            return;
+        }
+        const inSec =
+            typeof getRangeLoopInSec === 'function' ? getRangeLoopInSec() : NaN;
+        const outSec =
+            typeof getRangeLoopOutSec === 'function' ? getRangeLoopOutSec() : NaN;
+        if (Number.isFinite(inSec)) {
+            stops.push({ sec: inSec, edge: 'in', slot: -1, segmentIndex: -1 });
+        }
+        if (Number.isFinite(outSec)) {
+            stops.push({ sec: outSec, edge: 'out', slot: -1, segmentIndex: -1 });
+        }
+    }
+
+    /** Ex リージョン In/Out（マーカー非表示時の ↑↓ ナビ用） */
+    function buildRegionNavStops() {
+        const stops = [];
+        const trackCount =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        for (let slot = 0; slot < trackCount; slot++) {
+            const track = { type: 'extra', slot };
+            const segments = getTrackSegments(track);
+            for (let i = 0; i < segments.length; i++) {
+                const inSec = getSegmentRegionTimelineIn(track, i);
+                const outSec = getSegmentTimelineEnd(track, i);
+                if (Number.isFinite(inSec)) {
+                    stops.push({ sec: inSec, edge: 'in', slot, segmentIndex: i });
+                }
+                if (Number.isFinite(outSec)) {
+                    stops.push({ sec: outSec, edge: 'out', slot, segmentIndex: i });
+                }
+            }
+        }
+        if (!stops.length) {
+            appendRangeLoopNavStops(stops);
+        }
+        sortRegionNavStops(stops);
+        return stops;
+    }
+
+    function regionNavStopEpsilonSec() {
+        if (typeof markerNavStopEpsilonSec === 'function') {
+            return markerNavStopEpsilonSec();
+        }
+        return regionSnapThresholdSec();
+    }
+
+    function regionNavStopIndexForCurrent(stops, dir) {
+        if (!stops || stops.length === 0) return -1;
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const eps = regionNavStopEpsilonSec();
+        if (dir < 0) {
+            for (let i = 0; i < stops.length; i++) {
+                if (stops[i].sec > t - eps) return i;
+            }
+            let best = -1;
+            for (let i = 0; i < stops.length; i++) {
+                if (stops[i].sec <= t + eps) best = i;
+                else break;
+            }
+            return best;
+        }
+        let best = -1;
+        for (let i = 0; i < stops.length; i++) {
+            if (stops[i].sec <= t + eps) best = i;
+            else break;
+        }
+        return best;
+    }
+
+    function syncRegionNavSeekTransportUi(t) {
+        if (!Number.isFinite(t)) return;
+        if (typeof setTransportSec === 'function') {
+            setTransportSec(t);
+        } else if (typeof seekBar !== 'undefined' && seekBar) {
+            seekBar.value = String(t);
+        }
+        if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
+            if (typeof formatTimecodeForTransport === 'function') {
+                currentTimeEl.textContent = formatTimecodeForTransport(t);
+            }
+        }
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') {
+            updateMarkerCommentOverlay();
+        }
+    }
+
+    function seekToRegionNavStop(stop, opt) {
+        if (!stop || !Number.isFinite(stop.sec)) return false;
+        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        let target = stop.sec;
+        if (typeof clampTransportSec === 'function') {
+            target = clampTransportSec(target);
+        }
+        if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+            suppressRangeLoopSnapForExplicitSeek();
+        }
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(target, { resumeAfter: resumeAfter });
+        }
+        syncRegionNavSeekTransportUi(target);
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const edgeLabel = stop.edge === 'out' ? ' Out' : ' In';
+        const hintTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(target)
+                : String(target);
+        const hintTitle =
+            stop.slot >= 0 ? 'Ex ' + (stop.slot + 1) : 'Range loop';
+        writeLog('Region: seek to ' + hintTitle + ' ' + hintTc + edgeLabel);
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(hintTitle, hintTc + edgeLabel);
+        }
+        return true;
+    }
+
+    function jumpToAdjacentRegionStop(dir, opt) {
+        const stops = buildRegionNavStops();
+        const n = stops.length;
+        if (n === 0) return false;
+        const idx = regionNavStopIndexForCurrent(stops, dir);
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const eps = regionNavStopEpsilonSec();
+        let next;
+        if (idx < 0) {
+            if (dir <= 0) return false;
+            next = 0;
+        } else if (dir < 0 && t > stops[idx].sec + eps) {
+            next = idx;
+        } else if (dir > 0 && t < stops[idx].sec - eps) {
+            next = idx;
+        } else {
+            next = idx + dir;
+            if (next < 0 || next >= n) return false;
+        }
+        return seekToRegionNavStop(stops[next], opt);
+    }
+
+    window.buildRegionNavStops = buildRegionNavStops;
+    window.jumpToAdjacentRegionStop = jumpToAdjacentRegionStop;
     window.getTrackSegmentCount = function (slot) {
         return getSegmentCount({ type: 'extra', slot });
     };
