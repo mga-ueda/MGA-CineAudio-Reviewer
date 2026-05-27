@@ -3772,11 +3772,14 @@
         if (e.code !== 'ArrowUp' && e.code !== 'ArrowDown') return false;
         if (e.ctrlKey || e.metaKey) return false;
 
-        const inWaveformDraw = isWaveformDrawingAreaActive({ target: e.target });
-        // 波形描画エリア: ↑↓（↑=次、↓=前）。Markers パネル等: Shift+↑↓
+        const inMarkerPanel = isMarkerAreaKeyboardActive({ target: e.target });
+        // トランスポート有効時: ↑↓（↑=次、↓=前）。Markers パネル内: Shift+↑↓
         // マーカー非表示時はフォーカス位置に関わらず ↑↓ でリージョン In/Out へ
         const markerStopNav =
-            !e.altKey && (inWaveformDraw || e.shiftKey || markersDisplayHidden);
+            !e.altKey &&
+            (markersDisplayHidden ||
+                e.shiftKey ||
+                (!inMarkerPanel && markerTimelineReady()));
 
         // Alt+↑↓: 一覧内の Feedback 移動（↑=上の行、↓=下の行）
         if (e.altKey && !e.shiftKey) {
