@@ -285,6 +285,9 @@
             v: 4,
             loopPlayback: getLoopPlaybackEnabled(),
         };
+        if (typeof getMusicalGridPersistSnapshot === 'function') {
+            row.musicalGrid = getMusicalGridPersistSnapshot();
+        }
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
         }
@@ -680,6 +683,9 @@
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
+        if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
+            applyMusicalGridPersistSnapshot(row.musicalGrid);
+        }
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);
         }

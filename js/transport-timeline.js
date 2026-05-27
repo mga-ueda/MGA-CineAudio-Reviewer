@@ -302,11 +302,9 @@
 
     function setTransportSessionPlaying(playing) {
         transportSessionPlaying = !!playing;
-        if (playing) {
-            cancelWaveformHiresRedraw();
-        } else {
-            scheduleWaveformHiresRedrawAfterZoom();
-        }
+        // 再生中でもズーム/スクロール等で波形を追従させるため、
+        // 再生開始で hires 再描画をキャンセルしない。
+        if (!playing) scheduleWaveformHiresRedrawAfterZoom();
     }
 
     function masterTransportTailEpsilonSec() {
@@ -1152,6 +1150,7 @@
         }
         const scrollable = contentW > viewportW + 0.5;
         if (!scrollable || isWaveformTimelineAtFitZoom()) lanes.scrollLeft = 0;
+        if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
     }
 
     let waveformHiresTimer = 0;
@@ -1187,7 +1186,8 @@
 
     /** 停止中の可視範囲（マスター時間）と高解像度バー数 */
     function getWaveformViewportHiresSpec() {
-        if (isTransportPlaying()) return null;
+        // 以前は再生中の負荷を避けるため null にしていたが、
+        // 再生中でもズーム/スクロール等で波形が追従できるよう spec を返す。
         const lanes = waveformScrubTargetEl();
         if (!lanes) return null;
         const m = waveformTimelineMetrics(lanes);
@@ -1253,7 +1253,6 @@
 
     /** ズーム・リサイズ直後: ピラミッドから可視範囲ピークを同期的に更新（粗い波形のチラつき防止） */
     function applyWaveformViewportPeaksImmediate(opt) {
-        if (isTransportPlaying()) return false;
         const spec = getWaveformViewportHiresSpec();
         if (!spec) return false;
         if (
@@ -1267,14 +1266,12 @@
     }
 
     function applyWaveformViewportHiresRedraw(opt) {
-        if (isTransportPlaying()) return;
         const spec = getWaveformViewportHiresSpec();
         if (!spec) {
             clearAllWaveformViewportPeaks();
             return;
         }
         const run = () => {
-            if (isTransportPlaying()) return;
             const live = getWaveformViewportHiresSpec();
             if (!live) {
                 clearAllWaveformViewportPeaks();
@@ -1310,7 +1307,6 @@
 
     function scheduleWaveformHiresRedrawAfterZoom(opt) {
         cancelWaveformHiresRedraw();
-        if (isTransportPlaying()) return;
         waveformHiresTimer = setTimeout(() => {
             waveformHiresTimer = 0;
             applyWaveformViewportHiresRedraw(opt);
@@ -1342,6 +1338,7 @@
 
     function drawWaveformChromeOverlays() {
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (typeof drawMusicalGridOverlay === 'function') drawMusicalGridOverlay();
         if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
     }
@@ -1376,6 +1373,7 @@
         applyWaveformTimelineZoomLayout();
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         drawWaveformChromeOverlays();
+        if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
         scheduleWaveformVisualRefresh();
     }
 

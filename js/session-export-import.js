@@ -524,6 +524,7 @@
         const out = {
             v: typeof row.v === 'number' ? row.v : 4,
             laneUi: row.laneUi,
+            musicalGrid: row.musicalGrid,
             mName: row.mName,
             mLastModified: row.mLastModified,
             markers: row.markers,
@@ -620,6 +621,12 @@
                     sessionRow && sessionRow.laneUi
                         ? sessionRow.laneUi
                         : prefs.laneUi,
+                musicalGrid:
+                    sessionRow && sessionRow.musicalGrid
+                        ? sessionRow.musicalGrid
+                        : typeof getMusicalGridPersistSnapshot === 'function'
+                          ? getMusicalGridPersistSnapshot()
+                          : prefs.musicalGrid,
             },
             monitorPrefs: reviewMonitorPrefsForExport(),
             timecodeOverlay:
@@ -704,6 +711,7 @@
         const row = {
             v: typeof sess.v === 'number' ? sess.v : 4,
             laneUi: sess.laneUi,
+            musicalGrid: sess.musicalGrid,
             mName: sess.mName,
             mLastModified: sess.mLastModified,
             markers: sess.markers,
@@ -820,6 +828,14 @@
         }
         if (manifest.timecodeOverlay && typeof applyTimecodeOverlayPersistSnapshot === 'function') {
             applyTimecodeOverlayPersistSnapshot(manifest.timecodeOverlay);
+        }
+        const mg =
+            p.musicalGrid && typeof p.musicalGrid === 'object'
+                ? p.musicalGrid
+                : null;
+        if (mg && typeof applyMusicalGridPersistSnapshot === 'function') {
+            applyMusicalGridPersistSnapshot(mg);
+            if (typeof writePrefs === 'function') writePrefs();
         }
     }
 
@@ -1266,7 +1282,7 @@
         const importBtn = document.getElementById('sessionImportBtn');
         const allClearBtn = document.getElementById('sessionAllClearBtn');
         const importFile = document.getElementById('sessionImportFile');
-        const sessionIoRow = document.querySelector('.transport-bar__row--links');
+        const sessionIoRow = document.querySelector('.transport-bar__row--export');
         if (!exportBtn || !importBtn || !importFile) return;
 
         applyExportMediaIncludePrefs(readExportMediaIncludePrefs());

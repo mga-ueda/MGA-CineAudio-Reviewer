@@ -254,6 +254,11 @@
                     aria-hidden="true"
                 ></div>
                 <canvas
+                    class="audio-waveform-composite__musical-grid"
+                    id="audioWaveformMusicalGrid"
+                    aria-hidden="true"
+                ></canvas>
+                <canvas
                     class="audio-waveform-composite__seek-trail"
                     id="audioWaveformSeekTrail"
                     aria-hidden="true"
@@ -270,7 +275,44 @@
 
     <div class="layout-narrow">
     <div class="transport-bar">
-        <div class="transport-bar__row transport-bar__row--links">
+        <div class="transport-bar__row transport-bar__row--grid">
+            <div class="musical-grid-options transport-opt-chip" role="group" aria-label="Musical grid (experimental)">
+                <label
+                    class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
+                    title="小節・拍グリッドの表示 (T)"
+                >
+                    <input type="checkbox" id="musicalGridVisibleCheckbox">
+                    <span>Tempo/Sig</span>
+                </label>
+                <input
+                    type="text"
+                    id="musicalGridMeterInput"
+                    class="transport-text-input musical-grid-input musical-grid-input--meter"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="140-4/4"
+                    title="BPM-拍子。例: 140-4/4 / 140-1/16,140-4/4 / (140-4/4,140-2/4)。空欄でグリッド非表示。"
+                >
+                <label
+                    class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
+                    title="フレーズ着色と番号 (P)"
+                >
+                    <input type="checkbox" id="musicalGridPhraseFillCheckbox">
+                    <span>Phrase</span>
+                </label>
+                <input
+                    type="text"
+                    id="musicalGridPhraseInput"
+                    class="transport-text-input musical-grid-input musical-grid-input--phrase"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="1,8"
+                    title="Phrase length in bars. 8 = every 8 bars. 1,8 = first 1 bar alone, then 8-bar groups."
+                >
+            </div>
+        </div>
+        <div class="transport-bar__row transport-bar__row--export">
             <div class="session-io-cluster" role="group" aria-label="Export media selection and review import/export">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
                     <span class="transport-opt-label">Include in export</span>
@@ -416,6 +458,7 @@
     <script src="js/video-load-lock.js"></script>
     <script src="js/waveform-peaks.js"></script>
     <script src="js/transport-timeline.js"></script>
+    <script src="js/musical-grid.js"></script>
     <script src="js/player-timecode-overlay.js"></script>
     <script src="js/timecode-seek.js"></script>
     <script src="js/range-loop.js"></script>

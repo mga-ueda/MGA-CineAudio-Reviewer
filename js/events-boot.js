@@ -456,6 +456,34 @@
         }
 
         if (
+            !e.repeat &&
+            !e.ctrlKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.shiftKey &&
+            e.code === 'KeyT' &&
+            typeof toggleMusicalGridVisible === 'function'
+        ) {
+            e.preventDefault();
+            toggleMusicalGridVisible();
+            return;
+        }
+
+        if (
+            !e.repeat &&
+            !e.ctrlKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.shiftKey &&
+            e.code === 'KeyP' &&
+            typeof toggleMusicalGridPhraseFillVisible === 'function'
+        ) {
+            e.preventDefault();
+            toggleMusicalGridPhraseFillVisible();
+            return;
+        }
+
+        if (
             typeof handlePlaybackRegionDeleteKeydown === 'function' &&
             handlePlaybackRegionDeleteKeydown(e)
         ) {
@@ -590,7 +618,27 @@
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
-            const target = Math.max(0, Math.min(dur - 0.001, (d / 10) * dur));
+            const phraseTintActive =
+                typeof getMusicalGridPhraseFillVisible === 'function' &&
+                getMusicalGridPhraseFillVisible() &&
+                typeof getPhraseGroupRangesSnapshot === 'function' &&
+                getPhraseGroupRangesSnapshot().length > 0;
+            let target = null;
+            let seekHintTitle = 'Jump ' + d + '/10';
+            let seekLogSuffix = ' (decile ' + d + '/10)';
+            if (phraseTintActive && typeof resolveMusicalGridNumpadSeekSec === 'function') {
+                const phraseSec = resolveMusicalGridNumpadSeekSec(d);
+                if (phraseSec == null || !Number.isFinite(phraseSec)) {
+                    return;
+                }
+                target = Math.max(0, Math.min(dur - 0.001, phraseSec));
+                seekHintTitle = 'Phrase ' + d;
+                seekLogSuffix = ' (phrase ' + d + ')';
+            } else if (!phraseTintActive) {
+                target = Math.max(0, Math.min(dur - 0.001, (d / 10) * dur));
+            } else {
+                return;
+            }
             const wasPlaying =
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
@@ -607,11 +655,9 @@
                         d +
                         ' -> ' +
                         formatTimecodeForTransport(target) +
-                        ' (decile ' +
-                        d +
-                        '/10)'
+                        seekLogSuffix
                 );
-                flashSeekHint('Jump ' + d + '/10', formatTimecodeForTransport(target));
+                flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
             })();
             return;
         }

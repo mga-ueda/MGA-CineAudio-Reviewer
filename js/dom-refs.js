@@ -44,6 +44,7 @@
     const audioWaveformMarkers = document.getElementById('audioWaveformMarkers');
     const audioWaveformMarkerLabels = document.getElementById('audioWaveformMarkerLabels');
     const audioWaveformRangeLoop = document.getElementById('audioWaveformRangeLoop');
+    const audioWaveformMusicalGrid = document.getElementById('audioWaveformMusicalGrid');
     const audioWaveformSeekTrail = document.getElementById('audioWaveformSeekTrail');
     const audioWaveformPlayheadWrap = document.getElementById('audioWaveformPlayheadWrap');
     const audioWaveformPlayhead = document.getElementById('audioWaveformPlayhead');

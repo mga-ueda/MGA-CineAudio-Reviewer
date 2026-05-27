@@ -232,6 +232,21 @@
             } else if (prev.monitorPrefs && typeof prev.monitorPrefs === 'object') {
                 payload.monitorPrefs = prev.monitorPrefs;
             }
+            if (typeof getMusicalGridPersistSnapshot === 'function') {
+                payload.musicalGrid = getMusicalGridPersistSnapshot();
+            } else if (prev.musicalGrid && typeof prev.musicalGrid === 'object') {
+                payload.musicalGrid = prev.musicalGrid;
+            }
+            if (typeof getMusicalGridVisible === 'function') {
+                payload.musicalGridVisible = getMusicalGridVisible();
+            } else if (typeof prev.musicalGridVisible === 'boolean') {
+                payload.musicalGridVisible = prev.musicalGridVisible;
+            }
+            if (typeof getMusicalGridPhraseFillVisible === 'function') {
+                payload.musicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible();
+            } else if (typeof prev.musicalGridPhraseFillVisible === 'boolean') {
+                payload.musicalGridPhraseFillVisible = prev.musicalGridPhraseFillVisible;
+            }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
             if (typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
                 try {

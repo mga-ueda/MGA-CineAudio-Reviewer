@@ -499,6 +499,7 @@
                 audioWaveformMarkerLabels.style.height = laneH + 'px';
             }
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+            if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
             if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
             if (typeof redrawAllExtraTrackWaveforms === 'function') {
                 redrawAllExtraTrackWaveforms();
