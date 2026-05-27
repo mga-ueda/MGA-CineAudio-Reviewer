@@ -1052,9 +1052,9 @@
     /** 波形全体がビューポートに収まる倍率（\ で復帰） */
     const WAVEFORM_TIMELINE_ZOOM_FIT = 1;
     const WAVEFORM_TIMELINE_ZOOM_MIN = 0.25;
-    const WAVEFORM_TIMELINE_ZOOM_MAX = 24;
+    const WAVEFORM_TIMELINE_ZOOM_MAX = 32;
     /** MARKERS の In/Out TC 編集（+/-）中の波形倍率 */
-    const MARKER_TC_EDIT_WAVEFORM_ZOOM = 12;
+    const MARKER_TC_EDIT_WAVEFORM_ZOOM = 32;
     const WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR = 1.14;
     /** Ctrl+ホイール／Shift+Ctrl+ホイール時の倍率（通常の3倍速） */
     const WAVEFORM_TIMELINE_WHEEL_SPEED_FAST = 3;
