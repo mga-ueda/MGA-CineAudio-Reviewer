@@ -3410,6 +3410,104 @@
     window.snapSecToMarkerInOut = snapSecToMarkerInOut;
     window.collectMarkerVideoEndSnapStops = collectMarkerVideoEndSnapStops;
 
+    function collectVisibleRegionSnapStopsForMarkerDrag() {
+        if (typeof collectRegionSnapStops !== 'function') return [];
+        if (typeof getVisibleLoadedExtraTrackSlots !== 'function') {
+            return collectRegionSnapStops(null, -1);
+        }
+        const visibleSlots = getVisibleLoadedExtraTrackSlots();
+        if (!Array.isArray(visibleSlots) || visibleSlots.length === 0) return [];
+        const stops = [];
+        for (let i = 0; i < visibleSlots.length; i++) {
+            const slot = visibleSlots[i];
+            if (!Number.isFinite(slot)) continue;
+            const slotStops = collectRegionSnapStops(null, slot);
+            if (Array.isArray(slotStops) && slotStops.length) {
+                stops.push(...slotStops);
+            }
+        }
+        return stops;
+    }
+
+    function collectSeekBarSnapStopsForMarkerDrag() {
+        if (typeof seekBar === 'undefined' || !seekBar || seekBar.hidden) return [];
+        const stops = [];
+        const seekValue = Number(seekBar.value);
+        if (Number.isFinite(seekValue)) stops.push(seekValue);
+        if (typeof isRangeLoopPlaybackActive === 'function' && isRangeLoopPlaybackActive()) {
+            if (typeof getRangeLoopInSec === 'function') {
+                const inSec = Number(getRangeLoopInSec());
+                if (Number.isFinite(inSec)) stops.push(inSec);
+            }
+            if (typeof getRangeLoopOutSec === 'function') {
+                const outSec = Number(getRangeLoopOutSec());
+                if (Number.isFinite(outSec)) stops.push(outSec);
+            }
+        }
+        return stops;
+    }
+
+    function collectAllVisibleMarkerDragSnapStops(m) {
+        const stops = [];
+        if (!markersDisplayHidden && currentMarkers.length > 0) {
+            stops.push(
+                ...collectMarkerVideoEndSnapStops(
+                    m && m.id ? { excludeMarkerId: m.id } : undefined,
+                ),
+            );
+        }
+        if (typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops()) {
+            if (typeof collectMusicalGridSnapStops === 'function') {
+                stops.push(...collectMusicalGridSnapStops());
+            }
+        }
+        stops.push(...collectVisibleRegionSnapStopsForMarkerDrag());
+        stops.push(...collectSeekBarSnapStopsForMarkerDrag());
+        return stops;
+    }
+
+    function snapRangeMarkerMoveAnchorTransportSec(sec, m, dragState) {
+        const n = Number(sec);
+        if (!Number.isFinite(n)) return 0;
+        if (!m || m.type !== 'range' || !dragState) return n;
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt()) {
+            return n;
+        }
+        const anchor = Number(dragState.dragAnchorSec);
+        const s0 = Number(dragState.dragStartStartSec);
+        const e0 = Number(dragState.dragStartEndSec);
+        if (!Number.isFinite(anchor) || !Number.isFinite(s0) || !Number.isFinite(e0)) {
+            return n;
+        }
+        const threshold =
+            typeof regionSnapThresholdSec === 'function'
+                ? regionSnapThresholdSec()
+                : markerNavStopEpsilonSec();
+        const deltaRaw = n - anchor;
+        const proposedStart = s0 + deltaRaw;
+        const proposedEnd = e0 + deltaRaw;
+        const stops = collectAllVisibleMarkerDragSnapStops(m);
+        if (!stops.length) return n;
+
+        let bestAnchor = n;
+        let bestDist = threshold + 1;
+        for (let i = 0; i < stops.length; i++) {
+            const stop = stops[i];
+            if (!Number.isFinite(stop)) continue;
+            const dStart = Math.abs(stop - proposedStart);
+            if (dStart <= threshold && dStart < bestDist) {
+                bestDist = dStart;
+                bestAnchor = anchor + (stop - s0);
+            }
+            const dEnd = Math.abs(stop - proposedEnd);
+            if (dEnd <= threshold && dEnd < bestDist) {
+                bestDist = dEnd;
+                bestAnchor = anchor + (stop - e0);
+            }
+        }
+        return bestAnchor;
+    }
+
     /** 波形マーカードラッグ: 他マーカー In/Out・点・動画終端＋全リージョン In/Out */
     function snapMarkerDragTransportSec(sec, m) {
         const n = Number(sec);
@@ -3421,19 +3519,7 @@
             typeof regionSnapThresholdSec === 'function'
                 ? regionSnapThresholdSec()
                 : markerNavStopEpsilonSec();
-        let stops = collectMarkerVideoEndSnapStops(
-            m && m.id ? { excludeMarkerId: m.id } : undefined,
-        );
-        if (markersDisplayHidden || currentMarkers.length === 0) {
-            if (typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops()) {
-                stops =
-                    typeof collectMusicalGridSnapStops === 'function'
-                        ? collectMusicalGridSnapStops()
-                        : [];
-            } else if (typeof collectRegionSnapStops === 'function') {
-                stops = collectRegionSnapStops(null, -1);
-            }
-        }
+        const stops = collectAllVisibleMarkerDragSnapStops(m);
         if (!stops.length) return n;
         let best = n;
         let bestDist = threshold + 1;
@@ -3602,7 +3688,10 @@
     }
 
     function applyMarkerDragSec(m, edge, sec) {
-        const t = clampMarkerSec(snapMarkerDragTransportSec(sec, m));
+        const t =
+            edge === 'move' && m && m.type === 'range'
+                ? clampMarkerSec(snapRangeMarkerMoveAnchorTransportSec(sec, m, markerDragState))
+                : clampMarkerSec(snapMarkerDragTransportSec(sec, m));
         const oneFrame = markerOneFrameSec();
         if (m.type === 'point') {
             m.timeSec = t;
