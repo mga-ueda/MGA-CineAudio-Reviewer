@@ -1492,7 +1492,14 @@
         if (typeof refreshHoverPlayheadFromLastPointer === 'function') {
             refreshHoverPlayheadFromLastPointer();
         }
-        if (isTransportPlaying() || isWaveformTimelineAtFitZoom()) return;
+        if (isWaveformTimelineAtFitZoom()) return;
+        const centerLockPlayback = isTransportPlaying() && playheadCenterLockActive;
+        if (isTransportPlaying() && !centerLockPlayback) return;
+        // センターロック再生中は連続スクロールのためデバウンスでは再描画されない
+        if (centerLockPlayback) {
+            scheduleWaveformVisualRefresh();
+            return;
+        }
         if (waveformHiresScrollTimer) clearTimeout(waveformHiresScrollTimer);
         waveformHiresScrollTimer = setTimeout(() => {
             waveformHiresScrollTimer = 0;
@@ -1518,6 +1525,9 @@
         if (Math.abs((lanes.scrollLeft || 0) - next) > 0.5) {
             lanes.scrollLeft = next;
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+            if (playheadCenterLockActive && isTransportPlaying()) {
+                scheduleWaveformVisualRefresh();
+            }
         }
     }
 
