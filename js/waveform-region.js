@@ -2,7 +2,7 @@
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
     /** 結合境界のクロスフェード幅（分割点の手前のみ、境界以降は伸ばさない） */
-    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.5;
+    const JOINED_BOUNDARY_CROSSFADE_SEC = 1;
     const REGION_GAIN_DB_MIN = -96;
     const REGION_GAIN_DB_MAX = 10;
 
@@ -1605,14 +1605,13 @@
     }
 
     /**
-     * 連続結合境界: 入側を左の BufferSource クロックに同期して開始する計画
+     * 結合境界: 入側をフェード開始位置から再生する計画（ソース連続時は左の BufferSource クロックに同期）
      * @returns {{ whenCtx: number, bufferOff: number, remain: number, transportAnchor: number } | null}
      */
     function planIncomingSegmentStartAtJoinedBoundary(track, segmentIndex, ctx, opt) {
         if (!ctx || segmentIndex < 1) return null;
-        if (!isSegmentSourceContinuousAtBoundary(track, segmentIndex - 1)) {
-            return null;
-        }
+        const boundaryIndex = segmentIndex - 1;
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return null;
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return null;
@@ -1623,20 +1622,34 @@
                 ? opt.mapTransportSec
                 : fadeTransportSec;
         const probeT = Math.max(fadeTransportSec, mapT);
-        const fromLeft = segmentSourceSecFromTransport(
+        const sourceContinuous = isSegmentSourceContinuousAtBoundary(
             track,
-            segmentIndex - 1,
-            probeT,
+            boundaryIndex,
         );
-        const bufferOff = Math.max(
-            seg.sourceInSec,
-            Math.min(seg.sourceOutSec, fromLeft),
-        );
+        let bufferOff;
+        if (sourceContinuous) {
+            const fromLeft = segmentSourceSecFromTransport(
+                track,
+                segmentIndex - 1,
+                probeT,
+            );
+            bufferOff = Math.max(
+                seg.sourceInSec,
+                Math.min(seg.sourceOutSec, fromLeft),
+            );
+        } else {
+            const localT = Math.max(0, probeT - fadeTransportSec);
+            bufferOff = Math.max(
+                seg.sourceInSec,
+                Math.min(seg.sourceOutSec, seg.sourceInSec + localT),
+            );
+        }
         const remain = Math.max(0, seg.sourceOutSec - bufferOff);
         if (remain <= 0.002) return null;
         let whenCtx = ctx.currentTime + 0.0005;
         const leftEntry = opt && opt.leftEntry ? opt.leftEntry : null;
         if (
+            sourceContinuous &&
             leftEntry &&
             leftEntry.src &&
             Number.isFinite(leftEntry.playbackAnchorCtxTime) &&
@@ -1780,6 +1793,10 @@
                 );
                 timelineEnd = boundaryPrev;
             } else if (forPlayback && joinedNext && boundaryNext != null) {
+                timelineStart = Math.min(
+                    timelineStart,
+                    boundaryNext - JOINED_BOUNDARY_CROSSFADE_SEC,
+                );
                 timelineEnd = boundaryNext;
             }
 
@@ -1866,6 +1883,16 @@
     function crossfadeOutInIndicesForTrack(active, i, j) {
         const a = active[i];
         const b = active[j];
+        const lo = a.segmentIndex < b.segmentIndex ? a : b;
+        const hi = a.segmentIndex < b.segmentIndex ? b : a;
+        if (hi.segmentIndex === lo.segmentIndex + 1) {
+            const trackRef = { type: 'extra', slot: lo.slot };
+            if (isSegmentBoundaryJoined(trackRef, lo.segmentIndex)) {
+                const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
+                const hiIdx = a.segmentIndex < b.segmentIndex ? j : i;
+                return { out: loIdx, in: hiIdx };
+            }
+        }
         if (a.timelineStart < b.timelineStart - 0.0005) {
             return { out: i, in: j };
         }
@@ -5009,9 +5036,11 @@
     };
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
+    window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;
+    window.JOINED_BOUNDARY_CROSSFADE_SEC = JOINED_BOUNDARY_CROSSFADE_SEC;
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
     window.setSegmentGainDb = setSegmentGainDb;

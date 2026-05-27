@@ -164,13 +164,22 @@
 
     /** 意図したクロスフェードとみなす最小重なり（境界接触のみは除外） */
     const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
-    /** 入側がこの等パワー係数に達するまで出側のフェードアウトを抑える（結合境界の途切れ防止） */
-    const INCOMING_CROSSFADE_AUDIBLE_FLOOR = 0.18;
-
-    /** 重なりペアのフェードアウト／イン: タイムライン上で先に始まった方が cos（アウト）、後から始まった方が sin（イン）。 */
+    /** 重なりペアのフェードアウト／イン: 先に始まった方が cos（アウト）、後から始まった方が sin（イン）。結合境界はセグメント順で固定。 */
     function crossfadeOutInIndices(active, i, j) {
         const a = active[i];
         const b = active[j];
+        if (a.slot === b.slot && typeof isSegmentBoundaryJoined === 'function') {
+            const lo = a.segmentIndex < b.segmentIndex ? a : b;
+            const hi = a.segmentIndex < b.segmentIndex ? b : a;
+            if (hi.segmentIndex === lo.segmentIndex + 1) {
+                const trackRef = { type: 'extra', slot: a.slot };
+                if (isSegmentBoundaryJoined(trackRef, lo.segmentIndex)) {
+                    const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
+                    const hiIdx = a.segmentIndex < b.segmentIndex ? j : i;
+                    return { out: loIdx, in: hiIdx };
+                }
+            }
+        }
         if (a.timelineStart < b.timelineStart - 0.0005) {
             return { out: i, in: j };
         }
@@ -236,8 +245,8 @@
     }
 
     /**
-     * 結合境界: 入側 BufferSource がまだ ctx 上で鳴り始めていない間は出側をフェードアウトしない。
-     * （先に左だけ下げると、右の開始まで一瞬途切れて聞こえる）
+     * 結合境界: 入側の BufferSource が未作成の間だけ出側=1・入側=0。
+     * 両方ある場合は等パワー曲線をそのまま両セグメントへ適用する。
      */
     function withCrossfadeGainsDeferredUntilIncomingAudible(ctx, active, transportSec, gains) {
         if (!ctx || !active || active.length < 2 || !gains) return gains;
@@ -265,21 +274,201 @@
                 const tr = extraTrackBySlot(inHit.slot);
                 const inEntry =
                     tr && tr.segmentSources ? tr.segmentSources[inHit.key] : null;
-                if (!inEntry || !inEntry.src) continue;
-                const inCf = out.get(inHit.key) ?? gains.get(inHit.key) ?? 0;
-                if (!isSegmentSourceAudibleOnCtx(inEntry, ctx)) {
-                    out.set(outHit.key, 1);
+                const outEntry =
+                    tr && tr.segmentSources ? tr.segmentSources[outHit.key] : null;
+                if (inEntry && inEntry.src && outEntry && outEntry.src) {
+                    continue;
+                }
+                if (!inEntry || !inEntry.src) {
+                    const outCf = gains.get(outHit.key) ?? 1;
+                    out.set(outHit.key, outCf);
                     out.set(inHit.key, 0);
                     continue;
                 }
-                if (inCf >= INCOMING_CROSSFADE_AUDIBLE_FLOOR) continue;
-                const outCf = gains.get(outHit.key) ?? 1;
-                const blend = inCf / INCOMING_CROSSFADE_AUDIBLE_FLOOR;
-                out.set(outHit.key, Math.max(outCf, 1 - (1 - outCf) * blend));
-                out.set(inHit.key, Math.min(inCf, INCOMING_CROSSFADE_AUDIBLE_FLOOR * blend));
+                if (
+                    inEntry.src &&
+                    (!outEntry || !outEntry.src) &&
+                    !isSegmentSourceAudibleOnCtx(inEntry, ctx)
+                ) {
+                    const outCf = gains.get(outHit.key) ?? 1;
+                    out.set(outHit.key, outCf);
+                    out.set(inHit.key, 0);
+                }
             }
         }
         return out;
+    }
+
+    function getCrossfadeGainTransportSec() {
+        return typeof getAudioSyncTransportSec === 'function'
+            ? getAudioSyncTransportSec()
+            : typeof getSegmentMappingTransportSec === 'function'
+              ? getSegmentMappingTransportSec()
+              : 0;
+    }
+
+    function joinedBoundaryCrossfadeSec() {
+        return typeof window.JOINED_BOUNDARY_CROSSFADE_SEC === 'number'
+            ? window.JOINED_BOUNDARY_CROSSFADE_SEC
+            : 1;
+    }
+
+    function computeSegmentCrossfadeGainsForActive(ctx, active, transportSec) {
+        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
+        if (activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec)) {
+            return gains;
+        }
+        return withCrossfadeGainsDeferredUntilIncomingAudible(
+            ctx,
+            active,
+            transportSec,
+            gains,
+        );
+    }
+
+    /**
+     * 非連続の結合スプリット境界: 重なり開始前に入側を起動し、両方へクロスフェードゲインを適用する。
+     */
+    function ensureJoinedBoundaryCrossfadePlayback(ctx, opt) {
+        if (!ctx || !isTransportPlayingForExtra()) return;
+        const gainT = getCrossfadeGainTransportSec();
+        const fadeW = joinedBoundaryCrossfadeSec();
+        const scheduleProbeT = gainT + Math.min(0.12, fadeW * 0.15);
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            const trackRef = { type: 'extra', slot: i };
+            if (
+                typeof isTrackRegionActive !== 'function' ||
+                !isTrackRegionActive(trackRef) ||
+                !shouldExtraTrackSourceBePlaying(i)
+            ) {
+                continue;
+            }
+            const tr = extraTrackBySlot(i);
+            if (!tr) continue;
+            ensureExtraTrackMixRouting(i, ctx);
+            const activeNow =
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+                    ? getActiveExtraSegmentsAtTransport(gainT).filter((s) => s.slot === i)
+                    : [];
+            const activeSoon =
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+                    ? getActiveExtraSegmentsAtTransport(scheduleProbeT).filter(
+                          (s) => s.slot === i,
+                      )
+                    : [];
+            const byIndex = new Map();
+            for (const h of activeSoon) byIndex.set(h.segmentIndex, h);
+            for (const h of activeNow) byIndex.set(h.segmentIndex, h);
+            const indices = Array.from(byIndex.keys()).sort((a, b) => a - b);
+            for (let k = 0; k < indices.length - 1; k++) {
+                const leftIdx = indices[k];
+                const rightIdx = indices[k + 1];
+                if (rightIdx !== leftIdx + 1) continue;
+                if (
+                    typeof isSegmentBoundaryJoined !== 'function' ||
+                    !isSegmentBoundaryJoined(trackRef, leftIdx)
+                ) {
+                    continue;
+                }
+                const leftHit = byIndex.get(leftIdx);
+                const rightHit = byIndex.get(rightIdx);
+                if (!leftHit || !rightHit) continue;
+                const pair = [leftHit, rightHit];
+                if (
+                    !activeHasJoinedBoundaryCrossfadeAtTransport(pair, gainT) &&
+                    !activeHasJoinedBoundaryCrossfadeAtTransport(pair, scheduleProbeT)
+                ) {
+                    continue;
+                }
+                const gains = computeSegmentCrossfadeGainsForActive(ctx, pair, gainT);
+                const leftEntry =
+                    tr.segmentSources && tr.segmentSources[leftHit.key];
+                const rightEntry =
+                    tr.segmentSources && tr.segmentSources[rightHit.key];
+                if (leftEntry && leftEntry.src) {
+                    const gLeft = segmentPlaybackGainLinear(
+                        leftHit,
+                        gains.get(leftHit.key) ?? 1,
+                    );
+                    applySegmentEntryGain(leftEntry, gLeft, ctx, {
+                        rampSec: 0.008,
+                        inCrossfade: true,
+                    });
+                }
+                if (!rightEntry || !rightEntry.src) {
+                    const gRight = segmentPlaybackGainLinear(
+                        rightHit,
+                        gains.get(rightHit.key) ?? 0,
+                    );
+                    const scheduleWhen =
+                        opt && opt.when != null && Number.isFinite(opt.when)
+                            ? opt.when
+                            : ctx.currentTime + 0.001;
+                    startExtraTrackSegmentSource(i, rightHit, gRight, scheduleWhen, ctx, {
+                        force: false,
+                        transportSec: gainT,
+                    });
+                } else if (isSegmentSourceAudibleOnCtx(rightEntry, ctx)) {
+                    const gRight = segmentPlaybackGainLinear(
+                        rightHit,
+                        gains.get(rightHit.key) ?? 1,
+                    );
+                    applySegmentEntryGain(rightEntry, gRight, ctx, {
+                        rampSec: 0.008,
+                        inCrossfade: true,
+                    });
+                }
+            }
+            const slotActive =
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+                    ? getActiveExtraSegmentsAtTransport(gainT).filter((s) => s.slot === i)
+                    : [];
+            if (slotActive.length >= 2) {
+                applySegmentCrossfadeGains(ctx, slotActive, gainT);
+            }
+        }
+    }
+
+    /** 結合境界の重なり区間で複数セグメントが同時にアクティブか */
+    function activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || !active || active.length < 2) return false;
+        if (typeof isSegmentBoundaryJoined !== 'function') return false;
+        const bySlot = new Map();
+        for (let i = 0; i < active.length; i++) {
+            const hit = active[i];
+            if (!bySlot.has(hit.slot)) bySlot.set(hit.slot, []);
+            bySlot.get(hit.slot).push(hit);
+        }
+        for (const slotHits of bySlot.values()) {
+            if (slotHits.length < 2) continue;
+            slotHits.sort((a, b) => a.segmentIndex - b.segmentIndex);
+            const trackRef = { type: 'extra', slot: slotHits[0].slot };
+            for (let i = 0; i < slotHits.length - 1; i++) {
+                const left = slotHits[i];
+                const right = slotHits[i + 1];
+                if (right.segmentIndex !== left.segmentIndex + 1) continue;
+                if (!isSegmentBoundaryJoined(trackRef, left.segmentIndex)) continue;
+                const oStart = Math.max(left.timelineStart, right.timelineStart);
+                const oEnd = Math.min(left.timelineEnd, right.timelineEnd);
+                if (
+                    oEnd - oStart >= MIN_CROSSFADE_OVERLAP_SEC &&
+                    t >= oStart - 0.0005 &&
+                    t <= oEnd + 0.0005
+                ) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function slotHasJoinedBoundaryCrossfadeAtTransport(slot, transportSec) {
+        if (typeof getActiveExtraSegmentsAtTransport !== 'function') return false;
+        const active = getActiveExtraSegmentsAtTransport(transportSec).filter(
+            (s) => s.slot === slot,
+        );
+        return activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec);
     }
 
     function stopExtraTrackSegmentSourceEntry(entry) {
@@ -311,7 +500,9 @@
         if (!entry || !entry.segGain) return;
         const now = ctx.currentTime;
         const g = Math.max(0, gainLinear);
+        const inCrossfade = !!(opt && opt.inCrossfade);
         if (
+            !inCrossfade &&
             entry.lastAppliedGain != null &&
             Math.abs(entry.lastAppliedGain - g) < 0.002
         ) {
@@ -320,7 +511,16 @@
         entry.lastAppliedGain = g;
         const rampSec =
             opt && Number.isFinite(opt.rampSec) ? Math.max(0.001, opt.rampSec) : 0.05;
-        entry.segGain.gain.setTargetAtTime(g, now, rampSec);
+        try {
+            entry.segGain.gain.cancelScheduledValues(now);
+        } catch (_) {}
+        const cur = entry.segGain.gain.value;
+        entry.segGain.gain.setValueAtTime(cur, now);
+        if (inCrossfade && rampSec > 0) {
+            entry.segGain.gain.linearRampToValueAtTime(g, now + rampSec);
+        } else {
+            entry.segGain.gain.setTargetAtTime(g, now, rampSec);
+        }
     }
 
     function extraTrackSourcesAudibleOnCtx(tr, ctx) {
@@ -456,13 +656,8 @@
             return;
         }
         ensureExtraTrackMixRouting(slot, ctx);
-        const syncT =
-            typeof getSegmentMappingTransportSec === 'function'
-                ? getSegmentMappingTransportSec()
-                : typeof getAudioSyncTransportSec === 'function'
-                  ? getAudioSyncTransportSec()
-                  : 0;
-        const anchorT = Number.isFinite(opt.transportSec) ? opt.transportSec : syncT;
+        const gainT = getCrossfadeGainTransportSec();
+        const anchorT = Number.isFinite(opt.transportSec) ? opt.transportSec : gainT;
         stopExtraTrackSegmentSourceEntry(existing);
         const trackRef = { type: 'extra', slot };
         let when = Number.isFinite(scheduleWhen)
@@ -472,6 +667,10 @@
         let startAt = Math.max(0, segHit.bufferOff);
         let remain = Math.max(0, segHit.remain);
         let usedJoinedPlan = false;
+        const boundaryJoined =
+            segHit.segmentIndex > 0 &&
+            typeof isSegmentBoundaryJoined === 'function' &&
+            isSegmentBoundaryJoined(trackRef, segHit.segmentIndex - 1);
         const othersPlaying =
             tr.segmentSources &&
             Object.keys(tr.segmentSources).some((k) => {
@@ -480,17 +679,18 @@
                 return e && e.src;
             });
         if (
-            othersPlaying &&
-            segHit.segmentIndex > 0 &&
+            boundaryJoined &&
             typeof planIncomingSegmentStartAtJoinedBoundary === 'function'
         ) {
             let leftEntry = null;
-            for (const k of Object.keys(tr.segmentSources)) {
-                if (k === key) continue;
-                const e = tr.segmentSources[k];
-                if (e && e.src) {
-                    leftEntry = e;
-                    break;
+            if (othersPlaying) {
+                for (const k of Object.keys(tr.segmentSources)) {
+                    if (k === key) continue;
+                    const e = tr.segmentSources[k];
+                    if (e && e.src) {
+                        leftEntry = e;
+                        break;
+                    }
                 }
             }
             const plan = planIncomingSegmentStartAtJoinedBoundary(
@@ -539,6 +739,26 @@
         if (remain <= 0.002) return;
         const maxOff = Math.max(0, clip.buffer.duration - 0.002);
         startAt = Math.min(startAt, maxOff);
+        if (
+            boundaryJoined &&
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+        ) {
+            const activeAtPlay = getActiveExtraSegmentsAtTransport(playTransportSec);
+            if (activeAtPlay.length >= 2) {
+                const liveAtPlay = activeAtPlay.find((h) => h.key === key);
+                if (liveAtPlay) {
+                    const gainsAtPlay = computeSegmentCrossfadeGainsForActive(
+                        ctx,
+                        activeAtPlay,
+                        playTransportSec,
+                    );
+                    gainLinear = segmentPlaybackGainLinear(
+                        liveAtPlay,
+                        gainsAtPlay.get(key) ?? 1,
+                    );
+                }
+            }
+        }
         const src = ctx.createBufferSource();
         src.buffer = clip.buffer;
         const segGain = ctx.createGain();
@@ -554,6 +774,21 @@
             bufferOff: startAt,
             lastAppliedGain: Math.max(0, gainLinear),
         };
+        if (
+            boundaryJoined &&
+            typeof getActiveExtraSegmentsAtTransport === 'function'
+        ) {
+            const slotActive = getActiveExtraSegmentsAtTransport(playTransportSec).filter(
+                (h) => h.slot === slot,
+            );
+            if (slotActive.length >= 2) {
+                applySegmentCrossfadeGains(
+                    ctx,
+                    slotActive,
+                    getCrossfadeGainTransportSec(),
+                );
+            }
+        }
         tr.source = src;
         tr.playbackAnchorTransportSec = playTransportSec;
         tr.playbackAnchorCtxTime = when;
@@ -1902,6 +2137,9 @@
         if (typeof getActiveExtraSegmentsAtTransport !== 'function') return false;
         const active = getActiveExtraSegmentsAtTransport(transportSec);
         if (active.length < 2) return false;
+        if (activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec)) {
+            return true;
+        }
         const gains = computeEqualPowerCrossfadeGains(active, transportSec);
         for (let i = 0; i < active.length; i++) {
             const g = gains.get(active[i].key) ?? 1;
@@ -1922,26 +2160,35 @@
     }
 
     function applySegmentCrossfadeGains(ctx, active, transportSec) {
-        if (!ctx || !active || active.length < 2) return;
-        const gains = withCrossfadeGainsDeferredUntilIncomingAudible(
-            ctx,
-            active,
-            transportSec,
-            computeEqualPowerCrossfadeGains(active, transportSec),
-        );
-        const rampSec = 0.012;
+        if (!ctx || !active || active.length < 2) return false;
+        const gainT = Number.isFinite(transportSec)
+            ? transportSec
+            : getCrossfadeGainTransportSec();
+        const gains = computeSegmentCrossfadeGainsForActive(ctx, active, gainT);
+        const rampSec = 0.008;
+        const inCrossfade =
+            activeHasJoinedBoundaryCrossfadeAtTransport(active, gainT) ||
+            reviewMixHasCrossfadeAtTransport(gainT);
+        let applied = false;
         for (const segHit of active) {
             const tr = extraTrackBySlot(segHit.slot);
             const entry =
                 tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
-            if (entry && entry.segGain) {
-                const g = segmentPlaybackGainLinear(
-                    segHit,
-                    gains.get(segHit.key) ?? 1,
-                );
-                applySegmentEntryGain(entry, g, ctx, { rampSec });
+            if (!entry || !entry.segGain || !entry.src) continue;
+            if (
+                !isSegmentSourceAudibleOnCtx(entry, ctx) &&
+                entry.playbackAnchorCtxTime > ctx.currentTime + 0.0005
+            ) {
+                continue;
             }
+            const g = segmentPlaybackGainLinear(
+                segHit,
+                gains.get(segHit.key) ?? 1,
+            );
+            applySegmentEntryGain(entry, g, ctx, { rampSec, inCrossfade });
+            applied = true;
         }
+        return applied;
     }
 
     function reviewMixNeedsPlaybackSync() {
@@ -1976,16 +2223,19 @@
         if (!isTransportPlayingForExtra()) return;
         const ctx = ensureReviewMixCtx();
         if (!ctx) return;
-        const mapT =
-            typeof getSegmentMappingTransportSec === 'function'
-                ? getSegmentMappingTransportSec()
-                : getAudioSyncTransportSec();
+        ensureJoinedBoundaryCrossfadePlayback(ctx);
+        const gainT = getCrossfadeGainTransportSec();
         const active =
             typeof getActiveExtraSegmentsAtTransport === 'function'
-                ? getActiveExtraSegmentsAtTransport(mapT)
+                ? getActiveExtraSegmentsAtTransport(gainT)
                 : [];
-        if (active.length < 2 || !segmentSourcesReadyForActive(active)) return;
-        applySegmentCrossfadeGains(ctx, active, mapT);
+        if (active.length < 2) return;
+        const inJoinedOverlap = activeHasJoinedBoundaryCrossfadeAtTransport(
+            active,
+            gainT,
+        );
+        if (!inJoinedOverlap && !segmentSourcesReadyForActive(active)) return;
+        applySegmentCrossfadeGains(ctx, active, gainT);
     }
 
     window.reviewMixNeedsPlaybackSync = reviewMixNeedsPlaybackSync;
@@ -1998,6 +2248,13 @@
     window.primeReviewMixForPlayback = primeReviewMixForPlayback;
 
     function extraTrackSegmentSourcesDrifted(slot, allActiveAtT, targetSec, ctx) {
+        const mapT =
+            typeof getSegmentMappingTransportSec === 'function'
+                ? getSegmentMappingTransportSec()
+                : targetSec;
+        if (slotHasJoinedBoundaryCrossfadeAtTransport(slot, mapT)) {
+            return false;
+        }
         const tr = extraTrackBySlot(slot);
         if (!tr || !tr.segmentSources) return false;
         const wanted = wantedSegmentKeysForSlot(slot, allActiveAtT);
@@ -2039,14 +2296,15 @@
     }
 
     function applyIncrementalRegionSegmentSync(ctx, masterT, mapT, allActiveAtT, opt) {
+        ensureJoinedBoundaryCrossfadePlayback(ctx, opt);
+        const gainT = getCrossfadeGainTransportSec();
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
-        const crossfadeGains = withCrossfadeGainsDeferredUntilIncomingAudible(
+        const crossfadeGains = computeSegmentCrossfadeGainsForActive(
             ctx,
             allActiveAtT,
-            mapT,
-            computeEqualPowerCrossfadeGains(allActiveAtT, mapT),
+            gainT,
         );
-        const crossfadeActive = reviewMixHasCrossfadeAtTransport(mapT);
+        const crossfadeActive = reviewMixHasCrossfadeAtTransport(gainT);
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const trackRef = { type: 'extra', slot: i };
             const regionActive =
@@ -2069,11 +2327,8 @@
                 if (!existing || !existing.src) {
                     if (
                         segHit.segmentIndex > 0 &&
-                        typeof isSegmentSourceContinuousAtBoundary === 'function' &&
-                        isSegmentSourceContinuousAtBoundary(
-                            trackRef,
-                            segHit.segmentIndex - 1,
-                        ) &&
+                        typeof isSegmentBoundaryJoined === 'function' &&
+                        isSegmentBoundaryJoined(trackRef, segHit.segmentIndex - 1) &&
                         typeof refreshSegmentHitAtTransport === 'function'
                     ) {
                         const priorAudible = Object.keys(
@@ -2092,41 +2347,68 @@
                                 ? refreshSegmentHitAtTransport(
                                       trackRef,
                                       leftHit,
-                                      mapT,
+                                      gainT,
                                   )
                                 : null;
-                            if (refreshedLeft) {
+                            const leftEntry =
+                                refreshedLeft &&
+                                tr.segmentSources &&
+                                tr.segmentSources[refreshedLeft.key];
+                            if (leftEntry && leftEntry.src) {
                                 const gLeft = segmentPlaybackGainLinear(
                                     refreshedLeft,
                                     crossfadeGains.get(refreshedLeft.key) ?? 1,
                                 );
-                                startExtraTrackSegmentSource(
-                                    i,
-                                    refreshedLeft,
-                                    gLeft,
-                                    ctx.currentTime + 0.001,
-                                    ctx,
-                                    {
-                                        force: true,
-                                        transportSec: mapT,
-                                    },
-                                );
+                                const restartLeft =
+                                    typeof isSegmentSourceContinuousAtBoundary ===
+                                        'function' &&
+                                    isSegmentSourceContinuousAtBoundary(
+                                        trackRef,
+                                        segHit.segmentIndex - 1,
+                                    );
+                                if (restartLeft) {
+                                    startExtraTrackSegmentSource(
+                                        i,
+                                        refreshedLeft,
+                                        gLeft,
+                                        ctx.currentTime + 0.001,
+                                        ctx,
+                                        {
+                                            force: true,
+                                            transportSec: gainT,
+                                        },
+                                    );
+                                } else {
+                                    applySegmentEntryGain(leftEntry, gLeft, ctx, {
+                                        rampSec: 0.008,
+                                        inCrossfade: true,
+                                    });
+                                }
                             }
                         }
                     }
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force: false,
-                        transportSec: mapT,
+                        transportSec: gainT,
                     });
                 } else {
-                    const rampSec = crossfadeActive && activeAtT.length > 1 ? 0.012 : 0.05;
-                    applySegmentEntryGain(existing, g, ctx, { rampSec });
+                    const inCf =
+                        activeAtT.length > 1 &&
+                        (crossfadeActive ||
+                            activeHasJoinedBoundaryCrossfadeAtTransport(
+                                activeAtT,
+                                gainT,
+                            ));
+                    applySegmentEntryGain(existing, g, ctx, {
+                        rampSec: inCf ? 0.008 : 0.05,
+                        inCrossfade: inCf,
+                    });
                 }
             }
         }
         pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
-        if (crossfadeActive && allActiveAtT.length > 1) {
-            applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
+        if (allActiveAtT.length >= 2) {
+            applySegmentCrossfadeGains(ctx, allActiveAtT, getCrossfadeGainTransportSec());
         }
     }
 
@@ -2767,11 +3049,13 @@
         }
         const ctx = ensureReviewMixCtx();
         if (!ctx) return;
+        ensureJoinedBoundaryCrossfadePlayback(ctx, opt);
+        const gainT = getCrossfadeGainTransportSec();
         const allActiveAtT =
             typeof getActiveExtraSegmentsAtTransport === 'function'
-                ? getActiveExtraSegmentsAtTransport(mapT)
+                ? getActiveExtraSegmentsAtTransport(gainT)
                 : [];
-        const crossfadeActive = reviewMixHasCrossfadeAtTransport(mapT);
+        const crossfadeActive = reviewMixHasCrossfadeAtTransport(gainT);
         if (
             !force &&
             canTryIncrementalRegionSegmentSync(masterT, ctx, allActiveAtT)
@@ -2786,7 +3070,11 @@
             segmentSourcesReadyForActive(allActiveAtT) &&
             !extraTracksNeedResync(masterT, ctx)
         ) {
-            applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
+            applySegmentCrossfadeGains(
+                ctx,
+                allActiveAtT,
+                getCrossfadeGainTransportSec(),
+            );
             pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
             applyReviewMixVideoGain();
             return;
@@ -2797,21 +3085,30 @@
             !extraTracksNeedResync(masterT, ctx) &&
             extraAudioSourcesActive()
         ) {
+            if (
+                allActiveAtT.length >= 2 &&
+                activeHasJoinedBoundaryCrossfadeAtTransport(
+                    allActiveAtT,
+                    getCrossfadeGainTransportSec(),
+                )
+            ) {
+                applySegmentCrossfadeGains(
+                    ctx,
+                    allActiveAtT,
+                    getCrossfadeGainTransportSec(),
+                );
+            }
             pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
             applyReviewMixVideoGain();
             return;
         }
         resetExtraMixScheduleTime();
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
-        const crossfadeGains = withCrossfadeGainsDeferredUntilIncomingAudible(
+        const crossfadeGains = computeSegmentCrossfadeGainsForActive(
             ctx,
             allActiveAtT,
             mapT,
-            computeEqualPowerCrossfadeGains(allActiveAtT, mapT),
         );
-        if (crossfadeActive) {
-            applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
-        }
         applyReviewMixVideoGain();
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             stopExtraTrackSourceIfPastPlayableEnd(i);
@@ -2836,7 +3133,7 @@
                     );
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force,
-                        transportSec: mapT,
+                        transportSec: gainT,
                     });
                 }
                 pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
@@ -2875,6 +3172,13 @@
                 transportSec: masterT,
                 playRemainSec: tr.buffer.duration - bufferOff,
             });
+        }
+        if (allActiveAtT.length >= 2) {
+            applySegmentCrossfadeGains(
+                ctx,
+                allActiveAtT,
+                getCrossfadeGainTransportSec(),
+            );
         }
     }
 
