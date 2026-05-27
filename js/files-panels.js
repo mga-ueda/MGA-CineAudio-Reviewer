@@ -311,6 +311,16 @@
         if (typeof resetMasterVolumeForSessionClear === 'function') {
             resetMasterVolumeForSessionClear();
         }
+        if (typeof window.resetMusicalGridToDefaults === 'function') {
+            window.resetMusicalGridToDefaults({ silent: true });
+        } else {
+            if (typeof window.setMusicalGridVisible === 'function') {
+                window.setMusicalGridVisible(false, { silent: true });
+            }
+            if (typeof window.setMusicalGridPhraseFillVisible === 'function') {
+                window.setMusicalGridPhraseFillVisible(false, { silent: true });
+            }
+        }
         revokeAll();
         if (typeof resetVideoDriftMonitorSchedule === 'function') {
             resetVideoDriftMonitorSchedule();

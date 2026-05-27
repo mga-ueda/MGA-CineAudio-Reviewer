@@ -4348,15 +4348,29 @@
             return false;
         }
         const { clientX, clientY } = waveformPointerClientXY();
-        const boundaryIndex = resolveJoinedBoundaryIndexAtPointer(
+        let boundaryIndex = resolveJoinedBoundaryIndexAtPointer(
             track,
             clientX,
             clientY,
         );
         if (boundaryIndex < 0) {
-            writeLog('Playback region: hover a joined boundary, then press B');
+            const seekTransportSec = transportSecFromSeekbar();
+            if (Number.isFinite(seekTransportSec)) {
+                const segments = getTrackSegments(track);
+                for (let b = 0; b < segments.length - 1; b++) {
+                    if (!isSegmentBoundaryJoined(track, b)) continue;
+                    const boundT = getSegmentTimelineEnd(track, b);
+                    if (Math.abs(seekTransportSec - boundT) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC) {
+                        boundaryIndex = b;
+                        break;
+                    }
+                }
+            }
+        }
+        if (boundaryIndex < 0) {
+            writeLog('Playback region: hover a joined boundary or seek to boundary, then press B');
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover joined boundary', 'notice');
+                flashSeekHint('Region', 'Hover/seek joined boundary', 'notice');
             }
             return false;
         }

@@ -16,6 +16,8 @@
 
     const BAR_GROUP_FILL_A = 'rgba(200, 48, 58, 0.14)';
     const BAR_GROUP_FILL_B = 'rgba(48, 110, 220, 0.14)';
+    const MUSICAL_GRID_DEFAULT_METER_TEXT = '120-4/4';
+    const MUSICAL_GRID_DEFAULT_PHRASE_TEXT = '8';
 
     function normalizeMusicalGridTempoText(raw) {
         return String(raw == null ? '' : raw).trim();
@@ -486,6 +488,20 @@
         if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
         if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
         scheduleMusicalGridRedraw();
+    }
+
+    function resetMusicalGridToDefaults(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        applyMusicalGridPersistSnapshot({
+            meter: MUSICAL_GRID_DEFAULT_METER_TEXT,
+            phrase: MUSICAL_GRID_DEFAULT_PHRASE_TEXT,
+        });
+        setMusicalGridVisible(false, { silent: !!o.silent, persist: false });
+        setMusicalGridPhraseFillVisible(false, { silent: !!o.silent, persist: false });
+        if (o.persist !== false) {
+            if (typeof writePrefs === 'function') writePrefs();
+            if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        }
     }
 
     function persistMusicalGridAndRedraw() {
@@ -1694,10 +1710,13 @@
 
     window.getMusicalGridPersistSnapshot = musicalGridPersistSnapshot;
     window.getMusicalGridVisible = getMusicalGridVisible;
+    window.setMusicalGridVisible = setMusicalGridVisible;
     window.toggleMusicalGridVisible = toggleMusicalGridVisible;
     window.getMusicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible;
+    window.setMusicalGridPhraseFillVisible = setMusicalGridPhraseFillVisible;
     window.toggleMusicalGridPhraseFillVisible = toggleMusicalGridPhraseFillVisible;
     window.applyMusicalGridPersistSnapshot = applyMusicalGridPersistSnapshot;
+    window.resetMusicalGridToDefaults = resetMusicalGridToDefaults;
     window.drawMusicalGridOverlay = drawMusicalGridOverlay;
     window.scheduleMusicalGridRedraw = scheduleMusicalGridRedraw;
     window.parseMeterSpec = parseMeterSpec;
