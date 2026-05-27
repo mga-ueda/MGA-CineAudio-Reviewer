@@ -1312,6 +1312,17 @@
         }
 
         const onInput = () => scheduleMusicalGridRedraw();
+        const focusWaveformTrackFromInput = () => {
+            const waveFocus =
+                typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                    ? audioWaveformLanesTracks
+                    : typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack
+                      ? audioWaveformTrack
+                      : null;
+            if (waveFocus && typeof waveFocus.focus === 'function') {
+                waveFocus.focus();
+            }
+        };
         if (musicalGridMeterInput) {
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', persistMusicalGridAndRedraw);
@@ -1326,6 +1337,13 @@
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridMeterInput.blur();
+                    focusWaveformTrackFromInput();
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    musicalGridMeterInput.blur();
+                    focusWaveformTrackFromInput();
                 }
             });
         }
@@ -1337,6 +1355,13 @@
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridPhraseInput.blur();
+                    focusWaveformTrackFromInput();
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    musicalGridPhraseInput.blur();
+                    focusWaveformTrackFromInput();
                 }
             });
         }
