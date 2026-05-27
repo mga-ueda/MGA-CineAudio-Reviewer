@@ -3362,19 +3362,26 @@
             return n;
         }
         const stops = collectMarkerVideoEndSnapStops(opt);
-        if (!stops.length) return n;
         const threshold =
             opt && Number.isFinite(opt.thresholdSec) && opt.thresholdSec > 0
                 ? opt.thresholdSec
                 : markerNavStopEpsilonSec();
         let best = n;
-        let bestDist = threshold + 1;
-        for (let i = 0; i < stops.length; i++) {
-            const d = Math.abs(stops[i] - n);
-            if (d <= threshold && d < bestDist) {
-                bestDist = d;
-                best = stops[i];
+        if (stops.length) {
+            let bestDist = threshold + 1;
+            for (let i = 0; i < stops.length; i++) {
+                const d = Math.abs(stops[i] - n);
+                if (d <= threshold && d < bestDist) {
+                    bestDist = d;
+                    best = stops[i];
+                }
             }
+        }
+        if (typeof snapSecToMusicalGridStops === 'function') {
+            return snapSecToMusicalGridStops(best, {
+                thresholdSec: threshold,
+                altKey: opt && opt.altKey,
+            });
         }
         return best;
     }
@@ -3400,6 +3407,12 @@
             const regionStops = collectRegionSnapStops(null, -1);
             for (let i = 0; i < regionStops.length; i++) {
                 stops.push(regionStops[i]);
+            }
+        }
+        if (typeof collectMusicalGridSnapStops === 'function') {
+            const gridStops = collectMusicalGridSnapStops();
+            for (let i = 0; i < gridStops.length; i++) {
+                stops.push(gridStops[i]);
             }
         }
         if (!stops.length) return n;
@@ -3881,6 +3894,22 @@
                 focusComment: false,
                 resumeAfterSeek: wasPlaying,
             };
+            const phraseNavActive =
+                typeof getMusicalGridPhraseFillVisible === 'function' &&
+                getMusicalGridPhraseFillVisible() &&
+                typeof getPhraseGroupRangesSnapshot === 'function' &&
+                getPhraseGroupRangesSnapshot().length > 0;
+            if (
+                phraseNavActive &&
+                typeof jumpToAdjacentPhrase === 'function' &&
+                jumpToAdjacentPhrase(dir, navOpt)
+            ) {
+                e.preventDefault();
+                return true;
+            }
+            if (phraseNavActive) {
+                return false;
+            }
             if (markersDisplayHidden) {
                 if (typeof jumpToAdjacentRegionStop !== 'function') return false;
                 if (!jumpToAdjacentRegionStop(dir, navOpt)) return false;

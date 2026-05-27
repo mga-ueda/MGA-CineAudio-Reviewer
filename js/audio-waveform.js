@@ -813,6 +813,7 @@
         const t = ev.target;
         if (!t || !t.closest) return true;
         if (t.closest('.seek-bar-marker')) return true;
+        if (t.closest('.audio-waveform-composite__phrase-boundary-handle')) return true;
         if (t.closest('.audio-waveform-composite__seek-input')) return true;
         if (
             typeof isPointerOnAnyRegionResizeHandle === 'function' &&

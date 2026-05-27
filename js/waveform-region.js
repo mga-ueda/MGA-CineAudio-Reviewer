@@ -769,6 +769,12 @@
         if (typeof snapSecToMarkerInOut === 'function') {
             n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
         }
+        if (typeof snapSecToMusicalGridStops === 'function') {
+            n = snapSecToMusicalGridStops(n, {
+                thresholdSec: threshold,
+                altKey: opt && opt.altKey,
+            });
+        }
         return Math.max(0, n);
     }
 
@@ -830,6 +836,12 @@
         );
         if (typeof snapSecToMarkerInOut === 'function') {
             n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
+        }
+        if (typeof snapSecToMusicalGridStops === 'function') {
+            n = snapSecToMusicalGridStops(n, {
+                thresholdSec: threshold,
+                altKey: opt && opt.altKey,
+            });
         }
         return Math.max(0, n);
     }
@@ -3227,19 +3239,61 @@
         return null;
     }
 
+    const regionCursorOverlayEl =
+        typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner
+            ? (() => {
+                  const el = document.createElement('div');
+                  el.className = 'audio-waveform-composite__region-cursor';
+                  el.hidden = true;
+                  el.setAttribute('aria-hidden', 'true');
+                  audioWaveformLanesInner.appendChild(el);
+                  return el;
+              })()
+            : null;
+
+    function hideRegionCursorOverlay() {
+        if (regionCursorOverlayEl) regionCursorOverlayEl.hidden = true;
+    }
+
+    function showRegionCursorOverlayAtTransportSec(sec) {
+        if (!regionCursorOverlayEl || !Number.isFinite(sec)) return;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) {
+            hideRegionCursorOverlay();
+            return;
+        }
+        const pct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(sec)
+                : (sec / master) * 100;
+        regionCursorOverlayEl.style.left = pct + '%';
+        regionCursorOverlayEl.hidden = false;
+    }
+
     function hideRegionCursorLine(regionEl) {
-        if (!regionEl) return;
-        const line = regionEl.querySelector(
-            '.audio-waveform-lane__playback-region__cursor-line',
-        );
-        if (line) line.hidden = true;
+        void regionEl;
+        hideRegionCursorOverlay();
     }
 
     function updateRegionCursorLine(regionEl, clientX, clientY, altKey) {
-        const line = regionEl.querySelector(
-            '.audio-waveform-lane__playback-region__cursor-line',
-        );
-        if (!line) return;
+        const lanes = getWaveformLanesEl();
+        if (
+            lanes &&
+            (lanes.classList.contains('audio-waveform-composite__lanes--scrubbing') ||
+                lanes.classList.contains('audio-waveform-composite__lanes--offset-drag') ||
+                lanes.classList.contains('audio-waveform-composite__lanes--region-drag') ||
+                regionHandleDragActive)
+        ) {
+            hideRegionCursorOverlay();
+            return;
+        }
+        if (!regionEl) {
+            hideRegionCursorOverlay();
+            return;
+        }
         const r = regionEl.getBoundingClientRect();
         if (
             !Number.isFinite(clientX) ||
@@ -3249,17 +3303,13 @@
             clientY < r.top ||
             clientY > r.bottom
         ) {
-            line.hidden = true;
+            hideRegionCursorOverlay();
             return;
         }
         const lane = regionEl.closest('.audio-waveform-lane--extra');
         const laneMatch = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
         const slot = laneMatch ? parseInt(laneMatch[1], 10) : -1;
         const segmentIndex = Number(regionEl.dataset && regionEl.dataset.segmentIndex);
-        const xRaw = Math.max(0, Math.min(r.width, clientX - r.left));
-        // Convert snapped transport sec back to px inside this region element.
-        // If we cannot resolve the track/segment context, fallback to raw cursor.
-        let x = xRaw;
 
         // Pre-resolve this region's effective in/out transport range.
         // (We snap to these boundaries for region-only snapping.)
@@ -3320,13 +3370,13 @@
                     }
                 }
 
-                // Allow snapped time to land outside the currently hovered region.
-                // The cursor line is positioned relative to this region element's local scale.
-                x = ((snappedTransportSec - inTransport) / (outTransport - inTransport)) * r.width;
             }
         }
-        line.style.left = x + 'px';
-        line.hidden = false;
+        if (Number.isFinite(snappedTransportSec)) {
+            showRegionCursorOverlayAtTransportSec(snappedTransportSec);
+        } else {
+            hideRegionCursorOverlay();
+        }
     }
 
     function setHoveredPlaybackRegion(el) {

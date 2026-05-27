@@ -1450,7 +1450,8 @@
             box-sizing: border-box;
         }
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__musical-grid,
-        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail {
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries {
             position: absolute;
             left: 0;
             top: 0;
@@ -1458,6 +1459,36 @@
             height: 100%;
             pointer-events: none;
             display: block;
+        }
+        .audio-waveform-composite__phrase-boundaries {
+            z-index: 7;
+        }
+        .audio-waveform-composite__phrase-boundary-handle {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 14px;
+            transform: translateX(-50%);
+            pointer-events: auto;
+            cursor: col-resize;
+            z-index: 1;
+        }
+        .audio-waveform-composite__phrase-boundary-handle::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 2px;
+            transform: translateX(-50%);
+            background: rgba(255, 200, 80, 0.9);
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        .audio-waveform-composite__phrase-boundary-handle:hover::after,
+        .audio-waveform-composite__lanes--phrase-boundary-drag
+            .audio-waveform-composite__phrase-boundary-handle::after {
+            opacity: 1;
         }
         /* グリッド: 波形よりは前（上）、マーカー・リージョンよりは後ろ（下） */
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__musical-grid {
@@ -1472,13 +1503,34 @@
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__range-loop,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__musical-grid,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__playhead-wrap,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead {
             grid-row: 1 / -1;
             grid-column: 1;
         }
-        /* リージョン付きレーン (z-index:5)・シークトレイル (6) より上、プレイヘッド (8) より下 */
+        .audio-waveform-composite__region-cursor {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            transform: translateX(-50%);
+            width: 0.5px;
+            pointer-events: none;
+            background: rgba(150, 156, 168, 0.92);
+            opacity: 0.92;
+        }
+        .audio-waveform-composite__lanes--scrubbing .audio-waveform-composite__region-cursor,
+        .audio-waveform-composite__lanes--offset-drag .audio-waveform-composite__region-cursor,
+        .audio-waveform-composite__lanes--region-drag .audio-waveform-composite__region-cursor {
+            display: none;
+        }
+        /* リージョン付きレーン (z-index:5)・グリッド (6)・リージョンカーソル/マーカー (7)・プレイヘッド (8) */
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers.seek-bar-markers {
+            z-index: 7;
+        }
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor {
             z-index: 7;
         }
         /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex レーンを上から連番（JS でも再割当） */
@@ -2125,16 +2177,7 @@
             background: rgba(150, 156, 168, 0.92);
         }
         .audio-waveform-lane__playback-region__cursor-line {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            width: 0.5px;
-            margin-left: -0.25px;
-            pointer-events: none;
-            z-index: 9;
-            background: rgba(150, 156, 168, 0.92);
-            opacity: 0.92;
+            display: none !important;
         }
         .audio-waveform-lane__playback-region--overlap {
             background: linear-gradient(
