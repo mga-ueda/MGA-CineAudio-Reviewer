@@ -616,6 +616,41 @@
             return;
         }
 
+        if (
+            e.code === 'Space' &&
+            (e.ctrlKey || e.metaKey) &&
+            !e.altKey &&
+            !e.shiftKey
+        ) {
+            if (e.repeat) return;
+            if (
+                typeof transportControlsReady !== 'function' ||
+                !transportControlsReady()
+            ) {
+                return;
+            }
+            e.preventDefault();
+            const cur =
+                typeof getTransportSec === 'function'
+                    ? getTransportSec()
+                    : parseFloat(seekBar.value) || 0;
+            const target = Math.max(0, cur - 1);
+            void (async () => {
+                if (typeof seekTransportToAndWait === 'function') {
+                    await seekTransportToAndWait(target, { resumeAfter: false });
+                } else if (typeof applyTimeToVideo === 'function') {
+                    applyTimeToVideo(target);
+                }
+                schedulePersistSession();
+                writeLog(
+                    'Keyboard: Ctrl+Space -> preroll play from ' +
+                        formatTimecodeForTransport(target)
+                );
+                playStopBtn.click();
+            })();
+            return;
+        }
+
         if (e.code === 'Space') {
             if (e.repeat) return;
             if (
@@ -625,10 +660,6 @@
                 return;
             }
             e.preventDefault();
-            const playingNow =
-                typeof isTransportPlaying === 'function'
-                    ? isTransportPlaying()
-                    : !videoMain.paused;
             writeLog('Keyboard: Space -> transport toggle');
             playStopBtn.click();
             return;
