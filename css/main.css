@@ -2393,6 +2393,14 @@
             flex-wrap: nowrap;
             flex: 0 1 auto;
             min-width: 0;
+            padding-block: var(--transport-bar-chip-pad-y);
+            padding-inline: calc(var(--transport-frame-pad-x) + 2px);
+            border-radius: 999px;
+            background: rgba(0, 0, 0, 0.28);
+            border: var(--transport-frame-border) solid rgba(255, 255, 255, 0.08);
+        }
+        .transport-bar .session-io-cluster[hidden] {
+            display: none !important;
         }
         .transport-bar__row #playStopBtn {
             flex-shrink: 0;
@@ -3918,6 +3926,13 @@
             gap: 6px 12px;
             flex-wrap: wrap;
             min-width: 0;
+            height: auto;
+            min-height: 0;
+            max-height: none;
+            padding: 0;
+            border: none;
+            background: transparent;
+            box-shadow: none;
         }
         .transport-bar .session-export-media__item {
             white-space: nowrap;

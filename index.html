@@ -273,7 +273,7 @@
         </div>
     </section>
 
-    <div class="layout-narrow">
+    <div class="layout-narrow" id="transportOptionsSection">
     <div class="transport-bar">
         <div class="transport-bar__row transport-bar__row--grid">
             <div
@@ -322,23 +322,6 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--export">
-            <div class="session-io-cluster" role="group" aria-label="Export media selection and review import/export">
-                <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
-                    <span class="transport-opt-label">Include in export</span>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
-                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled>
-                        <span>Video</span>
-                    </label>
-                    <span id="sessionExportExtraMount"></span>
-                </div>
-                <div class="session-io-actions" role="group" aria-label="Import and export review">
-                    <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file (Ctrl+Shift+Alt+I)">Import Review</button>
-                    <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file (Ctrl+Shift+Alt+E)">Export Review</button>
-                    <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" title="Export WebM with burned-in timecode and marker comments (real-time)">Export WebM</button>
-                </div>
-            </div>
-        </div>
-        <div class="transport-bar__row transport-bar__row--secondary">
             <div
                 class="playhead-center-lock-options transport-opt-chip"
                 title="Keep the playhead centered in the waveform view when zoomed (C to toggle)"
@@ -359,6 +342,23 @@
                 <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
                 <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze (A to toggle)" title="Show spectrum and level meters (A to toggle)">
             </div>
+            <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection and review import/export">
+                <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
+                    <span class="transport-opt-label">Include in export</span>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled>
+                        <span>Video</span>
+                    </label>
+                    <span id="sessionExportExtraMount"></span>
+                </div>
+                <div class="session-io-actions" role="group" aria-label="Import and export review">
+                    <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title="Restore a review from a .mgacr file (Ctrl+Shift+Alt+I)">Import Review</button>
+                    <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" title="Save selected media, markers, mix, and display settings to one file (Ctrl+Shift+Alt+E)">Export Review</button>
+                    <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" title="Export WebM with burned-in timecode and marker comments (real-time)">Export WebM</button>
+                </div>
+            </div>
+        </div>
+        <div class="transport-bar__row transport-bar__row--secondary">
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume (double-click or Ctrl+Shift+V for 100%)">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
                 <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="Double-click or Ctrl+Shift+V for 100%">

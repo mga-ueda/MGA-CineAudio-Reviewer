@@ -360,6 +360,30 @@
         }
 
         if (
+            !e.repeat &&
+            !e.ctrlKey &&
+            !e.altKey &&
+            !e.metaKey &&
+            !e.shiftKey &&
+            e.code === 'KeyO'
+        ) {
+            const transportOptionsSection = document.getElementById('transportOptionsSection');
+            if (!transportOptionsSection) return;
+            e.preventDefault();
+            const willHide = !transportOptionsSection.hidden;
+            transportOptionsSection.hidden = willHide;
+            writeLog(
+                willHide
+                    ? 'Transport options section: hidden (O)'
+                    : 'Transport options section: shown (O)'
+            );
+            if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
+                scheduleMarkersUiRefreshAfterLayout();
+            }
+            return;
+        }
+
+        if (
             typeof handleMarkerPendingRangeEscapeKeydown === 'function' &&
             handleMarkerPendingRangeEscapeKeydown(e)
         ) {
