@@ -499,13 +499,13 @@
         return null;
     }
 
+    function collectPhraseGroupDrawRanges(settings, master) {
+        if (!getMusicalGridPhraseFillVisible() || !settings.phraseSpec) return [];
+        return collectPhraseGroupRanges(settings.meterSpec, master, settings.phraseSpec);
+    }
+
     function drawPhraseGroupFills(ctx, w, h, master, settings) {
-        if (!getMusicalGridPhraseFillVisible() || !settings.phraseSpec) return;
-        const ranges = collectPhraseGroupRanges(
-            settings.meterSpec,
-            master,
-            settings.phraseSpec,
-        );
+        const ranges = collectPhraseGroupDrawRanges(settings, master);
         if (!ranges.length) return;
         const secToX = (sec) => (sec / master) * w;
         for (let i = 0; i < ranges.length; i++) {
@@ -515,6 +515,18 @@
             if (x1 <= x0 + 0.25) continue;
             ctx.fillStyle = r.paletteIndex % 2 === 0 ? BAR_GROUP_FILL_A : BAR_GROUP_FILL_B;
             ctx.fillRect(x0, 0, x1 - x0, h);
+        }
+    }
+
+    function drawPhraseGroupLabels(ctx, w, h, master, settings) {
+        const ranges = collectPhraseGroupDrawRanges(settings, master);
+        if (!ranges.length) return;
+        const secToX = (sec) => (sec / master) * w;
+        for (let i = 0; i < ranges.length; i++) {
+            const r = ranges[i];
+            const x0 = secToX(r.startSec);
+            const x1 = secToX(r.endSec);
+            if (x1 <= x0 + 0.25) continue;
 
             const bandW = x1 - x0;
             const cx = x0 + bandW * 0.5;
@@ -558,42 +570,39 @@
 
         drawPhraseGroupFills(ctx, w, h, master, settings);
 
-        if (!getMusicalGridVisible()) return;
+        if (getMusicalGridVisible()) {
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-over';
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'source-over';
+            const zoom =
+                typeof getWaveformTimelineZoom === 'function' ? getWaveformTimelineZoom() : 1;
+            const showBeats = zoom >= 10;
 
-        const zoom =
-            typeof getWaveformTimelineZoom === 'function' ? getWaveformTimelineZoom() : 1;
-        const showBeats = zoom >= 10;
-
-        const lines = collectMusicalGridLines(settings.meterSpec, master, {
-            showBeats,
-        });
-        if (!lines.length) {
-            ctx.restore();
-            return;
-        }
-
-        const secToX = (sec) => (sec / master) * w;
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const x = secToX(line.sec);
-            if (x < -0.5 || x > w + 0.5) continue;
-            const xi = Math.round(x) + 0.5;
-            if (line.kind === 'bar') {
-                ctx.strokeStyle = 'rgba(255, 90, 90, 0.75)';
-                ctx.lineWidth = 1;
-            } else {
-                ctx.strokeStyle = 'rgba(0, 220, 255, 0.45)';
-                ctx.lineWidth = 1;
+            const lines = collectMusicalGridLines(settings.meterSpec, master, {
+                showBeats,
+            });
+            const secToX = (sec) => (sec / master) * w;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const x = secToX(line.sec);
+                if (x < -0.5 || x > w + 0.5) continue;
+                const xi = Math.round(x) + 0.5;
+                if (line.kind === 'bar') {
+                    ctx.strokeStyle = 'rgba(255, 90, 90, 0.75)';
+                    ctx.lineWidth = 1;
+                } else {
+                    ctx.strokeStyle = 'rgba(0, 220, 255, 0.45)';
+                    ctx.lineWidth = 1;
+                }
+                ctx.beginPath();
+                ctx.moveTo(xi, 0);
+                ctx.lineTo(xi, h);
+                ctx.stroke();
             }
-            ctx.beginPath();
-            ctx.moveTo(xi, 0);
-            ctx.lineTo(xi, h);
-            ctx.stroke();
+            ctx.restore();
         }
-        ctx.restore();
+
+        drawPhraseGroupLabels(ctx, w, h, master, settings);
     }
 
     function initMusicalGridUi() {
