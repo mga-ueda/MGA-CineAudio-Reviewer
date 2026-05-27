@@ -1585,6 +1585,33 @@
         return Math.abs(leftEnd - rightStart) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC;
     }
 
+    /**
+     * 結合アンカーは維持したまま、リージョン In/Out で重なりを広げた手動クロス。
+     * 結合境界専用の 1 秒ハンドオフより長い／手前からの重なりがある。
+     */
+    function hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex) {
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        const boundaryT = getSegmentTimelineStart(track, boundaryIndex + 1);
+        const rightPlay = getSegmentPlaybackTimelineStart(track, boundaryIndex + 1);
+        const leftPlay = getSegmentPlaybackTimelineStart(track, boundaryIndex);
+        const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
+        const rightEnd = getSegmentTimelineEnd(track, boundaryIndex + 1);
+        const overlapStart = Math.max(leftPlay, rightPlay);
+        const overlapEnd = Math.min(leftEnd, rightEnd);
+        const overlapDur = overlapEnd - overlapStart;
+        if (overlapDur < MIN_CROSSFADE_OVERLAP_SEC) return false;
+        if (
+            rightPlay <
+            boundaryT - JOINED_BOUNDARY_CROSSFADE_SEC + SEGMENT_BOUNDARY_JOIN_EPS_SEC
+        ) {
+            return true;
+        }
+        return (
+            overlapDur >
+            JOINED_BOUNDARY_CROSSFADE_SEC + SEGMENT_BOUNDARY_JOIN_EPS_SEC
+        );
+    }
+
     /** タイムライン結合かつクリップ内ソースが連続（分割直後・B結合可能な境界） */
     function isSegmentSourceContinuousAtBoundary(track, boundaryIndex) {
         if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
@@ -1786,13 +1813,26 @@
 
             let timelineStart = absStart;
             let timelineEnd = absEnd;
-            if (forPlayback && joinedPrev && boundaryPrev != null) {
+            const skipJoinedCrossfadeClamp =
+                forPlayback &&
+                ((i > 0 &&
+                    isSegmentBoundaryJoined(track, i - 1) &&
+                    hasExtendedCrossfadeOverlapAtBoundary(track, i - 1)) ||
+                    (i < segments.length - 1 &&
+                        isSegmentBoundaryJoined(track, i) &&
+                        hasExtendedCrossfadeOverlapAtBoundary(track, i)));
+            if (forPlayback && !skipJoinedCrossfadeClamp && joinedPrev && boundaryPrev != null) {
                 timelineStart = Math.min(
                     timelineStart,
                     boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC,
                 );
                 timelineEnd = boundaryPrev;
-            } else if (forPlayback && joinedNext && boundaryNext != null) {
+            } else if (
+                forPlayback &&
+                !skipJoinedCrossfadeClamp &&
+                joinedNext &&
+                boundaryNext != null
+            ) {
                 timelineStart = Math.min(
                     timelineStart,
                     boundaryNext - JOINED_BOUNDARY_CROSSFADE_SEC,
@@ -1887,7 +1927,10 @@
         const hi = a.segmentIndex < b.segmentIndex ? b : a;
         if (hi.segmentIndex === lo.segmentIndex + 1) {
             const trackRef = { type: 'extra', slot: lo.slot };
-            if (isSegmentBoundaryJoined(trackRef, lo.segmentIndex)) {
+            if (
+                isSegmentBoundaryJoined(trackRef, lo.segmentIndex) &&
+                !hasExtendedCrossfadeOverlapAtBoundary(trackRef, lo.segmentIndex)
+            ) {
                 const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
                 const hiIdx = a.segmentIndex < b.segmentIndex ? j : i;
                 return { out: loIdx, in: hiIdx };
@@ -5086,6 +5129,7 @@
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
     window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
+    window.hasExtendedCrossfadeOverlapAtBoundary = hasExtendedCrossfadeOverlapAtBoundary;
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;

@@ -173,7 +173,13 @@
             const hi = a.segmentIndex < b.segmentIndex ? b : a;
             if (hi.segmentIndex === lo.segmentIndex + 1) {
                 const trackRef = { type: 'extra', slot: a.slot };
-                if (isSegmentBoundaryJoined(trackRef, lo.segmentIndex)) {
+                if (
+                    isSegmentBoundaryJoined(trackRef, lo.segmentIndex) &&
+                    !(
+                        typeof hasExtendedCrossfadeOverlapAtBoundary === 'function' &&
+                        hasExtendedCrossfadeOverlapAtBoundary(trackRef, lo.segmentIndex)
+                    )
+                ) {
                     const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
                     const hiIdx = a.segmentIndex < b.segmentIndex ? j : i;
                     return { out: loIdx, in: hiIdx };
@@ -313,9 +319,59 @@
             : 1;
     }
 
+    function activeHasManualCrossfadeOverlapAtTransport(active, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || !active || active.length < 2) return false;
+        const bySlot = new Map();
+        for (let i = 0; i < active.length; i++) {
+            const hit = active[i];
+            if (!bySlot.has(hit.slot)) bySlot.set(hit.slot, []);
+            bySlot.get(hit.slot).push(hit);
+        }
+        for (const slotHits of bySlot.values()) {
+            if (slotHits.length < 2) continue;
+            const trackRef = { type: 'extra', slot: slotHits[0].slot };
+            for (let i = 0; i < slotHits.length; i++) {
+                for (let j = i + 1; j < slotHits.length; j++) {
+                    const a = slotHits[i];
+                    const b = slotHits[j];
+                    const oStart = Math.max(a.timelineStart, b.timelineStart);
+                    const oEnd = Math.min(a.timelineEnd, b.timelineEnd);
+                    const overlap = oEnd - oStart;
+                    if (overlap < MIN_CROSSFADE_OVERLAP_SEC) continue;
+                    if (t < oStart - 0.0005 || t > oEnd + 0.0005) continue;
+                    const lo =
+                        a.segmentIndex < b.segmentIndex ? a : b;
+                    const hi =
+                        a.segmentIndex < b.segmentIndex ? b : a;
+                    if (
+                        hi.segmentIndex === lo.segmentIndex + 1 &&
+                        typeof isSegmentBoundaryJoined === 'function' &&
+                        isSegmentBoundaryJoined(trackRef, lo.segmentIndex) &&
+                        !(
+                            typeof hasExtendedCrossfadeOverlapAtBoundary ===
+                                'function' &&
+                            hasExtendedCrossfadeOverlapAtBoundary(
+                                trackRef,
+                                lo.segmentIndex,
+                            )
+                        )
+                    ) {
+                        continue;
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     function computeSegmentCrossfadeGainsForActive(ctx, active, transportSec) {
         const gains = computeEqualPowerCrossfadeGains(active, transportSec);
-        if (activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec)) {
+        if (
+            activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec) ||
+            activeHasManualCrossfadeOverlapAtTransport(active, transportSec)
+        ) {
             return gains;
         }
         return withCrossfadeGainsDeferredUntilIncomingAudible(
@@ -449,6 +505,12 @@
                 const right = slotHits[i + 1];
                 if (right.segmentIndex !== left.segmentIndex + 1) continue;
                 if (!isSegmentBoundaryJoined(trackRef, left.segmentIndex)) continue;
+                if (
+                    typeof hasExtendedCrossfadeOverlapAtBoundary === 'function' &&
+                    hasExtendedCrossfadeOverlapAtBoundary(trackRef, left.segmentIndex)
+                ) {
+                    continue;
+                }
                 const oStart = Math.max(left.timelineStart, right.timelineStart);
                 const oEnd = Math.min(left.timelineEnd, right.timelineEnd);
                 if (
@@ -670,7 +732,14 @@
         const boundaryJoined =
             segHit.segmentIndex > 0 &&
             typeof isSegmentBoundaryJoined === 'function' &&
-            isSegmentBoundaryJoined(trackRef, segHit.segmentIndex - 1);
+            isSegmentBoundaryJoined(trackRef, segHit.segmentIndex - 1) &&
+            !(
+                typeof hasExtendedCrossfadeOverlapAtBoundary === 'function' &&
+                hasExtendedCrossfadeOverlapAtBoundary(
+                    trackRef,
+                    segHit.segmentIndex - 1,
+                )
+            );
         const othersPlaying =
             tr.segmentSources &&
             Object.keys(tr.segmentSources).some((k) => {
@@ -2168,6 +2237,7 @@
         const rampSec = 0.008;
         const inCrossfade =
             activeHasJoinedBoundaryCrossfadeAtTransport(active, gainT) ||
+            activeHasManualCrossfadeOverlapAtTransport(active, gainT) ||
             reviewMixHasCrossfadeAtTransport(gainT);
         let applied = false;
         for (const segHit of active) {
@@ -2234,7 +2304,17 @@
             active,
             gainT,
         );
-        if (!inJoinedOverlap && !segmentSourcesReadyForActive(active)) return;
+        const inManualOverlap = activeHasManualCrossfadeOverlapAtTransport(
+            active,
+            gainT,
+        );
+        if (
+            !inJoinedOverlap &&
+            !inManualOverlap &&
+            !segmentSourcesReadyForActive(active)
+        ) {
+            return;
+        }
         applySegmentCrossfadeGains(ctx, active, gainT);
     }
 
@@ -2329,6 +2409,14 @@
                         segHit.segmentIndex > 0 &&
                         typeof isSegmentBoundaryJoined === 'function' &&
                         isSegmentBoundaryJoined(trackRef, segHit.segmentIndex - 1) &&
+                        !(
+                            typeof hasExtendedCrossfadeOverlapAtBoundary ===
+                                'function' &&
+                            hasExtendedCrossfadeOverlapAtBoundary(
+                                trackRef,
+                                segHit.segmentIndex - 1,
+                            )
+                        ) &&
                         typeof refreshSegmentHitAtTransport === 'function'
                     ) {
                         const priorAudible = Object.keys(
@@ -3085,18 +3173,20 @@
             !extraTracksNeedResync(masterT, ctx) &&
             extraAudioSourcesActive()
         ) {
-            if (
-                allActiveAtT.length >= 2 &&
-                activeHasJoinedBoundaryCrossfadeAtTransport(
-                    allActiveAtT,
-                    getCrossfadeGainTransportSec(),
-                )
-            ) {
-                applySegmentCrossfadeGains(
-                    ctx,
-                    allActiveAtT,
-                    getCrossfadeGainTransportSec(),
-                );
+            if (allActiveAtT.length >= 2) {
+                const gainT = getCrossfadeGainTransportSec();
+                if (
+                    activeHasJoinedBoundaryCrossfadeAtTransport(
+                        allActiveAtT,
+                        gainT,
+                    ) ||
+                    activeHasManualCrossfadeOverlapAtTransport(
+                        allActiveAtT,
+                        gainT,
+                    )
+                ) {
+                    applySegmentCrossfadeGains(ctx, allActiveAtT, gainT);
+                }
             }
             pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
             applyReviewMixVideoGain();
