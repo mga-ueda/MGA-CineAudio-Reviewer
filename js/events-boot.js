@@ -617,6 +617,33 @@
         }
 
         if (
+            (e.code === 'Enter' || e.code === 'NumpadEnter') &&
+            e.altKey &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.shiftKey
+        ) {
+            if (e.repeat) return;
+            if (
+                typeof transportControlsReady !== 'function' ||
+                !transportControlsReady()
+            ) {
+                return;
+            }
+            if (
+                typeof transportPlaybackStartSec === 'undefined' ||
+                !Number.isFinite(transportPlaybackStartSec)
+            ) {
+                return;
+            }
+            e.preventDefault();
+            void (typeof replayTransportFromPlaybackStart === 'function'
+                ? replayTransportFromPlaybackStart()
+                : Promise.resolve());
+            return;
+        }
+
+        if (
             e.code === 'Space' &&
             (e.ctrlKey || e.metaKey) &&
             !e.altKey &&

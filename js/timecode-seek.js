@@ -171,6 +171,47 @@
     window.forceTransportRafLoop = forceTransportRafLoop;
     window.startVideoPlayback = startVideoPlayback;
 
+    function rememberTransportPlaybackStartSec(sec) {
+        let n = Number(sec);
+        if (!Number.isFinite(n)) return;
+        if (typeof clampTransportSec === 'function') {
+            n = clampTransportSec(n);
+        } else {
+            n = Math.max(0, n);
+        }
+        transportPlaybackStartSec = n;
+    }
+
+    function clearTransportPlaybackStartSec() {
+        transportPlaybackStartSec = null;
+    }
+
+    async function replayTransportFromPlaybackStart() {
+        if (!Number.isFinite(transportPlaybackStartSec)) return false;
+        const ready =
+            typeof transportControlsReady === 'function'
+                ? transportControlsReady()
+                : typeof videoReady === 'function' && videoReady();
+        if (!ready) return false;
+        const target = transportPlaybackStartSec;
+        if (typeof seekTransportToAndWait === 'function') {
+            await seekTransportToAndWait(target, { resumeAfter: false });
+        } else {
+            applyTimeToVideo(target);
+            if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        writeLog(
+            'Keyboard: Alt+Enter -> replay from ' + formatTimecodeForTransport(target)
+        );
+        if (playStopBtn) playStopBtn.click();
+        return true;
+    }
+
+    window.rememberTransportPlaybackStartSec = rememberTransportPlaybackStartSec;
+    window.clearTransportPlaybackStartSec = clearTransportPlaybackStartSec;
+    window.replayTransportFromPlaybackStart = replayTransportFromPlaybackStart;
+
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {
         if (!videoMain || !videoReady()) return;
@@ -248,6 +289,7 @@
             typeof clampTransportSec === 'function'
                 ? clampTransportSec(getTransportSec())
                 : getTransportSec();
+        rememberTransportPlaybackStartSec(t0);
         transportPlaybackSec = t0;
         transportPlaybackLastTs = performance.now();
         setTransportSec(t0);
@@ -553,6 +595,7 @@
             await primeExtraAudioForPlayback();
         }
         const startT = getTransportSec();
+        rememberTransportPlaybackStartSec(startT);
         transportPlaybackSec = startT;
         transportPlaybackLastTs = performance.now();
         setTransportSec(startT);
@@ -917,6 +960,7 @@
 
     function stopPlaybackReturnTransportToHead() {
         isSeeking = false;
+        clearTransportPlaybackStartSec();
         if (typeof resetTransportPlaybackClock === 'function') {
             resetTransportPlaybackClock();
         } else {
@@ -1091,6 +1135,7 @@
             transportPlaybackSec = 0;
             transportPlaybackLastTs = 0;
         }
+        clearTransportPlaybackStartSec();
         if (typeof setTransportSec === 'function') {
             setTransportSec(0);
         }

@@ -18,6 +18,8 @@
     const IDB_VER = 1;
 
     let pendingRestoreTime = null;
+    /** 直近の再生開始位置（Alt+Enter でここから再生し直す）。未再生時は null。 */
+    let transportPlaybackStartSec = null;
     /** @type {{ videoLaneOpen?: boolean, extraLanesOpen?: boolean[] }|null} */
     let pendingLaneUiRestore = null;
     let persistSessionTimer = null;
