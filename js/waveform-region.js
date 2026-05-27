@@ -511,6 +511,74 @@
         return true;
     }
 
+    function adjustPlaybackRegionGainForTransportRange(startSec, endSec, deltaDb, meta) {
+        const slot = resolveMarkerRegionTargetSlot();
+        if (slot < 0) {
+            const loadMsg =
+                meta && meta.loadLog
+                    ? meta.loadLog
+                    : 'Playback region: load an Ex track to adjust volume from a range marker';
+            writeLog(loadMsg);
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint(
+                    (meta && meta.loadHintTitle) || 'Region',
+                    (meta && meta.loadHintDetail) || 'Load Ex audio',
+                    'notice',
+                );
+            }
+            return { handled: true, ok: false };
+        }
+        const track = { type: 'extra', slot };
+        const ensured = ensureIndependentRegionForMarkerRange(track, startSec, endSec);
+        if (ensured.segmentIndex < 0) {
+            const failDetail =
+                (meta && meta.failHintDetail) || 'Region isolate failed';
+            writeLog(
+                'Ex ' +
+                    (slot + 1) +
+                    ': could not isolate region' +
+                    (meta && meta.failLogSuffix ? meta.failLogSuffix : ' for range marker'),
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Ex ' + (slot + 1), failDetail, 'notice');
+            }
+            return { handled: true, ok: false };
+        }
+        const next = clampRegionGainDb(
+            getSegmentGainDb(track, ensured.segmentIndex) + deltaDb,
+        );
+        if (
+            !setSegmentGainDb(track, ensured.segmentIndex, next, {
+                skipPersist: true,
+                skipUndo: ensured.created,
+            })
+        ) {
+            return { handled: true, ok: false };
+        }
+        if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        const label = formatRegionGainDbDisplay(next);
+        const gainSuffix = (meta && meta.gainLogSuffix) || ' (marker)';
+        writeLog(
+            'Ex ' +
+                (slot + 1) +
+                ' region ' +
+                (ensured.segmentIndex + 1) +
+                ' gain' +
+                gainSuffix +
+                ': ' +
+                (label || '0.0 dB'),
+        );
+        if (typeof flashSeekHint === 'function') {
+            const hintTitle =
+                (meta && meta.hintTitle) ||
+                'Ex ' + (slot + 1) + ' R' + (ensured.segmentIndex + 1);
+            flashSeekHint(hintTitle, label || '0.0 dB', 'notice');
+        }
+        return { handled: true, ok: true };
+    }
+
     function handlePlaybackRegionGainWheel(ev) {
         if (!ev || !ev.altKey || ev.ctrlKey || ev.metaKey || ev.shiftKey) {
             return false;
@@ -532,68 +600,47 @@
         if (typeof resolveRangeMarkerAtPointer === 'function') {
             const markerHit = resolveRangeMarkerAtPointer(ev.clientX, ev.clientY);
             if (markerHit) {
-                const slot = resolveMarkerRegionTargetSlot();
-                if (slot < 0) {
-                    writeLog(
-                        'Playback region: load an Ex track to adjust volume from a range marker',
-                    );
-                    if (typeof flashSeekHint === 'function') {
-                        flashSeekHint('Region', 'Load Ex audio', 'notice');
-                    }
-                    ev.preventDefault();
-                    return true;
-                }
-                const track = { type: 'extra', slot };
-                const ensured = ensureIndependentRegionForMarkerRange(
-                    track,
+                const result = adjustPlaybackRegionGainForTransportRange(
                     markerHit.startSec,
                     markerHit.endSec,
+                    deltaDb,
+                    {
+                        gainLogSuffix: ' (marker)',
+                    },
                 );
-                if (ensured.segmentIndex < 0) {
-                    writeLog(
-                        'Ex ' +
-                            (slot + 1) +
-                            ': could not isolate region for range marker',
-                    );
-                    if (typeof flashSeekHint === 'function') {
-                        flashSeekHint('Ex ' + (slot + 1), 'Region isolate failed', 'notice');
-                    }
+                if (result.handled) {
                     ev.preventDefault();
                     return true;
                 }
-                const next = clampRegionGainDb(
-                    getSegmentGainDb(track, ensured.segmentIndex) + deltaDb,
+            }
+        }
+
+        if (typeof resolvePhraseGroupAtTransportSec === 'function') {
+            const transportSec =
+                typeof transportSecFromClientX === 'function'
+                    ? transportSecFromClientX(ev.clientX)
+                    : NaN;
+            const phraseHit = resolvePhraseGroupAtTransportSec(transportSec);
+            if (phraseHit) {
+                const result = adjustPlaybackRegionGainForTransportRange(
+                    phraseHit.startSec,
+                    phraseHit.endSec,
+                    deltaDb,
+                    {
+                        gainLogSuffix: ' (phrase ' + phraseHit.label + ')',
+                        hintTitle: 'Phrase ' + phraseHit.label,
+                        loadLog:
+                            'Playback region: load an Ex track to adjust volume from a phrase',
+                        loadHintTitle: 'Phrase',
+                        loadHintDetail: 'Load Ex audio',
+                        failLogSuffix: ' for phrase',
+                        failHintDetail: 'Phrase region isolate failed',
+                    },
                 );
-                if (
-                    !setSegmentGainDb(track, ensured.segmentIndex, next, {
-                        skipPersist: true,
-                        skipUndo: ensured.created,
-                    })
-                ) {
+                if (result.handled) {
                     ev.preventDefault();
                     return true;
                 }
-                if (typeof schedulePersistSession === 'function') {
-                    schedulePersistSession();
-                }
-                const label = formatRegionGainDbDisplay(next);
-                writeLog(
-                    'Ex ' +
-                        (slot + 1) +
-                        ' region ' +
-                        (ensured.segmentIndex + 1) +
-                        ' gain (marker): ' +
-                        (label || '0.0 dB'),
-                );
-                if (typeof flashSeekHint === 'function') {
-                    flashSeekHint(
-                        'Ex ' + (slot + 1) + ' R' + (ensured.segmentIndex + 1),
-                        label || '0.0 dB',
-                        'notice',
-                    );
-                }
-                ev.preventDefault();
-                return true;
             }
         }
 

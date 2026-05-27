@@ -1973,15 +1973,15 @@
         .audio-waveform-lane__playback-region__gain-db {
             position: absolute;
             left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
+            top: calc(50% + 0.35rem);
+            transform: translateX(-50%);
             z-index: 4;
             font-size: 0.72rem;
             font-weight: 400;
             line-height: 1.15;
             letter-spacing: 0.02em;
-            color: #e83838;
-            -webkit-text-fill-color: #e83838;
+            color: var(--accent-ink);
+            -webkit-text-fill-color: var(--accent-ink);
             text-shadow: 0 0 3px rgba(0, 0, 0, 0.85), 0 1px 2px rgba(0, 0, 0, 0.75);
             pointer-events: none;
             user-select: none;

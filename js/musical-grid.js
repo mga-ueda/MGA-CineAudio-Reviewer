@@ -462,6 +462,27 @@
         );
     }
 
+    /** Phrase 着色 ON 時、transport 秒が属する Phrase 範囲。該当なしは null。 */
+    function resolvePhraseGroupAtTransportSec(sec) {
+        if (!getMusicalGridPhraseFillVisible()) return null;
+        const s = Number(sec);
+        if (!Number.isFinite(s)) return null;
+        const ranges = getPhraseGroupRangesSnapshot();
+        if (!ranges.length) return null;
+        for (let i = 0; i < ranges.length; i++) {
+            const r = ranges[i];
+            if (s >= r.startSec - 1e-9 && s < r.endSec + 1e-9) {
+                return {
+                    startSec: r.startSec,
+                    endSec: r.endSec,
+                    paletteIndex: r.paletteIndex,
+                    label: phraseGroupLabelForIndex(r.paletteIndex),
+                };
+            }
+        }
+        return null;
+    }
+
     /** Phrase 着色 ON 時、テンキー digit に対応するシーク位置（秒）。該当なしは null。 */
     function resolveMusicalGridNumpadSeekSec(digit) {
         if (!getMusicalGridPhraseFillVisible()) return null;
@@ -497,7 +518,7 @@
 
             const bandW = x1 - x0;
             const cx = x0 + bandW * 0.5;
-            const cy = h * 0.5;
+            const cy = h * 0.42;
             const fontPx = Math.max(12, Math.min(h * 0.34, bandW * 0.5));
             const label = phraseGroupLabelForIndex(r.paletteIndex);
             ctx.save();
@@ -652,6 +673,7 @@
     window.parsePhraseGroupingSpec = parsePhraseGroupingSpec;
     window.resolveMusicalGridNumpadSeekSec = resolveMusicalGridNumpadSeekSec;
     window.getPhraseGroupRangesSnapshot = getPhraseGroupRangesSnapshot;
+    window.resolvePhraseGroupAtTransportSec = resolvePhraseGroupAtTransportSec;
 
     initMusicalGridUi();
 })();
