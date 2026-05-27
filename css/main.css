@@ -3093,6 +3093,20 @@
         .transport-bar__row--grid {
             align-items: stretch;
         }
+        .transport-bar .transport-musical-pos {
+            flex: 0 0 auto;
+            min-width: 11.5rem;
+            justify-content: center;
+            font-family: var(--font-mono);
+            font-size: 1em;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            color: var(--accent-ink);
+            -webkit-text-fill-color: var(--accent-ink);
+            letter-spacing: 0.02em;
+            text-align: center;
+            white-space: nowrap;
+        }
         .transport-bar .musical-grid-options {
             flex: 1 1 auto;
             width: 100%;

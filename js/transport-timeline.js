@@ -974,6 +974,20 @@
         return 0;
     }
 
+    function updateMusicalGridPlayheadDisplay(sec) {
+        const el =
+            typeof musicalGridPlayheadPos !== 'undefined' && musicalGridPlayheadPos
+                ? musicalGridPlayheadPos
+                : document.getElementById('musicalGridPlayheadPos');
+        if (!el) return;
+        if (typeof resolveMusicalGridPlayheadPositionText === 'function') {
+            el.textContent = resolveMusicalGridPlayheadPositionText(sec);
+            return;
+        }
+        el.textContent = '---:--:--.---';
+    }
+    window.updateMusicalGridPlayheadDisplay = updateMusicalGridPlayheadDisplay;
+
     function transportRatioFromMasterSec(sec) {
         const master = getMasterTransportDurationSec();
         if (!master) return 0;
@@ -1712,6 +1726,7 @@
         if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
             currentTimeEl.textContent = formatTimecodeForTransport(t);
         }
+        updateMusicalGridPlayheadDisplay(t);
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.setAttribute('aria-valuenow', String(Math.round(r * 100)));
     }

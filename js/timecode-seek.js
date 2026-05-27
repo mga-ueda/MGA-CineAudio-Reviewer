@@ -146,6 +146,9 @@
         if (typeof setTransportSec === 'function') setTransportSec(0);
         if (seekBar) seekBar.value = '0';
         if (currentTimeEl) currentTimeEl.textContent = formatTimecodeForTransport(0);
+        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+            updateMusicalGridPlayheadDisplay(0);
+        }
         if (videoMain && videoReady()) {
             videoMain.pause();
             if (typeof applyTimeToVideoIfNeeded === 'function') {
@@ -764,6 +767,9 @@
             const t = Math.max(0, Math.min(pendingRestoreTime, master - 0.001));
             setTransportSec(t);
             currentTimeEl.textContent = formatTimecodeForTransport(t);
+            if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+                updateMusicalGridPlayheadDisplay(t);
+            }
             updateTimecodeOverlay();
             return;
         }
@@ -796,6 +802,9 @@
             setTransportSec(clamped);
             /* マスター上の時刻（動画終端以降のトランスポート区間も表示）。焼き込み TC は別仕様。 */
             currentTimeEl.textContent = formatTimecodeForTransport(clamped);
+            if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+                updateMusicalGridPlayheadDisplay(clamped);
+            }
         }
         updateTimecodeOverlay();
         if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
@@ -814,6 +823,9 @@
         const t = Math.max(0, pendingRestoreTime);
         setTransportSec(t);
         currentTimeEl.textContent = formatTimecodeForTransport(t);
+        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+            updateMusicalGridPlayheadDisplay(t);
+        }
     }
 
     function applyPendingTransportRestore() {
@@ -840,6 +852,9 @@
                 syncExtraAudioToTransport({ force: true });
             }
             currentTimeEl.textContent = formatTimecodeForTransport(t);
+            if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+                updateMusicalGridPlayheadDisplay(t);
+            }
             updateTimecodeOverlay();
             pendingRestoreTime = null;
             return true;
@@ -848,6 +863,9 @@
         const t = Math.max(0, Math.min(pendingRestoreTime, master - 0.001));
         applyTimeToVideoIfNeeded(t);
         currentTimeEl.textContent = formatTimecodeForTransport(t);
+        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+            updateMusicalGridPlayheadDisplay(t);
+        }
         updateTimecodeOverlay();
         const expected =
             typeof videoSecForTransportSec === 'function' ? videoSecForTransportSec(t) : t;

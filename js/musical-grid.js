@@ -12,6 +12,7 @@
     let musicalGridPhraseText = '';
     let musicalGridVisible = false;
     let musicalGridPhraseFillVisible = false;
+    let musicalGridPosCache = null;
 
     const BAR_GROUP_FILL_A = 'rgba(200, 48, 58, 0.14)';
     const BAR_GROUP_FILL_B = 'rgba(48, 110, 220, 0.14)';
@@ -289,6 +290,114 @@
         }
     }
 
+    function clearMusicalGridPositionCache() {
+        musicalGridPosCache = null;
+    }
+
+    function clampMusicalGridSec(sec, maxSec) {
+        const s = Number(sec);
+        if (!Number.isFinite(s)) return 0;
+        if (!(maxSec > 0)) return Math.max(0, s);
+        return Math.max(0, Math.min(maxSec, s));
+    }
+
+    function getMusicalGridBarBySec(meterSpec, sec, maxSec) {
+        const t = clampMusicalGridSec(sec, maxSec);
+        const meterKey = musicalGridMeterText || '';
+        if (!musicalGridPosCache || musicalGridPosCache.meterKey !== meterKey) {
+            musicalGridPosCache = {
+                meterKey,
+                barIndex: 0,
+                barStartSec: 0,
+                barEndSec: 0,
+                entry: null,
+            };
+        }
+        let barIndex = musicalGridPosCache.barIndex | 0;
+        let barStartSec = Number.isFinite(musicalGridPosCache.barStartSec)
+            ? musicalGridPosCache.barStartSec
+            : 0;
+        let barEndSec = Number.isFinite(musicalGridPosCache.barEndSec)
+            ? musicalGridPosCache.barEndSec
+            : 0;
+        let entry = musicalGridPosCache.entry;
+
+        if (!entry || !(barEndSec > barStartSec + 1e-9) || t < barStartSec - 1e-9) {
+            barIndex = 0;
+            barStartSec = 0;
+            entry = null;
+            barEndSec = 0;
+        }
+        if (!entry) {
+            entry = getMeterEntryForBar(meterSpec, barIndex);
+            if (!entry) return null;
+            const barDur0 = entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
+            barEndSec = barStartSec + barDur0;
+        }
+        const maxBars = 48000;
+        let guard = 0;
+        while (t >= barEndSec - 1e-9 && guard < maxBars) {
+            barStartSec = barEndSec;
+            barIndex += 1;
+            entry = getMeterEntryForBar(meterSpec, barIndex);
+            if (!entry) break;
+            const barDur = entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
+            barEndSec = barStartSec + barDur;
+            guard += 1;
+            if (barStartSec >= maxSec - 1e-9) break;
+        }
+        if (!entry) return null;
+        musicalGridPosCache = {
+            meterKey,
+            barIndex,
+            barStartSec,
+            barEndSec,
+            entry,
+        };
+        return {
+            barIndex,
+            barStartSec,
+            barEndSec,
+            entry,
+            sec: t,
+        };
+    }
+
+    function formatMusicalGridPlayheadPosition(pos) {
+        if (!pos) return '---:--:--.---';
+        const sig = pos.entry.sig;
+        const beatDur = beatDurationSec(sig, pos.entry.bpm);
+        let beatInBar = Math.floor((pos.sec - pos.barStartSec) / beatDur);
+        if (!Number.isFinite(beatInBar)) beatInBar = 0;
+        beatInBar = Math.max(0, Math.min(sig.num - 1, beatInBar));
+        const beatStartSec = pos.barStartSec + beatInBar * beatDur;
+        const quarterDur = beatDur / 4;
+        let quarterInBeat = Math.floor((pos.sec - beatStartSec) / quarterDur);
+        if (!Number.isFinite(quarterInBeat)) quarterInBeat = 0;
+        quarterInBeat = Math.max(0, Math.min(3, quarterInBeat));
+        const quarterStartSec = beatStartSec + quarterInBeat * quarterDur;
+        let ms = Math.round((pos.sec - quarterStartSec) * 1000);
+        if (!Number.isFinite(ms)) ms = 0;
+        ms = Math.max(0, Math.min(999, ms));
+        const barText = String(pos.barIndex + 1).padStart(3, '0');
+        const beatText = String(beatInBar + 1).padStart(2, '0');
+        const quarterText = String(quarterInBeat + 1).padStart(2, '0');
+        const msText = String(ms).padStart(3, '0');
+        return barText + ':' + beatText + ':' + quarterText + '.' + msText;
+    }
+
+    function resolveMusicalGridPlayheadPositionText(sec) {
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return '---:--:--.---';
+        const maxSec =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(maxSec > 0)) return '---:--:--.---';
+        const pos = getMusicalGridBarBySec(settings.meterSpec, sec, maxSec);
+        return formatMusicalGridPlayheadPosition(pos);
+    }
+
     function musicalGridDrawSettings() {
         readMusicalGridFromInputs();
         if (!musicalGridMeterText) return null;
@@ -378,6 +487,7 @@
         const phraseRaw =
             s.phrase != null ? s.phrase : s.bars != null ? s.bars : '';
         musicalGridPhraseText = normalizeMusicalGridPhraseText(phraseRaw);
+        clearMusicalGridPositionCache();
         if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
         if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
         scheduleMusicalGridRedraw();
@@ -385,6 +495,7 @@
 
     function persistMusicalGridAndRedraw() {
         readMusicalGridFromInputs();
+        clearMusicalGridPositionCache();
         if (typeof writePrefs === 'function') writePrefs();
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
         scheduleMusicalGridRedraw();
@@ -392,6 +503,7 @@
 
     function bumpMeterTempoBy(delta) {
         readMusicalGridFromInputs();
+        clearMusicalGridPositionCache();
         let spec = parseMeterSpec(musicalGridMeterText);
         if (!spec) {
             const cur = parseMusicalGridTempoBpm(musicalGridMeterText);
@@ -1261,6 +1373,7 @@
     window.collectMusicalGridSnapStops = collectMusicalGridSnapStops;
     window.snapSecToMusicalGridStops = snapSecToMusicalGridStops;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
+    window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
 
     initMusicalGridUi();
 })();
