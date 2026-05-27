@@ -1,6 +1,8 @@
 (function waveformRegionModule() {
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
+    /** 結合境界のクロスフェード幅（分割点の手前のみ、境界以降は伸ばさない） */
+    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.08;
     const REGION_GAIN_DB_MIN = -96;
     const REGION_GAIN_DB_MAX = 10;
 
@@ -1268,12 +1270,56 @@
             const playbackStart = getSegmentPlaybackTimelineStart(track, i);
             const absEnd = getSegmentTimelineEnd(track, i);
             const absStart = forPlayback ? playbackStart : regionIn;
-            if (forPlayback && t < playbackStart - 0.0005) continue;
-            if (t < regionIn - 0.0005 || t >= absEnd - 0.002) continue;
-            const sourceSec =
-                t < playbackStart - 0.0005
-                    ? seg.sourceInSec
-                    : segmentSourceSecFromTransport(track, i, t);
+
+            const joinedNext =
+                forPlayback &&
+                i < segments.length - 1 &&
+                isSegmentBoundaryJoined(track, i);
+            const joinedPrev =
+                forPlayback && i > 0 && isSegmentBoundaryJoined(track, i - 1);
+            const boundaryNext = joinedNext ? absEnd : null;
+            const boundaryPrev = joinedPrev ? getSegmentTimelineStart(track, i) : null;
+            const inHandoffFromPrev =
+                joinedPrev &&
+                boundaryPrev != null &&
+                t >= boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC &&
+                t < boundaryPrev + 0.00001;
+            const inHandoffToNext =
+                joinedNext &&
+                boundaryNext != null &&
+                t >= boundaryNext - JOINED_BOUNDARY_CROSSFADE_SEC &&
+                t < boundaryNext + 0.00001;
+
+            if (t < regionIn - 0.0005) continue;
+            if (forPlayback) {
+                if (t < playbackStart - 0.0005 && !inHandoffFromPrev) continue;
+                if (t >= absEnd - 0.0005 && !inHandoffToNext) continue;
+            } else if (t >= absEnd - 0.002) {
+                continue;
+            }
+
+            let sourceSec;
+            if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
+                const fadeStart = boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC;
+                sourceSec = seg.sourceInSec + Math.max(0, t - fadeStart);
+            } else if (t < playbackStart - 0.0005) {
+                sourceSec = seg.sourceInSec;
+            } else {
+                sourceSec = segmentSourceSecFromTransport(track, i, t);
+            }
+
+            let timelineStart = absStart;
+            let timelineEnd = absEnd;
+            if (forPlayback && joinedPrev && boundaryPrev != null) {
+                timelineStart = Math.min(
+                    timelineStart,
+                    boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC,
+                );
+                timelineEnd = boundaryPrev;
+            } else if (forPlayback && joinedNext && boundaryNext != null) {
+                timelineEnd = boundaryNext;
+            }
+
             hits.push({
                 slot: track.slot,
                 segmentIndex: i,
@@ -1282,8 +1328,8 @@
                 sourceSec,
                 bufferOff: sourceSec,
                 remain: Math.max(0, seg.sourceOutSec - sourceSec),
-                timelineStart: absStart,
-                timelineEnd: absEnd,
+                timelineStart,
+                timelineEnd,
                 key: track.slot + ':' + (seg.id || 'i' + i),
             });
         }
@@ -1295,16 +1341,40 @@
         return hits.length ? hits[0] : null;
     }
 
+    function refreshSegmentHitAtTransport(track, hit, transportSec) {
+        const fresh = mapAllSegmentsAtTransport(track, transportSec, {
+            forPlayback: true,
+        }).find((h) => h.segmentIndex === hit.segmentIndex);
+        return fresh || hit;
+    }
+
     function getActiveExtraSegmentsAtTransport(transportSec) {
         const all = [];
+        const seen = new Set();
         const n =
             typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
-        const t = Number(transportSec);
+        let t = Number(transportSec);
         if (!Number.isFinite(t)) return all;
+        const scheduleAhead =
+            typeof window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC === 'number'
+                ? window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC
+                : 0.02;
+        const lookahead = scheduleAhead + JOINED_BOUNDARY_CROSSFADE_SEC + 0.01;
+        const probes = [t, t + lookahead];
         for (let slot = 0; slot < n; slot++) {
             const track = { type: 'extra', slot };
             if (!isTrackRegionActive(track)) continue;
-            all.push(...mapAllSegmentsAtTransport(track, t, { forPlayback: true }));
+            for (let p = 0; p < probes.length; p++) {
+                const hits = mapAllSegmentsAtTransport(track, probes[p], {
+                    forPlayback: true,
+                });
+                for (let i = 0; i < hits.length; i++) {
+                    const hit = hits[i];
+                    if (seen.has(hit.key)) continue;
+                    seen.add(hit.key);
+                    all.push(refreshSegmentHitAtTransport(track, hit, t));
+                }
+            }
         }
         return all;
     }
@@ -1365,7 +1435,7 @@
                 if (
                     oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC ||
                     t < oStart ||
-                    t >= oEnd - 0.0005
+                    t > oEnd
                 ) {
                     continue;
                 }
