@@ -751,6 +751,17 @@
         return stops;
     }
 
+    function resolveTimelineSnapPriorityMode() {
+        const markerActive =
+            typeof hasVisibleMarkersOnTimeline === 'function' &&
+            hasVisibleMarkersOnTimeline();
+        if (markerActive) return 'marker';
+        const musicalActive =
+            typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops();
+        if (musicalActive) return 'musical';
+        return 'region';
+    }
+
     function snapRegionTransportSec(sec, opt) {
         let n = snapTimelineSec(sec, opt);
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
@@ -760,20 +771,18 @@
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
             opt && typeof opt.sameSlotOnly === 'number' ? opt.sameSlotOnly : -1;
-        n = snapToNearestStop(
-            n,
-            collectRegionSnapStops(exclude, sameSlotOnly),
-            threshold,
-            opt,
-        );
-        if (typeof snapSecToMarkerInOut === 'function') {
-            n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
-        }
-        if (typeof snapSecToMusicalGridStops === 'function') {
-            n = snapSecToMusicalGridStops(n, {
-                thresholdSec: threshold,
-                altKey: opt && opt.altKey,
-            });
+        const priority = resolveTimelineSnapPriorityMode();
+        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
+            n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
+        } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
+            n = snapToNearestStop(n, collectMusicalGridSnapStops(), threshold, opt);
+        } else {
+            n = snapToNearestStop(
+                n,
+                collectRegionSnapStops(exclude, sameSlotOnly),
+                threshold,
+                opt,
+            );
         }
         return Math.max(0, n);
     }
@@ -828,20 +837,18 @@
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
             opt && typeof opt.sameSlotOnly === 'number' ? opt.sameSlotOnly : -1;
-        n = snapToNearestStop(
-            n,
-            collectRegionEndSnapStops(exclude, sameSlotOnly),
-            threshold,
-            opt,
-        );
-        if (typeof snapSecToMarkerInOut === 'function') {
-            n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
-        }
-        if (typeof snapSecToMusicalGridStops === 'function') {
-            n = snapSecToMusicalGridStops(n, {
-                thresholdSec: threshold,
-                altKey: opt && opt.altKey,
-            });
+        const priority = resolveTimelineSnapPriorityMode();
+        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
+            n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
+        } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
+            n = snapToNearestStop(n, collectMusicalGridSnapStops(), threshold, opt);
+        } else {
+            n = snapToNearestStop(
+                n,
+                collectRegionEndSnapStops(exclude, sameSlotOnly),
+                threshold,
+                opt,
+            );
         }
         return Math.max(0, n);
     }
@@ -860,14 +867,14 @@
     }
 
     function collectRegionMoveSnapStops(exclude) {
-        const stops = collectRegionSnapStops(exclude, -1);
-        if (typeof collectMarkerVideoEndSnapStops === 'function') {
-            const markerStops = collectMarkerVideoEndSnapStops();
-            for (let i = 0; i < markerStops.length; i++) {
-                stops.push(markerStops[i]);
-            }
+        const priority = resolveTimelineSnapPriorityMode();
+        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
+            return collectMarkerVideoEndSnapStops();
         }
-        return stops;
+        if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
+            return collectMusicalGridSnapStops();
+        }
+        return collectRegionSnapStops(exclude, -1);
     }
 
     /** リージョン平行移動: In/Out 両端のうち近い方でマーカー・他トラック In/Out・動画終端へスナップ */

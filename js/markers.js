@@ -1090,7 +1090,17 @@
         updateMarkerHideViewButton();
     }
 
+    function areMarkersHiddenOnTimeline() {
+        return !!markersDisplayHidden;
+    }
+
+    function hasVisibleMarkersOnTimeline() {
+        return !markersDisplayHidden && currentMarkers.length > 0;
+    }
+
     window.resetMarkersDisplayHidden = resetMarkersDisplayHidden;
+    window.areMarkersHiddenOnTimeline = areMarkersHiddenOnTimeline;
+    window.hasVisibleMarkersOnTimeline = hasVisibleMarkersOnTimeline;
     function getMarkerCommentBurnInMetrics(exportCanvasH, isRange) {
         const overlay = isRange ? markerCommentOverlayRange : markerCommentOverlayPoint;
         const textEl = markerCommentOverlayTextEl(overlay);
@@ -3400,19 +3410,17 @@
             typeof regionSnapThresholdSec === 'function'
                 ? regionSnapThresholdSec()
                 : markerNavStopEpsilonSec();
-        const stops = collectMarkerVideoEndSnapStops(
+        let stops = collectMarkerVideoEndSnapStops(
             m && m.id ? { excludeMarkerId: m.id } : undefined,
         );
-        if (typeof collectRegionSnapStops === 'function') {
-            const regionStops = collectRegionSnapStops(null, -1);
-            for (let i = 0; i < regionStops.length; i++) {
-                stops.push(regionStops[i]);
-            }
-        }
-        if (typeof collectMusicalGridSnapStops === 'function') {
-            const gridStops = collectMusicalGridSnapStops();
-            for (let i = 0; i < gridStops.length; i++) {
-                stops.push(gridStops[i]);
+        if (markersDisplayHidden || currentMarkers.length === 0) {
+            if (typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops()) {
+                stops =
+                    typeof collectMusicalGridSnapStops === 'function'
+                        ? collectMusicalGridSnapStops()
+                        : [];
+            } else if (typeof collectRegionSnapStops === 'function') {
+                stops = collectRegionSnapStops(null, -1);
             }
         }
         if (!stops.length) return n;
@@ -3894,20 +3902,23 @@
                 focusComment: false,
                 resumeAfterSeek: wasPlaying,
             };
-            const phraseNavActive =
-                typeof getMusicalGridPhraseFillVisible === 'function' &&
-                getMusicalGridPhraseFillVisible() &&
-                typeof getPhraseGroupRangesSnapshot === 'function' &&
-                getPhraseGroupRangesSnapshot().length > 0;
+            const markerNavActive = !markersDisplayHidden && currentMarkers.length > 0;
+            const musicalNavActive =
+                typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops();
+            if (markerNavActive) {
+                e.preventDefault();
+                jumpToAdjacentMarkerStop(dir, navOpt);
+                return true;
+            }
             if (
-                phraseNavActive &&
-                typeof jumpToAdjacentPhrase === 'function' &&
-                jumpToAdjacentPhrase(dir, navOpt)
+                musicalNavActive &&
+                typeof jumpToAdjacentMusicalGridStop === 'function' &&
+                jumpToAdjacentMusicalGridStop(dir, navOpt)
             ) {
                 e.preventDefault();
                 return true;
             }
-            if (phraseNavActive) {
+            if (musicalNavActive) {
                 return false;
             }
             if (markersDisplayHidden) {
@@ -3916,9 +3927,9 @@
                 e.preventDefault();
                 return true;
             }
-            if (currentMarkers.length === 0) return false;
+            if (typeof jumpToAdjacentRegionStop !== 'function') return false;
+            if (!jumpToAdjacentRegionStop(dir, navOpt)) return false;
             e.preventDefault();
-            jumpToAdjacentMarkerStop(dir, navOpt);
             return true;
         }
 

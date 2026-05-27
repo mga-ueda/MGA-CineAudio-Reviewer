@@ -932,7 +932,22 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
-        return collectBarBoundarySecs(settings.meterSpec, master);
+        const zoom = typeof getWaveformTimelineZoom === 'function' ? getWaveformTimelineZoom() : 1;
+        const showBeats = zoom >= 10;
+        const lines = collectMusicalGridLines(settings.meterSpec, master, { showBeats });
+        if (!lines.length) return [];
+        const stops = [];
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (
+                line &&
+                (line.kind === 'bar' || line.kind === 'beat') &&
+                Number.isFinite(line.sec)
+            ) {
+                stops.push(line.sec);
+            }
+        }
+        return stops;
     }
 
     function collectPhraseGroupSnapStops() {
@@ -958,6 +973,99 @@
             }
         }
         return deduped;
+    }
+
+    function hasMusicalGridSnapStops() {
+        return collectMusicalGridSnapStops().length > 0;
+    }
+
+    function musicalGridNavStopEpsilonSec() {
+        if (typeof regionNavStopEpsilonSec === 'function') {
+            return regionNavStopEpsilonSec();
+        }
+        if (typeof markerNavStopEpsilonSec === 'function') {
+            return markerNavStopEpsilonSec();
+        }
+        return 0.05;
+    }
+
+    function musicalGridNavStopIndexForCurrent(stops) {
+        if (!stops || !stops.length) return -1;
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const eps = musicalGridNavStopEpsilonSec();
+        let best = -1;
+        for (let i = 0; i < stops.length; i++) {
+            if (stops[i] <= t + eps) best = i;
+            else break;
+        }
+        return best;
+    }
+
+    function seekToMusicalGridNavStop(stopSec, opt) {
+        if (!Number.isFinite(stopSec)) return false;
+        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        let target = stopSec;
+        if (typeof clampTransportSec === 'function') {
+            target = clampTransportSec(target);
+        }
+        if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+            suppressRangeLoopSnapForExplicitSeek();
+        }
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(target, { resumeAfter: resumeAfter });
+        } else if (typeof applyTimeToVideo === 'function') {
+            applyTimeToVideo(target);
+        }
+        if (typeof setTransportSec === 'function') {
+            setTransportSec(target);
+        }
+        if (typeof updateAllWaveformPlayheads === 'function') {
+            updateAllWaveformPlayheads();
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const hintTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(target)
+                : String(target);
+        if (typeof writeLog === 'function') {
+            writeLog('Grid: seek to ' + hintTc);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Grid', hintTc);
+        }
+        return true;
+    }
+
+    function jumpToAdjacentMusicalGridStop(dir, opt) {
+        const stops = collectMusicalGridSnapStops();
+        const n = stops.length;
+        if (!n) return false;
+        const idx = musicalGridNavStopIndexForCurrent(stops);
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const eps = musicalGridNavStopEpsilonSec();
+        let next;
+        if (idx < 0) {
+            if (dir <= 0) return false;
+            next = 0;
+        } else if (dir < 0 && t > stops[idx] + eps) {
+            next = idx;
+        } else if (dir > 0 && t < stops[idx] - eps) {
+            next = idx;
+        } else {
+            next = idx + dir;
+            if (next < 0 || next >= n) return false;
+        }
+        return seekToMusicalGridNavStop(stops[next], opt);
     }
 
     function snapSecToMusicalGridStops(sec, opt) {
@@ -1391,8 +1499,10 @@
     window.resolveMusicalGridNumpadSeekSec = resolveMusicalGridNumpadSeekSec;
     window.getPhraseGroupRangesSnapshot = getPhraseGroupRangesSnapshot;
     window.resolvePhraseGroupAtTransportSec = resolvePhraseGroupAtTransportSec;
+    window.hasMusicalGridSnapStops = hasMusicalGridSnapStops;
     window.collectMusicalGridSnapStops = collectMusicalGridSnapStops;
     window.snapSecToMusicalGridStops = snapSecToMusicalGridStops;
+    window.jumpToAdjacentMusicalGridStop = jumpToAdjacentMusicalGridStop;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
 
