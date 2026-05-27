@@ -204,13 +204,14 @@
         writeLog(
             'Keyboard: Alt+Enter -> replay from ' + formatTimecodeForTransport(target)
         );
-        if (playStopBtn) playStopBtn.click();
+        await playTransportAfterKeyboardSeek();
         return true;
     }
 
     window.rememberTransportPlaybackStartSec = rememberTransportPlaybackStartSec;
     window.clearTransportPlaybackStartSec = clearTransportPlaybackStartSec;
     window.replayTransportFromPlaybackStart = replayTransportFromPlaybackStart;
+    window.playTransportAfterKeyboardSeek = playTransportAfterKeyboardSeek;
 
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {
@@ -706,6 +707,36 @@
         })();
 
         return transportPlayInFlight;
+    }
+
+    /** キーボードのジャンプ後に必ず再生する（Play ボタンのトグルは使わない） */
+    async function playTransportAfterKeyboardSeek() {
+        const ready =
+            typeof transportControlsReady === 'function'
+                ? transportControlsReady()
+                : typeof videoReady === 'function' && videoReady();
+        if (!ready) return false;
+        if (typeof requestScrollToPlayerStageOnNextPlay === 'function') {
+            requestScrollToPlayerStageOnNextPlay();
+        }
+        if (typeof endAudioWaveformScrub === 'function') {
+            endAudioWaveformScrub({ force: true });
+        }
+        isSeeking = false;
+        const mixCtx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        if (mixCtx && mixCtx.state === 'suspended') {
+            try {
+                await mixCtx.resume();
+            } catch (_) {}
+        }
+        if (typeof applyReviewMixVideoGain === 'function') {
+            applyReviewMixVideoGain();
+        }
+        if (typeof startVideoPlayback === 'function') {
+            return startVideoPlayback({ force: true });
+        }
+        return false;
     }
 
     async function resumeTransportPlaybackAfterSeek() {

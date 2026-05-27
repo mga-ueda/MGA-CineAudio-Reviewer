@@ -719,7 +719,11 @@
                     'Keyboard: Ctrl+Space -> preroll play from ' +
                         formatTimecodeForTransport(target)
                 );
-                playStopBtn.click();
+                if (typeof playTransportAfterKeyboardSeek === 'function') {
+                    await playTransportAfterKeyboardSeek();
+                } else if (playStopBtn) {
+                    playStopBtn.click();
+                }
             })();
             return;
         }
