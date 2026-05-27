@@ -1616,22 +1616,30 @@
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', persistMusicalGridAndRedraw);
             musicalGridMeterInput.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                const shortcuts = window.SHORTCUTS || {};
+                const matches =
+                    typeof window.matchesShortcut === 'function'
+                        ? window.matchesShortcut
+                        : () => false;
+                if (
+                    matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ||
+                    matches(e, shortcuts.musicalGridInputArrowDown, { allowRepeat: true })
+                ) {
                     e.preventDefault();
-                    const dir = e.key === 'ArrowUp' ? 1 : -1;
+                    const dir = matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ? 1 : -1;
                     const bpmStep = (e.shiftKey ? 10 : 1) * dir;
                     const sigStep = dir;
                     bumpMeterFieldBy(bpmStep, sigStep);
                     return;
                 }
-                if (e.key === 'Enter') {
+                if (matches(e, shortcuts.submitEditing, { allowRepeat: true })) {
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridMeterInput.blur();
                     focusWaveformTrackFromInput();
                     return;
                 }
-                if (e.key === 'Escape') {
+                if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridMeterInput.blur();
                     focusWaveformTrackFromInput();
@@ -1642,20 +1650,32 @@
             musicalGridPhraseInput.addEventListener('input', onInput);
             musicalGridPhraseInput.addEventListener('change', persistMusicalGridAndRedraw);
             musicalGridPhraseInput.addEventListener('keydown', (e) => {
-                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                const shortcuts = window.SHORTCUTS || {};
+                const matches =
+                    typeof window.matchesShortcut === 'function'
+                        ? window.matchesShortcut
+                        : () => false;
+                if (
+                    matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ||
+                    matches(e, shortcuts.musicalGridInputArrowDown, { allowRepeat: true })
+                ) {
                     e.preventDefault();
                     const step = e.shiftKey ? 10 : 1;
-                    bumpPhraseSizeBy(e.key === 'ArrowUp' ? step : -step);
+                    bumpPhraseSizeBy(
+                        matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true })
+                            ? step
+                            : -step,
+                    );
                     return;
                 }
-                if (e.key === 'Enter') {
+                if (matches(e, shortcuts.submitEditing, { allowRepeat: true })) {
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridPhraseInput.blur();
                     focusWaveformTrackFromInput();
                     return;
                 }
-                if (e.key === 'Escape') {
+                if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridPhraseInput.blur();
                     focusWaveformTrackFromInput();

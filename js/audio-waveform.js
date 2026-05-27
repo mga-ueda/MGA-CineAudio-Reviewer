@@ -1919,6 +1919,11 @@
         }
 
         lanes.addEventListener('keydown', (ev) => {
+            const shortcuts = window.SHORTCUTS || {};
+            const matches =
+                typeof window.matchesShortcut === 'function'
+                    ? window.matchesShortcut
+                    : () => false;
             if (
                 (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                     handlePlaybackRegionSplitKeydown(ev)) ||
@@ -1937,11 +1942,11 @@
             let ratio = transportRatioFromMasterSec(
                 typeof getTransportSec === 'function' ? getTransportSec() : 0,
             );
-            if (ev.code === 'Home') ratio = 0;
-            else if (ev.code === 'End') ratio = 1;
-            else if (ev.code === 'ArrowLeft')
+            if (matches(ev, shortcuts.waveformLaneSeekHome, { allowRepeat: true })) ratio = 0;
+            else if (matches(ev, shortcuts.waveformLaneSeekEnd, { allowRepeat: true })) ratio = 1;
+            else if (matches(ev, shortcuts.waveformLaneSeekPrev, { allowRepeat: true }))
                 ratio = Math.max(0, ratio - masterFrameSec / master);
-            else if (ev.code === 'ArrowRight')
+            else if (matches(ev, shortcuts.waveformLaneSeekNext, { allowRepeat: true }))
                 ratio = Math.min(1, ratio + masterFrameSec / master);
             else return;
             ev.preventDefault();

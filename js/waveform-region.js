@@ -3991,11 +3991,15 @@
     }
 
     function handlePlaybackRegionMixKeydown(e) {
-        if (e.ctrlKey || e.altKey || e.metaKey) return false;
-        const isSoloMute = e.code === 'KeyS' || e.code === 'KeyM';
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        const isSolo = matches(e, shortcuts.mixLaneSoloToggle);
+        const isMute = matches(e, shortcuts.mixLaneMuteToggle);
+        const isSoloMute = isSolo || isMute;
         if (!isSoloMute) return false;
-        if (e.repeat) return false;
-        if (isSoloMute && e.shiftKey) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4022,14 +4026,14 @@
         if (idx < 0) return false;
 
         e.preventDefault();
-        if (e.code === 'KeyS') {
+        if (isSolo) {
             if (typeof window.toggleMixSoloByDisplayIndex === 'function') {
                 window.toggleMixSoloByDisplayIndex(idx);
                 return true;
             }
             return false;
         }
-        if (e.code === 'KeyM') {
+        if (isMute) {
             if (typeof window.toggleMixMuteByDisplayIndex === 'function') {
                 window.toggleMixMuteByDisplayIndex(idx);
                 return true;
@@ -4360,9 +4364,12 @@
     }
 
     function handlePlaybackRegionJoinKeydown(e) {
-        if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
-        if (e.code !== 'KeyB') return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionJoin)) return false;
         if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         joinPlaybackRegionAtPointer();
@@ -4379,8 +4386,12 @@
     }
 
     function isPlaybackRegionSplitKeyEvent(e) {
-        if (!e || e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
-        return e.code === 'KeyX';
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        return matches(e, shortcuts.regionSplit);
     }
 
     function handlePlaybackRegionSlashKeydown(e) {
@@ -4388,9 +4399,12 @@
     }
 
     function handlePlaybackRegionUndoKeydown(e) {
-        if (e.code !== 'KeyZ') return false;
-        if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionUndo)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4401,9 +4415,12 @@
     }
 
     function handlePlaybackRegionRedoKeydown(e) {
-        if (e.code !== 'KeyZ') return false;
-        if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionRedo)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4414,8 +4431,13 @@
     }
 
     function handlePlaybackRegionDeleteKeydown(e) {
-        if (e.code !== 'Delete' && e.code !== 'Backspace') return false;
-        if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionDelete)) return false;
+        if (e.shiftKey) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4426,9 +4448,12 @@
     }
 
     function handlePlaybackRegionCopyKeydown(e) {
-        if (e.code !== 'KeyC') return false;
-        if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionCopy)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4439,9 +4464,12 @@
     }
 
     function handlePlaybackRegionPasteKeydown(e) {
-        if (e.code !== 'KeyV') return false;
-        if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionPaste)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -4452,8 +4480,12 @@
     }
 
     function handlePlaybackRegionEscapeKeydown(e) {
-        if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
-        if (e.repeat) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.regionEscape)) return false;
         if (regionHandleDragActive) {
             endRegionHandleDrag({ cancelled: true });
             return true;

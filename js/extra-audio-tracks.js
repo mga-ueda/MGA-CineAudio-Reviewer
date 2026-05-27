@@ -1416,8 +1416,14 @@
     }
 
     function handleActiveMixLaneVolumeKeydown(e) {
-        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return false;
-        if (e.code !== 'PageUp' && e.code !== 'PageDown') return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        const isUp = matches(e, shortcuts.mixLaneVolumeUp, { allowRepeat: true });
+        const isDown = matches(e, shortcuts.mixLaneVolumeDown, { allowRepeat: true });
+        if (!isUp && !isDown) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -1441,7 +1447,7 @@
         if (idx < 0) return false;
 
         e.preventDefault();
-        const deltaDb = e.code === 'PageUp' ? 1 : -1;
+        const deltaDb = isUp ? 1 : -1;
         adjustMixLaneVolumeByDisplayIndex(idx, deltaDb);
         return true;
     }
@@ -3396,13 +3402,12 @@
     }
 
     function handleExtraTrackAddShortcutKeydown(e) {
-        if (
-            e.repeat ||
-            !(e.ctrlKey || e.metaKey) ||
-            e.altKey ||
-            e.shiftKey ||
-            e.code !== 'KeyN'
-        ) {
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.addExtraTrack)) {
             return false;
         }
         e.preventDefault();

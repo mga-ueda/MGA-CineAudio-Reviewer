@@ -347,8 +347,21 @@
     );
 
     window.addEventListener('keydown', (e) => {
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        const isCodeInGroup =
+            typeof window.isShortcutCodeInGroup === 'function'
+                ? window.isShortcutCodeInGroup
+                : () => false;
+        const getNumpadSeekDigit =
+            typeof window.getNumpadSeekDigit === 'function'
+                ? window.getNumpadSeekDigit
+                : () => null;
         if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
-            if (e.code === 'Escape') {
+            if (matches(e, shortcuts.regionEscape)) {
                 e.preventDefault();
                 if (typeof tryCancelWebmExportFromEsc === 'function') {
                     tryCancelWebmExportFromEsc();
@@ -359,14 +372,7 @@
             return;
         }
 
-        if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey &&
-            e.code === 'KeyO'
-        ) {
+        if (matches(e, shortcuts.transportOptionsToggle)) {
             const transportOptionsSection = document.getElementById('transportOptionsSection');
             if (!transportOptionsSection) return;
             e.preventDefault();
@@ -487,12 +493,7 @@
         }
 
         if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey &&
-            e.code === 'KeyT' &&
+            matches(e, shortcuts.musicalGridToggle) &&
             typeof toggleMusicalGridVisible === 'function'
         ) {
             e.preventDefault();
@@ -501,12 +502,7 @@
         }
 
         if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey &&
-            e.code === 'KeyP' &&
+            matches(e, shortcuts.musicalGridPhraseToggle) &&
             typeof toggleMusicalGridPhraseFillVisible === 'function'
         ) {
             e.preventDefault();
@@ -515,12 +511,7 @@
         }
 
         if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey &&
-            e.code === 'KeyC' &&
+            matches(e, shortcuts.playheadCenterLockToggle) &&
             typeof togglePlayheadCenterLock === 'function'
         ) {
             if (
@@ -557,56 +548,12 @@
         }
 
         if (typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive()) {
-            const appKey =
-                e.code === 'Space' ||
-                e.code === 'ArrowLeft' ||
-                e.code === 'ArrowRight' ||
-                /^Numpad[0-9]$/.test(e.code) ||
-                e.code === 'KeyL' ||
-                e.code === 'KeyA' ||
-                e.code === 'KeyM' ||
-                e.code === 'KeyS' ||
-                e.code === 'KeyV' ||
-                e.code === 'KeyX' ||
-                e.code === 'KeyB' ||
-                e.code === 'KeyF' ||
-                e.code === 'KeyZ' ||
-                e.code === 'Insert' ||
-                e.code === 'IntlYen' ||
-                e.code === 'Backslash' ||
-                e.code === 'Equal' ||
-                e.code === 'Minus' ||
-                e.code === 'NumpadAdd' ||
-                e.code === 'NumpadSubtract' ||
-                e.code === 'PageUp' ||
-                e.code === 'PageDown';
+            const appKey = isCodeInGroup(e.code, 'scrubStopCodes');
             if (appKey && typeof endAudioWaveformScrub === 'function') endAudioWaveformScrub();
         }
         const waveFocus = audioWaveformLanesTracks || audioWaveformTrack;
         if (waveFocus && document.activeElement === waveFocus) {
-            const appKey =
-                e.code === 'Space' ||
-                e.code === 'ArrowLeft' ||
-                e.code === 'ArrowRight' ||
-                /^Numpad[0-9]$/.test(e.code) ||
-                e.code === 'KeyL' ||
-                e.code === 'KeyA' ||
-                e.code === 'KeyM' ||
-                e.code === 'KeyS' ||
-                e.code === 'KeyV' ||
-                e.code === 'KeyF' ||
-                e.code === 'KeyZ' ||
-                e.code === 'Insert' ||
-                e.code === 'IntlYen' ||
-                e.code === 'Backslash' ||
-                e.code === 'Equal' ||
-                e.code === 'Minus' ||
-                e.code === 'NumpadAdd' ||
-                e.code === 'NumpadSubtract' ||
-                e.code === 'KeyX' ||
-                e.code === 'KeyB' ||
-                e.code === 'PageUp' ||
-                e.code === 'PageDown';
+            const appKey = isCodeInGroup(e.code, 'scrubStopCodes');
             if (appKey && waveFocus) waveFocus.blur();
         }
 
@@ -617,17 +564,12 @@
             return;
         }
 
-        const isArrowKey = e.code === 'ArrowLeft' || e.code === 'ArrowRight';
+        const isArrowKey =
+            matches(e, shortcuts.transportSeekArrowLeft, { allowRepeat: true }) ||
+            matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true });
         if (e.repeat && !isArrowKey) return;
 
-        if (
-            !e.repeat &&
-            !e.ctrlKey &&
-            !e.altKey &&
-            !e.metaKey &&
-            !e.shiftKey &&
-            e.code === 'KeyL'
-        ) {
+        if (matches(e, shortcuts.loopToggle)) {
             if (!loopPlaybackCheckbox) return;
             e.preventDefault();
             loopPlaybackCheckbox.checked = !loopPlaybackCheckbox.checked;
@@ -643,19 +585,8 @@
             return;
         }
 
-        const numpadSeekDigit = {
-            Numpad0: 0,
-            Numpad1: 1,
-            Numpad2: 2,
-            Numpad3: 3,
-            Numpad4: 4,
-            Numpad5: 5,
-            Numpad6: 6,
-            Numpad7: 7,
-            Numpad8: 8,
-            Numpad9: 9,
-        };
-        if (Object.prototype.hasOwnProperty.call(numpadSeekDigit, e.code)) {
+        const numpadDigit = getNumpadSeekDigit(e.code);
+        if (numpadDigit != null) {
             if (e.repeat) return;
             if (
                 typeof transportControlsReady !== 'function' ||
@@ -664,7 +595,7 @@
                 return;
             }
             e.preventDefault();
-            const d = numpadSeekDigit[e.code];
+            const d = numpadDigit;
             const dur =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
@@ -713,14 +644,7 @@
             return;
         }
 
-        if (
-            (e.code === 'Enter' || e.code === 'NumpadEnter') &&
-            e.altKey &&
-            !e.ctrlKey &&
-            !e.metaKey &&
-            !e.shiftKey
-        ) {
-            if (e.repeat) return;
+        if (matches(e, shortcuts.replayFromPlaybackStart)) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -740,13 +664,7 @@
             return;
         }
 
-        if (
-            e.code === 'Space' &&
-            (e.ctrlKey || e.metaKey) &&
-            !e.altKey &&
-            !e.shiftKey
-        ) {
-            if (e.repeat) return;
+        if (matches(e, shortcuts.prerollPlay)) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -779,8 +697,7 @@
             return;
         }
 
-        if (e.code === 'Space') {
-            if (e.repeat) return;
+        if (matches(e, shortcuts.transportToggle)) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -793,7 +710,10 @@
             return;
         }
 
-        if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        if (
+            matches(e, shortcuts.transportSeekArrowLeft, { allowRepeat: true }) ||
+            matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true })
+        ) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -809,7 +729,7 @@
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
-            const dir = e.code === 'ArrowRight' ? 1 : -1;
+            const dir = matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true }) ? 1 : -1;
             let stepSec;
             if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
                 stepSec = 10;
@@ -844,7 +764,8 @@
                 } else {
                     stepLabel = 'Frame ±1f';
                 }
-                const arrow = e.code === 'ArrowRight' ? 'ArrowRight' : 'ArrowLeft';
+                const arrow =
+                    dir > 0 ? shortcuts.transportSeekArrowRight.code : shortcuts.transportSeekArrowLeft.code;
                 const line =
                     'Seek keyboard: ' +
                     arrow +
@@ -877,7 +798,7 @@
     document.addEventListener(
         'keydown',
         (e) => {
-            if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
+            if (matches(e, shortcuts.altSnapModifier, { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(true);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
                     window.refreshPlaybackRegionHoverCursorLine();
@@ -889,7 +810,7 @@
     document.addEventListener(
         'keyup',
         (e) => {
-            if (e.key === 'Alt' && typeof setAltKeySnapSuppressed === 'function') {
+            if (matches(e, shortcuts.altSnapModifier, { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(false);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
                     window.refreshPlaybackRegionHoverCursorLine();
@@ -909,8 +830,7 @@
             return;
         }
 
-        if (e.code !== 'PageUp' && e.code !== 'PageDown') return;
-        if (e.ctrlKey || e.altKey || e.metaKey) return;
+        if (!matches(e, shortcuts.releaseExtraTrackUnityHold, { allowRepeat: true })) return;
         if (typeof window.clearExtraTrackVolumeUnityHold === 'function') {
             window.clearExtraTrackVolumeUnityHold();
         }

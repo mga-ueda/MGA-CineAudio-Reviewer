@@ -1240,34 +1240,24 @@
     function handleSessionIoShortcutKeydown(e) {
         if (!e || e.repeat) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
 
-        if (
-            e.altKey &&
-            e.shiftKey &&
-            (e.ctrlKey || e.metaKey) &&
-            e.code === 'Delete'
-        ) {
+        if (matches(e, shortcuts.sessionAllClear)) {
             e.preventDefault();
             triggerAllClear();
             return true;
         }
 
-        if (
-            e.altKey &&
-            e.shiftKey &&
-            (e.ctrlKey || e.metaKey) &&
-            e.code === 'KeyI'
-        ) {
+        if (matches(e, shortcuts.sessionImport)) {
             e.preventDefault();
             triggerImportReview();
             return true;
         }
-        if (
-            e.altKey &&
-            e.shiftKey &&
-            (e.ctrlKey || e.metaKey) &&
-            e.code === 'KeyE'
-        ) {
+        if (matches(e, shortcuts.sessionExport)) {
             e.preventDefault();
             triggerExportReview();
             return true;

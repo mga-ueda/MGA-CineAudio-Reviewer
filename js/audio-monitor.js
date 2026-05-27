@@ -1775,8 +1775,12 @@ window.addEventListener('resize', () => {
 
     function handleMasterVolShortcutKeydown(e) {
         if (!e || e.repeat) return false;
-        if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return false;
-        if (e.code !== 'KeyV') return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.masterVolumeResetUnity)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
         e.preventDefault();
         applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, true);
@@ -1786,8 +1790,12 @@ window.addEventListener('resize', () => {
 
     function handleAnalyzeShortcutKeydown(e) {
         if (!e || e.repeat) return false;
-        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return false;
-        if (e.code !== 'KeyA') return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.analyzeToggle)) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
         e.preventDefault();
         toggleAnalyzeOn();

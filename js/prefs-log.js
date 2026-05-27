@@ -95,7 +95,12 @@
         cancelBtn.addEventListener('click', () => closeAppConfirm(false));
         okBtn.addEventListener('click', () => closeAppConfirm(true));
         root.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
+            const shortcuts = window.SHORTCUTS || {};
+            const matches =
+                typeof window.matchesShortcut === 'function'
+                    ? window.matchesShortcut
+                    : () => false;
+            if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
                 e.preventDefault();
                 closeAppConfirm(appConfirmOkOnly);
             }
