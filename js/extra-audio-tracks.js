@@ -160,7 +160,7 @@
     }
 
     /** 意図したクロスフェードとみなす最小重なり（境界接触のみは除外） */
-    const MIN_CROSSFADE_OVERLAP_SEC = 0.02;
+    const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
 
     /** 重なりペアのフェードアウト／イン: タイムライン上で先に始まった方が cos（アウト）、後から始まった方が sin（イン）。 */
     function crossfadeOutInIndices(active, i, j) {
@@ -315,13 +315,35 @@
         return true;
     }
 
-    function pruneExtraSegmentSourcesToActive(allActiveAtT) {
+    function shouldHoldOutgoingSegmentSource(slot, outgoingKey, allActiveAtT, ctx) {
+        if (!ctx) return false;
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.segmentSources || !tr.segmentSources[outgoingKey]) return false;
+        if (wantedSegmentKeysForSlot(slot, allActiveAtT).has(outgoingKey)) return false;
+        for (let h = 0; h < allActiveAtT.length; h++) {
+            const segHit = allActiveAtT[h];
+            if (segHit.slot !== slot || segHit.key === outgoingKey) continue;
+            const incoming = tr.segmentSources[segHit.key];
+            if (!incoming || !incoming.src) return true;
+            if (!isSegmentSourceAudibleOnCtx(incoming, ctx)) return true;
+        }
+        return false;
+    }
+
+    function pruneExtraSegmentSourcesToActive(allActiveAtT, ctx) {
+        const mixCtx = ctx || ensureReviewMixCtx();
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
             if (!tr || !tr.segmentSources) continue;
             const wanted = wantedSegmentKeysForSlot(i, allActiveAtT);
             for (const k of Object.keys(tr.segmentSources)) {
                 if (!wanted.has(k)) {
+                    if (
+                        mixCtx &&
+                        shouldHoldOutgoingSegmentSource(i, k, allActiveAtT, mixCtx)
+                    ) {
+                        continue;
+                    }
                     stopExtraTrackSegmentSourceEntry(tr.segmentSources[k]);
                     delete tr.segmentSources[k];
                 }
@@ -382,22 +404,22 @@
             return;
         }
         ensureExtraTrackMixRouting(slot, ctx);
-        const anchorT = Number.isFinite(opt.transportSec)
-            ? opt.transportSec
-            : typeof getAudioSyncTransportSec === 'function'
-              ? getAudioSyncTransportSec()
-              : typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : 0;
+        const syncT =
+            typeof getSegmentMappingTransportSec === 'function'
+                ? getSegmentMappingTransportSec()
+                : typeof getAudioSyncTransportSec === 'function'
+                  ? getAudioSyncTransportSec()
+                  : 0;
+        const anchorT = Number.isFinite(opt.transportSec) ? opt.transportSec : syncT;
         stopExtraTrackSegmentSourceEntry(existing);
-        const off = Math.max(0, segHit.bufferOff);
-        const remain = Math.max(0, segHit.remain);
-        if (remain <= 0.002) return;
-        const maxOff = Math.max(0, clip.buffer.duration - 0.002);
-        const startAt = Math.min(off, maxOff);
+        const trackRef = { type: 'extra', slot };
         let when = Number.isFinite(scheduleWhen)
             ? scheduleWhen
             : acquireExtraMixScheduleTime(ctx, opt);
+        let playTransportSec = anchorT;
+        let startAt = Math.max(0, segHit.bufferOff);
+        let remain = Math.max(0, segHit.remain);
+        let usedJoinedPlan = false;
         const othersPlaying =
             tr.segmentSources &&
             Object.keys(tr.segmentSources).some((k) => {
@@ -405,21 +427,66 @@
                 const e = tr.segmentSources[k];
                 return e && e.src;
             });
-        if (othersPlaying) {
-            when = Math.min(
-                when,
-                ctx.currentTime + EXTRA_AUDIO_SEGMENT_ADD_AHEAD_SEC,
-            );
-        }
         if (
-            Number.isFinite(segHit.timelineStart) &&
-            Number.isFinite(anchorT) &&
-            anchorT < segHit.timelineStart - 0.0005
+            othersPlaying &&
+            segHit.segmentIndex > 0 &&
+            typeof planIncomingSegmentStartAtJoinedBoundary === 'function'
         ) {
-            const leadSec = segHit.timelineStart - anchorT;
-            const alignedWhen = ctx.currentTime + Math.max(0.002, leadSec - 0.001);
-            when = Math.min(when, alignedWhen);
+            let leftEntry = null;
+            for (const k of Object.keys(tr.segmentSources)) {
+                if (k === key) continue;
+                const e = tr.segmentSources[k];
+                if (e && e.src) {
+                    leftEntry = e;
+                    break;
+                }
+            }
+            const plan = planIncomingSegmentStartAtJoinedBoundary(
+                trackRef,
+                segHit.segmentIndex,
+                ctx,
+                { leftEntry, mapTransportSec: anchorT },
+            );
+            if (plan) {
+                when = plan.whenCtx;
+                startAt = plan.bufferOff;
+                remain = plan.remain;
+                playTransportSec = plan.transportAnchor;
+                usedJoinedPlan = true;
+            }
         }
+        if (!usedJoinedPlan) {
+            if (othersPlaying) {
+                when = Math.min(
+                    when,
+                    ctx.currentTime + EXTRA_AUDIO_SEGMENT_ADD_AHEAD_SEC,
+                );
+            }
+            if (
+                Number.isFinite(segHit.timelineStart) &&
+                Number.isFinite(anchorT) &&
+                anchorT < segHit.timelineStart - 0.0005
+            ) {
+                const leadSec = segHit.timelineStart - anchorT;
+                const alignedWhen = ctx.currentTime + Math.max(0.002, leadSec - 0.001);
+                when = Math.min(when, alignedWhen);
+            }
+            playTransportSec = anchorT + Math.max(0, when - ctx.currentTime);
+            let liveHit = segHit;
+            if (typeof refreshSegmentHitAtTransport === 'function') {
+                const refreshed = refreshSegmentHitAtTransport(
+                    trackRef,
+                    segHit,
+                    playTransportSec,
+                );
+                if (refreshed) liveHit = refreshed;
+            }
+            startAt = Math.max(0, liveHit.bufferOff);
+            remain = Math.max(0, liveHit.remain);
+        }
+        if (remain <= 0.002) return;
+        const maxOff = Math.max(0, clip.buffer.duration - 0.002);
+        startAt = Math.min(startAt, maxOff);
         const src = ctx.createBufferSource();
         src.buffer = clip.buffer;
         const segGain = ctx.createGain();
@@ -430,13 +497,13 @@
         tr.segmentSources[key] = {
             src,
             segGain,
-            transportAnchor: anchorT,
+            transportAnchor: playTransportSec,
             playbackAnchorCtxTime: when,
             bufferOff: startAt,
             lastAppliedGain: Math.max(0, gainLinear),
         };
         tr.source = src;
-        tr.playbackAnchorTransportSec = opt.transportSec;
+        tr.playbackAnchorTransportSec = playTransportSec;
         tr.playbackAnchorCtxTime = when;
         src.onended = () => {
             if (tr.segmentSources[key] && tr.segmentSources[key].src === src) {
@@ -1922,7 +1989,9 @@
             const tr = extraTrackBySlot(i);
             if (!tr || !shouldExtraTrackSourceBePlaying(i)) continue;
             ensureExtraTrackMixRouting(i, ctx);
-            const activeAtT = allActiveAtT.filter((s) => s.slot === i);
+            const activeAtT = allActiveAtT
+                .filter((s) => s.slot === i)
+                .sort((a, b) => a.segmentIndex - b.segmentIndex);
             for (const segHit of activeAtT) {
                 const g = segmentPlaybackGainLinear(
                     segHit,
@@ -1930,9 +1999,56 @@
                 );
                 const existing = tr.segmentSources && tr.segmentSources[segHit.key];
                 if (!existing || !existing.src) {
+                    if (
+                        segHit.segmentIndex > 0 &&
+                        typeof isSegmentSourceContinuousAtBoundary === 'function' &&
+                        isSegmentSourceContinuousAtBoundary(
+                            trackRef,
+                            segHit.segmentIndex - 1,
+                        ) &&
+                        typeof refreshSegmentHitAtTransport === 'function'
+                    ) {
+                        const priorAudible = Object.keys(
+                            tr.segmentSources || {},
+                        ).filter(
+                            (k) =>
+                                tr.segmentSources[k] &&
+                                tr.segmentSources[k].src,
+                        );
+                        if (priorAudible.length === 1) {
+                            const leftHit = activeAtT.find(
+                                (s) =>
+                                    s.segmentIndex === segHit.segmentIndex - 1,
+                            );
+                            const refreshedLeft = leftHit
+                                ? refreshSegmentHitAtTransport(
+                                      trackRef,
+                                      leftHit,
+                                      mapT,
+                                  )
+                                : null;
+                            if (refreshedLeft) {
+                                const gLeft = segmentPlaybackGainLinear(
+                                    refreshedLeft,
+                                    crossfadeGains.get(refreshedLeft.key) ?? 1,
+                                );
+                                startExtraTrackSegmentSource(
+                                    i,
+                                    refreshedLeft,
+                                    gLeft,
+                                    ctx.currentTime + 0.001,
+                                    ctx,
+                                    {
+                                        force: true,
+                                        transportSec: mapT,
+                                    },
+                                );
+                            }
+                        }
+                    }
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force: false,
-                        transportSec: masterT,
+                        transportSec: mapT,
                     });
                 } else {
                     const rampSec = crossfadeActive && activeAtT.length > 1 ? 0.006 : 0.05;
@@ -1940,7 +2056,7 @@
                 }
             }
         }
-        pruneExtraSegmentSourcesToActive(allActiveAtT);
+        pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
         if (crossfadeActive && allActiveAtT.length > 1) {
             applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
         }
@@ -2603,7 +2719,7 @@
             !extraTracksNeedResync(masterT, ctx)
         ) {
             applySegmentCrossfadeGains(ctx, allActiveAtT, mapT);
-            pruneExtraSegmentSourcesToActive(allActiveAtT);
+            pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
             applyReviewMixVideoGain();
             return;
         }
@@ -2613,7 +2729,7 @@
             !extraTracksNeedResync(masterT, ctx) &&
             extraAudioSourcesActive()
         ) {
-            pruneExtraSegmentSourcesToActive(allActiveAtT);
+            pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
             applyReviewMixVideoGain();
             return;
         }
@@ -2640,26 +2756,17 @@
 
             if (regionActive && activeAtT.length) {
                 ensureExtraTrackMixRouting(i, ctx);
-                const wanted = new Set();
                 for (const segHit of activeAtT) {
-                    wanted.add(segHit.key);
                     const g = segmentPlaybackGainLinear(
                         segHit,
                         crossfadeGains.get(segHit.key) ?? 1,
                     );
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force,
-                        transportSec: masterT,
+                        transportSec: mapT,
                     });
                 }
-                if (tr.segmentSources) {
-                    for (const k of Object.keys(tr.segmentSources)) {
-                        if (!wanted.has(k)) {
-                            stopExtraTrackSegmentSourceEntry(tr.segmentSources[k]);
-                            delete tr.segmentSources[k];
-                        }
-                    }
-                }
+                pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
                 continue;
             }
 

@@ -2,7 +2,7 @@
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
     /** 結合境界のクロスフェード幅（分割点の手前のみ、境界以降は伸ばさない） */
-    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.08;
+    const JOINED_BOUNDARY_CROSSFADE_SEC = 0.1;
     const REGION_GAIN_DB_MIN = -96;
     const REGION_GAIN_DB_MAX = 10;
 
@@ -1228,6 +1228,85 @@
         return Math.abs(leftEnd - rightStart) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC;
     }
 
+    /** タイムライン結合かつクリップ内ソースが連続（分割直後・B結合可能な境界） */
+    function isSegmentSourceContinuousAtBoundary(track, boundaryIndex) {
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        const segments = getTrackSegments(track);
+        const left = segments[boundaryIndex];
+        const right = segments[boundaryIndex + 1];
+        if (!left || !right) return false;
+        const leftClip =
+            left.clipId || getSegmentClipId(track, boundaryIndex);
+        const rightClip =
+            right.clipId || getSegmentClipId(track, boundaryIndex + 1);
+        if (leftClip !== rightClip) return false;
+        return (
+            Math.abs(
+                (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
+            ) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC
+        );
+    }
+
+    /**
+     * 連続結合境界: 入側を左の BufferSource クロックに同期して開始する計画
+     * @returns {{ whenCtx: number, bufferOff: number, remain: number, transportAnchor: number } | null}
+     */
+    function planIncomingSegmentStartAtJoinedBoundary(track, segmentIndex, ctx, opt) {
+        if (!ctx || segmentIndex < 1) return null;
+        if (!isSegmentSourceContinuousAtBoundary(track, segmentIndex - 1)) {
+            return null;
+        }
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        if (!seg) return null;
+        const boundaryT = getSegmentTimelineStart(track, segmentIndex);
+        const fadeTransportSec = boundaryT - JOINED_BOUNDARY_CROSSFADE_SEC;
+        const mapT =
+            opt && Number.isFinite(opt.mapTransportSec)
+                ? opt.mapTransportSec
+                : fadeTransportSec;
+        const probeT = Math.max(fadeTransportSec, mapT);
+        const fromLeft = segmentSourceSecFromTransport(
+            track,
+            segmentIndex - 1,
+            probeT,
+        );
+        const bufferOff = Math.max(
+            seg.sourceInSec,
+            Math.min(seg.sourceOutSec, fromLeft),
+        );
+        const remain = Math.max(0, seg.sourceOutSec - bufferOff);
+        if (remain <= 0.002) return null;
+        let whenCtx = ctx.currentTime + 0.0005;
+        const leftEntry = opt && opt.leftEntry ? opt.leftEntry : null;
+        if (
+            leftEntry &&
+            leftEntry.src &&
+            Number.isFinite(leftEntry.playbackAnchorCtxTime) &&
+            Number.isFinite(leftEntry.bufferOff)
+        ) {
+            const fadeBuf = segmentSourceSecFromTransport(
+                track,
+                segmentIndex - 1,
+                fadeTransportSec,
+            );
+            whenCtx =
+                leftEntry.playbackAnchorCtxTime +
+                Math.max(0, fadeBuf - leftEntry.bufferOff);
+        } else {
+            whenCtx = ctx.currentTime + Math.max(0.0005, fadeTransportSec - mapT);
+        }
+        if (whenCtx < ctx.currentTime) {
+            whenCtx = ctx.currentTime + 0.0005;
+        }
+        return {
+            whenCtx,
+            bufferOff,
+            remain,
+            transportAnchor: probeT,
+        };
+    }
+
     function shouldShowSegmentInHandle(track, segmentIndex) {
         if (segmentIndex === 0) return true;
         return !isSegmentBoundaryJoined(track, segmentIndex - 1);
@@ -1299,7 +1378,18 @@
             }
 
             let sourceSec;
-            if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
+            if (
+                forPlayback &&
+                inHandoffFromPrev &&
+                i > 0 &&
+                isSegmentSourceContinuousAtBoundary(track, i - 1)
+            ) {
+                const fromLeft = segmentSourceSecFromTransport(track, i - 1, t);
+                sourceSec = Math.max(
+                    seg.sourceInSec,
+                    Math.min(seg.sourceOutSec, fromLeft),
+                );
+            } else if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
                 const fadeStart = boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC;
                 sourceSec = seg.sourceInSec + Math.max(0, t - fadeStart);
             } else if (t < playbackStart - 0.0005) {
@@ -1345,7 +1435,7 @@
         const fresh = mapAllSegmentsAtTransport(track, transportSec, {
             forPlayback: true,
         }).find((h) => h.segmentIndex === hit.segmentIndex);
-        return fresh || hit;
+        return fresh || null;
     }
 
     function getActiveExtraSegmentsAtTransport(transportSec) {
@@ -1359,7 +1449,8 @@
             typeof window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC === 'number'
                 ? window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC
                 : 0.02;
-        const lookahead = scheduleAhead + JOINED_BOUNDARY_CROSSFADE_SEC + 0.01;
+        /** 先読みはスケジュール余裕のみ（フェード幅ぶん早く拾うと bufferOff が未来のままになる） */
+        const lookahead = scheduleAhead + 0.01;
         const probes = [t, t + lookahead];
         for (let slot = 0; slot < n; slot++) {
             const track = { type: 'extra', slot };
@@ -1371,8 +1462,10 @@
                 for (let i = 0; i < hits.length; i++) {
                     const hit = hits[i];
                     if (seen.has(hit.key)) continue;
+                    const refreshed = refreshSegmentHitAtTransport(track, hit, t);
+                    if (!refreshed) continue;
                     seen.add(hit.key);
-                    all.push(refreshSegmentHitAtTransport(track, hit, t));
+                    all.push(refreshed);
                 }
             }
         }
@@ -1415,7 +1508,7 @@
         return { out: i, in: j };
     }
 
-    const MIN_CROSSFADE_OVERLAP_SEC = 0.02;
+    const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
 
     /** 再生ミックスと同じ等パワー・重なりゲイン（波形振幅表示用） */
     function computeSegmentCrossfadeVisualGain(track, segmentIndex, transportSec) {
@@ -3953,6 +4046,10 @@
         syncLaneFileNameForTrack({ type: 'extra', slot });
     };
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
+    window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
+    window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
+    window.planIncomingSegmentStartAtJoinedBoundary =
+        planIncomingSegmentStartAtJoinedBoundary;
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
     window.setSegmentGainDb = setSegmentGainDb;
