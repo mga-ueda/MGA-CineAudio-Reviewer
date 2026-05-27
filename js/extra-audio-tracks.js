@@ -3878,6 +3878,9 @@
 
     async function loadExtraTrackFile(slot, file, opt) {
         if (slot < 0 || slot >= EXTRA_TRACK_COUNT || !file) return;
+        if (typeof clearRegionUndoStack === 'function') {
+            clearRegionUndoStack();
+        }
         setExtraTrackLaneUiOpen(slot, true);
         const tr = extraTrackBySlot(slot);
         const gen = ++tr.loadGen;

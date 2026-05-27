@@ -1105,6 +1105,9 @@
         if (typeof prepareReviewMixForNewVideoLoad === 'function') {
             prepareReviewMixForNewVideoLoad();
         }
+        if (typeof clearRegionUndoStack === 'function') {
+            clearRegionUndoStack();
+        }
         if (typeof prepareMarkersForVideoSwitch === 'function') {
             prepareMarkersForVideoSwitch();
         } else if (typeof saveMarkersToCache === 'function') {
