@@ -1164,6 +1164,16 @@
                 inner.style.minWidth = '';
             }
         }
+        if (zoomed) {
+            const cs = window.getComputedStyle(lanes);
+            const borderTop = parseFloat(cs.borderTopWidth || '0') || 0;
+            const borderBottom = parseFloat(cs.borderBottomWidth || '0') || 0;
+            const chromeH = Math.max(0, lanes.offsetHeight - lanes.clientHeight);
+            const scrollbarH = Math.max(0, Math.round(chromeH - borderTop - borderBottom));
+            lanes.style.setProperty('--wave-lanes-scrollbar-h', scrollbarH + 'px');
+        } else {
+            lanes.style.setProperty('--wave-lanes-scrollbar-h', '0px');
+        }
         const scrollable = contentW > viewportW + 0.5;
         if (!scrollable || isWaveformTimelineAtFitZoom()) lanes.scrollLeft = 0;
         if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();

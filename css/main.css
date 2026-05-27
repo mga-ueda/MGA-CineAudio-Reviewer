@@ -1435,8 +1435,13 @@
         }
         .audio-waveform-composite__lanes {
             position: relative;
-            height: calc(var(--wave-lane-count, 3) * var(--wave-lane-h));
-            max-height: calc(var(--wave-lane-count, 3) * var(--wave-lane-h));
+            --wave-lanes-scrollbar-h: 0px;
+            height: calc(
+                (var(--wave-lane-count, 3) * var(--wave-lane-h)) + var(--wave-lanes-scrollbar-h)
+            );
+            max-height: calc(
+                (var(--wave-lane-count, 3) * var(--wave-lane-h)) + var(--wave-lanes-scrollbar-h)
+            );
             box-sizing: border-box;
         }
         .audio-waveform-composite__lanes-inner {
