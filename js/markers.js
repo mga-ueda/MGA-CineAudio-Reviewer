@@ -3544,12 +3544,18 @@
 
     let markerDragState = null;
 
-    function setMarkerDragLanesActive(active) {
+    function setMarkerDragLanesActive(active, opt) {
         const lanes =
             typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
                 ? audioWaveformLanesTracks
                 : null;
-        if (lanes) lanes.classList.toggle('audio-waveform-composite__lanes--marker-dragging', !!active);
+        if (!lanes) return;
+        const edge = opt && opt.edge;
+        lanes.classList.toggle('audio-waveform-composite__lanes--marker-dragging', !!active);
+        lanes.classList.toggle(
+            'audio-waveform-composite__lanes--marker-dragging-range-move',
+            !!active && edge === 'move',
+        );
     }
 
     function detachMarkerDragDocListeners() {
@@ -3568,6 +3574,37 @@
         const oneFrame = markerOneFrameSec();
         if (m.type === 'point') {
             m.timeSec = t;
+            return;
+        }
+        if (edge === 'move') {
+            if (!markerDragState) return;
+            const anchor = markerDragState.dragAnchorSec;
+            const s0 = markerDragState.dragStartStartSec;
+            const e0 = markerDragState.dragStartEndSec;
+            if (
+                !Number.isFinite(anchor) ||
+                !Number.isFinite(s0) ||
+                !Number.isFinite(e0)
+            ) {
+                return;
+            }
+            const delta = t - anchor;
+            const span = e0 - s0;
+            let newStart = s0 + delta;
+            let newEnd = e0 + delta;
+            const dur = masterDurForTimelineMarkers();
+            const maxEnd = dur > 0 ? dur - 0.001 : e0;
+            if (newStart < 0) {
+                newStart = 0;
+                newEnd = span;
+            }
+            if (newEnd > maxEnd) {
+                newEnd = maxEnd;
+                newStart = newEnd - span;
+            }
+            if (newStart < 0) newStart = 0;
+            m.startSec = newStart;
+            m.endSec = newEnd;
             return;
         }
         if (edge === 'in') {
@@ -3603,7 +3640,7 @@
         detachMarkerDragDocListeners();
         if (st.raf) cancelAnimationFrame(st.raf);
         markerDragState = null;
-        setMarkerDragLanesActive(false);
+        setMarkerDragLanesActive(false, { edge: st.edge });
         if (commit) {
             collapseRangeMarkerToPointIfNarrow(st.m, { silent: true });
             sortMarkersInPlace();
@@ -3658,6 +3695,13 @@
         el.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0) return;
             if (opt && opt.pending) return;
+            if (
+                edge === 'move' &&
+                ev.target.closest &&
+                ev.target.closest('.seek-bar-marker__handle')
+            ) {
+                return;
+            }
             if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
                 syncSnapSuppressionFromPointerEvent(ev);
             }
@@ -3670,6 +3714,11 @@
 
             const bandEl = opt && opt.bandEl ? opt.bandEl : null;
             endMarkerDrag(false);
+            const pointerSec = transportSecFromWaveformClientX(ev.clientX);
+            const moveAnchor =
+                edge === 'move' && m.type === 'range'
+                    ? clampMarkerSec(snapMarkerDragTransportSec(pointerSec, m))
+                    : NaN;
             markerDragState = {
                 m: m,
                 edge: edge,
@@ -3678,6 +3727,11 @@
                 startX: ev.clientX,
                 moved: false,
                 raf: 0,
+                dragAnchorSec: moveAnchor,
+                dragStartStartSec:
+                    edge === 'move' && m.type === 'range' ? m.startSec : NaN,
+                dragStartEndSec:
+                    edge === 'move' && m.type === 'range' ? m.endSec : NaN,
                 onMove: null,
                 onUp: null,
             };
@@ -3692,7 +3746,7 @@
                 if (Math.abs(e.clientX - markerDragState.startX) >= 4) {
                     if (!markerDragState.moved) {
                         markerDragState.moved = true;
-                        setMarkerDragLanesActive(true);
+                        setMarkerDragLanesActive(true, { edge: markerDragState.edge });
                     }
                 }
                 if (!markerDragState.moved) return;
@@ -3706,12 +3760,14 @@
                 detachMarkerDragDocListeners();
                 if (st.raf) cancelAnimationFrame(st.raf);
                 markerDragState = null;
-                setMarkerDragLanesActive(false);
+                setMarkerDragLanesActive(false, { edge: st.edge });
                 if (!st.moved) {
                     seekToMarkerOnClick(m, edge, e.clientX, bandEl);
                     return;
                 }
-                collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                if (st.edge !== 'move') {
+                    collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                }
                 sortMarkersInPlace();
                 persistMarkersAfterChange({ forceMarkerList: true });
                 writeLog('Marker: drag ' + markerTimeLabel(m));
@@ -4263,9 +4319,6 @@
         if (opt && opt.title) el.title = opt.title;
         if (opt && opt.marker && !isPending) {
             const m = opt.marker;
-            bindSeekBarMarkerPointerSeek(el, m, (ev) =>
-                rangeMarkerTargetSecFromPointer(m, el, ev.clientX),
-            );
             const handleIn = document.createElement('div');
             handleIn.className = 'seek-bar-marker__handle seek-bar-marker__handle--in';
             handleIn.title = 'Drag In';
@@ -4274,6 +4327,7 @@
             handleOut.title = 'Drag Out';
             el.appendChild(handleIn);
             el.appendChild(handleOut);
+            bindSeekBarMarkerDrag(el, m, 'move', { bandEl: el });
             bindSeekBarMarkerDrag(handleIn, m, 'in', { bandEl: el });
             bindSeekBarMarkerDrag(handleOut, m, 'out', { bandEl: el });
             bindSeekBarMarkerListHighlight(el, opt.id);
