@@ -16,8 +16,12 @@
     let regionHandleDragDocUp = null;
     /** Out ドラッグ中のみ、当該 Ex のタイムラインをクリップ最大長まで一時拡張 */
     let regionOutDragExtendSlot = -1;
-    let regionOutDragStartClientX = NaN;
     let regionOutDragStartOutTransportSec = NaN;
+    /** Out ドラッグ開始時のマスター尺・スクラブ幅（途中の尺変更でカーソルが飛ばないよう固定） */
+    let regionOutDragStartMasterSec = NaN;
+    let regionOutDragStartScrubW = NaN;
+    let regionOutDragStartScrubRatio = NaN;
+    let regionOutDragExtentSec = NaN;
 
     const regionUndoStack = [];
     const regionRedoStack = [];
@@ -508,6 +512,9 @@
 
     /** Out ハンドル: フレームスナップ＋他リージョンの終端（同一 Ex）へスナップ */
     function snapRegionOutTransportSec(sec, opt) {
+        if (opt && opt.forOutDrag) {
+            return Math.max(0, Number(sec) || 0);
+        }
         let n = snapTimelineSec(sec, opt);
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
             return Math.max(0, n);
@@ -526,6 +533,19 @@
             n = snapSecToMarkerInOut(n, { thresholdSec: threshold, altKey: opt && opt.altKey });
         }
         return Math.max(0, n);
+    }
+
+    /** transportRatioFromClientX は 0–1 クランプのため、Out ドラッグでは未クランプ比率を使う */
+    function scrubRatioUnclampedFromClientX(clientX, scrubWCss) {
+        const inner =
+            typeof waveformTimelineInnerEl === 'function' ? waveformTimelineInnerEl() : null;
+        const lanes =
+            typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        const ref = inner || lanes;
+        const w = Number(scrubWCss);
+        if (!ref || !(w > 0) || !Number.isFinite(clientX)) return 0;
+        const left = ref.getBoundingClientRect().left;
+        return (Number(clientX) - left) / w;
     }
 
     function collectRegionMoveSnapStops(exclude) {
@@ -903,6 +923,25 @@
         return lead;
     }
 
+    /** 波形描画のタイムライン左端（結合境界のクロスフェード手前を含む） */
+    function getSegmentWaveformDrawTimelineStart(track, segmentIndex) {
+        let start = getSegmentRegionTimelineIn(track, segmentIndex);
+        if (segmentIndex > 0 && isSegmentBoundaryJoined(track, segmentIndex - 1)) {
+            const anchor = getSegmentTimelineStart(track, segmentIndex);
+            start = Math.min(start, anchor - JOINED_BOUNDARY_CROSSFADE_SEC);
+        }
+        return start;
+    }
+
+    /** 波形を表示するタイムライン左端（リージョン In 以降。結合クロスフェードは手前を含む） */
+    function getSegmentWaveformVisibleTimelineStart(track, segmentIndex) {
+        const segT0 = getSegmentTimelineStart(track, segmentIndex);
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        let start = regionIn > segT0 + 0.00001 ? regionIn : playbackStart;
+        return Math.min(start, getSegmentWaveformDrawTimelineStart(track, segmentIndex));
+    }
+
     /** 再生上の音声開始（リージョン内先頭ギャップの後） */
     function getSegmentPlaybackTimelineStart(track, segmentIndex) {
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
@@ -1034,7 +1073,7 @@
             setSegmentRegionTimelineIn(track, segmentIndex, anchor);
             setSegmentRegionLeadPadSec(track, segmentIndex, 0);
             updateTrackRegionOverlays(track);
-            redrawAfterRegionChange(track.slot);
+            redrawAfterRegionChange(track.slot, { segmentIndex });
             return;
         }
 
@@ -1042,7 +1081,7 @@
             setSegmentRegionTimelineIn(track, segmentIndex, regionIn);
             setSegmentRegionLeadPadSec(track, segmentIndex, 0);
             updateTrackRegionOverlays(track);
-            redrawAfterRegionChange(track.slot);
+            redrawAfterRegionChange(track.slot, { segmentIndex });
             return;
         }
 
@@ -1331,6 +1370,22 @@
         return end;
     }
 
+    function projectedTrackTimelineEndSec(track, segmentIndex, segmentTimelineEndSec) {
+        const segments = getTrackSegments(track);
+        if (!segments.length) {
+            return getTrackTimelineStartSec(track) + (Number(segmentTimelineEndSec) || 0);
+        }
+        let end = getTrackTimelineStartSec(track);
+        for (let i = 0; i < segments.length; i++) {
+            const t =
+                i === segmentIndex
+                    ? Number(segmentTimelineEndSec) || 0
+                    : getSegmentTimelineEnd(track, i);
+            end = Math.max(end, t);
+        }
+        return end;
+    }
+
     function mapTransportToSegment(track, transportSec) {
         const hits = mapAllSegmentsAtTransport(track, transportSec);
         return hits.length ? hits[0] : null;
@@ -1587,21 +1642,22 @@
             typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
                 ? TIMELINE_LANE_TRACK_BG
                 : '#161820';
-        const vpX0 = (vp.masterStartSec / master) * wCss;
-        const vpX1 = (vp.masterEndSec / master) * wCss;
-        const vpW = vpX1 - vpX0;
-        if (!(vpW > 0.5)) return;
+        const gradFill = grad || '#ffffff';
 
-        ctx.fillStyle = bg;
-        ctx.fillRect(vpX0, 0, vpW, hCss);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(vpX0, mid);
-        ctx.lineTo(vpX1, mid);
-        ctx.stroke();
+        for (let si = 0; si < vp.segments.length; si++) {
+            const s = vp.segments[si];
+            if (!s.peaks || !s.peaks.length) continue;
+            const segDur = s.masterEndSec - s.masterStartSec;
+            if (!(segDur > 1e-9)) continue;
+            const x0 = (s.masterStartSec / master) * wCss;
+            const x1 = (s.masterEndSec / master) * wCss;
+            const drawW = x1 - x0;
+            if (!(drawW > 0.5)) continue;
+            ctx.fillStyle = bg;
+            ctx.fillRect(x0, 0, drawW, hCss);
+        }
 
-        ctx.fillStyle = grad || '#ffffff';
+        ctx.fillStyle = gradFill;
         for (let si = 0; si < vp.segments.length; si++) {
             const s = vp.segments[si];
             if (!s.peaks || !s.peaks.length) continue;
@@ -1619,6 +1675,8 @@
                 const x = x0 + p * barW;
                 const barTransport =
                     s.masterStartSec + ((p + 0.5) / s.peaks.length) * segDur;
+                const hideBefore = getSegmentWaveformVisibleTimelineStart(track, segIdx);
+                if (barTransport < hideBefore - 0.0005) continue;
                 const gain =
                     computeSegmentCrossfadeVisualGain(track, segIdx, barTransport) *
                     getSegmentGainLinear(track, segIdx);
@@ -1629,11 +1687,94 @@
         }
     }
 
-    function rebuildExtraTrackRegionViewportPeaks(slot, spec) {
+    function buildSegmentViewportPeakEntry(track, tr, segmentIndex, spec, viewportDur) {
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        if (!seg) return null;
+        const segT0 = getSegmentTimelineStart(track, segmentIndex);
+        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
+        let t0 = Math.max(
+            spec.masterStartSec,
+            getSegmentWaveformVisibleTimelineStart(track, segmentIndex),
+        );
+        let t1 = Math.min(segEnd, spec.masterEndSec);
+        if (t1 <= t0 + 1e-9) return null;
+
+        const srcStart = segmentSourceSecFromTransport(track, segmentIndex, t0);
+        const srcEnd = segmentSourceSecFromTransport(track, segmentIndex, t1);
+        const clipId = seg.clipId || getSegmentClipId(track, segmentIndex);
+        let buf = tr.buffer;
+        if (typeof getExtraTrackClipBuffer === 'function') {
+            buf = getExtraTrackClipBuffer(tr, clipId) || buf;
+        }
+        if (!buf) return null;
+
+        const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
+        let peaks = [];
+        if (typeof peaksForViewportRange === 'function') {
+            const bufId = typeof bufferPeakId === 'function' ? bufferPeakId(buf) : 0;
+            peaks = peaksForViewportRange(
+                buf,
+                tr.peakPyramid,
+                srcStart,
+                srcEnd,
+                bars,
+                bufId,
+            );
+        } else if (typeof peaksFromBufferRange === 'function') {
+            peaks = peaksFromBufferRange(buf, srcStart, srcEnd, bars);
+        }
+        if (!peaks.length) return null;
+        return { masterStartSec: t0, masterEndSec: t1, peaks, segmentIndex };
+    }
+
+    function segmentHasViewportPeaksForDraw(vp, segmentIndex) {
+        if (!vp || !vp.segments || !vp.segments.length) return false;
+        for (let j = 0; j < vp.segments.length; j++) {
+            const s = vp.segments[j];
+            if (
+                s.segmentIndex === segmentIndex &&
+                s.peaks &&
+                s.peaks.length > 0 &&
+                s.masterEndSec > s.masterStartSec + 1e-9
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** リージョン編集中: 変更セグメントだけピラミッドから高解像度ピークを即時更新 */
+    function refreshExtraTrackViewportPeaksForRegionEdit(slot, opt) {
+        if (!(slot >= 0)) return false;
+        if (typeof getWaveformViewportHiresSpec !== 'function') return false;
+        const spec = getWaveformViewportHiresSpec();
+        if (!spec) return false;
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tr.buffer) return false;
+        const only =
+            opt && typeof opt.segmentIndex === 'number' && opt.segmentIndex >= 0
+                ? [opt.segmentIndex]
+                : null;
+        rebuildExtraTrackRegionViewportPeaks(slot, spec, {
+            onlySegmentIndices: only,
+            merge: true,
+        });
+        return !!(tr.viewportPeaks && tr.viewportPeaks.segments && tr.viewportPeaks.segments.length);
+    }
+
+    window.refreshExtraTrackViewportPeaksForRegionEdit =
+        refreshExtraTrackViewportPeaksForRegionEdit;
+
+    function rebuildExtraTrackRegionViewportPeaks(slot, spec, opt) {
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
         if (!tr) return;
-        tr.viewportPeaks = null;
+        const merge = !!(opt && opt.merge);
+        if (!merge) {
+            tr.viewportPeaks = null;
+        }
         if (!spec) return;
 
         const track = { type: 'extra', slot };
@@ -1642,6 +1783,43 @@
         if (typeof peaksFromBufferRange !== 'function') return;
 
         const segments = getTrackSegments(track);
+        const onlyIndices =
+            opt && Array.isArray(opt.onlySegmentIndices) ? opt.onlySegmentIndices : null;
+
+        if (onlyIndices && onlyIndices.length && segments.length) {
+            let outSegs =
+                merge && tr.viewportPeaks && tr.viewportPeaks.segments
+                    ? tr.viewportPeaks.segments.slice()
+                    : [];
+            for (let k = 0; k < onlyIndices.length; k++) {
+                const segIdx = onlyIndices[k];
+                const entry = buildSegmentViewportPeakEntry(
+                    track,
+                    tr,
+                    segIdx,
+                    spec,
+                    viewportDur,
+                );
+                const existing = outSegs.findIndex((s) => s.segmentIndex === segIdx);
+                if (entry) {
+                    if (existing >= 0) outSegs[existing] = entry;
+                    else outSegs.push(entry);
+                } else if (existing >= 0) {
+                    outSegs.splice(existing, 1);
+                }
+            }
+            if (outSegs.length) {
+                tr.viewportPeaks = {
+                    masterStartSec: spec.masterStartSec,
+                    masterEndSec: spec.masterEndSec,
+                    segments: outSegs,
+                };
+            } else if (!merge) {
+                tr.viewportPeaks = null;
+            }
+            return;
+        }
+
         if (!segments.length) {
             const t0Track = getTrackTimelineStartSec(track);
             const fullDur = getTrackSourceDurationSec(track);
@@ -1653,7 +1831,21 @@
             const srcStart = t0 - t0Track;
             const srcEnd = t1 - t0Track;
             const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
-            const peaks = peaksFromBufferRange(tr.buffer, srcStart, srcEnd, bars);
+            let peaks = [];
+            if (typeof peaksForViewportRange === 'function') {
+                const bufId =
+                    typeof bufferPeakId === 'function' ? bufferPeakId(tr.buffer) : 0;
+                peaks = peaksForViewportRange(
+                    tr.buffer,
+                    tr.peakPyramid,
+                    srcStart,
+                    srcEnd,
+                    bars,
+                    bufId,
+                );
+            } else if (typeof peaksFromBufferRange === 'function') {
+                peaks = peaksFromBufferRange(tr.buffer, srcStart, srcEnd, bars);
+            }
             if (!peaks.length) return;
             tr.viewportPeaks = {
                 masterStartSec: spec.masterStartSec,
@@ -1665,29 +1857,8 @@
 
         const outSegs = [];
         for (let i = 0; i < segments.length; i++) {
-            const seg = segments[i];
-            const segT0 = getSegmentTimelineStart(track, i);
-            const segEnd = getSegmentTimelineEnd(track, i);
-            let t0 = Math.max(segT0, spec.masterStartSec);
-            let t1 = Math.min(segEnd, spec.masterEndSec);
-            if (t1 <= t0 + 1e-9) continue;
-            const playbackStart = getSegmentPlaybackTimelineStart(track, i);
-            t0 = Math.max(t0, playbackStart);
-            if (t1 <= t0 + 1e-9) continue;
-
-            const srcStart = segmentSourceSecFromTransport(track, i, t0);
-            const srcEnd = segmentSourceSecFromTransport(track, i, t1);
-            const clipId = seg.clipId || getSegmentClipId(track, i);
-            let buf = tr.buffer;
-            if (typeof getExtraTrackClipBuffer === 'function') {
-                buf = getExtraTrackClipBuffer(tr, clipId) || buf;
-            }
-            if (!buf) continue;
-
-            const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
-            const peaks = peaksFromBufferRange(buf, srcStart, srcEnd, bars);
-            if (!peaks.length) continue;
-            outSegs.push({ masterStartSec: t0, masterEndSec: t1, peaks, segmentIndex: i });
+            const entry = buildSegmentViewportPeakEntry(track, tr, i, spec, viewportDur);
+            if (entry) outSegs.push(entry);
         }
 
         if (outSegs.length) {
@@ -1745,11 +1916,11 @@
 
         ctx.fillStyle = grad || '#ffffff';
         for (let i = 0; i < segments.length; i++) {
-            const regionIn = getSegmentRegionTimelineIn(track, i);
-            const playbackStart = getSegmentPlaybackTimelineStart(track, i);
             const seg = segments[i];
             const clipId = seg.clipId || getSegmentClipId(track, i);
             const fullDur = getSegmentSourceDurationSec(track, seg);
+            if (segmentHasViewportPeaksForDraw(vp, i)) continue;
+
             const peaks = getSegmentPeaksForDraw(slot, clipId);
             if (!peaks || !peaks.length || !fullDur) continue;
             const segPeaks = slicePeaksForRegion(
@@ -1771,8 +1942,7 @@
                     : wCss;
             const drawW = contentW > 0 ? contentW : wCss;
             const barW = drawW / segPeaks.length;
-            const waveformHideBefore =
-                regionIn > segT0 + 0.00001 ? regionIn : playbackStart;
+            const waveformHideBefore = getSegmentWaveformVisibleTimelineStart(track, i);
             for (let p = 0; p < segPeaks.length; p++) {
                 const pk = segPeaks[p];
                 const x = startX + p * barW;
@@ -1818,7 +1988,7 @@
         state.active = true;
 
         updateTrackRegionOverlays(track);
-        redrawAfterRegionChange(track.slot);
+        redrawAfterRegionChange(track.slot, { invalidatePeakCache: true });
 
         if (!(opt && opt.silent)) {
             writeLog(
@@ -2181,7 +2351,36 @@
         return true;
     }
 
-    function redrawAfterRegionChange(slot) {
+    function clearExtraTrackViewportPeaksForSlot(slot) {
+        if (!(slot >= 0)) return;
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (tr) tr.viewportPeaks = null;
+    }
+
+    function redrawAfterRegionChange(slot, opt) {
+        const dragging = !!regionHandleDragActive;
+        let usedViewportRefresh = false;
+        if (typeof slot === 'number' && slot >= 0) {
+            if (typeof refreshExtraTrackViewportPeaksForRegionEdit === 'function') {
+                usedViewportRefresh = refreshExtraTrackViewportPeaksForRegionEdit(slot, opt);
+            }
+            if (!usedViewportRefresh) {
+                clearExtraTrackViewportPeaksForSlot(slot);
+            }
+        } else if (typeof clearAllExtraWaveformViewportPeaks === 'function') {
+            clearAllExtraWaveformViewportPeaks();
+        }
+
+        if (!usedViewportRefresh) {
+            if (opt && opt.invalidatePeakCache && typeof clearViewportPeakCache === 'function') {
+                clearViewportPeakCache();
+            }
+            if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+                invalidateWaveformViewportHiresSpec();
+            }
+        }
+
         if (
             typeof slot === 'number' &&
             slot >= 0 &&
@@ -2190,6 +2389,12 @@
             drawExtraTrackWaveform(slot);
         } else if (typeof redrawAllExtraTrackWaveforms === 'function') {
             redrawAllExtraTrackWaveforms();
+        }
+
+        if (!dragging && typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+            const hiresOpt =
+                typeof slot === 'number' && slot >= 0 ? { slots: [slot] } : undefined;
+            scheduleWaveformHiresRedrawAfterZoom(hiresOpt);
         }
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
@@ -3162,7 +3367,7 @@
         return -1;
     }
 
-    function setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec) {
+    function setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec, opt) {
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return;
         const state = getPlaybackRegionsState(track);
@@ -3171,6 +3376,7 @@
         const snapOpt = {
             exclude: { slot: track.slot, segmentIndex },
             sameSlotOnly: track.slot,
+            forOutDrag: kind === 'out' && !(opt && opt.finalizeSnap),
         };
         const t =
             kind === 'out'
@@ -3189,6 +3395,7 @@
                 Math.min(maxEnd, t),
             );
             timelineEnd = clampSegmentTimelineEnd(track, segmentIndex, timelineEnd);
+            syncRegionOutDragTimelineExtent(track, segmentIndex, timelineEnd);
             const dur = Math.max(PLAYBACK_REGION_MIN_SEC, timelineEnd - timelineStartSeg);
             const newOut = Math.min(
                 clipDur,
@@ -3272,7 +3479,7 @@
             Math.max(0, newRegionIn - newAnchor),
         );
         updateTrackRegionOverlays(track);
-        redrawAfterRegionChange(track.slot);
+        redrawAfterRegionChange(track.slot, { segmentIndex });
         if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
@@ -3502,21 +3709,17 @@
         return false;
     }
 
-    function beginRegionOutDragTimelineExtend(track, segmentIndex) {
+    function beginRegionOutDragTimelineExtend() {
         regionOutDragExtendSlot = -1;
-        if (!track || segmentIndex < 0) return;
-        const currentEnd = getSegmentTimelineEnd(track, segmentIndex);
-        const maxEnd = maxSegmentTimelineEndSec(track, segmentIndex);
-        if (maxEnd <= currentEnd + 0.01) return;
-        regionOutDragExtendSlot = track.slot;
-        if (typeof notifyMasterTransportDurationChanged === 'function') {
-            notifyMasterTransportDurationChanged();
-        }
+        regionOutDragExtentSec = NaN;
     }
 
     function endRegionOutDragTimelineExtend() {
-        regionOutDragStartClientX = NaN;
         regionOutDragStartOutTransportSec = NaN;
+        regionOutDragStartMasterSec = NaN;
+        regionOutDragStartScrubW = NaN;
+        regionOutDragStartScrubRatio = NaN;
+        regionOutDragExtentSec = NaN;
         if (regionOutDragExtendSlot < 0) return;
         regionOutDragExtendSlot = -1;
         if (typeof notifyMasterTransportDurationChanged === 'function') {
@@ -3524,27 +3727,86 @@
         }
     }
 
+    /** ドラッグ中のマスター終端をハンドル位置に追従（クリップ最大長まで一気に伸ばさない） */
+    function syncRegionOutDragTimelineExtent(track, segmentIndex, timelineEndSec) {
+        if (!track || segmentIndex < 0 || !(timelineEndSec > 0)) return;
+        const maxEnd = getExtraTrackMaxTimelineEndSec(track);
+        const projected = projectedTrackTimelineEndSec(
+            track,
+            segmentIndex,
+            timelineEndSec,
+        );
+        const prev = regionOutDragExtentSec;
+
+        if (regionOutDragExtendSlot === track.slot && projected < prev - 0.01) {
+            regionOutDragExtentSec = projected;
+            if (projected <= getTrackTimelineEndSec(track) + 0.01) {
+                regionOutDragExtendSlot = -1;
+                regionOutDragExtentSec = NaN;
+            }
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+            return;
+        }
+
+        if (timelineEndSec <= getTrackTimelineEndSec(track) + 0.01) {
+            if (regionOutDragExtendSlot === track.slot) {
+                regionOutDragExtendSlot = -1;
+                regionOutDragExtentSec = NaN;
+                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
+            }
+            return;
+        }
+
+        const next = Math.min(
+            maxEnd > 0 ? maxEnd : timelineEndSec,
+            Math.max(timelineEndSec, projected),
+        );
+        regionOutDragExtendSlot = track.slot;
+        regionOutDragExtentSec = next;
+        if (!(prev > 0) || Math.abs(next - prev) > 0.01) {
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+        }
+    }
+
     function transportSecFromRegionOutDragDelta(clientX) {
-        if (!Number.isFinite(regionOutDragStartOutTransportSec)) {
+        if (
+            !Number.isFinite(regionOutDragStartOutTransportSec) ||
+            !Number.isFinite(regionOutDragStartScrubRatio) ||
+            !(regionOutDragStartScrubW > 0) ||
+            !(regionOutDragStartMasterSec > 0)
+        ) {
             return typeof transportSecFromClientX === 'function'
                 ? transportSecFromClientX(clientX)
                 : 0;
         }
-        const w =
-            typeof waveformTimelineScrubWidthCss === 'function'
-                ? waveformTimelineScrubWidthCss()
-                : 0;
-        if (!w || !Number.isFinite(regionOutDragStartClientX)) {
-            return regionOutDragStartOutTransportSec;
+        const ratioNow = scrubRatioUnclampedFromClientX(
+            clientX,
+            regionOutDragStartScrubW,
+        );
+        let sec =
+            regionOutDragStartOutTransportSec +
+            (ratioNow - regionOutDragStartScrubRatio) * regionOutDragStartMasterSec;
+        if (regionHandleDragTrack && regionHandleDragSegmentIndex >= 0) {
+            const timelineStart = getSegmentTimelineStart(
+                regionHandleDragTrack,
+                regionHandleDragSegmentIndex,
+            );
+            const maxEnd = maxSegmentTimelineEndSec(
+                regionHandleDragTrack,
+                regionHandleDragSegmentIndex,
+            );
+            sec = Math.max(
+                timelineStart + PLAYBACK_REGION_MIN_SEC,
+                Math.min(maxEnd, sec),
+            );
         }
-        const master =
-            typeof getMasterTransportDurationSec === 'function'
-                ? getMasterTransportDurationSec()
-                : 0;
-        if (!master) return regionOutDragStartOutTransportSec;
-        const deltaSec =
-            ((Number(clientX) - regionOutDragStartClientX) / w) * master;
-        return regionOutDragStartOutTransportSec + deltaSec;
+        return sec;
     }
 
     function detachRegionHandleDragDocListeners() {
@@ -3578,6 +3840,15 @@
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--region-drag');
+        if (!(opt && opt.cancelled) && regionHandleDragTrack) {
+            const slot = regionHandleDragTrack.slot;
+            if (
+                slot >= 0 &&
+                typeof scheduleWaveformHiresRedrawAfterZoom === 'function'
+            ) {
+                scheduleWaveformHiresRedrawAfterZoom({ slots: [slot] });
+            }
+        }
     }
 
     function onSplitHandlePointerDown(ev, track, boundaryIndex) {
@@ -3650,15 +3921,29 @@
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--region-drag');
         beginRegionUndoGesture();
         if (kind === 'out') {
-            regionOutDragStartClientX = ev.clientX;
+            const scrubW =
+                typeof waveformTimelineScrubWidthCss === 'function'
+                    ? waveformTimelineScrubWidthCss()
+                    : 0;
             regionOutDragStartOutTransportSec = getSegmentTimelineEnd(
                 track,
                 segmentIndex,
             );
-            beginRegionOutDragTimelineExtend(track, segmentIndex);
+            regionOutDragStartMasterSec =
+                typeof getMasterTransportDurationSec === 'function'
+                    ? getMasterTransportDurationSec()
+                    : 0;
+            regionOutDragStartScrubW = scrubW;
+            regionOutDragStartScrubRatio = scrubRatioUnclampedFromClientX(
+                ev.clientX,
+                scrubW,
+            );
+            beginRegionOutDragTimelineExtend();
         } else {
-            regionOutDragStartClientX = NaN;
             regionOutDragStartOutTransportSec = NaN;
+            regionOutDragStartMasterSec = NaN;
+            regionOutDragStartScrubW = NaN;
+            regionOutDragStartScrubRatio = NaN;
         }
 
         regionHandleDragDocMove = (e) => {
@@ -3683,6 +3968,20 @@
         regionHandleDragDocUp = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
             e.preventDefault();
+            if (
+                regionHandleDragKind === 'out' &&
+                regionHandleDragTrack &&
+                regionHandleDragSegmentIndex >= 0
+            ) {
+                const transportSec = transportSecFromRegionOutDragDelta(e.clientX);
+                setSegmentHandleFromTransport(
+                    regionHandleDragTrack,
+                    regionHandleDragSegmentIndex,
+                    'out',
+                    transportSec,
+                    { finalizeSnap: true },
+                );
+            }
             endRegionHandleDrag();
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         };
@@ -4080,6 +4379,12 @@
     };
     window.getRegionOutDragExtendSlot = function () {
         return regionOutDragExtendSlot;
+    };
+    window.getRegionOutDragTimelineExtentSec = function (slot) {
+        if (regionOutDragExtendSlot !== slot) return 0;
+        return Number.isFinite(regionOutDragExtentSec) && regionOutDragExtentSec > 0
+            ? regionOutDragExtentSec
+            : 0;
     };
     window.clearPlaybackRegion = clearPlaybackRegion;
     window.clearTrackRegion = clearTrackRegion;

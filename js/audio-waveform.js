@@ -1,6 +1,9 @@
     let waveformPeaks = null;
     /** 可視範囲のみの高解像度ピーク（拡大停止時） */
     let waveformViewportPeaks = null;
+    /** マルチレゾピーク（ビューポート用スライスの元） */
+    let waveformPeakPyramid = null;
+    let waveformPeakPyramidGen = 0;
     let waveformAudioBuffer = null;
     let waveformBuildGen = 0;
     let waveformResizeObs = null;
@@ -1008,8 +1011,10 @@
         waveformBuildGen += 1;
         waveformPeaks = null;
         waveformViewportPeaks = null;
+        waveformPeakPyramid = null;
+        waveformPeakPyramidGen += 1;
         waveformAudioBuffer = null;
-        waveformAudioBuffer = null;
+        if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
         endAudioWaveformScrub({ force: true });
         setAudioWaveformLoaded(false);
         setAudioWaveformStatus('Not Loaded');
@@ -1113,17 +1118,64 @@
         }
         const audioStart = t0 - timelineStartSec;
         const audioEnd = t1 - timelineStartSec;
-        const peaks = peaksFromAudioBufferRange(
-            waveformAudioBuffer,
-            audioStart,
-            audioEnd,
-            spec.barCount,
-        );
+        let peaks = [];
+        if (typeof peaksForViewportRange === 'function') {
+            const bufId =
+                typeof bufferPeakId === 'function'
+                    ? bufferPeakId(waveformAudioBuffer)
+                    : 0;
+            peaks = peaksForViewportRange(
+                waveformAudioBuffer,
+                waveformPeakPyramid,
+                audioStart,
+                audioEnd,
+                spec.barCount,
+                bufId,
+            );
+        } else {
+            peaks = peaksFromAudioBufferRange(
+                waveformAudioBuffer,
+                audioStart,
+                audioEnd,
+                spec.barCount,
+            );
+        }
         if (!peaks.length) {
             waveformViewportPeaks = null;
             return;
         }
         waveformViewportPeaks = { peaks, masterStartSec: t0, masterEndSec: t1 };
+    }
+
+    function scheduleMainWaveformPeakPyramidBuild(buffer, barCount) {
+        const gen = ++waveformPeakPyramidGen;
+        const onBuilt = (pyramid) => {
+            if (gen !== waveformPeakPyramidGen || waveformAudioBuffer !== buffer) return;
+            if (!pyramid) return;
+            if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
+            waveformPeakPyramid = pyramid;
+            if (typeof peaksOverviewFromPyramid === 'function') {
+                const overview = peaksOverviewFromPyramid(waveformPeakPyramid, barCount);
+                if (overview && overview.length) waveformPeaks = overview;
+            }
+            drawAudioWaveformCanvas();
+            if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+                scheduleWaveformHiresRedrawAfterZoom();
+            }
+        };
+        const run = () => {
+            if (gen !== waveformPeakPyramidGen || waveformAudioBuffer !== buffer) return;
+            if (typeof buildPeakPyramidFromBufferAsync === 'function') {
+                buildPeakPyramidFromBufferAsync(buffer, onBuilt);
+            } else if (typeof buildPeakPyramidFromBuffer === 'function') {
+                onBuilt(buildPeakPyramidFromBuffer(buffer));
+            }
+        };
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(run, { timeout: 3000 });
+        } else {
+            setTimeout(run, 16);
+        }
     }
 
     window.clearMainWaveformViewportPeaks = clearMainWaveformViewportPeaks;
@@ -1470,12 +1522,16 @@
         if (waveformBuildGenerationStale(gen)) return;
 
         waveformAudioBuffer = buffer;
+        waveformPeakPyramid = null;
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport();
         }
         const sized = syncAudioWaveformCanvasSize();
         const barCount = sized ? sized.barCount : 1200;
-        waveformPeaks = peaksFromAudioBuffer(buffer, barCount);
+        if (typeof peaksFromAudioBuffer === 'function') {
+            waveformPeaks = peaksFromAudioBuffer(buffer, Math.min(512, barCount));
+        }
+        scheduleMainWaveformPeakPyramidBuild(buffer, barCount);
         const ch = buffer.numberOfChannels;
         const rate = buffer.sampleRate | 0;
         const dur = buffer.duration;
@@ -1761,19 +1817,24 @@
                 if (typeof applyWaveformTimelineZoomLayout === 'function') {
                     applyWaveformTimelineZoomLayout();
                 }
+                const sized = syncAudioWaveformCanvasSize();
+                if (!sized) return;
                 if (!waveformAudioBuffer) {
                     drawAudioWaveformCanvas();
                     updateAllWaveformPlayheads();
                     return;
                 }
-                const sized = syncAudioWaveformCanvasSize();
-                if (!sized) return;
-                // レイアウト変更時は常にデフォルト解像度でピークを再生成（元の挙動）。
-                waveformPeaks = peaksFromAudioBuffer(
-                    waveformAudioBuffer,
-                    sized.barCount,
-                );
-                drawAudioWaveformCanvas();
+                if (typeof scheduleWaveformVisualRefresh === 'function') {
+                    scheduleWaveformVisualRefresh();
+                } else if (typeof applyWaveformViewportPeaksImmediate === 'function') {
+                    applyWaveformViewportPeaksImmediate();
+                    drawAudioWaveformCanvas();
+                    if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                        redrawAllExtraTrackWaveforms();
+                    }
+                } else {
+                    drawAudioWaveformCanvas();
+                }
                 updateAllWaveformPlayheads();
                 if (typeof renderAudioWaveformMarkers === 'function') {
                     renderAudioWaveformMarkers();

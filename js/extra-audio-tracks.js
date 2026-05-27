@@ -65,6 +65,7 @@
             file: null,
             buffer: null,
             peaks: null,
+            peakPyramid: null,
             persistBlob: null,
             restoreDurationHint: 0,
             muted: false,
@@ -82,6 +83,7 @@
             file: null,
             buffer: null,
             peaks: null,
+            peakPyramid: null,
             persistBlob: null,
             restoreDurationHint: 0,
             muted: false,
@@ -99,6 +101,7 @@
             file: null,
             buffer: null,
             peaks: null,
+            peakPyramid: null,
             persistBlob: null,
             restoreDurationHint: 0,
             muted: false,
@@ -2967,12 +2970,66 @@
         if (layoutW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return false;
         const sized = syncExtraCanvasSize(ui);
         if (!sized) return false;
-        // 元の挙動: レイアウトに合わせて固定解像度（最大 4096）でピーク生成。
         if (!tr.peaks || tr.peaks.length !== sized.barCount) {
-            tr.peaks = peaksFromBuffer(tr.buffer, sized.barCount);
+            if (tr.peakPyramid && typeof peaksOverviewFromPyramid === 'function') {
+                const overview = peaksOverviewFromPyramid(tr.peakPyramid, sized.barCount);
+                if (overview && overview.length) tr.peaks = overview;
+            }
+            if (!tr.peaks || tr.peaks.length !== sized.barCount) {
+                tr.peaks = peaksFromBuffer(tr.buffer, Math.min(512, sized.barCount));
+            }
         }
         return !!(tr.peaks && tr.peaks.length > 0);
     }
+
+    function scheduleExtraTrackPeakPyramidBuild(slot, buffer, barCount) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !buffer) return;
+        const gen = (tr.peakPyramidGen = (tr.peakPyramidGen || 0) + 1);
+        const onBuilt = (pyramid) => {
+            if (!tr.buffer || tr.buffer !== buffer || tr.peakPyramidGen !== gen) return;
+            if (!pyramid) return;
+            if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
+            tr.peakPyramid = pyramid;
+            if (typeof peaksOverviewFromPyramid === 'function') {
+                const overview = peaksOverviewFromPyramid(tr.peakPyramid, barCount);
+                if (overview && overview.length) tr.peaks = overview;
+            }
+            drawExtraTrackWaveform(slot);
+            if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+                scheduleWaveformHiresRedrawAfterZoom({ slots: [slot] });
+            }
+        };
+        const run = () => {
+            if (!tr.buffer || tr.buffer !== buffer || tr.peakPyramidGen !== gen) return;
+            if (typeof buildPeakPyramidFromBufferAsync === 'function') {
+                buildPeakPyramidFromBufferAsync(buffer, onBuilt);
+            } else if (typeof buildPeakPyramidFromBuffer === 'function') {
+                onBuilt(buildPeakPyramidFromBuffer(buffer));
+            }
+        };
+        if (typeof requestIdleCallback === 'function') {
+            requestIdleCallback(run, { timeout: 3000 });
+        } else {
+            setTimeout(run, 16);
+        }
+    }
+
+    /** 表示中かつ読み込み済みの Ex スロット */
+    function getVisibleLoadedExtraTrackSlots() {
+        const out = [];
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            const meta = document.getElementById('extraAudioMeta' + i);
+            if (meta && meta.hidden) continue;
+            if (!isExtraTrackLoaded(i)) continue;
+            const tr = extraTrackBySlot(i);
+            if (!tr || !tr.buffer) continue;
+            out.push(i);
+        }
+        return out;
+    }
+
+    window.getVisibleLoadedExtraTrackSlots = getVisibleLoadedExtraTrackSlots;
 
     function extraTrackWaveformDrawReady(slot) {
         if (!hasExtraTrackWaveformPeaks(slot) || !isExtraTrackLaneShown(slot)) return true;
@@ -3178,12 +3235,17 @@
         }
     }
 
-    function rebuildAllExtraWaveformViewportPeaks(spec) {
+    function rebuildAllExtraWaveformViewportPeaks(spec, opt) {
         if (!spec) {
             clearAllExtraWaveformViewportPeaks();
             return;
         }
-        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+        const slots =
+            opt && Array.isArray(opt.slots) && opt.slots.length
+                ? opt.slots
+                : getVisibleLoadedExtraTrackSlots();
+        for (let j = 0; j < slots.length; j++) {
+            const i = slots[j];
             if (typeof rebuildExtraTrackRegionViewportPeaks === 'function') {
                 rebuildExtraTrackRegionViewportPeaks(i, spec);
             } else {
@@ -3719,6 +3781,8 @@
         tr.file = null;
         tr.buffer = null;
         tr.peaks = null;
+        tr.peakPyramid = null;
+        tr.viewportPeaks = null;
         tr.persistBlob = null;
         tr.restoreDurationHint = 0;
         tr.timelineStartSec = 0;
@@ -3958,6 +4022,8 @@
             tr.file = null;
             tr.buffer = null;
             tr.peaks = null;
+            tr.peakPyramid = null;
+            tr.viewportPeaks = null;
             tr.persistBlob = null;
             setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
             setExtraTrackStatus(slot, 'Decode failed');
@@ -4090,9 +4156,11 @@
             const ui = getExtraUi(slot);
             const sized = ui && ui.track ? syncExtraCanvasSize(ui) : null;
             const barCount = sized ? sized.barCount : 1200;
-            const peaks = peaksFromBuffer(buffer, barCount);
+            tr.peakPyramid = null;
+            const peaks = peaksFromBuffer(buffer, Math.min(512, barCount));
             tr.peaks = peaks;
             if (clipRef) clipRef.peaks = peaks;
+            scheduleExtraTrackPeakPyramidBuild(slot, buffer, barCount);
             if (!(opt && opt.fromSessionRestore)) {
                 if (
                     addClip &&

@@ -558,12 +558,15 @@
             typeof getRegionOutDragExtendSlot === 'function'
                 ? getRegionOutDragExtendSlot()
                 : -1;
-        if (
-            extendSlot === slot &&
-            typeof getExtraTrackMaxTimelineEndSec === 'function'
-        ) {
-            const maxEnd = getExtraTrackMaxTimelineEndSec(slot);
-            if (maxEnd > 0) return maxEnd;
+        if (extendSlot === slot) {
+            if (typeof getRegionOutDragTimelineExtentSec === 'function') {
+                const dragEnd = getRegionOutDragTimelineExtentSec(slot);
+                if (dragEnd > 0) return dragEnd;
+            }
+            if (typeof getExtraTrackMaxTimelineEndSec === 'function') {
+                const maxEnd = getExtraTrackMaxTimelineEndSec(slot);
+                if (maxEnd > 0) return maxEnd;
+            }
         }
         if (typeof getTrackTimelineEndSec === 'function') {
             const end = getTrackTimelineEndSec({ type: 'extra', slot });
@@ -1153,9 +1156,12 @@
 
     let waveformHiresTimer = 0;
     let waveformHiresScrollTimer = 0;
+    let waveformVisualRefreshRaf = 0;
     const WAVEFORM_HIRES_DELAY_MS = 500;
-    const WAVEFORM_HIRES_BARS_PER_PX = 4;
-    const WAVEFORM_HIRES_BAR_MAX = 16384;
+    const WAVEFORM_HIRES_SCROLL_DELAY_MS = 320;
+    /** 見た目を保ちつつ負荷を抑える（旧 4px） */
+    const WAVEFORM_HIRES_BARS_PER_PX = 3;
+    const WAVEFORM_HIRES_BAR_MAX = 12288;
 
     function cancelWaveformHiresRedraw() {
         if (waveformHiresTimer) {
@@ -1177,10 +1183,11 @@
         }
     }
 
-    /** 停止中・拡大時の可視範囲（マスター時間）と高解像度バー数 */
+    let lastWaveformViewportHiresSpec = null;
+
+    /** 停止中の可視範囲（マスター時間）と高解像度バー数 */
     function getWaveformViewportHiresSpec() {
         if (isTransportPlaying()) return null;
-        if (isWaveformTimelineAtFitZoom()) return null;
         const lanes = waveformScrubTargetEl();
         if (!lanes) return null;
         const m = waveformTimelineMetrics(lanes);
@@ -1192,14 +1199,74 @@
         const contentW = m.scrubW;
         const masterStartSec = (scrollLeft / contentW) * master;
         const masterEndSec = ((scrollLeft + visW) / contentW) * master;
+        // ズームレベルに応じてバー密度を変化させる（LOD）
+        const zoom = getWaveformTimelineZoom();
+        let densityScale = 1;
+        if (zoom <= 1.02) {
+            densityScale = 0.42;
+        } else if (zoom <= 2.0) {
+            densityScale = 0.68;
+        } else {
+            densityScale = 0.92;
+        }
+        const barsPerPx = WAVEFORM_HIRES_BARS_PER_PX * densityScale;
         const barCount = Math.min(
             WAVEFORM_HIRES_BAR_MAX,
-            Math.max(1, Math.round(visW * WAVEFORM_HIRES_BARS_PER_PX)),
+            Math.max(1, Math.round(visW * barsPerPx)),
         );
         return { masterStartSec, masterEndSec, barCount, master };
     }
 
-    function applyWaveformViewportHiresRedraw() {
+    function waveformViewportSpecNearlyEqual(prev, live) {
+        if (!prev || !live) return false;
+        const dt0 = Math.abs(prev.masterStartSec - live.masterStartSec);
+        const dt1 = Math.abs(prev.masterEndSec - live.masterEndSec);
+        const db = Math.abs(prev.barCount - live.barCount);
+        const timeThresh = live.master / 200;
+        return dt0 < timeThresh && dt1 < timeThresh && db <= 12;
+    }
+
+    function extraSlotsForViewportPeaks(opt) {
+        if (opt && Array.isArray(opt.slots) && opt.slots.length) {
+            return opt.slots.filter((s) => s >= 0);
+        }
+        if (typeof getVisibleLoadedExtraTrackSlots === 'function') {
+            return getVisibleLoadedExtraTrackSlots();
+        }
+        return [];
+    }
+
+    function rebuildWaveformViewportPeaksFromSpec(spec, opt) {
+        if (!spec) return false;
+        if (typeof rebuildMainWaveformViewportPeaks === 'function') {
+            rebuildMainWaveformViewportPeaks(spec);
+        }
+        const extraSlots = extraSlotsForViewportPeaks(opt);
+        for (let j = 0; j < extraSlots.length; j++) {
+            const slot = extraSlots[j];
+            if (typeof rebuildExtraTrackRegionViewportPeaks === 'function') {
+                rebuildExtraTrackRegionViewportPeaks(slot, spec);
+            }
+        }
+        return true;
+    }
+
+    /** ズーム・リサイズ直後: ピラミッドから可視範囲ピークを同期的に更新（粗い波形のチラつき防止） */
+    function applyWaveformViewportPeaksImmediate(opt) {
+        if (isTransportPlaying()) return false;
+        const spec = getWaveformViewportHiresSpec();
+        if (!spec) return false;
+        if (
+            lastWaveformViewportHiresSpec &&
+            waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, spec)
+        ) {
+            return true;
+        }
+        lastWaveformViewportHiresSpec = spec;
+        return rebuildWaveformViewportPeaksFromSpec(spec, opt);
+    }
+
+    function applyWaveformViewportHiresRedraw(opt) {
         if (isTransportPlaying()) return;
         const spec = getWaveformViewportHiresSpec();
         if (!spec) {
@@ -1217,15 +1284,21 @@
                 }
                 return;
             }
-            if (typeof rebuildMainWaveformViewportPeaks === 'function') {
-                rebuildMainWaveformViewportPeaks(live);
+            if (
+                lastWaveformViewportHiresSpec &&
+                waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, live)
+            ) {
+                return;
             }
-            if (typeof rebuildAllExtraWaveformViewportPeaks === 'function') {
-                rebuildAllExtraWaveformViewportPeaks(live);
-            }
+            lastWaveformViewportHiresSpec = live;
+            rebuildWaveformViewportPeaksFromSpec(live, opt);
             if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
-            if (typeof redrawAllExtraTrackWaveforms === 'function') {
-                redrawAllExtraTrackWaveforms();
+            const extraSlots = extraSlotsForViewportPeaks(opt);
+            for (let j = 0; j < extraSlots.length; j++) {
+                const slot = extraSlots[j];
+                if (typeof drawExtraTrackWaveform === 'function') {
+                    drawExtraTrackWaveform(slot);
+                }
             }
         };
         if (typeof requestIdleCallback === 'function') {
@@ -1235,21 +1308,12 @@
         }
     }
 
-    function scheduleWaveformHiresRedrawAfterZoom() {
+    function scheduleWaveformHiresRedrawAfterZoom(opt) {
         cancelWaveformHiresRedraw();
-        if (isWaveformTimelineAtFitZoom()) {
-            clearAllWaveformViewportPeaks();
-            if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
-            if (typeof redrawAllExtraTrackWaveforms === 'function') {
-                redrawAllExtraTrackWaveforms();
-            }
-            return;
-        }
         if (isTransportPlaying()) return;
-        clearAllWaveformViewportPeaks();
         waveformHiresTimer = setTimeout(() => {
             waveformHiresTimer = 0;
-            applyWaveformViewportHiresRedraw();
+            applyWaveformViewportHiresRedraw(opt);
         }, WAVEFORM_HIRES_DELAY_MS);
     }
 
@@ -1258,20 +1322,61 @@
         clearAllWaveformViewportPeaks();
     }
 
+    function invalidateWaveformViewportHiresSpec() {
+        lastWaveformViewportHiresSpec = null;
+    }
+
     window.cancelWaveformHiresOnPlayback = cancelWaveformHiresOnPlayback;
     window.scheduleWaveformHiresRedrawAfterZoom = scheduleWaveformHiresRedrawAfterZoom;
+    window.applyWaveformViewportPeaksImmediate = applyWaveformViewportPeaksImmediate;
+    window.scheduleWaveformVisualRefresh = scheduleWaveformVisualRefresh;
+    window.flushWaveformVisualRefresh = flushWaveformVisualRefresh;
+    window.invalidateWaveformViewportHiresSpec = invalidateWaveformViewportHiresSpec;
     window.isWaveformTimelineAtFitZoom = isWaveformTimelineAtFitZoom;
     window.getWaveformViewportHiresSpec = getWaveformViewportHiresSpec;
 
-    function refreshWaveformTimelineAfterZoomChange() {
-        clearAllWaveformViewportPeaks();
-        applyWaveformTimelineZoomLayout();
+    function drawWaveformVisualLayers() {
         if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
         if (typeof redrawAllExtraTrackWaveforms === 'function') redrawAllExtraTrackWaveforms();
+    }
+
+    function drawWaveformChromeOverlays() {
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
-        scheduleWaveformHiresRedrawAfterZoom();
+    }
+
+    function flushWaveformVisualRefresh(opt) {
+        if (waveformVisualRefreshRaf) {
+            cancelAnimationFrame(waveformVisualRefreshRaf);
+            waveformVisualRefreshRaf = 0;
+        }
+        const refreshed = applyWaveformViewportPeaksImmediate(opt);
+        drawWaveformVisualLayers();
+        drawWaveformChromeOverlays();
+        return refreshed;
+    }
+
+    /** 連続ズーム・リサイズ時は 1 フレームにまとめてピーク再計算＋描画 */
+    function scheduleWaveformVisualRefresh(opt) {
+        if (opt && opt.sync) {
+            const refreshed = flushWaveformVisualRefresh(opt);
+            if (!refreshed) scheduleWaveformHiresRedrawAfterZoom(opt);
+            return;
+        }
+        if (waveformVisualRefreshRaf) return;
+        waveformVisualRefreshRaf = requestAnimationFrame(() => {
+            waveformVisualRefreshRaf = 0;
+            const refreshed = flushWaveformVisualRefresh(opt);
+            if (!refreshed) scheduleWaveformHiresRedrawAfterZoom(opt);
+        });
+    }
+
+    function refreshWaveformTimelineAfterZoomChange() {
+        applyWaveformTimelineZoomLayout();
+        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        drawWaveformChromeOverlays();
+        scheduleWaveformVisualRefresh();
     }
 
     function transportSecForWaveformZoomCenter() {
@@ -1390,8 +1495,8 @@
         if (waveformHiresScrollTimer) clearTimeout(waveformHiresScrollTimer);
         waveformHiresScrollTimer = setTimeout(() => {
             waveformHiresScrollTimer = 0;
-            applyWaveformViewportHiresRedraw();
-        }, WAVEFORM_HIRES_DELAY_MS);
+            scheduleWaveformVisualRefresh();
+        }, WAVEFORM_HIRES_SCROLL_DELAY_MS);
     }
 
     function isWaveformTimelineKeyboardReady() {
