@@ -2742,6 +2742,27 @@
         return !!(m && m.type === 'range' && Number.isFinite(m.endSec));
     }
 
+    /** ポインタ直下の範囲マーカー（In/Out 確定済み・pending 除く） */
+    function resolveRangeMarkerAtPointer(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+        const hit = document.elementFromPoint(clientX, clientY);
+        if (!hit || !hit.closest) return null;
+        const band = hit.closest(
+            '.seek-bar-marker--range:not(.seek-bar-marker--range-pending)',
+        );
+        if (!band || !band.dataset.markerId) return null;
+        const m = currentMarkers.find((x) => x.id === band.dataset.markerId);
+        if (!m || m.type !== 'range' || !markerHasOutTc(m)) return null;
+        return {
+            marker: m,
+            startSec: m.startSec,
+            endSec: m.endSec,
+            element: band,
+        };
+    }
+
+    window.resolveRangeMarkerAtPointer = resolveRangeMarkerAtPointer;
+
     function isMarkerListPlaybackActive() {
         return typeof isTransportPlaying === 'function' && isTransportPlaying();
     }

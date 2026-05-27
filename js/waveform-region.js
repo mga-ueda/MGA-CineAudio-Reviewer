@@ -290,6 +290,189 @@
         return true;
     }
 
+    function transportBoundaryEpsilonSec() {
+        const step =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 24;
+        return Math.max(1e-6, step * 0.5);
+    }
+
+    function isTimelineBoundaryAtTransport(track, transportSec) {
+        const segments = getTrackSegments(track);
+        if (!segments.length) return false;
+        const t = snapRegionTransportSec(transportSec, { sameSlotOnly: track.slot });
+        const eps = transportBoundaryEpsilonSec();
+        for (let i = 0; i < segments.length; i++) {
+            const regionIn = getSegmentRegionTimelineIn(track, i);
+            const segEnd = getSegmentTimelineEnd(track, i);
+            if (Math.abs(regionIn - t) <= eps) return true;
+            if (Math.abs(segEnd - t) <= eps) return true;
+        }
+        return false;
+    }
+
+    function splitPlaybackRegionAtTransportSec(track, transportSec, opt) {
+        if (!isExtraTrackRef(track)) return false;
+        const splitTransport = clampRegionEditTransportSec(track, transportSec);
+        const hit = mapTransportToSegment(track, splitTransport);
+        let segments = getTrackSegments(track);
+        let splitIndex = -1;
+        let sourceSplit = 0;
+        let clipId = 'main';
+
+        if (hit) {
+            sourceSplit = hit.sourceSec;
+            splitIndex = hit.segmentIndex;
+            clipId = hit.clipId || getSegmentClipId(track, splitIndex);
+        } else if (!segments.length) {
+            return false;
+        } else {
+            return false;
+        }
+
+        const seg = segments[splitIndex];
+        const fullDur = getSegmentSourceDurationSec(track, seg);
+        if (!fullDur) return false;
+        if (
+            sourceSplit <= seg.sourceInSec + PLAYBACK_REGION_MIN_SEC ||
+            sourceSplit >= seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC
+        ) {
+            return false;
+        }
+
+        const leftStart = getSegmentTimelineStart(track, splitIndex);
+        const leftDur = sourceSplit - seg.sourceInSec;
+        const left = {
+            id: newRegionId(),
+            clipId: seg.clipId || clipId,
+            sourceInSec: seg.sourceInSec,
+            sourceOutSec: sourceSplit,
+            timelineStartSec: leftStart,
+        };
+        const right = {
+            id: newRegionId(),
+            clipId: seg.clipId || clipId,
+            sourceInSec: sourceSplit,
+            sourceOutSec: seg.sourceOutSec,
+            timelineStartSec: leftStart + leftDur,
+        };
+        const next = segments.slice();
+        next.splice(splitIndex, 1, left, right);
+        return !!setTrackSegments(track, next, {
+            silent: true,
+            skipUndo: !!(opt && opt.skipUndo),
+        });
+    }
+
+    function resolveMarkerRegionTargetSlot() {
+        if (typeof getWaveformTargetExtraSlot === 'function') {
+            const slot = getWaveformTargetExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
+        const domSlot = getActiveMixExtraSlotFromDom();
+        if (domSlot >= 0 && isExtraSlotUsableForRegion(domSlot)) return domSlot;
+        if (typeof getLastActiveMixExtraSlot === 'function') {
+            const slot = getLastActiveMixExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
+        const n =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        for (let i = 0; i < n; i++) {
+            if (isExtraSlotUsableForRegion(i)) return i;
+        }
+        return -1;
+    }
+
+    function ensureIndependentRegionForMarkerRange(track, startSec, endSec, opt) {
+        if (!isExtraTrackRef(track)) {
+            return { segmentIndex: -1, created: false };
+        }
+        ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true });
+        if (!isTrackRegionActive(track)) {
+            return { segmentIndex: -1, created: false };
+        }
+
+        let start = snapRegionTransportSec(startSec, { sameSlotOnly: track.slot });
+        let end = snapRegionTransportSec(endSec, { sameSlotOnly: track.slot });
+        if (end < start) {
+            const swap = start;
+            start = end;
+            end = swap;
+        }
+        if (end - start < PLAYBACK_REGION_MIN_SEC * 2) {
+            return { segmentIndex: -1, created: false };
+        }
+
+        let created = false;
+        if (!(opt && opt.skipUndo) && !regionUndoPaused) {
+            requestRegionUndoCapture();
+        }
+
+        const splitPoints = [start, end].sort((a, b) => b - a);
+        for (let i = 0; i < splitPoints.length; i++) {
+            const t = splitPoints[i];
+            if (isTimelineBoundaryAtTransport(track, t)) continue;
+            if (
+                splitPlaybackRegionAtTransportSec(track, t, {
+                    silent: true,
+                    skipUndo: true,
+                })
+            ) {
+                created = true;
+            }
+        }
+
+        const mid = (start + end) * 0.5;
+        let hit = mapTransportToSegment(track, mid);
+        if (!hit) {
+            return { segmentIndex: -1, created };
+        }
+
+        let idx = hit.segmentIndex;
+        const eps = transportBoundaryEpsilonSec();
+        const regionIn = getSegmentRegionTimelineIn(track, idx);
+        if (regionIn > start + eps) {
+            setSegmentRegionTimelineIn(track, idx, start);
+            created = true;
+        }
+
+        let segEnd = getSegmentTimelineEnd(track, idx);
+        if (segEnd > end + eps) {
+            if (
+                splitPlaybackRegionAtTransportSec(track, end, {
+                    silent: true,
+                    skipUndo: true,
+                })
+            ) {
+                created = true;
+            }
+            hit = mapTransportToSegment(track, mid);
+            if (!hit) {
+                return { segmentIndex: -1, created };
+            }
+            idx = hit.segmentIndex;
+            segEnd = getSegmentTimelineEnd(track, idx);
+        }
+
+        if (segEnd < end - eps) {
+            return { segmentIndex: -1, created };
+        }
+
+        if (created) {
+            updateTrackRegionOverlays(track);
+            redrawAfterRegionChange(track.slot);
+            if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+            if (typeof syncExtraAudioToTransport === 'function') {
+                syncExtraAudioToTransport({ force: true });
+            }
+        }
+
+        return { segmentIndex: idx, created };
+    }
+
     function adjustSegmentGainDbAtPointer(clientX, clientY, deltaDb) {
         const hit =
             typeof resolveRegionSegmentFromPointer === 'function'
@@ -345,6 +528,75 @@
         const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
         if (!delta) return false;
         const deltaDb = delta > 0 ? -1 : 1;
+
+        if (typeof resolveRangeMarkerAtPointer === 'function') {
+            const markerHit = resolveRangeMarkerAtPointer(ev.clientX, ev.clientY);
+            if (markerHit) {
+                const slot = resolveMarkerRegionTargetSlot();
+                if (slot < 0) {
+                    writeLog(
+                        'Playback region: load an Ex track to adjust volume from a range marker',
+                    );
+                    if (typeof flashSeekHint === 'function') {
+                        flashSeekHint('Region', 'Load Ex audio', 'notice');
+                    }
+                    ev.preventDefault();
+                    return true;
+                }
+                const track = { type: 'extra', slot };
+                const ensured = ensureIndependentRegionForMarkerRange(
+                    track,
+                    markerHit.startSec,
+                    markerHit.endSec,
+                );
+                if (ensured.segmentIndex < 0) {
+                    writeLog(
+                        'Ex ' +
+                            (slot + 1) +
+                            ': could not isolate region for range marker',
+                    );
+                    if (typeof flashSeekHint === 'function') {
+                        flashSeekHint('Ex ' + (slot + 1), 'Region isolate failed', 'notice');
+                    }
+                    ev.preventDefault();
+                    return true;
+                }
+                const next = clampRegionGainDb(
+                    getSegmentGainDb(track, ensured.segmentIndex) + deltaDb,
+                );
+                if (
+                    !setSegmentGainDb(track, ensured.segmentIndex, next, {
+                        skipPersist: true,
+                        skipUndo: ensured.created,
+                    })
+                ) {
+                    ev.preventDefault();
+                    return true;
+                }
+                if (typeof schedulePersistSession === 'function') {
+                    schedulePersistSession();
+                }
+                const label = formatRegionGainDbDisplay(next);
+                writeLog(
+                    'Ex ' +
+                        (slot + 1) +
+                        ' region ' +
+                        (ensured.segmentIndex + 1) +
+                        ' gain (marker): ' +
+                        (label || '0.0 dB'),
+                );
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint(
+                        'Ex ' + (slot + 1) + ' R' + (ensured.segmentIndex + 1),
+                        label || '0.0 dB',
+                        'notice',
+                    );
+                }
+                ev.preventDefault();
+                return true;
+            }
+        }
+
         if (!adjustSegmentGainDbAtPointer(ev.clientX, ev.clientY, deltaDb)) {
             return false;
         }
@@ -2281,21 +2533,13 @@
         const track = { type: 'extra', slot };
 
         const splitTransport = getRegionSplitTargetTransportSec(track, clientX, clientY);
-        const hit = mapTransportToSegment(track, splitTransport);
-        let segments = getTrackSegments(track);
-        let splitIndex = -1;
-        let sourceSplit = 0;
-        let clipId = 'main';
-
-        if (hit) {
-            sourceSplit = hit.sourceSec;
-            splitIndex = hit.segmentIndex;
-            clipId = hit.clipId || getSegmentClipId(track, splitIndex);
-        } else if (segments.length) {
+        const segments = getTrackSegments(track);
+        if (!mapTransportToSegment(track, splitTransport) && segments.length) {
             writeLog('Playback region: split inside a region (not at edges)');
             flashSeekHint('Region', 'Split inside region', 'notice');
             return false;
-        } else {
+        }
+        if (!segments.length) {
             const clipId = getPrimaryClipIdForTrack(track);
             const fullDur =
                 typeof getExtraTrackClipDurationSec === 'function'
@@ -2306,49 +2550,31 @@
                 return false;
             }
             const t0 = getTrackTimelineStartSec(track);
-            sourceSplit = Math.max(
+            const sourceSplit = Math.max(
                 PLAYBACK_REGION_MIN_SEC,
                 Math.min(fullDur, splitTransport - t0),
             );
-            segments = [{ sourceInSec: 0, sourceOutSec: fullDur, clipId }];
-            splitIndex = 0;
+            const seeded = [
+                {
+                    id: newRegionId(),
+                    clipId,
+                    sourceInSec: 0,
+                    sourceOutSec: fullDur,
+                    timelineStartSec: t0,
+                },
+            ];
+            if (!setTrackSegments(track, seeded, { silent: true })) {
+                writeLog('Playback region: split failed (could not apply segments)');
+                flashSeekHint('Region', 'Split failed', 'notice');
+                return false;
+            }
         }
-
-        const seg = segments[splitIndex];
-        const fullDur = getSegmentSourceDurationSec(track, seg);
-        if (
-            sourceSplit <= seg.sourceInSec + PLAYBACK_REGION_MIN_SEC ||
-            sourceSplit >= seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC
-        ) {
-            writeLog('Playback region: split inside a region (not at edges)');
-            flashSeekHint('Region', 'Split inside region', 'notice');
-            return false;
+        if (splitPlaybackRegionAtTransportSec(track, splitTransport)) {
+            return true;
         }
-
-        const leftStart = getSegmentTimelineStart(track, splitIndex);
-        const leftDur = sourceSplit - seg.sourceInSec;
-        const left = {
-            id: newRegionId(),
-            clipId: seg.clipId || clipId,
-            sourceInSec: seg.sourceInSec,
-            sourceOutSec: sourceSplit,
-            timelineStartSec: leftStart,
-        };
-        const right = {
-            id: newRegionId(),
-            clipId: seg.clipId || clipId,
-            sourceInSec: sourceSplit,
-            sourceOutSec: seg.sourceOutSec,
-            timelineStartSec: leftStart + leftDur,
-        };
-        const next = segments.slice();
-        next.splice(splitIndex, 1, left, right);
-        if (!setTrackSegments(track, next)) {
-            writeLog('Playback region: split failed (could not apply segments)');
-            flashSeekHint('Region', 'Split failed', 'notice');
-            return false;
-        }
-        return true;
+        writeLog('Playback region: split inside a region (not at edges)');
+        flashSeekHint('Region', 'Split inside region', 'notice');
+        return false;
     }
 
     function clearExtraTrackViewportPeaksForSlot(slot) {
