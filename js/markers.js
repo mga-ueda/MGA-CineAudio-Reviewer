@@ -4857,6 +4857,7 @@
     }
 
     function handleMarkerHideViewKeydown(e) {
+        if (e.ctrlKey || e.metaKey || e.altKey) return false;
         const shortcuts = window.SHORTCUTS || {};
         const matches =
             typeof window.matchesShortcut === 'function'

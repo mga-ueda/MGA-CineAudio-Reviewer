@@ -2420,7 +2420,6 @@
     }
 
     function resolveTargetExtraSlot() {
-        if (typeof waveformExtraLaneSlotFromClientY !== 'function') return -1;
         let clientY = null;
         if (typeof getWaveformLanesPointerClientY === 'function') {
             clientY = getWaveformLanesPointerClientY();
@@ -2428,10 +2427,11 @@
         if (clientY == null && typeof getWaveformPointerClientY === 'function') {
             clientY = getWaveformPointerClientY();
         }
-        if (clientY != null) {
-            if (suppressInvalidRegionOpNoticeForVideoAudio()) {
-                return -1;
-            }
+        if (
+            clientY != null &&
+            typeof waveformExtraLaneSlotFromClientY === 'function' &&
+            !suppressInvalidRegionOpNoticeForVideoAudio()
+        ) {
             const slot = waveformExtraLaneSlotFromClientY(clientY);
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
                 return slot;
@@ -2442,6 +2442,27 @@
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
                 return slot;
             }
+        }
+        if (
+            clientY != null &&
+            typeof extraLaneSlotFromClientY === 'function'
+        ) {
+            const slot = extraLaneSlotFromClientY(clientY);
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    function resolvePasteTargetExtraSlot() {
+        const slot = resolveTargetExtraSlot();
+        if (slot >= 0) return slot;
+        if (
+            regionSegmentClipboard &&
+            isExtraSlotUsableForRegion(regionSegmentClipboard.slot)
+        ) {
+            return regionSegmentClipboard.slot;
         }
         return -1;
     }
@@ -2929,19 +2950,24 @@
     }
 
     function resolveRegionSegmentIndexAtPointer(track, clientX, clientY) {
-        if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
-            const hit = document.elementFromPoint(clientX, clientY);
-            if (hit) {
-                const region = hit.closest('.audio-waveform-lane__playback-region');
-                if (region) {
-                    const lane = region.closest('.audio-waveform-lane--extra');
-                    const m =
-                        lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-                    if (m && parseInt(m[1], 10) === track.slot) {
-                        const idx = Number(region.dataset.segmentIndex);
-                        if (Number.isFinite(idx) && idx >= 0) return idx;
-                    }
-                }
+        const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
+        if (regionEl) {
+            const lane = regionEl.closest('.audio-waveform-lane--extra');
+            const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+            if (m && parseInt(m[1], 10) === track.slot) {
+                const idx = Number(regionEl.dataset.segmentIndex);
+                if (Number.isFinite(idx) && idx >= 0) return idx;
+            }
+        }
+        if (
+            hoveredPlaybackRegionEl &&
+            !hoveredPlaybackRegionEl.hidden
+        ) {
+            const lane = hoveredPlaybackRegionEl.closest('.audio-waveform-lane--extra');
+            const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+            if (m && parseInt(m[1], 10) === track.slot) {
+                const idx = Number(hoveredPlaybackRegionEl.dataset.segmentIndex);
+                if (Number.isFinite(idx) && idx >= 0) return idx;
             }
         }
         let transportSec = null;
@@ -2952,8 +2978,10 @@
             transportSec = transportSecFromWaveformPointer();
         }
         transportSec = clampRegionEditTransportSec(track, transportSec);
-        const mapHit = mapTransportToSegment(track, transportSec);
-        return mapHit ? mapHit.segmentIndex : -1;
+        const mapHit = mapTransportToSegmentForPlayback(track, transportSec);
+        if (mapHit) return mapHit.segmentIndex;
+        const mapHitUi = mapTransportToSegment(track, transportSec);
+        return mapHitUi ? mapHitUi.segmentIndex : -1;
     }
 
     function deleteRegionSegmentAt(track, segmentIndex) {
@@ -3045,7 +3073,12 @@
         const track = { type: 'extra', slot };
         if (!isTrackRegionActive(track)) return false;
         const { clientX, clientY } = waveformPointerClientXY();
-        const segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
+        let segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
+        if (segmentIndex < 0) {
+            const t = clampRegionEditTransportSec(track, transportSecFromWaveformPointer());
+            const playHit = mapTransportToSegmentForPlayback(track, t);
+            if (playHit) segmentIndex = playHit.segmentIndex;
+        }
         if (segmentIndex < 0) {
             writeLog('Playback region: copy — hover a region on Ex ' + (slot + 1));
             if (typeof flashSeekHint === 'function') {
@@ -3079,12 +3112,24 @@
             }
             return false;
         }
-        const slot = regionSegmentClipboard.slot;
+        const slot = resolvePasteTargetExtraSlot();
+        if (slot < 0) {
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog('Playback region: hover an Ex lane, then Ctrl+V to paste');
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Hover Ex lane', 'notice');
+                }
+            }
+            return false;
+        }
         if (!isExtraSlotUsableForRegion(slot)) {
             writeLog('Playback region: load extra audio before paste');
             return false;
         }
         const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) {
+            ensureDefaultTrackRegion(track, { silent: true });
+        }
         if (!isTrackRegionActive(track)) return false;
 
         const clip = regionSegmentClipboard.segment;
@@ -4489,6 +4534,7 @@
     }
 
     function handlePlaybackRegionCopyKeydown(e) {
+        if (!e.ctrlKey && !e.metaKey) return false;
         const shortcuts = window.SHORTCUTS || {};
         const matches =
             typeof window.matchesShortcut === 'function'
@@ -4499,12 +4545,14 @@
             return false;
         }
         if (regionHandleDragActive) return false;
-        if (!copyRegionSegmentUnderCursor()) return false;
         e.preventDefault();
+        e.stopPropagation();
+        copyRegionSegmentUnderCursor();
         return true;
     }
 
     function handlePlaybackRegionPasteKeydown(e) {
+        if (!e.ctrlKey && !e.metaKey) return false;
         const shortcuts = window.SHORTCUTS || {};
         const matches =
             typeof window.matchesShortcut === 'function'
@@ -4515,8 +4563,9 @@
             return false;
         }
         if (regionHandleDragActive) return false;
-        if (!pasteRegionSegmentToTrackEnd()) return false;
         e.preventDefault();
+        e.stopPropagation();
+        pasteRegionSegmentToTrackEnd();
         return true;
     }
 

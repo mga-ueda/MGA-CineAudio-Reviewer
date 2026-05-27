@@ -36,8 +36,15 @@
         // ---------- 表示 ----------
         musicalGridToggle: { code: 'KeyT' },
         musicalGridPhraseToggle: { code: 'KeyP' },
-        playheadCenterLockToggle: { code: 'KeyC' },
-        analyzeToggle: { code: 'KeyA' },
+        playheadCenterLockToggle: {
+            code: 'KeyC',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -46,7 +53,14 @@
 
         // ---------- マーカー ----------
         markerInsert: { code: 'Insert' }, // 押すとポイント、長押しでレンジ開始
-        markerHideToggle: { code: 'KeyV' }, // マーカーの Hide/View
+        markerHideToggle: {
+            code: 'KeyV',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        }, // マーカーの Hide/View（修飾キーなし V のみ）
         markerRangeStart: { key: '[' },
         markerRangeEnd: { key: ']' },
         markerNavigateUp: { code: 'ArrowUp' },
