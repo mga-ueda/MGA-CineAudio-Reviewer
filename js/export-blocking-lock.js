@@ -5,11 +5,16 @@
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
     const NOW_LOADING_LOG_MAX_LINES = 80;
-
+    /** ログ無活動で Now Loading を終了するまでの時間 */
+    const NOW_LOADING_IDLE_MS = 5000;
+    const NOW_LOADING_IDLE_TICK_MS = 200;
     /** @type {null | 'webm-export' | 'waveform-restore'} */
     let blockingMode = null;
     let webmExportUserCancel = false;
     let webmExportEmergencyCleanup = null;
+    let nowLoadingIdleDeadline = 0;
+    let nowLoadingIdleTimer = 0;
+    let nowLoadingIdleDismissInFlight = false;
 
     function overlayEl() {
         return document.getElementById('exportBlockingOverlay');
@@ -65,7 +70,94 @@
         return time + ' - ' + String(message);
     }
 
+    function isNowLoadingCountdownLogLine(line) {
+        return /^Auto-dismiss in \d+s if no new log activity$/.test(String(line || ''));
+    }
+
+    function getNowLoadingContentLogLines(el) {
+        const cur = el && el.textContent ? el.textContent : '';
+        if (!cur) return [];
+        return cur.split('\n').filter((line) => !isNowLoadingCountdownLogLine(line));
+    }
+
+    function renderNowLoadingLogLines(contentLines, countdownSec) {
+        const el = minimalLogEl();
+        if (!el) return;
+        const lines = contentLines.slice();
+        const secLeft = Math.max(0, Math.ceil(Number(countdownSec) || 0));
+        lines.push('Auto-dismiss in ' + secLeft + 's if no new log activity');
+        el.textContent = lines.join('\n');
+        el.hidden = false;
+    }
+
+    function setNowLoadingCountdownLine(countdownSec) {
+        if (!isNowLoadingLogMirrorActive()) return;
+        const el = minimalLogEl();
+        if (!el) return;
+        renderNowLoadingLogLines(getNowLoadingContentLogLines(el), countdownSec);
+    }
+
+    function stopNowLoadingIdleWatch() {
+        if (nowLoadingIdleTimer) {
+            clearInterval(nowLoadingIdleTimer);
+            nowLoadingIdleTimer = 0;
+        }
+    }
+
+    async function dismissNowLoadingFromIdle() {
+        if (nowLoadingIdleDismissInFlight) return;
+        if (!isNowLoadingLogMirrorActive() && blockingMode !== 'waveform-restore') {
+            return;
+        }
+        nowLoadingIdleDismissInFlight = true;
+        stopNowLoadingIdleWatch();
+        try {
+            if (typeof writeLog === 'function') {
+                writeLog('Now Loading: auto-dismiss (no log activity for 5s)');
+            }
+            if (typeof ensureWaveformRestoreLockDismissed === 'function') {
+                await ensureWaveformRestoreLockDismissed();
+            }
+        } finally {
+            nowLoadingIdleDismissInFlight = false;
+        }
+    }
+
+    function notifyNowLoadingLogActivity() {
+        if (nowLoadingIdleDismissInFlight) return;
+        if (!isNowLoadingLogMirrorActive()) return;
+        nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
+        setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
+    }
+
+    function startNowLoadingIdleWatch() {
+        stopNowLoadingIdleWatch();
+        if (!NOW_LOADING_ENABLED) return;
+        nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
+        setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
+        nowLoadingIdleTimer = setInterval(() => {
+            if (!isNowLoadingLogMirrorActive() && blockingMode !== 'waveform-restore') {
+                stopNowLoadingIdleWatch();
+                return;
+            }
+            const leftMs = nowLoadingIdleDeadline - performance.now();
+            setNowLoadingCountdownLine(leftMs / 1000);
+            if (leftMs <= 0) {
+                stopNowLoadingIdleWatch();
+                void dismissNowLoadingFromIdle();
+            }
+        }, NOW_LOADING_IDLE_TICK_MS);
+    }
+
+    function ensureNowLoadingIdleWatchStarted() {
+        if (nowLoadingIdleDismissInFlight) return;
+        if (nowLoadingIdleTimer) return;
+        if (!isNowLoadingLogMirrorActive()) return;
+        startNowLoadingIdleWatch();
+    }
+
     function clearNowLoadingLog() {
+        stopNowLoadingIdleWatch();
         const el = minimalLogEl();
         if (!el) return;
         el.textContent = '';
@@ -75,17 +167,23 @@
     function appendNowLoadingLogLine(message) {
         if (!isNowLoadingLogMirrorActive()) return;
         if (isMaskedNowLoadingLogLine(message)) return;
+        if (isNowLoadingCountdownLogLine(message)) return;
         const el = minimalLogEl();
         if (!el) return;
+        ensureNowLoadingIdleWatchStarted();
         const line = formatNowLoadingLogLine(message);
-        const cur = el.textContent || '';
-        const lines = cur ? cur.split('\n') : [];
+        const lines = getNowLoadingContentLogLines(el);
         lines.push(line);
         if (lines.length > NOW_LOADING_LOG_MAX_LINES) {
             lines.splice(0, lines.length - NOW_LOADING_LOG_MAX_LINES);
         }
-        el.textContent = lines.join('\n');
-        el.hidden = false;
+        const leftMs = Math.max(0, nowLoadingIdleDeadline - performance.now());
+        const countdownSec =
+            nowLoadingIdleDeadline > 0 ? leftMs / 1000 : NOW_LOADING_IDLE_MS / 1000;
+        renderNowLoadingLogLines(lines, countdownSec);
+        if (!nowLoadingIdleDismissInFlight) {
+            nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
+        }
     }
 
     function panelEl() {
@@ -338,6 +436,7 @@
         blockingMode = 'waveform-restore';
         disarmWaveformRestoreBootPending();
         setOperationBlockingVisible(true, { minimal: true });
+        startNowLoadingIdleWatch();
         try {
             const ae = document.activeElement;
             if (ae && ae !== document.body && typeof ae.blur === 'function') {
@@ -419,6 +518,7 @@
 
     /** 復元ロック／起動時ぼかしを確実に外す（エラー時・タイムアウト時のフェイルセーフ） */
     async function ensureWaveformRestoreLockDismissed() {
+        stopNowLoadingIdleWatch();
         disarmWaveformRestoreBootPending();
         if (blockingMode === 'waveform-restore') {
             return endWaveformRestoreLock();

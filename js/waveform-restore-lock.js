@@ -97,6 +97,12 @@
 
                 const deadline = performance.now() + WAIT_TIMEOUT_MS;
                 while (performance.now() < deadline) {
+                    if (
+                        typeof isWaveformRestoreLockActive === 'function' &&
+                        !isWaveformRestoreLockActive()
+                    ) {
+                        break;
+                    }
                     if (!sessionExtraDecodeRestorePending()) break;
                     await delay(POLL_MS);
                 }
