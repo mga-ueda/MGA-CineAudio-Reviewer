@@ -2219,17 +2219,6 @@
         .audio-waveform-lane__playback-region__cursor-line {
             display: none !important;
         }
-        .audio-waveform-lane__playback-region--overlap {
-            background: linear-gradient(
-                180deg,
-                rgba(100, 180, 255, 0.14) 0%,
-                rgba(180, 120, 255, 0.2) 50%,
-                rgba(100, 180, 255, 0.14) 100%
-            );
-            border-left: 0.5px solid rgba(140, 200, 255, 0.95);
-            border-right: 0.5px solid rgba(200, 140, 255, 0.95);
-            z-index: 7;
-        }
         .audio-waveform-lane__crossfade-marker {
             position: absolute;
             top: 0;

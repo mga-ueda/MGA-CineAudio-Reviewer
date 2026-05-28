@@ -3561,6 +3561,52 @@
             fadeCurve.style.setProperty('--region-fade-in-width', fadeInRatio * 100 + '%');
             fadeCurve.style.setProperty('--region-fade-out-width', fadeOutRatio * 100 + '%');
         }
+        applyPlaybackRegionLabelCrossfadePriority(el, track, segmentIndex);
+    }
+
+    /** クロスフェード重なりでファイル名ラベルが重なるとき、後着（大きい segmentIndex）を手前にする */
+    function applyPlaybackRegionLabelCrossfadePriority(el, track, segmentIndex) {
+        const label = el.querySelector('.audio-waveform-lane__playback-region__label');
+        if (!label) return;
+
+        el.style.zIndex = String(segmentIndex + 1);
+        label.style.removeProperty('max-width');
+
+        const trackStart =
+            typeof getTrackTimelineStartSec === 'function'
+                ? getTrackTimelineStartSec(track)
+                : 0;
+        const inTransport = Math.max(
+            trackStart,
+            getSegmentRegionTimelineIn(track, segmentIndex),
+        );
+        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        const regionDur = Math.max(0.001, outTransport - inTransport);
+
+        let earliestLaterOverlapStart = outTransport;
+        for (let j = segmentIndex + 1; j < getTrackSegments(track).length; j++) {
+            const oStart = Math.max(
+                getSegmentPlaybackTimelineStart(track, segmentIndex),
+                getSegmentPlaybackTimelineStart(track, j),
+            );
+            const oEnd = Math.min(
+                outTransport,
+                getSegmentTimelineEnd(track, j),
+            );
+            if (oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC) continue;
+            earliestLaterOverlapStart = Math.min(earliestLaterOverlapStart, oStart);
+        }
+
+        if (earliestLaterOverlapStart >= outTransport - 0.0005) return;
+
+        const pct = Math.max(
+            0,
+            Math.min(
+                100,
+                ((earliestLaterOverlapStart - inTransport) / regionDur) * 100,
+            ),
+        );
+        label.style.maxWidth = 'max(0px, calc(' + pct + '% - 10px))';
     }
 
     const CROSSFADE_OVERLAP_MIN_SEC = 0.25;
