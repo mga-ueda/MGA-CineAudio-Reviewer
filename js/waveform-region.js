@@ -4769,22 +4769,7 @@
             endRegionHandleDrag({ cancelled: true });
             return true;
         }
-        if (
-            typeof isRangeLoopEscapeRelevant === 'function' &&
-            isRangeLoopEscapeRelevant()
-        ) {
-            return false;
-        }
-        const slot = resolveTargetExtraSlot();
-        if (slot >= 0 && isTrackRegionActive({ type: 'extra', slot })) {
-            clearTrackRegion({ type: 'extra', slot });
-            e.preventDefault();
-            return true;
-        }
-        if (!isPlaybackRegionActive()) return false;
-        clearPlaybackRegion();
-        e.preventDefault();
-        return true;
+        return false;
     }
 
     function getPlaybackRegionPersistSnapshot() {
