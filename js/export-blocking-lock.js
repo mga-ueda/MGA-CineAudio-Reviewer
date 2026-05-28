@@ -5,7 +5,7 @@
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
     /** ログ無活動で Now Loading を終了するまでの時間 */
-    const NOW_LOADING_IDLE_MS = 5000;
+    const NOW_LOADING_IDLE_MS = 3000;
     const NOW_LOADING_IDLE_TICK_MS = 200;
     /** @type {null | 'webm-export' | 'waveform-restore'} */
     let blockingMode = null;
@@ -121,7 +121,7 @@
         stopNowLoadingIdleWatch();
         try {
             if (typeof writeLog === 'function') {
-                writeLog('Now Loading: auto-dismiss (no log activity for 5s)');
+                writeLog('Now Loading: auto-dismiss (no log activity for 3s)');
             }
             if (typeof ensureWaveformRestoreLockDismissed === 'function') {
                 await ensureWaveformRestoreLockDismissed();
