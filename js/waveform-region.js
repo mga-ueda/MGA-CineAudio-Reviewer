@@ -4268,6 +4268,12 @@
     }
 
     function updateTrackRegionOverlays(track) {
+        if (
+            isExtraTrackRef(track) &&
+            typeof syncExtraTrackLaneMixVisual === 'function'
+        ) {
+            syncExtraTrackLaneMixVisual(track.slot);
+        }
         const container = getPlaybackRegionsContainerEl(track);
         if (!container) return;
         const restoreHover =

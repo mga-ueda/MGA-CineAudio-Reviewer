@@ -4531,6 +4531,7 @@
     window.EXTRA_TRACK_COUNT = EXTRA_TRACK_COUNT;
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
+    window.syncExtraTrackLaneMixVisual = syncExtraTrackLaneMixVisual;
     window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
     window.areExtraTrackWaveformsRestorePending = areExtraTrackWaveformsRestorePending;
     window.ensureExtraTrackWaveformsDrawnAsync = ensureExtraTrackWaveformsDrawnAsync;
@@ -4545,10 +4546,30 @@
     window.buildExtraTrackPeaksPreviewFromWavBlob = buildExtraTrackPeaksPreviewFromWavBlob;
     window.refreshAllExtraTrackLaneVisibility = refreshAllExtraTrackLaneVisibility;
 
+    function syncExtraTrackLaneMixVisual(slot) {
+        const lane = document.getElementById('extraAudioLane' + slot);
+        if (!lane) return;
+        const audible =
+            typeof isExtraTrackAudible === 'function' ? isExtraTrackAudible(slot) : true;
+        const chromeOpacity =
+            typeof timelineMixRegionChromeOpacity === 'function'
+                ? timelineMixRegionChromeOpacity(audible)
+                : audible
+                  ? 1
+                  : 0.336;
+        lane.classList.toggle('audio-waveform-lane--mix-muted', !audible);
+        if (audible) {
+            lane.style.removeProperty('--timeline-mix-chrome-opacity');
+        } else {
+            lane.style.setProperty('--timeline-mix-chrome-opacity', String(chromeOpacity));
+        }
+    }
+
     function refreshExtraTrackUi(slot) {
         const ui = getExtraUi(slot);
         const tr = extraTrackBySlot(slot);
         if (!ui) return;
+        syncExtraTrackLaneMixVisual(slot);
         if (ui.title) {
             const label = EXTRA_TRACK_DEFAULT_LABELS[slot] || 'Ex';
             const st = ui.status ? ui.status.textContent || '' : '';

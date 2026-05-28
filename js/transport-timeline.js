@@ -1032,6 +1032,21 @@
     /** レーン全面の下地（濃いグレー・単色） */
     const TIMELINE_LANE_TRACK_BG = '#161820';
 
+    /** timelineWaveformFillGradient の可聴/非可聴中心色から算出（リージョン UI の opacity に使用） */
+    const TIMELINE_MIX_REGION_CHROME_OPACITY_INAUDIBLE = (() => {
+        function lum(r, g, b) {
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        }
+        const audible = lum(220, 235, 255) * 0.9;
+        const inaudible = lum(68, 74, 84) * 0.96;
+        if (!(audible > 0)) return 0.336;
+        return Math.max(0.2, Math.min(1, inaudible / audible));
+    })();
+
+    function timelineMixRegionChromeOpacity(audible) {
+        return audible ? 1 : TIMELINE_MIX_REGION_CHROME_OPACITY_INAUDIBLE;
+    }
+
     function timelineWaveformFillGradient(ctx, hCss, laneKind, audible) {
         void laneKind;
         const h = Math.max(8, hCss);

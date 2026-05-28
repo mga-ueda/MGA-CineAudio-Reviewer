@@ -2181,6 +2181,10 @@
             user-select: none;
             -webkit-user-select: none;
         }
+        /* ミュート等で波形と同様に非可聴になったトラックのリージョン／フェード UI */
+        .audio-waveform-lane--mix-muted .audio-waveform-lane__playback-regions {
+            opacity: var(--timeline-mix-chrome-opacity, 0.336);
+        }
         .audio-waveform-composite__lanes--scrubbing,
         .audio-waveform-composite__lanes--scrubbing * {
             user-select: none;
