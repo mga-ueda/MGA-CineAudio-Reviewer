@@ -27,6 +27,8 @@
     const regionRedoStack = [];
     let regionUndoPaused = false;
     let regionUndoDragSnap = null;
+    let lastRegionSplitShortcutAtMs = -Infinity;
+    const REGION_SPLIT_SHORTCUT_DEDUP_MS = 120;
 
     let pendingPlaybackRegionRestore = null;
     /** @type {{ slot: number, segment: object } | null} */
@@ -2746,9 +2748,26 @@
                     altKey: altSuppressed,
                 });
             }
-            return clampRegionEditTransportSec(track, snapped);
+            const clamped = clampRegionEditTransportSec(track, snapped);
+            writeLog(
+                'Playback region split target: pointer sec=' +
+                    pointerSec.toFixed(3) +
+                    ' snapped=' +
+                    snapped.toFixed(3) +
+                    ' final=' +
+                    clamped.toFixed(3),
+            );
+            return clamped;
         }
-        return clampRegionEditTransportSec(track, transportSecFromSeekbar());
+        const seekbarSec = transportSecFromSeekbar();
+        const clamped = clampRegionEditTransportSec(track, seekbarSec);
+        writeLog(
+            'Playback region split target: seekbar sec=' +
+                seekbarSec.toFixed(3) +
+                ' final=' +
+                clamped.toFixed(3),
+        );
+        return clamped;
     }
 
     function splitPlaybackRegionAtTargetSec() {
@@ -4603,6 +4622,15 @@
         if (!isPlaybackRegionSplitKeyEvent(e)) return false;
         if (e.repeat) return false;
         if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
+        const nowMs =
+            Number.isFinite(e && e.timeStamp) && e.timeStamp >= 0
+                ? e.timeStamp
+                : performance.now();
+        if (nowMs - lastRegionSplitShortcutAtMs < REGION_SPLIT_SHORTCUT_DEDUP_MS) {
+            e.preventDefault();
+            return true;
+        }
+        lastRegionSplitShortcutAtMs = nowMs;
         e.preventDefault();
         splitPlaybackRegionAtTargetSec();
         return true;

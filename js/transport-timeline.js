@@ -1127,11 +1127,10 @@
         const lanes = waveformScrubTargetEl();
         const m = waveformTimelineMetrics(lanes);
         if (!m || !m.scrubW) return 0;
-        const inner = waveformTimelineInnerEl();
-        const ref = inner || lanes;
-        if (!ref) return 0;
-        const left = ref.getBoundingClientRect().left;
-        const xInScrub = clientX - left;
+        // clientX を「表示領域」ではなく「全タイムライン内容」座標へ変換する。
+        // ズーム時は scrollLeft を足さないと、分割点が描画幅比で前方にズレる。
+        const xInViewport = clientX - m.contentLeft;
+        const xInScrub = xInViewport + (m.scrollable ? m.scrollLeft : 0);
         return Math.max(0, Math.min(1, xInScrub / m.scrubW));
     }
 
