@@ -1863,19 +1863,40 @@
         return true;
     }
 
+    function focusWaveformDrawingArea() {
+        const waveFocus =
+            typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                ? audioWaveformLanesTracks
+                : typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack
+                  ? audioWaveformTrack
+                  : null;
+        if (!waveFocus || typeof waveFocus.focus !== 'function') return;
+        requestAnimationFrame(() => {
+            try {
+                waveFocus.focus({ preventScroll: true });
+            } catch (_) {
+                waveFocus.focus();
+            }
+        });
+    }
+
     function clearActiveMarkerTarget() {
         const hadActive = activeMarkerId != null;
         const ae = document.activeElement;
         const inComment =
             ae && ae.closest && ae.closest('.marker-table__comment');
+        const inTcInput =
+            ae && ae.closest && ae.closest('.marker-table__tc-input');
         activeMarkerId = null;
-        if (inComment && ae.blur) ae.blur();
+        if ((inComment || inTcInput) && ae.blur) ae.blur();
         refreshMarkerUi();
-        if (hadActive || inComment) {
+        const dismissed = hadActive || inComment || inTcInput;
+        if (dismissed) {
             writeLog('Marker: target cleared (Esc)');
             flashSeekHint('Marker', 'None', 'notice');
+            focusWaveformDrawingArea();
         }
-        return hadActive || inComment;
+        return dismissed;
     }
 
     function isMarkerAreaKeyboardActive(opt) {
@@ -1906,6 +1927,7 @@
         if (pendingRangeStartSec == null) return false;
         cancelPendingRange();
         e.preventDefault();
+        focusWaveformDrawingArea();
         return true;
     }
 
@@ -2656,6 +2678,11 @@
             renderSeekBarMarkers();
         };
         input.addEventListener('keydown', (ev) => {
+            const shortcuts = window.SHORTCUTS || {};
+            const matches =
+                typeof window.matchesShortcut === 'function'
+                    ? window.matchesShortcut
+                    : () => false;
             if (handleMarkerTcInputNudgeKey(ev, input, m, edge)) return;
             if (
                 edge === 'out' &&
@@ -2663,6 +2690,7 @@
             ) {
                 if (clearMarkerOutTc(m.id)) {
                     ev.preventDefault();
+                    ev.stopPropagation();
                     tcEditRevert = null;
                     const t = commitMarkerTransportSeek(clampMarkerSec(m.timeSec));
                     syncMarkerSeekTransportUi(t);
@@ -2673,12 +2701,15 @@
             }
             if (matches(ev, shortcuts.submitEditing, { allowRepeat: true })) {
                 ev.preventDefault();
+                ev.stopPropagation();
                 tcEditRevert = null;
                 input.blur();
+                focusWaveformDrawingArea();
             } else if (matches(ev, shortcuts.cancelEditing, { allowRepeat: true })) {
                 ev.preventDefault();
+                ev.stopPropagation();
                 applyTcEditRevert();
-                input.blur();
+                focusWaveformDrawingArea();
             }
         });
         input.addEventListener('mousedown', (ev) => {
@@ -3965,6 +3996,20 @@
         return true;
     }
 
+    /** Alt+↑↓: Feedback 行ナビ（テキスト入力中も有効） */
+    function isMarkerFeedbackRowNavKeydown(e) {
+        if (!e || e.ctrlKey || e.metaKey || !e.altKey || e.shiftKey) return false;
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        return (
+            matches(e, shortcuts.markerNavigateUp, { allowRepeat: true }) ||
+            matches(e, shortcuts.markerNavigateDown, { allowRepeat: true })
+        );
+    }
+
     function handleMarkerNavigationKeydown(e) {
         const shortcuts = window.SHORTCUTS || {};
         const matches =
@@ -4745,6 +4790,19 @@
                 updateMarkerComment(m.id, comment.value);
                 fitMarkerCommentHeight(comment);
             });
+            comment.addEventListener('keydown', (ev) => {
+                const shortcuts = window.SHORTCUTS || {};
+                const matches =
+                    typeof window.matchesShortcut === 'function'
+                        ? window.matchesShortcut
+                        : () => false;
+                if (!matches(ev, shortcuts.cancelEditing, { allowRepeat: true })) return;
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (!clearActiveMarkerTarget()) {
+                    focusWaveformDrawingArea();
+                }
+            });
             tdComment.appendChild(comment);
             requestAnimationFrame(() => fitMarkerCommentHeight(comment));
 
@@ -4940,7 +4998,9 @@
             'keydown',
             (e) => {
                 // 入力中はマーカー系グローバルショートカットを無効化する。
+                // Alt+↑↓ の Feedback 行移動は編集中も有効にする。
                 if (
+                    !isMarkerFeedbackRowNavKeydown(e) &&
                     typeof isTypingTarget === 'function' &&
                     (isTypingTarget(e.target) || isTypingTarget(document.activeElement))
                 ) {
@@ -5003,6 +5063,18 @@
                 if (typeof schedulePersistSession === 'function') {
                     schedulePersistSession();
                 }
+            });
+            markerMemoTextarea.addEventListener('keydown', (e) => {
+                const shortcuts = window.SHORTCUTS || {};
+                const matches =
+                    typeof window.matchesShortcut === 'function'
+                        ? window.matchesShortcut
+                        : () => false;
+                if (!matches(e, shortcuts.cancelEditing, { allowRepeat: true })) return;
+                e.preventDefault();
+                e.stopPropagation();
+                markerMemoTextarea.blur();
+                focusWaveformDrawingArea();
             });
         }
         updateMarkerHideViewButton();
