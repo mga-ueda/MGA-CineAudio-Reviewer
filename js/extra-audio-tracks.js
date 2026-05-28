@@ -4241,6 +4241,10 @@
         dst.file = src.file;
         dst.buffer = src.buffer;
         dst.peaks = src.peaks;
+        dst.peakPyramid = src.peakPyramid || null;
+        dst.peakPyramidGen = src.peakPyramidGen || 0;
+        // Force viewport peaks rebuild for the moved slot to avoid stale view slices.
+        dst.viewportPeaks = null;
         dst.persistBlob = src.persistBlob;
         dst.restoreDurationHint = src.restoreDurationHint;
         dst.timelineStartSec = src.timelineStartSec;
