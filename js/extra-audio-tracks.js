@@ -209,20 +209,26 @@
         return cf * segmentRegionGainLinear(segHit, t);
     }
 
-    function computeEqualPowerCrossfadeGains(active, transportSec) {
+    /** 同一 Ex スロット内の重なりのみ等パワー正規化（別トラックとは独立） */
+    function computeEqualPowerCrossfadeGainsForSlot(slotActive, transportSec) {
         const gains = new Map();
-        if (!active.length) return gains;
-        if (active.length === 1) {
-            gains.set(active[0].key, 1);
+        if (!slotActive.length) return gains;
+        if (slotActive.length === 1) {
+            gains.set(slotActive[0].key, 1);
             return gains;
         }
-        const weights = active.map(() => 1);
+        const weights = slotActive.map(() => 1);
         const t = Number(transportSec);
-        for (let i = 0; i < active.length; i++) {
-            for (let j = i + 1; j < active.length; j++) {
-                if (active[i].slot !== active[j].slot) continue;
-                const lo = active[i].segmentIndex < active[j].segmentIndex ? active[i] : active[j];
-                const hi = active[i].segmentIndex < active[j].segmentIndex ? active[j] : active[i];
+        for (let i = 0; i < slotActive.length; i++) {
+            for (let j = i + 1; j < slotActive.length; j++) {
+                const lo =
+                    slotActive[i].segmentIndex < slotActive[j].segmentIndex
+                        ? slotActive[i]
+                        : slotActive[j];
+                const hi =
+                    slotActive[i].segmentIndex < slotActive[j].segmentIndex
+                        ? slotActive[j]
+                        : slotActive[i];
                 if (
                     hi.segmentIndex === lo.segmentIndex + 1 &&
                     typeof isSegmentBoundaryJoined === 'function' &&
@@ -238,8 +244,14 @@
                 ) {
                     continue;
                 }
-                const oStart = Math.max(active[i].timelineStart, active[j].timelineStart);
-                const oEnd = Math.min(active[i].timelineEnd, active[j].timelineEnd);
+                const oStart = Math.max(
+                    slotActive[i].timelineStart,
+                    slotActive[j].timelineStart,
+                );
+                const oEnd = Math.min(
+                    slotActive[i].timelineEnd,
+                    slotActive[j].timelineEnd,
+                );
                 if (
                     oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC ||
                     t < oStart ||
@@ -250,7 +262,7 @@
                 const p = (t - oStart) / (oEnd - oStart);
                 const gOut = Math.cos(p * Math.PI * 0.5);
                 const gIn = Math.sin(p * Math.PI * 0.5);
-                const { out, in: inIdx } = crossfadeOutInIndices(active, i, j);
+                const { out, in: inIdx } = crossfadeOutInIndices(slotActive, i, j);
                 weights[out] *= gOut;
                 weights[inIdx] *= gIn;
             }
@@ -258,8 +270,27 @@
         let sumSq = 0;
         for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
         const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
+        for (let i = 0; i < slotActive.length; i++) {
+            gains.set(slotActive[i].key, weights[i] * norm);
+        }
+        return gains;
+    }
+
+    function computeEqualPowerCrossfadeGains(active, transportSec) {
+        const gains = new Map();
+        if (!active.length) return gains;
+        const bySlot = new Map();
         for (let i = 0; i < active.length; i++) {
-            gains.set(active[i].key, weights[i] * norm);
+            const hit = active[i];
+            if (!bySlot.has(hit.slot)) bySlot.set(hit.slot, []);
+            bySlot.get(hit.slot).push(hit);
+        }
+        for (const slotActive of bySlot.values()) {
+            const slotGains = computeEqualPowerCrossfadeGainsForSlot(
+                slotActive,
+                transportSec,
+            );
+            slotGains.forEach((g, key) => gains.set(key, g));
         }
         return gains;
     }
