@@ -4,6 +4,7 @@
 
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
+    const NOW_LOADING_LOG_MAX_LINES = 80;
 
     /** @type {null | 'webm-export' | 'waveform-restore'} */
     let blockingMode = null;
@@ -28,6 +29,63 @@
 
     function minimalEl() {
         return document.getElementById('exportBlockingMinimal');
+    }
+
+    function minimalLogEl() {
+        return document.getElementById('exportBlockingMinimalLog');
+    }
+
+    function isNowLoadingLogMirrorActive() {
+        if (!NOW_LOADING_ENABLED) return false;
+        if (blockingMode === 'waveform-restore') return true;
+        try {
+            return document.documentElement.classList.contains(
+                'waveform-restore-boot-pending',
+            );
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function isMaskedNowLoadingLogLine(message) {
+        const text = message != null ? String(message) : '';
+        return text.toLowerCase().includes('debug');
+    }
+
+    function formatNowLoadingLogLine(message) {
+        const now = new Date();
+        const time =
+            '[' +
+            String(now.getHours()).padStart(2, '0') +
+            ':' +
+            String(now.getMinutes()).padStart(2, '0') +
+            ':' +
+            String(now.getSeconds()).padStart(2, '0') +
+            ']';
+        return time + ' - ' + String(message);
+    }
+
+    function clearNowLoadingLog() {
+        const el = minimalLogEl();
+        if (!el) return;
+        el.textContent = '';
+        el.hidden = true;
+    }
+
+    function appendNowLoadingLogLine(message) {
+        if (!isNowLoadingLogMirrorActive()) return;
+        if (isMaskedNowLoadingLogLine(message)) return;
+        const el = minimalLogEl();
+        if (!el) return;
+        const line = formatNowLoadingLogLine(message);
+        const cur = el.textContent || '';
+        const lines = cur ? cur.split('\n') : [];
+        lines.push(line);
+        if (lines.length > NOW_LOADING_LOG_MAX_LINES) {
+            lines.splice(0, lines.length - NOW_LOADING_LOG_MAX_LINES);
+        }
+        el.textContent = lines.join('\n');
+        el.hidden = false;
     }
 
     function panelEl() {
@@ -290,6 +348,7 @@
 
     function cleanupWaveformRestoreOverlayDom() {
         clearWaveformRestoreBootHint();
+        clearNowLoadingLog();
         const root = overlayEl();
         if (!root) return;
         root.classList.remove(
@@ -425,6 +484,9 @@
 
     window.NOW_LOADING_ENABLED = NOW_LOADING_ENABLED;
     window.isNowLoadingEnabled = isNowLoadingEnabled;
+    window.isNowLoadingLogMirrorActive = isNowLoadingLogMirrorActive;
+    window.appendNowLoadingLogLine = appendNowLoadingLogLine;
+    window.clearNowLoadingLog = clearNowLoadingLog;
     window.setExportBlockingVisible = setExportBlockingVisible;
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;

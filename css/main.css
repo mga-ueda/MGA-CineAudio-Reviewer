@@ -3026,7 +3026,8 @@
         }
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
-        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint {
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint,
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log {
             animation: none;
             opacity: 0;
             transition: opacity 0.16s ease-out;
@@ -3037,7 +3038,8 @@
             }
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
-            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint {
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint,
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log {
                 transition: none;
             }
         }
@@ -3115,6 +3117,36 @@
                 opacity: 0.85;
                 transform: translateY(-1px);
             }
+        }
+
+        .export-blocking-overlay__minimal-log {
+            display: none;
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            box-sizing: border-box;
+            max-height: min(32vh, 14rem);
+            margin: 0;
+            padding: 0 16px 16px;
+            overflow: hidden;
+            border: none;
+            background: none;
+            font: 500 0.68rem/1.45 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            letter-spacing: 0.02em;
+            text-align: left;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: rgba(210, 220, 235, 0.62);
+            user-select: text;
+            pointer-events: auto;
+            cursor: text;
+        }
+        .export-blocking-overlay__minimal-log[hidden] {
+            display: none !important;
+        }
+        .export-blocking-overlay--minimal .export-blocking-overlay__minimal-log:not([hidden]) {
+            display: block;
         }
 
         .export-blocking-overlay__panel {

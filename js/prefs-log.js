@@ -168,6 +168,9 @@
         }
         logEl.innerText = lines.join('\n');
         logEl.scrollTop = logEl.scrollHeight;
+        if (typeof appendNowLoadingLogLine === 'function') {
+            appendNowLoadingLogLine(m);
+        }
     }
 
     window.clearLog = clearLog;
