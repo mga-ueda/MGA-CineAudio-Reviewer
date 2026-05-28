@@ -7,7 +7,10 @@
      * true にすると MediaElementSource 経由（環境によっては接続後も無音になる）。
      */
     const ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO = false;
-    const EXTRA_TRACK_DEFAULT_LABELS = ['Ex 1 Track', 'Ex 2 Track', 'Ex 3 Track'];
+    const EXTRA_TRACK_DEFAULT_LABELS = Array.from(
+        { length: EXTRA_TRACK_COUNT },
+        (_, i) => 'Ex ' + (i + 1) + ' Track',
+    );
 
     function setLaneWaveformFileNameEl(el, name, tip) {
         if (!el) return;
@@ -78,9 +81,9 @@
 
     const extraTrackUi = [];
     /** クリアで閉じる／新規動画・ドロップで開く空き Ex レーン枠 */
-    const extraLaneUiOpen = [false, false, false];
-    const extraTracks = [
-        {
+    const extraLaneUiOpen = Array.from({ length: EXTRA_TRACK_COUNT }, () => false);
+    function createEmptyExtraTrackState() {
+        return {
             file: null,
             buffer: null,
             peaks: null,
@@ -97,44 +100,11 @@
             timelineStartSec: 0,
             clips: [],
             segmentSources: {},
-        },
-        {
-            file: null,
-            buffer: null,
-            peaks: null,
-            peakPyramid: null,
-            persistBlob: null,
-            restoreDurationHint: 0,
-            muted: false,
-            solo: false,
-            volLinear: 1,
-            source: null,
-            gainNode: null,
-            analyser: null,
-            loadGen: 0,
-            timelineStartSec: 0,
-            clips: [],
-            segmentSources: {},
-        },
-        {
-            file: null,
-            buffer: null,
-            peaks: null,
-            peakPyramid: null,
-            persistBlob: null,
-            restoreDurationHint: 0,
-            muted: false,
-            solo: false,
-            volLinear: 1,
-            source: null,
-            gainNode: null,
-            analyser: null,
-            loadGen: 0,
-            timelineStartSec: 0,
-            clips: [],
-            segmentSources: {},
-        },
-    ];
+        };
+    }
+    const extraTracks = Array.from({ length: EXTRA_TRACK_COUNT }, () =>
+        createEmptyExtraTrackState(),
+    );
 
     function newExtraClipId() {
         return (

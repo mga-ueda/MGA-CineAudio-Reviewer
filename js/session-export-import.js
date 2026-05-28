@@ -334,7 +334,9 @@
     }
 
     function defaultExportMediaOptions() {
-        return { includeVideo: true, includeExtra: [true, true, true] };
+        const count =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        return { includeVideo: true, includeExtra: Array.from({ length: count }, () => true) };
     }
 
     function normalizeExportMediaOptions(opt) {
@@ -453,12 +455,10 @@
     }
 
     function bindExportMediaIncludeCheckboxPersistence() {
-        const ids = [
-            'sessionExportIncludeVideo',
-            'sessionExportIncludeEx0',
-            'sessionExportIncludeEx1',
-            'sessionExportIncludeEx2',
-        ];
+        const count =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const ids = ['sessionExportIncludeVideo'];
+        for (let i = 0; i < count; i++) ids.push('sessionExportIncludeEx' + i);
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el || el.dataset.exportMediaPersistBound === '1') continue;
@@ -1296,7 +1296,9 @@
         const mediaOpts = document.getElementById('sessionExportMediaOpts');
         if (mediaOpts) {
             const mo = new MutationObserver(refreshExportMediaOptionsUi);
-            for (let i = 0; i < 3; i++) {
+            const count =
+                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+            for (let i = 0; i < count; i++) {
                 const meta = document.getElementById('extraAudioMeta' + i);
                 if (meta) mo.observe(meta, { attributes: true, attributeFilter: ['hidden'] });
             }
