@@ -1710,12 +1710,62 @@
         else toggleExtraSolo(t.slot);
     }
 
+    function soloOnlyMixByDisplayIndex(displayIndex) {
+        const targets = getVisibleMixLaneTargets();
+        const t = targets[displayIndex];
+        if (!t) return false;
+
+        if (typeof videoReady === 'function' && videoReady()) {
+            videoMix.solo = t.kind === 'video';
+            if (t.kind === 'video') {
+                videoMix.muted = false;
+            }
+        }
+
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const tr = extraTrackBySlot(slot);
+            if (!tr || !tr.buffer) continue;
+            const isTarget = t.kind === 'extra' && t.slot === slot;
+            tr.solo = isTarget;
+            if (isTarget) {
+                tr.muted = false;
+            }
+        }
+
+        refreshReviewMixUi();
+        syncExtraAudioToTransport();
+        writeLog('Mix solo only: ' + (t.kind === 'video' ? 'Video' : 'Extra audio ' + (t.slot + 1)));
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        return true;
+    }
+
     function toggleMixMuteByDisplayIndex(displayIndex) {
         const targets = getVisibleMixLaneTargets();
         const t = targets[displayIndex];
         if (!t) return;
         if (t.kind === 'video') toggleVideoMute();
         else toggleExtraMute(t.slot);
+    }
+
+    function clearAllMixMute() {
+        let changed = false;
+        if (typeof videoReady === 'function' && videoReady() && videoMix.muted) {
+            videoMix.muted = false;
+            changed = true;
+        }
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const tr = extraTrackBySlot(slot);
+            if (!tr || !tr.buffer) continue;
+            if (!tr.muted) continue;
+            tr.muted = false;
+            changed = true;
+        }
+        if (!changed) return false;
+        refreshReviewMixUi();
+        syncExtraAudioToTransport();
+        writeLog('Mix mute: all tracks unmuted');
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        return true;
     }
 
     function isMixLaneDbAtUnity(db) {
@@ -4067,7 +4117,9 @@
     window.toggleExtraTrackMute = toggleExtraMute;
     window.resolveActiveMixLaneDisplayIndex = resolveActiveMixLaneDisplayIndex;
     window.toggleMixSoloByDisplayIndex = toggleMixSoloByDisplayIndex;
+    window.soloOnlyMixByDisplayIndex = soloOnlyMixByDisplayIndex;
     window.toggleMixMuteByDisplayIndex = toggleMixMuteByDisplayIndex;
+    window.clearAllMixMute = clearAllMixMute;
     window.adjustExtraTrackVolumeDb = adjustExtraTrackVolumeDb;
     window.clearExtraTrackVolumeUnityHold = clearExtraTrackVolumeUnityHold;
     window.isExtraTrackLoaded = isExtraTrackLoaded;

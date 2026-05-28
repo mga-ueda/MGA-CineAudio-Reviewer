@@ -80,7 +80,9 @@
 
         // ---------- ミックス ----------
         mixLaneSoloToggle: { code: 'KeyS', ctrl: false, alt: false, meta: false, shift: false },
+        mixLaneSoloExclusive: { code: 'KeyS', ctrl: false, alt: true, meta: false, shift: false },
         mixLaneMuteToggle: { code: 'KeyM', ctrl: false, alt: false, meta: false, shift: false },
+        mixLaneMuteClearAll: { code: 'KeyM', ctrl: false, alt: true, meta: false, shift: false },
         mixLaneVolumeUp: { code: 'PageUp', ctrl: false, alt: false, meta: false, shift: false },
         mixLaneVolumeDown: { code: 'PageDown', ctrl: false, alt: false, meta: false, shift: false },
         masterVolumeResetUnity: { code: 'KeyV', primary: true, shift: true, alt: false },

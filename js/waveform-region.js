@@ -4228,10 +4228,20 @@
                 ? window.matchesShortcut
                 : () => false;
         const isSolo = matches(e, shortcuts.mixLaneSoloToggle);
+        const isSoloExclusive = matches(e, shortcuts.mixLaneSoloExclusive);
         const isMute = matches(e, shortcuts.mixLaneMuteToggle);
-        const isSoloMute = isSolo || isMute;
+        const isMuteClearAll = matches(e, shortcuts.mixLaneMuteClearAll);
+        const isSoloMute = isSolo || isSoloExclusive || isMute || isMuteClearAll;
         if (!isSoloMute) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (isMuteClearAll) {
+            e.preventDefault();
+            if (typeof window.clearAllMixMute === 'function') {
+                window.clearAllMixMute();
+                return true;
+            }
             return false;
         }
 
@@ -4257,6 +4267,13 @@
         if (idx < 0) return false;
 
         e.preventDefault();
+        if (isSoloExclusive) {
+            if (typeof window.soloOnlyMixByDisplayIndex === 'function') {
+                window.soloOnlyMixByDisplayIndex(idx);
+                return true;
+            }
+            return false;
+        }
         if (isSolo) {
             if (typeof window.toggleMixSoloByDisplayIndex === 'function') {
                 window.toggleMixSoloByDisplayIndex(idx);
