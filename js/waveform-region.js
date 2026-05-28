@@ -2836,14 +2836,14 @@
             const handleIn = document.createElement('div');
             handleIn.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--in';
-            handleIn.title = 'Region ' + (segmentIndex + 1) + ' In';
+            handleIn.title = 'Region ' + (segmentIndex + 1) + ' In（開始位置）';
             el.appendChild(handleIn);
         }
         if (shouldShowSegmentOutHandle(track, segmentIndex)) {
             const handleOut = document.createElement('div');
             handleOut.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--out';
-            handleOut.title = 'Region ' + (segmentIndex + 1) + ' Out';
+            handleOut.title = 'Region ' + (segmentIndex + 1) + ' Out（終了位置）';
             el.appendChild(handleOut);
         }
         const label = document.createElement('span');
@@ -2872,7 +2872,7 @@
         el.className =
             'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--split';
         el.dataset.boundaryIndex = String(boundaryIndex);
-        el.title = 'Split point (drag to move)';
+        el.title = 'Split point（ドラッグで移動）';
         return el;
     }
 
@@ -2958,7 +2958,7 @@
         const el = document.createElement('div');
         el.className = 'audio-waveform-lane__crossfade-marker';
         el.setAttribute('aria-hidden', 'true');
-        el.title = 'Crossfade';
+        el.title = 'Crossfade（クロスフェード量）';
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'audio-waveform-lane__crossfade-marker__shape');
         svg.setAttribute('viewBox', '0 0 100 100');

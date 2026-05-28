@@ -104,7 +104,7 @@
             handle = document.createElement('div');
             handle.className = 'video-timecode__resize-handle';
             handle.setAttribute('aria-hidden', 'true');
-            handle.title = 'Drag to resize timecode';
+            handle.title = 'ドラッグで timecode サイズを変更';
             el.appendChild(handle);
         }
         return { textEl: textEl, handle: handle };

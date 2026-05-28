@@ -1606,7 +1606,7 @@
             const leftLabel = phraseGroupLabelForIndex(ranges[i].paletteIndex);
             const rightLabel = phraseGroupLabelForIndex(ranges[i + 1].paletteIndex);
             handle.title =
-                'Phrase ' + leftLabel + ' / ' + rightLabel + ' boundary (drag to adjust bars)';
+                'Phrase ' + leftLabel + ' / ' + rightLabel + ' 境界（ドラッグで小節数を調整）';
             handle.addEventListener('pointerdown', (ev) => {
                 onPhraseBoundaryHandlePointerDown(ev, i);
             });

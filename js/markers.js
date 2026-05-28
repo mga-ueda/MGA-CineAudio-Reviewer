@@ -2621,7 +2621,7 @@
         if (edge === 'in') {
             input.value =
                 m.type === 'range' ? tcLabelForSec(m.startSec) : tcLabelForSec(m.timeSec);
-            input.title = 'In TC: [+][-] ±1f · [Shift][+][-] ±1s (Enter/Esc to finish)';
+            input.title = 'In TC: [+][-] で ±1f ・ [Shift][+][-] で ±1s（Enter/Esc で終了）';
         } else {
             input.value = m.type === 'range' ? tcLabelForSec(m.endSec) : '';
             input.title =
@@ -3163,7 +3163,7 @@
                     'Out TC: [+][-] ±1f · [Shift][+][-] ±1s · [Del] clear Out (Enter/Esc to finish)';
             } else {
                 outInput.value = '';
-                outInput.title = 'Out TC: [+][-] sets range Out (±1f / Shift ±1s)';
+                outInput.title = 'Out TC: [+][-] で range Out を設定（±1f / Shift ±1s）';
             }
         }
         if (durCell) {
@@ -4468,10 +4468,10 @@
             const m = opt.marker;
             const handleIn = document.createElement('div');
             handleIn.className = 'seek-bar-marker__handle seek-bar-marker__handle--in';
-            handleIn.title = 'Drag In';
+            handleIn.title = 'In をドラッグ';
             const handleOut = document.createElement('div');
             handleOut.className = 'seek-bar-marker__handle seek-bar-marker__handle--out';
-            handleOut.title = 'Drag Out';
+            handleOut.title = 'Out をドラッグ';
             el.appendChild(handleIn);
             el.appendChild(handleOut);
             bindSeekBarMarkerDrag(el, m, 'move', { bandEl: el });
@@ -4732,6 +4732,7 @@
             comment.rows = 1;
             comment.placeholder = '';
             comment.value = m.comment || '';
+            comment.title = 'コメントを編集';
             comment.dataset.markerComment = m.id;
             comment.addEventListener('pointerdown', (ev) => {
                 if (ev.button !== 0) return;
@@ -4756,7 +4757,7 @@
             delBtn.type = 'button';
             delBtn.className = 'marker-table__btn marker-table__btn--danger';
             delBtn.textContent = '×';
-            delBtn.title = 'Delete';
+            delBtn.title = '削除';
             delBtn.addEventListener('click', () => removeMarker(m.id));
             actWrap.appendChild(delBtn);
             tdAct.appendChild(actWrap);

@@ -143,7 +143,7 @@
         setPlaybackDriftDisplayUnknown(statEl);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = title || 'Playback Drift: not available';
+        statEl.title = title || 'Playback Drift: 利用できません';
     }
 
     function showPlaybackDriftPanelZero(statEl) {
@@ -152,7 +152,7 @@
         setPlaybackDriftDisplay(statEl, 0);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = 'Playback Drift: no session loaded (0 f)';
+        statEl.title = 'Playback Drift: セッション未ロード（0 f）';
     }
 
     function applyPlaybackDriftPanelTone(statEl, tone) {
@@ -214,7 +214,7 @@
         if (!videoReady()) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: not available without video (shows ---- f)',
+                'Playback Drift: 動画なしでは利用不可（---- f を表示）',
             );
             return;
         }
@@ -260,7 +260,7 @@
         if (signed == null) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: no measurable drift (shows ---- f)',
+                'Playback Drift: 測定可能なドリフトなし（---- f を表示）',
             );
             return;
         }
@@ -276,10 +276,10 @@
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
         }
         statEl.title = VIDEO_DRIFT_AUTO_CORRECT_ENABLED
-            ? 'Playback Drift vs audio master (updates ~1s; corrects video when over ' +
+            ? 'Playback Drift と audio master の差（約1秒ごとに更新、' +
               threshFrames +
-              ' f).'
-            : 'Playback Drift vs audio master (updates ~1s; auto-correction disabled).';
+              ' f 超で video を補正）。'
+            : 'Playback Drift と audio master の差（約1秒ごとに更新、自動補正は無効）。';
     }
 
     window.refreshVideoDriftPanelStat = refreshVideoDriftPanelStat;

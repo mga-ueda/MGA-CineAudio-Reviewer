@@ -24,13 +24,13 @@
             '<div class="track-mix-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn' +
             slot +
-            '" disabled title="Solo" aria-pressed="false">S</button>' +
+            '" disabled title="Solo（このレーンのみ再生）" aria-pressed="false">S</button>' +
             '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
             slot +
-            '" disabled title="Mute" aria-pressed="false">M</button>' +
+            '" disabled title="Mute（このレーンをミュート）" aria-pressed="false">M</button>' +
             '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
             slot +
-            '" title="Clear (hide lane)">×</button>' +
+            '" title="Clear（レーンを非表示）">×</button>' +
             '</div></div>' +
             '<div class="track-lane-controls">' +
             '<div class="track-lane-meter-row">' +
@@ -46,7 +46,9 @@
             slot +
             '" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio ' +
             n +
-            ' volume">' +
+            ' volume" title="Ex ' +
+            n +
+            ' volume を調整">' +
             '<span class="track-lane-fader-db" id="trackLaneFaderDb' +
             slot +
             '">0.0 dB</span></div></div>' +
@@ -55,7 +57,7 @@
             '" hidden></span>' +
             '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
             slot +
-            '" title="Show next extra audio track"' +
+            '" title="次の extra audio track を表示"' +
             addAttrs +
             '>+ Add Track</button>';
         return wrap;
@@ -91,10 +93,13 @@
         const label = document.createElement('label');
         label.className =
             'transport-compact-lbl transport-compact-lbl--row session-export-media__item';
+        label.title = 'Export に Ex ' + n + ' を含める';
         label.innerHTML =
             '<input type="checkbox" id="sessionExportIncludeEx' +
             slot +
-            '" checked disabled>' +
+            '" checked disabled title="Export に Ex ' +
+            n +
+            ' を含める">' +
             '<span>Ex ' +
             n +
             '</span>';
