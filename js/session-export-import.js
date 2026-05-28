@@ -1222,9 +1222,13 @@
         fileInput.click();
     }
 
-    function triggerAllClear(allClearBtn) {
+    function triggerAllClear(allClearBtn, opt) {
         const btn = allClearBtn || document.getElementById('sessionAllClearBtn');
-        if (!btn || btn.disabled) return;
+        const allowWhileRestoreLock =
+            !!(opt && opt.allowWhileRestoreLock) &&
+            typeof isWaveformRestoreLockActive === 'function' &&
+            isWaveformRestoreLockActive();
+        if (!btn || (!allowWhileRestoreLock && btn.disabled)) return;
         pauseTransportForImportReview();
         const confirmPromise =
             typeof requestAppConfirm === 'function'
@@ -1269,7 +1273,10 @@
 
         if (matches(e, shortcuts.sessionAllClear)) {
             e.preventDefault();
-            triggerAllClear();
+            const duringRestoreLock =
+                typeof isWaveformRestoreLockActive === 'function' &&
+                isWaveformRestoreLockActive();
+            triggerAllClear(null, { allowWhileRestoreLock: duringRestoreLock });
             return true;
         }
 

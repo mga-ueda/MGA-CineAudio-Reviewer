@@ -378,6 +378,16 @@
                 }
                 return;
             }
+            // Now Loading が止まったときの脱出用: 波形復元ロック中も All Clear を許可
+            if (
+                typeof isWaveformRestoreLockActive === 'function' &&
+                isWaveformRestoreLockActive() &&
+                matches(e, shortcuts.sessionAllClear) &&
+                typeof handleSessionIoShortcutKeydown === 'function' &&
+                handleSessionIoShortcutKeydown(e)
+            ) {
+                return;
+            }
             e.preventDefault();
             return;
         }

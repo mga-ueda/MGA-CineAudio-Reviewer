@@ -66,7 +66,10 @@
         if (exportBtn) exportBtn.disabled = xl;
         if (importBtn) importBtn.disabled = xl;
         if (exportWebmBtn) exportWebmBtn.disabled = xl;
-        if (allClearBtn && xl) allClearBtn.disabled = true;
+        // waveform-restore（Now Loading）中は All Clear を残す（ショートカット／ボタンで脱出可能に）
+        if (allClearBtn && xl && blockingMode !== 'waveform-restore') {
+            allClearBtn.disabled = true;
+        }
         if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
         if (!xl && typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();

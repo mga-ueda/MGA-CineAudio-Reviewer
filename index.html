@@ -31,15 +31,18 @@
             -webkit-backdrop-filter: blur(10px);
         }
         html.waveform-restore-boot-pending::after {
-            content: 'Now Loading ...';
+            content: 'Now Loading ...\A Alt+Shift+Ctrl+Del to Cancel and Clear';
             position: fixed;
             z-index: 19991;
             left: 50%;
             top: 30%;
             transform: translateX(-50%);
             margin: 0;
+            max-width: min(90vw, 22rem);
             font: 600 1.05rem/1.4 system-ui, sans-serif;
             letter-spacing: 0.06em;
+            text-align: center;
+            white-space: pre-line;
             color: rgba(235, 240, 248, 0.88);
             pointer-events: none;
         }
@@ -87,7 +90,10 @@
         tabindex="-1"
     >
         <p class="export-blocking-overlay__minimal" id="exportBlockingMinimal" hidden aria-live="polite">
-            <span class="export-blocking-overlay__minimal-label">Now Loading</span><span class="export-blocking-overlay__minimal-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+            <span class="export-blocking-overlay__minimal-heading">
+                <span class="export-blocking-overlay__minimal-label">Now Loading</span><span class="export-blocking-overlay__minimal-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+            </span>
+            <span class="export-blocking-overlay__minimal-hint">Alt+Shift+Ctrl+Del to Cancel and Clear</span>
         </p>
         <div class="export-blocking-overlay__panel">
             <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>

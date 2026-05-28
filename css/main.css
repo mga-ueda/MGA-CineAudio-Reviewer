@@ -3025,7 +3025,8 @@
             pointer-events: none;
         }
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
-        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots {
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint {
             animation: none;
             opacity: 0;
             transition: opacity 0.16s ease-out;
@@ -3035,7 +3036,8 @@
                 transition: none;
             }
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
-            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots {
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint {
                 transition: none;
             }
         }
@@ -3044,6 +3046,9 @@
         }
         .export-blocking-overlay__minimal {
             display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.7rem;
             margin: 0;
             padding: 0;
             text-align: center;
@@ -3056,7 +3061,7 @@
             pointer-events: none;
         }
         .export-blocking-overlay--minimal .export-blocking-overlay__minimal {
-            display: block;
+            display: flex;
             position: absolute;
             top: 30%;
             left: 50%;
@@ -3064,8 +3069,21 @@
             width: max-content;
             max-width: min(90vw, 24rem);
         }
+        .export-blocking-overlay__minimal-heading {
+            display: block;
+        }
         .export-blocking-overlay__minimal-label {
             animation: export-blocking-minimal-breathe 2.4s ease-in-out infinite;
+        }
+        .export-blocking-overlay__minimal-hint {
+            display: block;
+            margin: 0;
+            max-width: 22rem;
+            font-size: 0.72rem;
+            font-weight: 500;
+            line-height: 1.45;
+            letter-spacing: 0.04em;
+            color: rgba(220, 228, 242, 0.5);
         }
         .export-blocking-overlay__minimal-dots span {
             display: inline-block;
