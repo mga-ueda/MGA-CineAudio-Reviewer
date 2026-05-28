@@ -393,14 +393,23 @@
             e.preventDefault();
             const willHide = !transportOptionsSection.hidden;
             transportOptionsSection.hidden = willHide;
+            const logSection = document.getElementById('logSection');
+            if (logSection) logSection.hidden = willHide;
             writeLog(
                 willHide
-                    ? 'Transport options section: hidden (O)'
-                    : 'Transport options section: shown (O)'
+                    ? 'Transport options and log: hidden (O)'
+                    : 'Transport options and log: shown (O)'
             );
             if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
                 scheduleMarkersUiRefreshAfterLayout();
             }
+            return;
+        }
+
+        if (
+            typeof handleVideoMarkersPanelsToggleKeydown === 'function' &&
+            handleVideoMarkersPanelsToggleKeydown(e)
+        ) {
             return;
         }
 

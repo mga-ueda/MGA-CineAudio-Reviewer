@@ -44,6 +44,14 @@
             alt: false,
             shift: false,
         },
+        videoMarkersPanelsToggle: {
+            code: 'KeyF',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
 
         // ---------- セッション I/O ----------
@@ -92,7 +100,7 @@
         // ---------- 波形タイムライン ----------
         waveformTimelineZoomIn: { codes: ['Equal', 'NumpadAdd'] },
         waveformTimelineZoomOut: { codes: ['Minus', 'NumpadSubtract'] },
-        waveformTimelineFit: { code: 'KeyF', shift: false, ctrl: false, alt: false, meta: false },
+        waveformTimelineFit: { code: 'KeyF', shift: true, ctrl: false, alt: false, meta: false },
         waveformTimelineScrollBack: { code: 'PageUp' },
         waveformTimelineScrollForward: { code: 'PageDown' },
         waveformLaneSeekHome: { code: 'Home' },

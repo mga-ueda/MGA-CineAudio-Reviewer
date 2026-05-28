@@ -1,3 +1,50 @@
+    let videoMarkersPanelsHidden = false;
+
+    function applyVideoMarkersPanelsHidden(hidden) {
+        videoMarkersPanelsHidden = !!hidden;
+        if (playerStage) {
+            playerStage.classList.toggle(
+                'player-stage--video-markers-panels-hidden',
+                videoMarkersPanelsHidden,
+            );
+        }
+        if (panelMain) {
+            panelMain.setAttribute('aria-hidden', videoMarkersPanelsHidden ? 'true' : 'false');
+        }
+        if (markerPanel) {
+            markerPanel.setAttribute('aria-hidden', videoMarkersPanelsHidden ? 'true' : 'false');
+        }
+        if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
+            scheduleMarkersUiRefreshAfterLayout();
+        }
+        return videoMarkersPanelsHidden;
+    }
+
+    function toggleVideoMarkersPanelsHidden() {
+        const hidden = applyVideoMarkersPanelsHidden(!videoMarkersPanelsHidden);
+        writeLog(
+            hidden
+                ? 'Video and Markers panels: hidden (F)'
+                : 'Video and Markers panels: shown (F)',
+        );
+        flashSeekHint('Video + Markers', hidden ? 'Hidden' : 'Shown', 'notice');
+        return hidden;
+    }
+
+    function handleVideoMarkersPanelsToggleKeydown(e) {
+        const shortcuts = window.SHORTCUTS || {};
+        const matches =
+            typeof window.matchesShortcut === 'function'
+                ? window.matchesShortcut
+                : () => false;
+        if (!matches(e, shortcuts.videoMarkersPanelsToggle)) return false;
+        e.preventDefault();
+        toggleVideoMarkersPanelsHidden();
+        return true;
+    }
+
+    window.handleVideoMarkersPanelsToggleKeydown = handleVideoMarkersPanelsToggleKeydown;
+
     function getLoopPlaybackEnabled() {
         return !!(loopPlaybackCheckbox && loopPlaybackCheckbox.checked);
     }
