@@ -166,6 +166,10 @@
                     !(
                         typeof hasExtendedCrossfadeOverlapAtBoundary === 'function' &&
                         hasExtendedCrossfadeOverlapAtBoundary(trackRef, lo.segmentIndex)
+                    ) &&
+                    !(
+                        typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                        hasManualSegmentFadeAtJoinedBoundary(trackRef, lo.segmentIndex)
                     )
                 ) {
                     const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
@@ -189,25 +193,41 @@
         return { out: i, in: j };
     }
 
-    function segmentRegionGainLinear(segHit) {
+    function segmentRegionGainLinear(segHit, transportSec) {
         if (!segHit || typeof getSegmentGainLinear !== 'function') return 1;
         const track = { type: 'extra', slot: segHit.slot };
+        const t = Number.isFinite(transportSec) ? transportSec : segHit.transportSec;
         if (typeof getSegmentPlaybackGainLinear === 'function') {
-            return getSegmentPlaybackGainLinear(
-                track,
-                segHit.segmentIndex,
-                segHit.transportSec,
-            );
+            return getSegmentPlaybackGainLinear(track, segHit.segmentIndex, t);
         }
         return getSegmentGainLinear(track, segHit.segmentIndex);
     }
 
-    function segmentPlaybackGainLinear(segHit, crossfadeLinear) {
+    function segmentPlaybackGainLinear(segHit, crossfadeLinear, transportSec) {
         const cf = Number.isFinite(crossfadeLinear) ? crossfadeLinear : 1;
-        return cf * segmentRegionGainLinear(segHit);
+        const t = Number.isFinite(transportSec) ? transportSec : segHit.transportSec;
+        return cf * segmentRegionGainLinear(segHit, t);
     }
 
-    function computeEqualPowerCrossfadeGains(active, transportSec) {
+    function valleyCrossfadeOutGain(p) {
+        if (typeof window.crossfadeValleyGainOut === 'function') {
+            return window.crossfadeValleyGainOut(p);
+        }
+        const x = Math.max(0, Math.min(1, Number(p) || 0));
+        const q = 1 - x;
+        return q * q;
+    }
+
+    function valleyCrossfadeInGain(p) {
+        if (typeof window.crossfadeValleyGainIn === 'function') {
+            return window.crossfadeValleyGainIn(p);
+        }
+        const x = Math.max(0, Math.min(1, Number(p) || 0));
+        return x * x;
+    }
+
+    /** 谷型クロスフェード（振幅線形: 重なり中央で聴感音量が下がる） */
+    function computeValleyCrossfadeGains(active, transportSec) {
         const gains = new Map();
         if (!active.length) return gains;
         if (active.length === 1) {
@@ -219,6 +239,23 @@
         for (let i = 0; i < active.length; i++) {
             for (let j = i + 1; j < active.length; j++) {
                 if (active[i].slot !== active[j].slot) continue;
+                const lo = active[i].segmentIndex < active[j].segmentIndex ? active[i] : active[j];
+                const hi = active[i].segmentIndex < active[j].segmentIndex ? active[j] : active[i];
+                if (
+                    hi.segmentIndex === lo.segmentIndex + 1 &&
+                    typeof isSegmentBoundaryJoined === 'function' &&
+                    isSegmentBoundaryJoined(
+                        { type: 'extra', slot: lo.slot },
+                        lo.segmentIndex,
+                    ) &&
+                    typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                    hasManualSegmentFadeAtJoinedBoundary(
+                        { type: 'extra', slot: lo.slot },
+                        lo.segmentIndex,
+                    )
+                ) {
+                    continue;
+                }
                 const oStart = Math.max(active[i].timelineStart, active[j].timelineStart);
                 const oEnd = Math.min(active[i].timelineEnd, active[j].timelineEnd);
                 if (
@@ -229,25 +266,20 @@
                     continue;
                 }
                 const p = (t - oStart) / (oEnd - oStart);
-                const gOut = Math.cos(p * Math.PI * 0.5);
-                const gIn = Math.sin(p * Math.PI * 0.5);
                 const { out, in: inIdx } = crossfadeOutInIndices(active, i, j);
-                weights[out] *= gOut;
-                weights[inIdx] *= gIn;
+                weights[out] *= valleyCrossfadeOutGain(p);
+                weights[inIdx] *= valleyCrossfadeInGain(p);
             }
         }
-        let sumSq = 0;
-        for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
-        const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
         for (let i = 0; i < active.length; i++) {
-            gains.set(active[i].key, weights[i] * norm);
+            gains.set(active[i].key, weights[i]);
         }
         return gains;
     }
 
     /**
      * 結合境界: 入側の BufferSource が未作成の間だけ出側=1・入側=0。
-     * 両方ある場合は等パワー曲線をそのまま両セグメントへ適用する。
+     * 両方ある場合は谷型ゲイン曲線をそのまま両セグメントへ適用する。
      */
     function withCrossfadeGainsDeferredUntilIncomingAudible(ctx, active, transportSec, gains) {
         if (!ctx || !active || active.length < 2 || !gains) return gains;
@@ -266,6 +298,25 @@
                     oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC ||
                     t < oStart ||
                     t > oEnd
+                ) {
+                    continue;
+                }
+                const loDef =
+                    active[i].segmentIndex < active[j].segmentIndex ? active[i] : active[j];
+                const hiDef =
+                    active[i].segmentIndex < active[j].segmentIndex ? active[j] : active[i];
+                if (
+                    hiDef.segmentIndex === loDef.segmentIndex + 1 &&
+                    typeof isSegmentBoundaryJoined === 'function' &&
+                    isSegmentBoundaryJoined(
+                        { type: 'extra', slot: loDef.slot },
+                        loDef.segmentIndex,
+                    ) &&
+                    typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                    hasManualSegmentFadeAtJoinedBoundary(
+                        { type: 'extra', slot: loDef.slot },
+                        loDef.segmentIndex,
+                    )
                 ) {
                     continue;
                 }
@@ -352,6 +403,27 @@
                             )
                         )
                     ) {
+                        if (
+                            typeof hasManualSegmentFadeAtJoinedBoundary ===
+                                'function' &&
+                            hasManualSegmentFadeAtJoinedBoundary(
+                                trackRef,
+                                lo.segmentIndex,
+                            ) &&
+                            typeof getManualJoinedBoundaryFadeZone === 'function'
+                        ) {
+                            const zone = getManualJoinedBoundaryFadeZone(
+                                trackRef,
+                                lo.segmentIndex,
+                            );
+                            if (
+                                zone &&
+                                t >= zone.startSec - 0.0005 &&
+                                t <= zone.endSec + 0.0005
+                            ) {
+                                return true;
+                            }
+                        }
                         continue;
                     }
                     return true;
@@ -362,7 +434,7 @@
     }
 
     function computeSegmentCrossfadeGainsForActive(ctx, active, transportSec) {
-        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
+        const gains = computeValleyCrossfadeGains(active, transportSec);
         if (
             activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec) ||
             activeHasManualCrossfadeOverlapAtTransport(active, transportSec)
@@ -377,11 +449,82 @@
         );
     }
 
+    /** 結合境界の手動 Fade Out/In: 重なり開始前に右セグメントを起動 */
+    function ensureManualJoinedBoundaryFadePlayback(ctx, opt) {
+        if (!ctx || !isTransportPlayingForExtra()) return;
+        if (
+            typeof getManualJoinedBoundaryFadeZone !== 'function' ||
+            typeof hasManualSegmentFadeAtJoinedBoundary !== 'function'
+        ) {
+            return;
+        }
+        const gainT = getCrossfadeGainTransportSec();
+        const leadSec = 0.06;
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            const trackRef = { type: 'extra', slot: i };
+            if (
+                typeof isTrackRegionActive !== 'function' ||
+                !isTrackRegionActive(trackRef) ||
+                !shouldExtraTrackSourceBePlaying(i)
+            ) {
+                continue;
+            }
+            const tr = extraTrackBySlot(i);
+            if (!tr) continue;
+            const segCount =
+                typeof getTrackSegmentCount === 'function'
+                    ? getTrackSegmentCount(i)
+                    : 0;
+            if (segCount < 2) continue;
+            ensureExtraTrackMixRouting(i, ctx);
+            for (let b = 0; b < segCount - 1; b++) {
+                if (!hasManualSegmentFadeAtJoinedBoundary(trackRef, b)) continue;
+                const zone = getManualJoinedBoundaryFadeZone(trackRef, b);
+                if (!zone) continue;
+                if (!(zone.fadeIn > 0.0005)) continue;
+                if (gainT < zone.startSec - leadSec - 0.0005) continue;
+                if (gainT > zone.endSec + 0.0005) continue;
+                const probeT = Math.max(zone.startSec, gainT);
+                const hitsAtProbe =
+                    typeof getActiveExtraSegmentsAtTransport === 'function'
+                        ? getActiveExtraSegmentsAtTransport(probeT).filter(
+                              (s) => s.slot === i,
+                          )
+                        : [];
+                const startHit = hitsAtProbe.find((h) => h.segmentIndex === b + 1);
+                if (!startHit) continue;
+                const rightEntry = tr.segmentSources && tr.segmentSources[startHit.key];
+                if (rightEntry && rightEntry.src) continue;
+                const gRight = segmentPlaybackGainLinear(
+                    startHit,
+                    1,
+                    Math.max(zone.boundaryT, gainT),
+                );
+                const scheduleWhen =
+                    opt && opt.when != null && Number.isFinite(opt.when)
+                        ? opt.when
+                        : ctx.currentTime + 0.001;
+                startExtraTrackSegmentSource(i, startHit, gRight, scheduleWhen, ctx, {
+                    force: false,
+                    transportSec: gainT,
+                });
+            }
+            const slotActive =
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+                    ? getActiveExtraSegmentsAtTransport(gainT).filter((s) => s.slot === i)
+                    : [];
+            if (slotActive.length >= 2) {
+                applySegmentCrossfadeGains(ctx, slotActive, gainT);
+            }
+        }
+    }
+
     /**
      * 非連続の結合スプリット境界: 重なり開始前に入側を起動し、両方へクロスフェードゲインを適用する。
      */
     function ensureJoinedBoundaryCrossfadePlayback(ctx, opt) {
         if (!ctx || !isTransportPlayingForExtra()) return;
+        ensureManualJoinedBoundaryFadePlayback(ctx, opt);
         const gainT = getCrossfadeGainTransportSec();
         const fadeW = joinedBoundaryCrossfadeSec();
         const scheduleProbeT = gainT + Math.min(0.12, fadeW * 0.15);
@@ -440,6 +583,7 @@
                     const gLeft = segmentPlaybackGainLinear(
                         leftHit,
                         gains.get(leftHit.key) ?? 1,
+                        gainT,
                     );
                     applySegmentEntryGain(leftEntry, gLeft, ctx, {
                         rampSec: 0.008,
@@ -450,6 +594,7 @@
                     const gRight = segmentPlaybackGainLinear(
                         rightHit,
                         gains.get(rightHit.key) ?? 0,
+                        gainT,
                     );
                     const scheduleWhen =
                         opt && opt.when != null && Number.isFinite(opt.when)
@@ -463,6 +608,7 @@
                     const gRight = segmentPlaybackGainLinear(
                         rightHit,
                         gains.get(rightHit.key) ?? 1,
+                        gainT,
                     );
                     applySegmentEntryGain(rightEntry, gRight, ctx, {
                         rampSec: 0.008,
@@ -503,6 +649,12 @@
                 if (
                     typeof hasExtendedCrossfadeOverlapAtBoundary === 'function' &&
                     hasExtendedCrossfadeOverlapAtBoundary(trackRef, left.segmentIndex)
+                ) {
+                    continue;
+                }
+                if (
+                    typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                    hasManualSegmentFadeAtJoinedBoundary(trackRef, left.segmentIndex)
                 ) {
                     continue;
                 }
@@ -734,6 +886,13 @@
                     trackRef,
                     segHit.segmentIndex - 1,
                 )
+            ) &&
+            !(
+                typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                hasManualSegmentFadeAtJoinedBoundary(
+                    trackRef,
+                    segHit.segmentIndex - 1,
+                )
             );
         const othersPlaying =
             tr.segmentSources &&
@@ -819,6 +978,7 @@
                     gainLinear = segmentPlaybackGainLinear(
                         liveAtPlay,
                         gainsAtPlay.get(key) ?? 1,
+                        playTransportSec,
                     );
                 }
             }
@@ -2254,7 +2414,7 @@
         if (activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec)) {
             return true;
         }
-        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
+        const gains = computeValleyCrossfadeGains(active, transportSec);
         for (let i = 0; i < active.length; i++) {
             const g = gains.get(active[i].key) ?? 1;
             if (g < 0.97) return true;
@@ -2271,6 +2431,45 @@
             if (!entry || !entry.src) return false;
         }
         return true;
+    }
+
+    /** 再生中: セグメント Fade In/Out ゲインを毎同期で反映（単一セグメント時も） */
+    function applySegmentFadeGainsForActive(ctx, active, transportSec) {
+        if (!ctx || !active || !active.length) return false;
+        const gainT = Number.isFinite(transportSec)
+            ? transportSec
+            : getCrossfadeGainTransportSec();
+        const crossfadeGains = computeSegmentCrossfadeGainsForActive(
+            ctx,
+            active,
+            gainT,
+        );
+        const rampSec = active.length >= 2 ? 0.008 : 0.012;
+        const inCrossfade =
+            active.length >= 2 &&
+            (activeHasJoinedBoundaryCrossfadeAtTransport(active, gainT) ||
+                activeHasManualCrossfadeOverlapAtTransport(active, gainT));
+        let applied = false;
+        for (const segHit of active) {
+            const tr = extraTrackBySlot(segHit.slot);
+            const entry =
+                tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
+            if (!entry || !entry.segGain || !entry.src) continue;
+            if (
+                !isSegmentSourceAudibleOnCtx(entry, ctx) &&
+                entry.playbackAnchorCtxTime > ctx.currentTime + 0.0005
+            ) {
+                continue;
+            }
+            const g = segmentPlaybackGainLinear(
+                segHit,
+                crossfadeGains.get(segHit.key) ?? 1,
+                gainT,
+            );
+            applySegmentEntryGain(entry, g, ctx, { rampSec, inCrossfade });
+            applied = true;
+        }
+        return applied;
     }
 
     function applySegmentCrossfadeGains(ctx, active, transportSec) {
@@ -2299,6 +2498,7 @@
             const g = segmentPlaybackGainLinear(
                 segHit,
                 gains.get(segHit.key) ?? 1,
+                gainT,
             );
             applySegmentEntryGain(entry, g, ctx, { rampSec, inCrossfade });
             applied = true;
@@ -2344,6 +2544,8 @@
             typeof getActiveExtraSegmentsAtTransport === 'function'
                 ? getActiveExtraSegmentsAtTransport(gainT)
                 : [];
+        if (!active.length) return;
+        applySegmentFadeGainsForActive(ctx, active, gainT);
         if (active.length < 2) return;
         const inJoinedOverlap = activeHasJoinedBoundaryCrossfadeAtTransport(
             active,
@@ -2447,6 +2649,7 @@
                 const g = segmentPlaybackGainLinear(
                     segHit,
                     crossfadeGains.get(segHit.key) ?? 1,
+                    gainT,
                 );
                 const existing = tr.segmentSources && tr.segmentSources[segHit.key];
                 if (!existing || !existing.src) {
@@ -2491,6 +2694,7 @@
                                 const gLeft = segmentPlaybackGainLinear(
                                     refreshedLeft,
                                     crossfadeGains.get(refreshedLeft.key) ?? 1,
+                                    gainT,
                                 );
                                 const restartLeft =
                                     typeof isSegmentSourceContinuousAtBoundary ===
@@ -3216,8 +3420,8 @@
             !extraTracksNeedResync(masterT, ctx) &&
             extraAudioSourcesActive()
         ) {
+            applySegmentFadeGainsForActive(ctx, allActiveAtT, gainT);
             if (allActiveAtT.length >= 2) {
-                const gainT = getCrossfadeGainTransportSec();
                 if (
                     activeHasJoinedBoundaryCrossfadeAtTransport(
                         allActiveAtT,
@@ -3263,6 +3467,7 @@
                     const g = segmentPlaybackGainLinear(
                         segHit,
                         crossfadeGains.get(segHit.key) ?? 1,
+                        gainT,
                     );
                     startExtraTrackSegmentSource(i, segHit, g, scheduleWhen, ctx, {
                         force,

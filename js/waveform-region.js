@@ -283,9 +283,37 @@
         return Math.pow(10, db / 20);
     }
 
+    /** Fade In: 序盤ゆっくり→終盤急上昇 / Fade Out: 序盤急降下→終盤ゆっくり（二次 ease） */
+    const SEGMENT_FADE_EASE_POWER = 2;
+
+    function clampFadeNorm(norm) {
+        return Math.max(0, Math.min(1, Number(norm) || 0));
+    }
+
+    function segmentFadeEaseIn(norm) {
+        const p = clampFadeNorm(norm);
+        return Math.pow(p, SEGMENT_FADE_EASE_POWER);
+    }
+
+    function segmentFadeEaseOut(norm) {
+        const p = clampFadeNorm(norm);
+        return Math.pow(p, SEGMENT_FADE_EASE_POWER);
+    }
+
+    /** リージョン端 Fade In/Out（fadeIn=進行度 p、fadeOut=残量 remaining に適用） */
     function segmentFadeCurve(norm) {
-        const x = Math.max(0, Math.min(1, Number(norm) || 0));
-        return Math.sin(x * Math.PI * 0.5);
+        return segmentFadeEaseIn(norm);
+    }
+
+    /** クロスフェード出側: p が進むほど急に下がる */
+    function crossfadeValleyGainOut(p) {
+        const x = clampFadeNorm(p);
+        return segmentFadeEaseOut(1 - x);
+    }
+
+    /** クロスフェード入側: 終盤で急に上がる */
+    function crossfadeValleyGainIn(p) {
+        return segmentFadeEaseIn(p);
     }
 
     function getSegmentFadeOverlapWindow(track, segmentIndex) {
@@ -305,6 +333,14 @@
             if (overlapEnd > latestOverlapEnd) latestOverlapEnd = overlapEnd;
         }
         return { segStart, segEnd, earliestOverlapStart, latestOverlapEnd };
+    }
+
+    /** 保存値のフェード秒（上限クランプ・重なり計算なし） */
+    function getRawSegmentFadeSec(track, segmentIndex, kind) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (!raw) return 0;
+        const key = kind === 'out' ? 'fadeOutSec' : 'fadeInSec';
+        return Math.max(0, Number(raw[key]) || 0);
     }
 
     function getSegmentFadeDurationLimit(track, segmentIndex, kind) {
@@ -341,7 +377,11 @@
         }
         if (next <= 0.0005) delete raw[key];
         else raw[key] = next;
-        updateTrackRegionOverlays(track);
+        if (opt && opt.geometryOnly) {
+            refreshTrackRegionOverlayGeometry(track);
+        } else {
+            updateTrackRegionOverlays(track);
+        }
         redrawAfterRegionChange(track.slot, { segmentIndex });
         if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
@@ -355,6 +395,12 @@
     function computeSegmentFadeLinearAtTransport(track, segmentIndex, transportSec) {
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return 1;
+        const manualFade = computeManualJoinedBoundaryFadeLinear(
+            track,
+            segmentIndex,
+            transportSec,
+        );
+        if (manualFade != null) return manualFade;
         const start = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const end = getSegmentTimelineEnd(track, segmentIndex);
         if (!(end > start + 0.0005)) return 1;
@@ -1867,6 +1913,146 @@
         );
     }
 
+    /** 結合境界で手動 Fade In/Out が設定されている（自動 1 秒ハンドオフは使わない） */
+    function hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex) {
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        const fadeOut = getRawSegmentFadeSec(track, boundaryIndex, 'out');
+        const fadeIn = getRawSegmentFadeSec(track, boundaryIndex + 1, 'in');
+        return fadeOut > 0.0005 || fadeIn > 0.0005;
+    }
+
+    /** 結合境界の手動フェード重なり区間（左 FadeOut + 右 FadeIn） */
+    function getManualJoinedBoundaryFadeZone(track, boundaryIndex) {
+        if (!hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex)) return null;
+        const fadeOut = getRawSegmentFadeSec(track, boundaryIndex, 'out');
+        const fadeIn = getRawSegmentFadeSec(track, boundaryIndex + 1, 'in');
+        if (fadeOut <= 0.0005 && fadeIn <= 0.0005) return null;
+        const boundaryT = getSegmentTimelineStart(track, boundaryIndex + 1);
+        const totalSec = fadeOut + fadeIn;
+        return {
+            boundaryT,
+            fadeOut,
+            fadeIn,
+            startSec: boundaryT - fadeOut,
+            endSec: boundaryT + fadeIn,
+            totalSec,
+        };
+    }
+
+    function findManualJoinedBoundaryFadeAtTransport(track, segmentIndex, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        const segments = getTrackSegments(track);
+        if (segmentIndex > 0) {
+            const boundaryIndex = segmentIndex - 1;
+            const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
+            if (
+                zone &&
+                zone.fadeIn > 0.0005 &&
+                t >= zone.startSec - 0.0005 &&
+                t <= zone.endSec + 0.0005
+            ) {
+                return { zone, boundaryIndex, role: 'right' };
+            }
+        }
+        if (segmentIndex < segments.length - 1) {
+            const boundaryIndex = segmentIndex;
+            const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
+            if (
+                zone &&
+                zone.fadeOut > 0.0005 &&
+                t >= zone.startSec - 0.0005 &&
+                t <= zone.endSec + 0.0005
+            ) {
+                return { zone, boundaryIndex, role: 'left' };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 結合境界の手動フェード（再生）: 重なり区間で谷型交差。左は境界より後は 0、右は境界より前は 0。
+     */
+    function computeManualJoinedBoundaryFadeLinear(track, segmentIndex, transportSec) {
+        const hit = findManualJoinedBoundaryFadeAtTransport(
+            track,
+            segmentIndex,
+            transportSec,
+        );
+        if (!hit) return null;
+        const { zone, role } = hit;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        if (role === 'left') {
+            if (!(zone.fadeOut > 0.0005)) return null;
+            if (t >= zone.boundaryT - 0.0005) return 0;
+            const p = Math.max(
+                0,
+                Math.min(1, (t - zone.startSec) / zone.fadeOut),
+            );
+            return crossfadeValleyGainOut(p);
+        }
+        if (!(zone.fadeIn > 0.0005)) return null;
+        if (t < zone.boundaryT - 0.0005) return 0;
+        const p = Math.max(
+            0,
+            Math.min(1, (t - zone.boundaryT) / zone.fadeIn),
+        );
+        return crossfadeValleyGainIn(p);
+    }
+
+    /** 波形表示: リージョン内のみ（タイムライン外へは伸ばさない） */
+    function computeManualJoinedBoundaryFadeLinearForDisplay(
+        track,
+        segmentIndex,
+        transportSec,
+    ) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        const absEnd = getSegmentTimelineEnd(track, segmentIndex);
+        if (t < playbackStart - 0.0005 || t > absEnd + 0.0005) return null;
+        return computeManualJoinedBoundaryFadeLinear(track, segmentIndex, transportSec);
+    }
+
+    function segmentSourceSecForManualJoinedCrossfade(
+        track,
+        segmentIndex,
+        transportSec,
+        boundaryIndex,
+    ) {
+        const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
+        const segments = getTrackSegments(track);
+        const left = segments[boundaryIndex];
+        const right = segments[boundaryIndex + 1];
+        if (!zone || !left || !right) {
+            return segmentSourceSecFromTransport(track, segmentIndex, transportSec);
+        }
+        if (isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) {
+            const sourceAtB = Number(left.sourceOutSec) || 0;
+            const src = sourceAtB + (Number(transportSec) - zone.boundaryT);
+            if (segmentIndex === boundaryIndex) {
+                return Math.max(
+                    left.sourceInSec,
+                    Math.min(left.sourceOutSec, src),
+                );
+            }
+            return Math.max(
+                right.sourceInSec,
+                Math.min(right.sourceOutSec, src),
+            );
+        }
+        return segmentSourceSecFromTransport(track, segmentIndex, transportSec);
+    }
+
+    function isTransportInManualJoinedBoundaryFadeZone(track, segmentIndex, transportSec) {
+        return !!findManualJoinedBoundaryFadeAtTransport(
+            track,
+            segmentIndex,
+            transportSec,
+        );
+    }
+
     /** タイムライン結合かつクリップ内ソースが連続（分割直後・B結合可能な境界） */
     function isSegmentSourceContinuousAtBoundary(track, boundaryIndex) {
         if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
@@ -1904,12 +2090,16 @@
                 ? opt.mapTransportSec
                 : fadeTransportSec;
         const probeT = Math.max(fadeTransportSec, mapT);
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const sourceContinuous = isSegmentSourceContinuousAtBoundary(
             track,
             boundaryIndex,
         );
         let bufferOff;
-        if (sourceContinuous) {
+        /** 右セグメントの再生開始以降は左マップでは先頭にクランプされるため、右から直接求める */
+        if (probeT >= playbackStart - 0.0005) {
+            bufferOff = segmentSourceSecFromTransport(track, segmentIndex, probeT);
+        } else if (sourceContinuous) {
             const fromLeft = segmentSourceSecFromTransport(
                 track,
                 segmentIndex - 1,
@@ -1930,7 +2120,9 @@
         if (remain <= 0.002) return null;
         let whenCtx = ctx.currentTime + 0.0005;
         const leftEntry = opt && opt.leftEntry ? opt.leftEntry : null;
+        const inCrossfadeLeadIn = probeT < playbackStart - 0.0005;
         if (
+            inCrossfadeLeadIn &&
             sourceContinuous &&
             leftEntry &&
             leftEntry.src &&
@@ -1945,7 +2137,7 @@
             whenCtx =
                 leftEntry.playbackAnchorCtxTime +
                 Math.max(0, fadeBuf - leftEntry.bufferOff);
-        } else {
+        } else if (inCrossfadeLeadIn) {
             whenCtx = ctx.currentTime + Math.max(0.0005, fadeTransportSec - mapT);
         }
         if (whenCtx < ctx.currentTime) {
@@ -2026,21 +2218,56 @@
                 forPlayback && i > 0 && isSegmentBoundaryJoined(track, i - 1);
             const boundaryNext = joinedNext ? absEnd : null;
             const boundaryPrev = joinedPrev ? getSegmentTimelineStart(track, i) : null;
+            const manualFadePrev =
+                joinedPrev &&
+                i > 0 &&
+                hasManualSegmentFadeAtJoinedBoundary(track, i - 1);
+            const manualFadeNext =
+                joinedNext &&
+                i < segments.length - 1 &&
+                hasManualSegmentFadeAtJoinedBoundary(track, i);
             const inHandoffFromPrev =
                 joinedPrev &&
+                !manualFadePrev &&
                 boundaryPrev != null &&
                 t >= boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC &&
                 t < boundaryPrev + 0.00001;
             const inHandoffToNext =
                 joinedNext &&
+                !manualFadeNext &&
                 boundaryNext != null &&
                 t >= boundaryNext - JOINED_BOUNDARY_CROSSFADE_SEC &&
                 t < boundaryNext + 0.00001;
+            let inManualCrossfade = false;
+            if (forPlayback && manualFadePrev) {
+                const zone = getManualJoinedBoundaryFadeZone(track, i - 1);
+                if (
+                    zone &&
+                    t >= zone.startSec - 0.0005 &&
+                    t <= zone.endSec + 0.0005
+                ) {
+                    inManualCrossfade = true;
+                }
+            }
+            if (forPlayback && manualFadeNext) {
+                const zone = getManualJoinedBoundaryFadeZone(track, i);
+                if (
+                    zone &&
+                    t >= zone.startSec - 0.0005 &&
+                    t <= zone.endSec + 0.0005
+                ) {
+                    inManualCrossfade = true;
+                }
+            }
 
             if (t < regionIn - 0.0005) continue;
             if (forPlayback) {
-                if (t < playbackStart - 0.0005 && !inHandoffFromPrev) continue;
-                if (t >= absEnd - 0.0005 && !inHandoffToNext) continue;
+                if (t < playbackStart - 0.0005 && !inHandoffFromPrev && !inManualCrossfade) {
+                    continue;
+                }
+                if (t >= absEnd - 0.0005 && !inHandoffToNext && !inManualCrossfade) {
+                    continue;
+                }
             } else if (t >= absEnd - 0.002) {
                 continue;
             }
@@ -2052,11 +2279,15 @@
                 i > 0 &&
                 isSegmentSourceContinuousAtBoundary(track, i - 1)
             ) {
-                const fromLeft = segmentSourceSecFromTransport(track, i - 1, t);
-                sourceSec = Math.max(
-                    seg.sourceInSec,
-                    Math.min(seg.sourceOutSec, fromLeft),
-                );
+                if (t >= playbackStart - 0.0005) {
+                    sourceSec = segmentSourceSecFromTransport(track, i, t);
+                } else {
+                    const fromLeft = segmentSourceSecFromTransport(track, i - 1, t);
+                    sourceSec = Math.max(
+                        seg.sourceInSec,
+                        Math.min(seg.sourceOutSec, fromLeft),
+                    );
+                }
             } else if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
                 const fadeStart = boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC;
                 sourceSec = seg.sourceInSec + Math.max(0, t - fadeStart);
@@ -2065,6 +2296,18 @@
             } else {
                 sourceSec = segmentSourceSecFromTransport(track, i, t);
             }
+            if (forPlayback && inManualCrossfade) {
+                const boundaryIndex = manualFadePrev ? i - 1 : i;
+                const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
+                if (zone && isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) {
+                    sourceSec = segmentSourceSecForManualJoinedCrossfade(
+                        track,
+                        i,
+                        t,
+                        boundaryIndex,
+                    );
+                }
+            }
 
             let timelineStart = absStart;
             let timelineEnd = absEnd;
@@ -2072,10 +2315,12 @@
                 forPlayback &&
                 ((i > 0 &&
                     isSegmentBoundaryJoined(track, i - 1) &&
-                    hasExtendedCrossfadeOverlapAtBoundary(track, i - 1)) ||
+                    (hasExtendedCrossfadeOverlapAtBoundary(track, i - 1) ||
+                        hasManualSegmentFadeAtJoinedBoundary(track, i - 1))) ||
                     (i < segments.length - 1 &&
                         isSegmentBoundaryJoined(track, i) &&
-                        hasExtendedCrossfadeOverlapAtBoundary(track, i)));
+                        (hasExtendedCrossfadeOverlapAtBoundary(track, i) ||
+                            hasManualSegmentFadeAtJoinedBoundary(track, i))));
             if (forPlayback && !skipJoinedCrossfadeClamp && joinedPrev && boundaryPrev != null) {
                 timelineStart = Math.min(
                     timelineStart,
@@ -2185,7 +2430,8 @@
             const trackRef = { type: 'extra', slot: lo.slot };
             if (
                 isSegmentBoundaryJoined(trackRef, lo.segmentIndex) &&
-                !hasExtendedCrossfadeOverlapAtBoundary(trackRef, lo.segmentIndex)
+                !hasExtendedCrossfadeOverlapAtBoundary(trackRef, lo.segmentIndex) &&
+                !hasManualSegmentFadeAtJoinedBoundary(trackRef, lo.segmentIndex)
             ) {
                 const loIdx = a.segmentIndex < b.segmentIndex ? i : j;
                 const hiIdx = a.segmentIndex < b.segmentIndex ? j : i;
@@ -2209,8 +2455,14 @@
 
     const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
 
-    /** 再生ミックスと同じ等パワー・重なりゲイン（波形振幅表示用） */
+    /** 再生ミックスと同じ谷型・重なり（波形振幅表示用） */
     function computeSegmentCrossfadeVisualGain(track, segmentIndex, transportSec) {
+        const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
+            track,
+            segmentIndex,
+            transportSec,
+        );
+        if (manualG != null) return manualG;
         const hits = mapAllSegmentsAtTransport(track, transportSec, {
             forPlayback: true,
         });
@@ -2232,17 +2484,12 @@
                     continue;
                 }
                 const p = (t - oStart) / (oEnd - oStart);
-                const gOut = Math.cos(p * Math.PI * 0.5);
-                const gIn = Math.sin(p * Math.PI * 0.5);
                 const { out, in: inIdx } = crossfadeOutInIndicesForTrack(hits, i, j);
-                weights[out] *= gOut;
-                weights[inIdx] *= gIn;
+                weights[out] *= crossfadeValleyGainOut(p);
+                weights[inIdx] *= crossfadeValleyGainIn(p);
             }
         }
-        let sumSq = 0;
-        for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
-        const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
-        return Math.max(0, weights[pos] * norm);
+        return Math.max(0, weights[pos]);
     }
 
     function getSegmentPeaksForDraw(slot, clipId) {
@@ -3168,7 +3415,7 @@
         fadeInSvg.setAttribute('viewBox', '0 0 100 100');
         fadeInSvg.setAttribute('preserveAspectRatio', 'none');
         const fadeInPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        fadeInPath.setAttribute('d', 'M 0 99 Q 50 30 100 1');
+        fadeInPath.setAttribute('d', 'M 0 99 Q 50 99 100 1');
         fadeInSvg.appendChild(fadeInPath);
         fadeInCurve.appendChild(fadeInSvg);
         const fadeOutCurve = document.createElement('div');
@@ -3179,7 +3426,7 @@
         fadeOutSvg.setAttribute('viewBox', '0 0 100 100');
         fadeOutSvg.setAttribute('preserveAspectRatio', 'none');
         const fadeOutPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        fadeOutPath.setAttribute('d', 'M 100 99 Q 50 30 0 1');
+        fadeOutPath.setAttribute('d', 'M 100 99 Q 50 99 0 1');
         fadeOutSvg.appendChild(fadeOutPath);
         fadeOutCurve.appendChild(fadeOutSvg);
         fadeCurve.appendChild(fadeInCurve);
@@ -3962,6 +4209,51 @@
 
     window.refreshPlaybackRegionHoverCursorLine = refreshPlaybackRegionHoverCursorLine;
 
+    /** ドラッグ中: DOM を作り直さず位置・フェード表示だけ更新（ハンドルが消えない） */
+    function refreshTrackRegionOverlayGeometry(track) {
+        const container = getPlaybackRegionsContainerEl(track);
+        if (!container) return;
+        const segments = getTrackSegments(track);
+        if (!segments.length) {
+            updateTrackRegionOverlays(track);
+            return;
+        }
+        const regionEls = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region',
+        );
+        if (regionEls.length !== segments.length) {
+            updateTrackRegionOverlays(track);
+            return;
+        }
+        for (let i = 0; i < segments.length; i++) {
+            positionRegionOverlayEl(regionEls[i], track, i, segments[i]);
+        }
+        const splitHandles = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region__handle--split',
+        );
+        for (let h = 0; h < splitHandles.length; h++) {
+            const el = splitHandles[h];
+            const b = Number(el.dataset.boundaryIndex);
+            if (
+                Number.isFinite(b) &&
+                b >= 0 &&
+                b < segments.length - 1 &&
+                isSegmentBoundaryJoined(track, b)
+            ) {
+                positionSplitHandleEl(el, track, b);
+            }
+        }
+        const zones = collectTrackCrossfadeZones(track);
+        const markers = container.querySelectorAll('.audio-waveform-lane__crossfade-marker');
+        if (markers.length !== zones.length) {
+            updateTrackRegionOverlays(track);
+            return;
+        }
+        for (let z = 0; z < zones.length; z++) {
+            positionCrossfadeMarkerEl(markers[z], zones[z].startSec, zones[z].endSec);
+        }
+    }
+
     function updateTrackRegionOverlays(track) {
         const container = getPlaybackRegionsContainerEl(track);
         if (!container) return;
@@ -4070,7 +4362,11 @@
         state.segments = segments.map((s) =>
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
         );
-        updateTrackRegionOverlays(track);
+        if (opt && opt.geometryOnly) {
+            refreshTrackRegionOverlayGeometry(track);
+        } else {
+            updateTrackRegionOverlays(track);
+        }
         redrawAfterRegionChange(track.slot);
     }
 
@@ -4224,6 +4520,7 @@
             const t = Math.max(playbackStart, Math.min(playbackStart + maxDur, Number(transportSec) || 0));
             setSegmentFadeDurationSec(track, segmentIndex, 'in', t - playbackStart, {
                 skipUndo: true,
+                geometryOnly: !!(opt && opt.geometryOnly),
             });
             return;
         }
@@ -4235,6 +4532,7 @@
             const t = Math.max(minT, Math.min(playbackEnd, Number(transportSec) || 0));
             setSegmentFadeDurationSec(track, segmentIndex, 'out', playbackEnd - t, {
                 skipUndo: true,
+                geometryOnly: !!(opt && opt.geometryOnly),
             });
             return;
         }
@@ -4704,6 +5002,7 @@
     }
 
     function endRegionHandleDrag(opt) {
+        const dragTrack = regionHandleDragTrack;
         if (opt && opt.cancelled && regionUndoDragSnap) {
             restoreRegionUndoSnapshot(regionUndoDragSnap);
             cancelRegionUndoGesture();
@@ -4722,8 +5021,11 @@
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--region-drag');
-        if (!(opt && opt.cancelled) && regionHandleDragTrack) {
-            const slot = regionHandleDragTrack.slot;
+        if (dragTrack) {
+            updateTrackRegionOverlays(dragTrack);
+        }
+        if (!(opt && opt.cancelled) && dragTrack) {
+            const slot = dragTrack.slot;
             if (
                 slot >= 0 &&
                 typeof scheduleWaveformHiresRedrawAfterZoom === 'function'
@@ -4754,6 +5056,11 @@
         regionHandleDragBoundaryIndex = boundaryIndex;
         regionHandleDragKind = 'split';
         regionHandleDragPointerId = ev.pointerId;
+        if (typeof ev.target.setPointerCapture === 'function') {
+            try {
+                ev.target.setPointerCapture(ev.pointerId);
+            } catch (_) {}
+        }
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--region-drag');
@@ -4773,11 +5080,17 @@
                 regionHandleDragTrack,
                 regionHandleDragBoundaryIndex,
                 transportSec,
+                { geometryOnly: true },
             );
         };
         regionHandleDragDocUp = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
             e.preventDefault();
+            if (typeof e.target.releasePointerCapture === 'function') {
+                try {
+                    e.target.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+            }
             endRegionHandleDrag();
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         };
@@ -4810,6 +5123,11 @@
         regionHandleDragBoundaryIndex = -1;
         regionHandleDragKind = kind;
         regionHandleDragPointerId = ev.pointerId;
+        if (typeof ev.target.setPointerCapture === 'function') {
+            try {
+                ev.target.setPointerCapture(ev.pointerId);
+            } catch (_) {}
+        }
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--region-drag');
@@ -4857,11 +5175,17 @@
                 regionHandleDragSegmentIndex,
                 regionHandleDragKind,
                 transportSec,
+                { geometryOnly: true },
             );
         };
         regionHandleDragDocUp = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
             e.preventDefault();
+            if (typeof e.target.releasePointerCapture === 'function') {
+                try {
+                    e.target.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+            }
             if (
                 regionHandleDragKind === 'out' &&
                 regionHandleDragTrack &&
@@ -5583,6 +5907,10 @@
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
     window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
     window.hasExtendedCrossfadeOverlapAtBoundary = hasExtendedCrossfadeOverlapAtBoundary;
+    window.hasManualSegmentFadeAtJoinedBoundary = hasManualSegmentFadeAtJoinedBoundary;
+    window.getManualJoinedBoundaryFadeZone = getManualJoinedBoundaryFadeZone;
+    window.isTransportInManualJoinedBoundaryFadeZone =
+        isTransportInManualJoinedBoundaryFadeZone;
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;
@@ -5590,6 +5918,8 @@
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
     window.getSegmentPlaybackGainLinear = getSegmentPlaybackGainLinear;
+    window.crossfadeValleyGainOut = crossfadeValleyGainOut;
+    window.crossfadeValleyGainIn = crossfadeValleyGainIn;
     window.setSegmentGainDb = setSegmentGainDb;
     window.getSegmentRegionTimelineBounds = function (slot, segmentIndex) {
         const track = { type: 'extra', slot };
