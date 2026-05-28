@@ -1,4 +1,5 @@
     const LOG_MAX_LINES = 500;
+    const LOG_MASK_DEBUG_OUTPUT = true;
 
     function showAppAlert(title, body) {
         const t = title != null ? String(title) : '';
@@ -141,8 +142,15 @@
         return ok;
     }
 
+    function isMaskedDebugLogLine(message) {
+        if (!LOG_MASK_DEBUG_OUTPUT) return false;
+        const text = message != null ? String(message) : '';
+        return text.toLowerCase().includes('debug');
+    }
+
     function writeLog(m) {
         if (!logEl) return;
+        if (isMaskedDebugLogLine(m)) return;
         const now = new Date();
         const time =
             '[' +

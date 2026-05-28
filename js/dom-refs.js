@@ -1,4 +1,4 @@
-    window.EXTRA_TRACK_COUNT = 8;
+    window.EXTRA_TRACK_COUNT = 16;
 
     const filePicker = document.getElementById('filePicker');
     var videoMain = document.getElementById('videoMain');

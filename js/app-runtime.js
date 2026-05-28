@@ -3,7 +3,7 @@
  * dom-refs 直後に読み込み、他モジュールより先に利用可能にする。
  */
 (function () {
-    const DEFAULT_EXTRA_TRACK_COUNT = 8;
+    const DEFAULT_EXTRA_TRACK_COUNT = 16;
 
     function getExtraTrackCount() {
         const n = window.EXTRA_TRACK_COUNT;
