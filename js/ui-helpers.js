@@ -1,4 +1,4 @@
-    const transportOptGlowClearTimers = { playback: 0 };
+    const transportOptGlowClearTimers = { playback: 0, centerLock: 0, analyze: 0 };
     let videoPanelDriftGlowTimer = 0;
 
     const LANE_STATUS_HIDE_RE =
@@ -36,6 +36,10 @@
     const TRANSPORT_OPT_BOX_SELECTOR = {
         playback:
             '.transport-bar--playback .transport-opt-box--playback, .transport-opt-box--playback',
+        centerLock:
+            '.transport-bar .playhead-center-lock-options.transport-opt-chip, .playhead-center-lock-options.transport-opt-chip',
+        analyze:
+            '.transport-bar #analyzeToggleWrap.transport-opt-chip, #analyzeToggleWrap.transport-opt-chip',
     };
 
     function flashVideoPanelDrift() {
@@ -76,15 +80,18 @@
             TRANSPORT_OPT_BOX_SELECTOR[which] || TRANSPORT_OPT_BOX_SELECTOR.playback;
         const box = document.querySelector(sel);
         if (!box) return;
-        box.classList.remove('transport-opt-box--glow');
+        const glowClass = box.classList.contains('transport-opt-box')
+            ? 'transport-opt-box--glow'
+            : 'transport-opt-chip--glow';
+        box.classList.remove('transport-opt-box--glow', 'transport-opt-chip--glow');
         if (transportOptGlowClearTimers[which]) {
             clearTimeout(transportOptGlowClearTimers[which]);
             transportOptGlowClearTimers[which] = 0;
         }
         void box.offsetWidth;
-        box.classList.add('transport-opt-box--glow');
+        box.classList.add(glowClass);
         transportOptGlowClearTimers[which] = setTimeout(() => {
-            box.classList.remove('transport-opt-box--glow');
+            box.classList.remove(glowClass);
             transportOptGlowClearTimers[which] = 0;
         }, 900);
     }

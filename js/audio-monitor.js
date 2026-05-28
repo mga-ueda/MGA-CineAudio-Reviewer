@@ -106,6 +106,9 @@
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Analyze', analyzeOn ? 'ON' : 'OFF', 'notice');
             }
+            if (analyzeOn !== prev && typeof flashTransportOptBox === 'function') {
+                flashTransportOptBox('analyze');
+            }
         }
     }
 

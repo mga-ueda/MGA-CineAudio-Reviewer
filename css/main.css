@@ -3300,7 +3300,8 @@
                     0 0 52px rgba(255, 100, 25, 0.45);
             }
         }
-        .transport-opt-box.transport-opt-box--glow {
+        .transport-opt-box.transport-opt-box--glow,
+        .transport-opt-chip.transport-opt-chip--glow {
             border-color: rgba(255, 140, 60, 0.72);
             box-shadow:
                 0 0 0 1px rgba(255, 120, 40, 0.55),

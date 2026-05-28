@@ -1578,12 +1578,16 @@
     function setPlayheadCenterLockActive(enabled, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const next = !!enabled;
+        const prev = playheadCenterLockActive;
         playheadCenterLockActive = next;
         syncPlayheadCenterLockUi();
         if (playheadCenterLockActive) centerWaveformTimelineOnTransport();
         if (!o.silent) {
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Center lock', next ? 'ON' : 'OFF', 'notice');
+            }
+            if (next !== prev && typeof flashTransportOptBox === 'function') {
+                flashTransportOptBox('centerLock');
             }
         }
         if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
