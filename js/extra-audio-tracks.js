@@ -192,6 +192,13 @@
     function segmentRegionGainLinear(segHit) {
         if (!segHit || typeof getSegmentGainLinear !== 'function') return 1;
         const track = { type: 'extra', slot: segHit.slot };
+        if (typeof getSegmentPlaybackGainLinear === 'function') {
+            return getSegmentPlaybackGainLinear(
+                track,
+                segHit.segmentIndex,
+                segHit.transportSec,
+            );
+        }
         return getSegmentGainLinear(track, segHit.segmentIndex);
     }
 

@@ -253,6 +253,12 @@
             );
             if (Math.abs(db) > 0.0005) base.gainDb = db;
         }
+        if (seg && Number.isFinite(seg.fadeInSec)) {
+            base.fadeInSec = Math.max(0, seg.fadeInSec);
+        }
+        if (seg && Number.isFinite(seg.fadeOutSec)) {
+            base.fadeOutSec = Math.max(0, seg.fadeOutSec);
+        }
         return base;
     }
 
@@ -275,6 +281,101 @@
             return trackLaneLinearGainFromDb(db);
         }
         return Math.pow(10, db / 20);
+    }
+
+    function segmentFadeCurve(norm) {
+        const x = Math.max(0, Math.min(1, Number(norm) || 0));
+        return Math.sin(x * Math.PI * 0.5);
+    }
+
+    function getSegmentFadeOverlapWindow(track, segmentIndex) {
+        const segStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
+        let earliestOverlapStart = segEnd;
+        let latestOverlapEnd = segStart;
+        const segments = getTrackSegments(track);
+        for (let i = 0; i < segments.length; i++) {
+            if (i === segmentIndex) continue;
+            const otherStart = getSegmentPlaybackTimelineStart(track, i);
+            const otherEnd = getSegmentTimelineEnd(track, i);
+            const overlapStart = Math.max(segStart, otherStart);
+            const overlapEnd = Math.min(segEnd, otherEnd);
+            if (overlapEnd - overlapStart < MIN_CROSSFADE_OVERLAP_SEC) continue;
+            if (overlapStart < earliestOverlapStart) earliestOverlapStart = overlapStart;
+            if (overlapEnd > latestOverlapEnd) latestOverlapEnd = overlapEnd;
+        }
+        return { segStart, segEnd, earliestOverlapStart, latestOverlapEnd };
+    }
+
+    function getSegmentFadeDurationLimit(track, segmentIndex, kind) {
+        const win = getSegmentFadeOverlapWindow(track, segmentIndex);
+        if (kind === 'in') {
+            return Math.max(0, win.earliestOverlapStart - win.segStart);
+        }
+        if (kind === 'out') {
+            return Math.max(0, win.segEnd - win.latestOverlapEnd);
+        }
+        return 0;
+    }
+
+    function getSegmentFadeDurationSec(track, segmentIndex, kind) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (!raw) return 0;
+        const key = kind === 'out' ? 'fadeOutSec' : 'fadeInSec';
+        const stored = Math.max(0, Number(raw[key]) || 0);
+        const maxAllowed = getSegmentFadeDurationLimit(track, segmentIndex, kind);
+        return Math.max(0, Math.min(stored, maxAllowed));
+    }
+
+    function setSegmentFadeDurationSec(track, segmentIndex, kind, sec, opt) {
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments[segmentIndex]) return false;
+        const raw = state.segments[segmentIndex];
+        const key = kind === 'out' ? 'fadeOutSec' : 'fadeInSec';
+        const maxAllowed = getSegmentFadeDurationLimit(track, segmentIndex, kind);
+        const next = Math.max(0, Math.min(maxAllowed, Number(sec) || 0));
+        const prev = getSegmentFadeDurationSec(track, segmentIndex, kind);
+        if (Math.abs(next - prev) < 0.0005) return false;
+        if (!(opt && opt.skipUndo) && !regionUndoPaused) {
+            requestRegionUndoCapture();
+        }
+        if (next <= 0.0005) delete raw[key];
+        else raw[key] = next;
+        updateTrackRegionOverlays(track);
+        redrawAfterRegionChange(track.slot, { segmentIndex });
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        return true;
+    }
+
+    function computeSegmentFadeLinearAtTransport(track, segmentIndex, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return 1;
+        const start = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        const end = getSegmentTimelineEnd(track, segmentIndex);
+        if (!(end > start + 0.0005)) return 1;
+        const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
+        const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');
+        let gIn = 1;
+        let gOut = 1;
+        if (fadeInSec > 0.0005 && t <= start + fadeInSec) {
+            gIn = segmentFadeCurve((t - start) / fadeInSec);
+        }
+        if (fadeOutSec > 0.0005 && t >= end - fadeOutSec) {
+            gOut = segmentFadeCurve((end - t) / fadeOutSec);
+        }
+        return Math.max(0, Math.min(1, gIn * gOut));
+    }
+
+    function getSegmentPlaybackGainLinear(track, segmentIndex, transportSec) {
+        return (
+            getSegmentGainLinear(track, segmentIndex) *
+            computeSegmentFadeLinearAtTransport(track, segmentIndex, transportSec)
+        );
     }
 
     function formatRegionGainDbDisplay(db) {
@@ -385,6 +486,16 @@
             sourceOutSec: seg.sourceOutSec,
             timelineStartSec: leftStart + leftDur,
         };
+        if (Number.isFinite(seg.gainDb) && Math.abs(seg.gainDb) > 0.0005) {
+            left.gainDb = seg.gainDb;
+            right.gainDb = seg.gainDb;
+        }
+        if (Number.isFinite(seg.fadeInSec) && seg.fadeInSec > 0.0005) {
+            left.fadeInSec = seg.fadeInSec;
+        }
+        if (Number.isFinite(seg.fadeOutSec) && seg.fadeOutSec > 0.0005) {
+            right.fadeOutSec = seg.fadeOutSec;
+        }
         const next = segments.slice();
         next.splice(splitIndex, 1, left, right);
         const ok = !!setTrackSegments(track, next, {
@@ -837,6 +948,30 @@
         return Math.max(0, n);
     }
 
+    /** In/Out ハンドル: 全 Ex のリージョン In/Out を常に候補にし、マーカー／グリッドも併用 */
+    function snapRegionHandleTransportSec(sec, opt) {
+        let n = snapTimelineSec(sec, opt);
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
+        const threshold = regionSnapThresholdSec();
+        const exclude = opt && opt.exclude ? opt.exclude : null;
+        const stops = collectRegionSnapStops(exclude, -1);
+        const priority = resolveTimelineSnapPriorityMode();
+        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
+            const markerStops = collectMarkerVideoEndSnapStops();
+            for (let i = 0; i < markerStops.length; i++) {
+                stops.push(markerStops[i]);
+            }
+        } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
+            const gridStops = collectMusicalGridSnapStops();
+            for (let i = 0; i < gridStops.length; i++) {
+                stops.push(gridStops[i]);
+            }
+        }
+        return Math.max(0, snapToNearestStop(n, stops, threshold, opt));
+    }
+
     /** マーカードラッグ: 全 Ex トラックのリージョン In/Out へスナップ */
     function snapSecToPlaybackRegionInOut(sec, opt) {
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
@@ -851,67 +986,6 @@
             0,
             snapToNearestStop(sec, collectRegionSnapStops(null, -1), threshold, opt),
         );
-    }
-
-    function collectRegionEndSnapStops(exclude, sameSlotOnly) {
-        const stops = [];
-        const n =
-            getExtraTrackCount();
-        const limitSlot =
-            typeof sameSlotOnly === 'number' && sameSlotOnly >= 0 ? sameSlotOnly : -1;
-        for (let slot = 0; slot < n; slot++) {
-            if (limitSlot >= 0 && slot !== limitSlot) continue;
-            const track = { type: 'extra', slot };
-            if (!isTrackRegionActive(track)) continue;
-            const segs = getTrackSegments(track);
-            for (let i = 0; i < segs.length; i++) {
-                if (exclude && exclude.slot === slot && exclude.segmentIndex === i) {
-                    continue;
-                }
-                stops.push(getSegmentTimelineEnd(track, i));
-            }
-        }
-        return stops;
-    }
-
-    /** Out ハンドル: フレームスナップ＋他リージョンの終端（同一 Ex）へスナップ */
-    function snapRegionOutTransportSec(sec, opt) {
-        if (opt && opt.forOutDrag) {
-            return Math.max(0, Number(sec) || 0);
-        }
-        let n = snapTimelineSec(sec, opt);
-        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
-            return Math.max(0, n);
-        }
-        const threshold = regionSnapThresholdSec();
-        const exclude = opt && opt.exclude ? opt.exclude : null;
-        const sameSlotOnly =
-            opt && typeof opt.sameSlotOnly === 'number' ? opt.sameSlotOnly : -1;
-        if (sameSlotOnly >= 0) {
-            const snappedSameSlot = snapToNearestStop(
-                n,
-                collectRegionEndSnapStops(exclude, sameSlotOnly),
-                threshold,
-                opt,
-            );
-            if (Math.abs(snappedSameSlot - n) > 1e-9) {
-                return Math.max(0, snappedSameSlot);
-            }
-        }
-        const priority = resolveTimelineSnapPriorityMode();
-        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
-            n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
-        } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
-            n = snapToNearestStop(n, collectMusicalGridSnapStops(), threshold, opt);
-        } else {
-            n = snapToNearestStop(
-                n,
-                collectRegionEndSnapStops(exclude, sameSlotOnly),
-                threshold,
-                opt,
-            );
-        }
-        return Math.max(0, n);
     }
 
     /** transportRatioFromClientX は 0–1 クランプのため、Out ドラッグでは未クランプ比率を使う */
@@ -1075,6 +1149,47 @@
     }
 
     const REGION_HANDLE_HIT_PAD_PX = 4;
+    /** 見た目 8px の三角に対し、操作判定だけ下方向に倍 */
+    const FADE_HANDLE_HIT_HEIGHT_MUL = 2;
+
+    function fadeHandleHitTestRect(visualRect) {
+        if (!visualRect || !(visualRect.width > 0) || !(visualRect.height > 0)) {
+            return null;
+        }
+        const w = visualRect.width;
+        const h = visualRect.height * FADE_HANDLE_HIT_HEIGHT_MUL;
+        return {
+            left: visualRect.left,
+            top: visualRect.top,
+            right: visualRect.left + w,
+            bottom: visualRect.top + h,
+            width: w,
+            height: h,
+        };
+    }
+
+    function isPointerOnFadeHandleTriangle(kind, rect, clientX, clientY) {
+        if (!rect || !(rect.width > 0) || !(rect.height > 0)) return false;
+        if (
+            clientX < rect.left ||
+            clientX > rect.right ||
+            clientY < rect.top ||
+            clientY > rect.bottom
+        ) {
+            return false;
+        }
+        const lx = clientX - rect.left;
+        const ly = clientY - rect.top;
+        const w = rect.width;
+        const h = rect.height;
+        if (kind === 'fade-in') {
+            return lx / w + ly / h <= 1 + 1e-6;
+        }
+        if (kind === 'fade-out') {
+            return (w - lx) / w + ly / h <= 1 + 1e-6;
+        }
+        return false;
+    }
 
     function isPointerOnRegionResizeHandle(regionEl, clientX) {
         if (!regionEl || !Number.isFinite(clientX)) return false;
@@ -1116,6 +1231,8 @@
         if (!container || container.hidden) return null;
 
         const pad = REGION_HANDLE_HIT_PAD_PX;
+        let bestFade = null;
+        let bestFadeDist = Infinity;
         let best = null;
         let bestDist = Infinity;
         const regions = container.querySelectorAll('.audio-waveform-lane__playback-region');
@@ -1123,7 +1240,41 @@
             const regionEl = regions[r];
             const segmentIndex = Number(regionEl.dataset.segmentIndex);
             if (!Number.isFinite(segmentIndex)) continue;
-            const candidates = [
+            const fadeCandidates = [
+                {
+                    kind: 'fade-in',
+                    el: regionEl.querySelector(
+                        '.audio-waveform-lane__playback-region__handle--fade-in',
+                    ),
+                },
+                {
+                    kind: 'fade-out',
+                    el: regionEl.querySelector(
+                        '.audio-waveform-lane__playback-region__handle--fade-out',
+                    ),
+                },
+            ];
+            for (let c = 0; c < fadeCandidates.length; c++) {
+                const handleEl = fadeCandidates[c].el;
+                if (!handleEl || handleEl.hidden) continue;
+                const kind = fadeCandidates[c].kind;
+                const visualRect = handleEl.getBoundingClientRect();
+                const hitRect = fadeHandleHitTestRect(visualRect);
+                if (
+                    !hitRect ||
+                    !isPointerOnFadeHandleTriangle(kind, hitRect, clientX, clientY)
+                ) {
+                    continue;
+                }
+                const cx = (hitRect.left + hitRect.right) * 0.5;
+                const cy = (hitRect.top + hitRect.bottom) * 0.5;
+                const dist = Math.hypot(clientX - cx, clientY - cy);
+                if (dist < bestFadeDist) {
+                    bestFadeDist = dist;
+                    bestFade = { segmentIndex, kind, regionEl };
+                }
+            }
+            const edgeCandidates = [
                 {
                     kind: 'in',
                     el: regionEl.querySelector(
@@ -1137,8 +1288,8 @@
                     ),
                 },
             ];
-            for (let c = 0; c < candidates.length; c++) {
-                const handleEl = candidates[c].el;
+            for (let c = 0; c < edgeCandidates.length; c++) {
+                const handleEl = edgeCandidates[c].el;
                 if (!handleEl) continue;
                 const rect = handleEl.getBoundingClientRect();
                 if (clientX < rect.left - pad || clientX > rect.right + pad) continue;
@@ -1146,11 +1297,11 @@
                 const dist = Math.abs(clientX - cx);
                 if (dist < bestDist) {
                     bestDist = dist;
-                    best = { segmentIndex, kind: candidates[c].kind, regionEl };
+                    best = { segmentIndex, kind: edgeCandidates[c].kind, regionEl };
                 }
             }
         }
-        return best;
+        return bestFade || best;
     }
 
     function isPointerOnAnyRegionResizeHandle(clientX, clientY, opt) {
@@ -1911,6 +2062,7 @@
                 remain: Math.max(0, seg.sourceOutSec - sourceSec),
                 timelineStart,
                 timelineEnd,
+                transportSec: t,
                 key: track.slot + ':' + (seg.id || 'i' + i),
             });
         }
@@ -2128,6 +2280,7 @@
                 if (barTransport < hideBefore - 0.0005) continue;
                 const gain =
                     computeSegmentCrossfadeVisualGain(track, segIdx, barTransport) *
+                    computeSegmentFadeLinearAtTransport(track, segIdx, barTransport) *
                     getSegmentGainLinear(track, segIdx);
                 const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
                 const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
@@ -2405,6 +2558,7 @@
                 }
                 const gain =
                     computeSegmentCrossfadeVisualGain(track, i, barTransport) *
+                    computeSegmentFadeLinearAtTransport(track, i, barTransport) *
                     getSegmentGainLinear(track, i);
                 const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
                 const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
@@ -2960,6 +3114,46 @@
             handleOut.title = 'Region ' + (segmentIndex + 1) + ' Out（終了位置）';
             el.appendChild(handleOut);
         }
+        const fadeCurve = document.createElement('div');
+        fadeCurve.className = 'audio-waveform-lane__playback-region__fade-curve';
+        fadeCurve.setAttribute('aria-hidden', 'true');
+        const fadeInCurve = document.createElement('div');
+        fadeInCurve.className =
+            'audio-waveform-lane__playback-region__fade-curve-part audio-waveform-lane__playback-region__fade-curve-part--in';
+        const fadeInSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        fadeInSvg.setAttribute('class', 'audio-waveform-lane__playback-region__fade-svg');
+        fadeInSvg.setAttribute('viewBox', '0 0 100 100');
+        fadeInSvg.setAttribute('preserveAspectRatio', 'none');
+        const fadeInPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        fadeInPath.setAttribute('d', 'M 0 99 Q 50 30 100 1');
+        fadeInSvg.appendChild(fadeInPath);
+        fadeInCurve.appendChild(fadeInSvg);
+        const fadeOutCurve = document.createElement('div');
+        fadeOutCurve.className =
+            'audio-waveform-lane__playback-region__fade-curve-part audio-waveform-lane__playback-region__fade-curve-part--out';
+        const fadeOutSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        fadeOutSvg.setAttribute('class', 'audio-waveform-lane__playback-region__fade-svg');
+        fadeOutSvg.setAttribute('viewBox', '0 0 100 100');
+        fadeOutSvg.setAttribute('preserveAspectRatio', 'none');
+        const fadeOutPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        fadeOutPath.setAttribute('d', 'M 100 99 Q 50 30 0 1');
+        fadeOutSvg.appendChild(fadeOutPath);
+        fadeOutCurve.appendChild(fadeOutSvg);
+        fadeCurve.appendChild(fadeInCurve);
+        fadeCurve.appendChild(fadeOutCurve);
+        el.appendChild(fadeCurve);
+
+        const fadeInHandle = document.createElement('div');
+        fadeInHandle.className =
+            'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--fade-in';
+        fadeInHandle.title = 'Fade In（内側へドラッグ）';
+        el.appendChild(fadeInHandle);
+        const fadeOutHandle = document.createElement('div');
+        fadeOutHandle.className =
+            'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--fade-out';
+        fadeOutHandle.title = 'Fade Out（内側へドラッグ）';
+        el.appendChild(fadeOutHandle);
+
         const label = document.createElement('span');
         label.className = 'audio-waveform-lane__playback-region__label';
         label.textContent = fileName || 'Region ' + (segmentIndex + 1);
@@ -3032,6 +3226,38 @@
         el.style.left = leftPct + '%';
         el.style.width = Math.max(0.05, rightPct - leftPct) + '%';
         el.hidden = false;
+
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        const regionDur = Math.max(0.001, outTransport - inTransport);
+        const playbackFromRegion = Math.max(0, playbackStart - inTransport);
+        const fadeInMax = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
+        const fadeOutMax = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
+        const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
+        const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');
+        const fadeInRatio = Math.max(0, Math.min(1, fadeInSec / regionDur));
+        const fadeOutRatio = Math.max(0, Math.min(1, fadeOutSec / regionDur));
+        const playbackOffsetRatio = Math.max(0, Math.min(1, playbackFromRegion / regionDur));
+
+        const fadeInHandle = el.querySelector('.audio-waveform-lane__playback-region__handle--fade-in');
+        if (fadeInHandle) {
+            const left = (playbackOffsetRatio + fadeInRatio) * 100;
+            fadeInHandle.style.left = left + '%';
+            fadeInHandle.style.right = 'auto';
+            fadeInHandle.hidden = !(fadeInMax > 0.0005);
+        }
+        const fadeOutHandle = el.querySelector('.audio-waveform-lane__playback-region__handle--fade-out');
+        if (fadeOutHandle) {
+            const left = Math.max(0, 1 - fadeOutRatio);
+            fadeOutHandle.style.left = left * 100 + '%';
+            fadeOutHandle.style.right = 'auto';
+            fadeOutHandle.hidden = !(fadeOutMax > 0.0005);
+        }
+        const fadeCurve = el.querySelector('.audio-waveform-lane__playback-region__fade-curve');
+        if (fadeCurve) {
+            fadeCurve.style.setProperty('--region-fade-in-start', playbackOffsetRatio * 100 + '%');
+            fadeCurve.style.setProperty('--region-fade-in-width', fadeInRatio * 100 + '%');
+            fadeCurve.style.setProperty('--region-fade-out-width', fadeOutRatio * 100 + '%');
+        }
     }
 
     const CROSSFADE_OVERLAP_MIN_SEC = 0.25;
@@ -3213,6 +3439,8 @@
             regionInSec: getSegmentRegionTimelineIn(track, segmentIndex),
             regionLeadPadSec: getSegmentRegionLeadPadSec(track, segmentIndex),
             gainDb: getSegmentGainDb(track, segmentIndex),
+            fadeInSec: getSegmentFadeDurationSec(track, segmentIndex, 'in'),
+            fadeOutSec: getSegmentFadeDurationSec(track, segmentIndex, 'out'),
         };
     }
 
@@ -3323,6 +3551,12 @@
         }
         if (Number.isFinite(clip.gainDb) && Math.abs(clip.gainDb) > 0.0005) {
             clone.gainDb = clip.gainDb;
+        }
+        if (Number.isFinite(clip.fadeInSec) && clip.fadeInSec > 0.0005) {
+            clone.fadeInSec = clip.fadeInSec;
+        }
+        if (Number.isFinite(clip.fadeOutSec) && clip.fadeOutSec > 0.0005) {
+            clone.fadeOutSec = clip.fadeOutSec;
         }
 
         const fullDur = getSegmentSourceDurationSec(track, clone);
@@ -3785,8 +4019,10 @@
         right.timelineStartSec = leftStart + (sourceSplit - leftIn);
         delete left.regionTimelineInSec;
         delete left.regionLeadPadSec;
+        delete left.fadeOutSec;
         delete right.regionTimelineInSec;
         delete right.regionLeadPadSec;
+        delete right.fadeInSec;
 
         state.segments = segments.map((s) =>
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
@@ -3840,6 +4076,12 @@
         }
         if (Number.isFinite(left.gainDb)) {
             merged.gainDb = left.gainDb;
+        }
+        if (Number.isFinite(left.fadeInSec)) {
+            merged.fadeInSec = left.fadeInSec;
+        }
+        if (Number.isFinite(right.fadeOutSec)) {
+            merged.fadeOutSec = right.fadeOutSec;
         }
 
         segments.splice(boundaryIndex, 2, merged);
@@ -3931,18 +4173,33 @@
     function setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec, opt) {
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return;
-        const state = getPlaybackRegionsState(track);
         const seg = segments[segmentIndex];
+        if (kind === 'fade-in') {
+            const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+            const maxDur = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
+            if (!(maxDur > 0.0005)) return;
+            const t = Math.max(playbackStart, Math.min(playbackStart + maxDur, Number(transportSec) || 0));
+            setSegmentFadeDurationSec(track, segmentIndex, 'in', t - playbackStart, {
+                skipUndo: true,
+            });
+            return;
+        }
+        if (kind === 'fade-out') {
+            const playbackEnd = getSegmentTimelineEnd(track, segmentIndex);
+            const maxDur = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
+            if (!(maxDur > 0.0005)) return;
+            const minT = playbackEnd - maxDur;
+            const t = Math.max(minT, Math.min(playbackEnd, Number(transportSec) || 0));
+            setSegmentFadeDurationSec(track, segmentIndex, 'out', playbackEnd - t, {
+                skipUndo: true,
+            });
+            return;
+        }
         const clipDur = getSegmentSourceDurationSec(track, seg);
         const snapOpt = {
             exclude: { slot: track.slot, segmentIndex },
-            sameSlotOnly: track.slot,
-            forOutDrag: kind === 'out' && !(opt && opt.finalizeSnap),
         };
-        const t =
-            kind === 'out'
-                ? snapRegionOutTransportSec(transportSec, snapOpt)
-                : snapRegionTransportSec(transportSec, snapOpt);
+        const t = snapRegionHandleTransportSec(transportSec, snapOpt);
         if (!Number.isFinite(t)) return;
 
         if (kind === 'in') {
@@ -4438,6 +4695,12 @@
         if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
             syncSnapSuppressionFromPointerEvent(ev);
         }
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({
+                silent: true,
+                clearLoopAndRegion: false,
+            });
+        }
         ev.preventDefault();
         ev.stopPropagation();
         if (typeof endAudioWaveformScrub === 'function') {
@@ -4487,6 +4750,12 @@
         const segments = getTrackSegments(track);
         if (!segments[segmentIndex]) return;
         if (ev.button !== 0) return;
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({
+                silent: true,
+                clearLoopAndRegion: false,
+            });
+        }
         ev.preventDefault();
         ev.stopPropagation();
         if (typeof endAudioWaveformScrub === 'function') {
@@ -4814,6 +5083,12 @@
                     }
                     if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
                         entry.gainDb = raw.gainDb;
+                    }
+                    if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
+                        entry.fadeInSec = raw.fadeInSec;
+                    }
+                    if (raw && Number.isFinite(raw.fadeOutSec) && raw.fadeOutSec > 0.0005) {
+                        entry.fadeOutSec = raw.fadeOutSec;
                     }
                     return entry;
                 }),
@@ -5271,6 +5546,7 @@
     window.JOINED_BOUNDARY_CROSSFADE_SEC = JOINED_BOUNDARY_CROSSFADE_SEC;
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
+    window.getSegmentPlaybackGainLinear = getSegmentPlaybackGainLinear;
     window.setSegmentGainDb = setSegmentGainDb;
     window.getSegmentRegionTimelineBounds = function (slot, segmentIndex) {
         const track = { type: 'extra', slot };

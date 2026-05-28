@@ -2266,6 +2266,64 @@
             right: 0;
             transform: translateX(50%);
         }
+        .audio-waveform-lane__playback-region__handle--fade-in,
+        .audio-waveform-lane__playback-region__handle--fade-out {
+            top: 0;
+            bottom: auto;
+            width: 8px;
+            height: 8px;
+            z-index: 11;
+            background: rgba(150, 156, 168, 0.95);
+            border-radius: 0;
+            /* 当たり判定は JS の三角ヒットテストのみ（8px 枠全体は透過） */
+            pointer-events: none;
+        }
+        .audio-waveform-lane__playback-region__handle--fade-in {
+            transform: none;
+            clip-path: polygon(0 0, 100% 0, 0 100%);
+        }
+        .audio-waveform-lane__playback-region__handle--fade-out {
+            transform: translateX(-100%);
+            clip-path: polygon(0 0, 100% 0, 100% 100%);
+        }
+        .audio-waveform-lane__playback-region__fade-curve {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 6;
+            --region-fade-in-start: 0%;
+            --region-fade-in-width: 0%;
+            --region-fade-out-width: 0%;
+        }
+        .audio-waveform-lane__playback-region__fade-curve-part {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            opacity: 0.98;
+            background: none;
+            overflow: visible;
+        }
+        .audio-waveform-lane__playback-region__fade-svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+        .audio-waveform-lane__playback-region__fade-svg path {
+            fill: none;
+            stroke: rgba(150, 156, 168, 0.88);
+            stroke-width: 1;
+            stroke-linecap: round;
+            vector-effect: non-scaling-stroke;
+        }
+        .audio-waveform-lane__playback-region__fade-curve-part--in {
+            left: var(--region-fade-in-start);
+            width: var(--region-fade-in-width);
+        }
+        .audio-waveform-lane__playback-region__fade-curve-part--out {
+            right: 0;
+            width: var(--region-fade-out-width);
+        }
         .audio-waveform-lane__playback-region__handle--split {
             left: 0;
             transform: translateX(-50%);
@@ -2277,7 +2335,7 @@
             background: rgba(150, 156, 168, 0.92);
             box-shadow: none;
         }
-        .audio-waveform-lane__playback-region__handle::after {
+        .audio-waveform-lane__playback-region__handle:not(.audio-waveform-lane__playback-region__handle--fade-in):not(.audio-waveform-lane__playback-region__handle--fade-out)::after {
             content: '';
             position: absolute;
             top: 0;
