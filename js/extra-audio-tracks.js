@@ -24,6 +24,25 @@
         el.setAttribute('aria-hidden', 'false');
     }
 
+    function formatFileSizeMbText(bytes) {
+        const n = Number(bytes || 0);
+        if (!(n > 0)) return '';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    function buildTrackTitleTooltip(label, file, statusText) {
+        const parts = [label || ''];
+        if (file && file.name) {
+            parts.push(String(file.name));
+            const mb = formatFileSizeMbText(file.size);
+            if (mb) parts.push(mb);
+        }
+        const tip =
+            typeof laneStatusTooltip === 'function' ? laneStatusTooltip(statusText) : '';
+        if (tip) parts.push(tip);
+        return parts.filter((p) => !!p).join(' — ');
+    }
+
     function refreshVideoAudioLaneFileName() {
         const el = document.getElementById('audioWaveformFileName');
         if (!el) return;
@@ -3746,11 +3765,9 @@
         }
         const tr = extraTrackBySlot(slot);
         const label = EXTRA_TRACK_DEFAULT_LABELS[slot] || 'Ex';
-        const tip =
-            typeof laneStatusTooltip === 'function' ? laneStatusTooltip(text) : '';
         if (ui && ui.title) {
             ui.title.textContent = label;
-            ui.title.title = tip ? label + ' — ' + tip : label;
+            ui.title.title = buildTrackTitleTooltip(label, tr ? tr.file : null, text);
         }
         if (ui && ui.fileName) {
             const hasRegions =
@@ -3765,7 +3782,8 @@
                 }
             } else if (tr && tr.file && tr.file.name) {
                 const full = tr.file.name;
-                setLaneWaveformFileNameEl(ui.fileName, full, tip ? full + ' — ' + tip : full);
+                const tip = buildTrackTitleTooltip(label, tr.file, text);
+                setLaneWaveformFileNameEl(ui.fileName, full, tip || full);
             } else {
                 setLaneWaveformFileNameEl(ui.fileName, '');
             }
@@ -4112,10 +4130,8 @@
         if (ui.title) {
             const label = EXTRA_TRACK_DEFAULT_LABELS[slot] || 'Ex';
             const st = ui.status ? ui.status.textContent || '' : '';
-            const tip =
-                typeof laneStatusTooltip === 'function' ? laneStatusTooltip(st) : '';
             ui.title.textContent = label;
-            ui.title.title = tip ? label + ' — ' + tip : label;
+            ui.title.title = buildTrackTitleTooltip(label, tr ? tr.file : null, st);
         }
         if (ui.fileName) {
             const hasRegions =
@@ -4130,10 +4146,13 @@
                 }
             } else if (tr && tr.file && tr.file.name) {
                 const st = ui.status ? ui.status.textContent || '' : '';
-                const tip =
-                    typeof laneStatusTooltip === 'function' ? laneStatusTooltip(st) : '';
                 const full = tr.file.name;
-                setLaneWaveformFileNameEl(ui.fileName, full, tip ? full + ' — ' + tip : full);
+                const tip = buildTrackTitleTooltip(
+                    EXTRA_TRACK_DEFAULT_LABELS[slot] || 'Ex',
+                    tr.file,
+                    st,
+                );
+                setLaneWaveformFileNameEl(ui.fileName, full, tip || full);
             } else {
                 setLaneWaveformFileNameEl(ui.fileName, '');
             }

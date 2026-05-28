@@ -188,7 +188,16 @@
             titleEl.textContent = slotLabel;
             const tip =
                 typeof laneStatusTooltip === 'function' ? laneStatusTooltip(text) : '';
-            titleEl.title = tip ? slotLabel + ' — ' + tip : slotLabel;
+            const parts = [slotLabel];
+            if (typeof fileMain !== 'undefined' && fileMain && fileMain.name) {
+                parts.push(fileMain.name);
+                const bytes = Number(fileMain.size || 0);
+                if (bytes > 0) {
+                    parts.push((bytes / (1024 * 1024)).toFixed(2) + ' MB');
+                }
+            }
+            if (tip) parts.push(tip);
+            titleEl.title = parts.join(' — ');
         }
         if (typeof refreshVideoAudioLaneFileName === 'function') {
             refreshVideoAudioLaneFileName();
