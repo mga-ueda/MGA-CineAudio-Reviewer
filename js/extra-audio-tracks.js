@@ -4534,8 +4534,25 @@
     window.syncExtraTrackLaneMixVisual = syncExtraTrackLaneMixVisual;
     window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
     window.areExtraTrackWaveformsRestorePending = areExtraTrackWaveformsRestorePending;
+    window.extraTrackStatusIndicatesDecoding = extraTrackStatusIndicatesDecoding;
     window.ensureExtraTrackWaveformsDrawnAsync = ensureExtraTrackWaveformsDrawnAsync;
     window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;
+    /** セッション復元ロック解除後: マスター尺確定後に Ex リージョンオーバーレイを再同期 */
+    function refreshExtraTrackRegionOverlaysAfterSessionRestore() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLoaded(i)) continue;
+            if (typeof updateTrackRegionOverlay === 'function') {
+                updateTrackRegionOverlay({ type: 'extra', slot: i });
+            }
+            drawExtraTrackWaveform(i);
+        }
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+    }
+
+    window.refreshExtraTrackRegionOverlaysAfterSessionRestore =
+        refreshExtraTrackRegionOverlaysAfterSessionRestore;
     window.finalizeReviewMixAfterSessionRestore = finalizeReviewMixAfterSessionRestore;
     window.prepareReviewMixForNewVideoLoad = prepareReviewMixForNewVideoLoad;
     window.tryWireReviewMixVideoAudioWhenReady = tryWireReviewMixVideoAudioWhenReady;
@@ -4919,6 +4936,7 @@
                 if (opt && opt.fromSessionRestore) {
                     writeLog('Extra audio ' + (slot + 1) + ': restore aborted (superseded)');
                 }
+                setExtraTrackStatus(slot, '');
                 return;
             }
             if (!ab || ab.byteLength < 1) {
@@ -4949,6 +4967,7 @@
                 if (opt && opt.fromSessionRestore) {
                     writeLog('Extra audio ' + (slot + 1) + ': restore aborted after decode');
                 }
+                setExtraTrackStatus(slot, '');
                 return;
             }
             if (!buffer || !(buffer.duration > 0)) {
@@ -5096,6 +5115,7 @@
                 tr.buffer = null;
                 tr.peaks = null;
                 tr.persistBlob = null;
+                setExtraTrackStatus(slot, '');
                 return;
             }
             const ui = getExtraUi(slot);

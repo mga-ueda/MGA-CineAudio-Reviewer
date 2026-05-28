@@ -1,6 +1,6 @@
 (function exportBlockingLockModule() {
     /** Now Loading（波形復元ロック UI・起動時ぼかし）の有効／無効 */
-    const NOW_LOADING_ENABLED = false;
+    const NOW_LOADING_ENABLED = true;
 
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';

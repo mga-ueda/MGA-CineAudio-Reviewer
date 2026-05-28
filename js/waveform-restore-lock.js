@@ -29,6 +29,41 @@
         return false;
     }
 
+    /** Now Loading 解除判定: デコード中のみ待つ（描画レイアウト未確定で永久待ちしない） */
+    function sessionWaveformsBlockingRestorePending() {
+        if (
+            typeof isMainVideoWaveformBuildPending === 'function' &&
+            isMainVideoWaveformBuildPending()
+        ) {
+            return true;
+        }
+        const extraCount =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let i = 0; i < extraCount; i++) {
+            if (typeof extraTrackStatusIndicatesDecoding === 'function') {
+                if (extraTrackStatusIndicatesDecoding(i)) return true;
+            }
+        }
+        return false;
+    }
+
+    function prepareLayoutBeforeWaveformRestoreWait() {
+        if (typeof syncExtraLaneVisibilityAfterSessionRestore === 'function') {
+            syncExtraLaneVisibilityAfterSessionRestore();
+        }
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+        if (
+            typeof pendingLaneUiRestore !== 'undefined' &&
+            pendingLaneUiRestore &&
+            typeof applySavedWaveformLaneUi === 'function'
+        ) {
+            applySavedWaveformLaneUi(pendingLaneUiRestore);
+            pendingLaneUiRestore = null;
+        }
+    }
+
     function delay(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
@@ -68,6 +103,8 @@
             return;
         }
 
+        prepareLayoutBeforeWaveformRestoreWait();
+
         if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
             try {
                 await ensureExtraTrackWaveformsDrawnAsync({ notifyMaster: true, maxFrames: 48 });
@@ -85,16 +122,26 @@
             ) {
                 kickMainVideoWaveformBuild({ allowSettle: false });
             }
-            if (!sessionWaveformsRestorePending()) break;
+            if (!sessionWaveformsBlockingRestorePending()) break;
             await delay(POLL_MS);
         }
 
-        if (sessionWaveformsRestorePending() && typeof writeLog === 'function') {
+        if (sessionWaveformsBlockingRestorePending() && typeof writeLog === 'function') {
             writeLog('Waveform restore lock: timed out — releasing lock');
         }
 
         if (typeof endWaveformRestoreLock === 'function') {
             await endWaveformRestoreLock();
+        }
+
+        if (typeof refreshExtraTrackRegionOverlaysAfterSessionRestore === 'function') {
+            refreshExtraTrackRegionOverlaysAfterSessionRestore();
+        }
+
+        if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
+            try {
+                await ensureExtraTrackWaveformsDrawnAsync({ notifyMaster: true, maxFrames: 40 });
+            } catch (_) {}
         }
         if (typeof writeLog === 'function') {
             writeLog('Waveform restore lock: released');
