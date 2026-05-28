@@ -305,15 +305,25 @@
         return segmentFadeEaseIn(norm);
     }
 
-    /** クロスフェード出側: p が進むほど急に下がる */
-    function crossfadeValleyGainOut(p) {
+    /** 結合境界の手動 Fade Out/In（二次 ease） */
+    function manualJoinedBoundaryFadeOutGain(p) {
         const x = clampFadeNorm(p);
         return segmentFadeEaseOut(1 - x);
     }
 
-    /** クロスフェード入側: 終盤で急に上がる */
-    function crossfadeValleyGainIn(p) {
+    function manualJoinedBoundaryFadeInGain(p) {
         return segmentFadeEaseIn(p);
+    }
+
+    /** リージョン重なりクロスフェード（等パワー） */
+    function crossfadeEqualPowerGainOut(p) {
+        const x = clampFadeNorm(p);
+        return Math.cos(x * Math.PI * 0.5);
+    }
+
+    function crossfadeEqualPowerGainIn(p) {
+        const x = clampFadeNorm(p);
+        return Math.sin(x * Math.PI * 0.5);
     }
 
     function getSegmentFadeOverlapWindow(track, segmentIndex) {
@@ -1971,7 +1981,7 @@
     }
 
     /**
-     * 結合境界の手動フェード（再生）: 重なり区間で谷型交差。左は境界より後は 0、右は境界より前は 0。
+     * 結合境界の手動フェード（再生）: 二次 ease。左は境界より後は 0、右は境界より前は 0。
      */
     function computeManualJoinedBoundaryFadeLinear(track, segmentIndex, transportSec) {
         const hit = findManualJoinedBoundaryFadeAtTransport(
@@ -1990,7 +2000,7 @@
                 0,
                 Math.min(1, (t - zone.startSec) / zone.fadeOut),
             );
-            return crossfadeValleyGainOut(p);
+            return manualJoinedBoundaryFadeOutGain(p);
         }
         if (!(zone.fadeIn > 0.0005)) return null;
         if (t < zone.boundaryT - 0.0005) return 0;
@@ -1998,7 +2008,7 @@
             0,
             Math.min(1, (t - zone.boundaryT) / zone.fadeIn),
         );
-        return crossfadeValleyGainIn(p);
+        return manualJoinedBoundaryFadeInGain(p);
     }
 
     /** 波形表示: リージョン内のみ（タイムライン外へは伸ばさない） */
@@ -2455,7 +2465,7 @@
 
     const MIN_CROSSFADE_OVERLAP_SEC = 0.005;
 
-    /** 再生ミックスと同じ谷型・重なり（波形振幅表示用） */
+    /** 再生ミックスと同じ等パワー・重なり（波形振幅表示用） */
     function computeSegmentCrossfadeVisualGain(track, segmentIndex, transportSec) {
         const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
             track,
@@ -2485,11 +2495,14 @@
                 }
                 const p = (t - oStart) / (oEnd - oStart);
                 const { out, in: inIdx } = crossfadeOutInIndicesForTrack(hits, i, j);
-                weights[out] *= crossfadeValleyGainOut(p);
-                weights[inIdx] *= crossfadeValleyGainIn(p);
+                weights[out] *= crossfadeEqualPowerGainOut(p);
+                weights[inIdx] *= crossfadeEqualPowerGainIn(p);
             }
         }
-        return Math.max(0, weights[pos]);
+        let sumSq = 0;
+        for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
+        const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
+        return Math.max(0, weights[pos] * norm);
     }
 
     function getSegmentPeaksForDraw(slot, clipId) {
@@ -5918,8 +5931,6 @@
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
     window.getSegmentPlaybackGainLinear = getSegmentPlaybackGainLinear;
-    window.crossfadeValleyGainOut = crossfadeValleyGainOut;
-    window.crossfadeValleyGainIn = crossfadeValleyGainIn;
     window.setSegmentGainDb = setSegmentGainDb;
     window.getSegmentRegionTimelineBounds = function (slot, segmentIndex) {
         const track = { type: 'extra', slot };

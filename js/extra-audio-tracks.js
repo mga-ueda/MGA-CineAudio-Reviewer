@@ -209,25 +209,7 @@
         return cf * segmentRegionGainLinear(segHit, t);
     }
 
-    function valleyCrossfadeOutGain(p) {
-        if (typeof window.crossfadeValleyGainOut === 'function') {
-            return window.crossfadeValleyGainOut(p);
-        }
-        const x = Math.max(0, Math.min(1, Number(p) || 0));
-        const q = 1 - x;
-        return q * q;
-    }
-
-    function valleyCrossfadeInGain(p) {
-        if (typeof window.crossfadeValleyGainIn === 'function') {
-            return window.crossfadeValleyGainIn(p);
-        }
-        const x = Math.max(0, Math.min(1, Number(p) || 0));
-        return x * x;
-    }
-
-    /** 谷型クロスフェード（振幅線形: 重なり中央で聴感音量が下がる） */
-    function computeValleyCrossfadeGains(active, transportSec) {
+    function computeEqualPowerCrossfadeGains(active, transportSec) {
         const gains = new Map();
         if (!active.length) return gains;
         if (active.length === 1) {
@@ -266,20 +248,25 @@
                     continue;
                 }
                 const p = (t - oStart) / (oEnd - oStart);
+                const gOut = Math.cos(p * Math.PI * 0.5);
+                const gIn = Math.sin(p * Math.PI * 0.5);
                 const { out, in: inIdx } = crossfadeOutInIndices(active, i, j);
-                weights[out] *= valleyCrossfadeOutGain(p);
-                weights[inIdx] *= valleyCrossfadeInGain(p);
+                weights[out] *= gOut;
+                weights[inIdx] *= gIn;
             }
         }
+        let sumSq = 0;
+        for (let i = 0; i < weights.length; i++) sumSq += weights[i] * weights[i];
+        const norm = sumSq > 0 ? 1 / Math.sqrt(sumSq) : 1;
         for (let i = 0; i < active.length; i++) {
-            gains.set(active[i].key, weights[i]);
+            gains.set(active[i].key, weights[i] * norm);
         }
         return gains;
     }
 
     /**
      * 結合境界: 入側の BufferSource が未作成の間だけ出側=1・入側=0。
-     * 両方ある場合は谷型ゲイン曲線をそのまま両セグメントへ適用する。
+     * 両方ある場合は等パワー曲線をそのまま両セグメントへ適用する。
      */
     function withCrossfadeGainsDeferredUntilIncomingAudible(ctx, active, transportSec, gains) {
         if (!ctx || !active || active.length < 2 || !gains) return gains;
@@ -434,7 +421,7 @@
     }
 
     function computeSegmentCrossfadeGainsForActive(ctx, active, transportSec) {
-        const gains = computeValleyCrossfadeGains(active, transportSec);
+        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
         if (
             activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec) ||
             activeHasManualCrossfadeOverlapAtTransport(active, transportSec)
@@ -2414,7 +2401,7 @@
         if (activeHasJoinedBoundaryCrossfadeAtTransport(active, transportSec)) {
             return true;
         }
-        const gains = computeValleyCrossfadeGains(active, transportSec);
+        const gains = computeEqualPowerCrossfadeGains(active, transportSec);
         for (let i = 0; i < active.length; i++) {
             const g = gains.get(active[i].key) ?? 1;
             if (g < 0.97) return true;
