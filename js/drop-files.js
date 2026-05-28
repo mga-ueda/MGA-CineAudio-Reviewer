@@ -156,8 +156,7 @@
             logLabel: 'Video audio lane',
         });
     }
-    const extraCount =
-        typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+    const extraCount = getExtraTrackCount();
     for (let slot = 0; slot < extraCount; slot++) {
         const track = document.getElementById('extraAudioTrack' + slot);
         const meta = document.getElementById('extraAudioMeta' + slot);

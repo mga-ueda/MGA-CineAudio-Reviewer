@@ -395,8 +395,7 @@
 
     /** Ex トラック1本を即時マージ保存（リロード直前の欠落防止） */
     async function persistExtraTrackEntryToSession(entry) {
-        const maxExtra =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const maxExtra = getExtraTrackCount();
         if (!window.indexedDB || !entry || entry.slot < 0 || entry.slot >= maxExtra) return;
         const slot = entry.slot;
         const reqSeq = (extraTrackPersistReqSeqBySlot[slot] || 0) + 1;
@@ -568,8 +567,7 @@
     }
 
     async function removeExtraTrackFromSession(slot) {
-        const maxExtra =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const maxExtra = getExtraTrackCount();
         if (!window.indexedDB || slot < 0 || slot >= maxExtra) return;
         let row;
         try {
@@ -813,8 +811,7 @@
         pendingLaneUiRestore = row.laneUi && typeof row.laneUi === 'object' ? row.laneUi : null;
         if (!Array.isArray(row.extraTracks) || row.extraTracks.length < 1) return;
         const defaultExtraLaneOpen = () => {
-            const n =
-                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+            const n = getExtraTrackCount();
             return Array(n).fill(false);
         };
         if (!pendingLaneUiRestore || typeof pendingLaneUiRestore !== 'object') {
@@ -827,8 +824,7 @@
             pendingLaneUiRestore.extraLanesOpen = defaultExtraLaneOpen();
         }
         for (const entry of row.extraTracks) {
-            const maxExtra =
-                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+            const maxExtra = getExtraTrackCount();
             if (entry && entry.slot >= 0 && entry.slot < maxExtra) {
                 pendingLaneUiRestore.extraLanesOpen[entry.slot] = true;
             }
@@ -851,8 +847,7 @@
         }
         let restoredCount = 0;
         for (const entry of row.extraTracks) {
-            const maxExtraRestore =
-                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+            const maxExtraRestore = getExtraTrackCount();
             if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) continue;
             const blobBytes =
                 typeof entry.byteLength === 'number'

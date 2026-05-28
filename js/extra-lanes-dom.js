@@ -1,10 +1,9 @@
 /**
- * Ex 音声レーンのサイドバー・波形・Export チェックボックスを EXTRA_TRACK_COUNT 分生成する。
+ * Ex 音声レーンのサイドバー・波形を EXTRA_TRACK_COUNT 分生成する。
  * dom-refs / app-runtime 直後、他スクリプトより先に同期実行する。
  */
 (function buildExtraLanesDom() {
-    const count =
-        typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+    const count = getExtraTrackCount();
 
     function buildExtraLaneMeta(slot) {
         const n = slot + 1;
@@ -88,24 +87,6 @@
         return wrap;
     }
 
-    function buildExportExtraCheckbox(slot) {
-        const n = slot + 1;
-        const label = document.createElement('label');
-        label.className =
-            'transport-compact-lbl transport-compact-lbl--row session-export-media__item';
-        label.title = 'Export に Ex ' + n + ' を含める';
-        label.innerHTML =
-            '<input type="checkbox" id="sessionExportIncludeEx' +
-            slot +
-            '" checked disabled title="Export に Ex ' +
-            n +
-            ' を含める">' +
-            '<span>Ex ' +
-            n +
-            '</span>';
-        return label;
-    }
-
     const metaMount = document.getElementById('extraLaneMetaMount');
     if (metaMount) {
         const frag = document.createDocumentFragment();
@@ -124,12 +105,4 @@
         tracksMount.replaceWith(frag);
     }
 
-    const exportMount = document.getElementById('sessionExportExtraMount');
-    if (exportMount) {
-        const frag = document.createDocumentFragment();
-        for (let slot = 0; slot < count; slot++) {
-            frag.appendChild(buildExportExtraCheckbox(slot));
-        }
-        exportMount.replaceWith(frag);
-    }
 })();

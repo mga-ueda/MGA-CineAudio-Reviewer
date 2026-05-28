@@ -211,15 +211,7 @@
                   ? getExportMediaOptionsFromUi()
                   : {
                         includeVideo: true,
-                        includeExtra: Array.from(
-                            {
-                                length:
-                                    typeof getExtraTrackCount === 'function'
-                                        ? getExtraTrackCount()
-                                        : 3,
-                            },
-                            () => false,
-                        ),
+                        includeExtra: Array.from({ length: getExtraTrackCount() }, () => false),
                     };
         if (!exportMedia.includeVideo) {
             throw new Error('Video must be included in export');

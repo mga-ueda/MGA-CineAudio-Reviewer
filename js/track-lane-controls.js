@@ -13,8 +13,7 @@
 
     function ensureExtraLaneUiRefs() {
         if (laneUi.extra.length > 0) return;
-        const n =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const n = getExtraTrackCount();
         for (let slot = 0; slot < n; slot++) {
             laneUi.extra.push({
                 meterBar: document.getElementById('trackLaneMeter' + slot),

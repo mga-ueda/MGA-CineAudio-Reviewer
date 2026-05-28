@@ -334,23 +334,32 @@
     }
 
     function defaultExportMediaOptions() {
-        const count =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
-        return { includeVideo: true, includeExtra: Array.from({ length: count }, () => true) };
+        const count = getExtraTrackCount();
+        return {
+            includeVideo: true,
+            includeAudio: true,
+            includeExtra: Array.from({ length: count }, () => true),
+        };
     }
 
     function normalizeExportMediaOptions(opt) {
         const base = defaultExportMediaOptions();
         if (!opt || typeof opt !== 'object') return base;
         const extra = Array.isArray(opt.includeExtra) ? opt.includeExtra : base.includeExtra;
-        const count =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const includeAudio =
+            typeof opt.includeAudio === 'boolean'
+                ? opt.includeAudio
+                : Array.isArray(opt.includeExtra)
+                  ? opt.includeExtra.some(Boolean)
+                  : base.includeAudio;
+        const count = getExtraTrackCount();
         const includeExtra = [];
         for (let i = 0; i < count; i++) {
             includeExtra.push(!!extra[i]);
         }
         return {
             includeVideo: !!opt.includeVideo,
+            includeAudio: !!includeAudio,
             includeExtra,
         };
     }
@@ -363,6 +372,14 @@
         return typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(slot);
     }
 
+    function isAnyExportExtraAvailable() {
+        const count = getExtraTrackCount();
+        for (let i = 0; i < count; i++) {
+            if (isExportExtraSlotAvailable(i)) return true;
+        }
+        return false;
+    }
+
     function readExportMediaIncludePrefs() {
         if (typeof readPrefs !== 'function') return defaultExportMediaOptions();
         const p = readPrefs();
@@ -372,11 +389,9 @@
     function getExportMediaIncludePrefsSnapshot() {
         const opts = defaultExportMediaOptions();
         const videoEl = document.getElementById('sessionExportIncludeVideo');
+        const audioEl = document.getElementById('sessionExportIncludeAudio');
         if (videoEl) opts.includeVideo = !!videoEl.checked;
-        for (let i = 0; i < opts.includeExtra.length; i++) {
-            const el = document.getElementById('sessionExportIncludeEx' + i);
-            if (el) opts.includeExtra[i] = !!el.checked;
-        }
+        if (audioEl) opts.includeAudio = !!audioEl.checked;
         return opts;
     }
 
@@ -394,11 +409,9 @@
     function applyExportMediaIncludePrefs(saved) {
         const media = normalizeExportMediaOptions(saved);
         const videoEl = document.getElementById('sessionExportIncludeVideo');
+        const audioEl = document.getElementById('sessionExportIncludeAudio');
         if (videoEl) videoEl.checked = media.includeVideo;
-        for (let i = 0; i < media.includeExtra.length; i++) {
-            const el = document.getElementById('sessionExportIncludeEx' + i);
-            if (el) el.checked = media.includeExtra[i];
-        }
+        if (audioEl) audioEl.checked = media.includeAudio;
     }
 
     /** Active export selection (loaded media only); not written to .mgacr. */
@@ -408,10 +421,14 @@
         if (isExportVideoAvailable()) {
             opts.includeVideo = saved.includeVideo;
         }
+        const hasAnyExtra = isAnyExportExtraAvailable();
+        if (hasAnyExtra) {
+            opts.includeAudio = saved.includeAudio;
+        } else {
+            opts.includeAudio = false;
+        }
         for (let i = 0; i < opts.includeExtra.length; i++) {
-            if (isExportExtraSlotAvailable(i)) {
-                opts.includeExtra[i] = saved.includeExtra[i];
-            }
+            opts.includeExtra[i] = !!opts.includeAudio && isExportExtraSlotAvailable(i);
         }
         return opts;
     }
@@ -419,7 +436,9 @@
     function refreshExportMediaOptionsUi() {
         const saved = readExportMediaIncludePrefs();
         const videoEl = document.getElementById('sessionExportIncludeVideo');
+        const audioEl = document.getElementById('sessionExportIncludeAudio');
         const hasVideo = isExportVideoAvailable();
+        const hasAnyExtra = isAnyExportExtraAvailable();
         if (videoEl) {
             const wasDisabled = videoEl.disabled;
             videoEl.disabled = !hasVideo;
@@ -427,16 +446,14 @@
                 videoEl.checked = saved.includeVideo;
             }
         }
-        const count =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
-        for (let i = 0; i < count; i++) {
-            const el = document.getElementById('sessionExportIncludeEx' + i);
-            const loaded = isExportExtraSlotAvailable(i);
-            if (!el) continue;
-            const wasDisabled = el.disabled;
-            el.disabled = !loaded;
-            if (loaded && wasDisabled) {
-                el.checked = saved.includeExtra[i];
+        if (audioEl) {
+            const wasDisabled = audioEl.disabled;
+            audioEl.disabled = !hasAnyExtra;
+            if (hasAnyExtra && wasDisabled) {
+                audioEl.checked = saved.includeAudio;
+            }
+            if (!hasAnyExtra) {
+                audioEl.checked = false;
             }
         }
         if (typeof updateSessionAllClearButton === 'function') {
@@ -455,10 +472,7 @@
     }
 
     function bindExportMediaIncludeCheckboxPersistence() {
-        const count =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
-        const ids = ['sessionExportIncludeVideo'];
-        for (let i = 0; i < count; i++) ids.push('sessionExportIncludeEx' + i);
+        const ids = ['sessionExportIncludeVideo', 'sessionExportIncludeAudio'];
         for (const id of ids) {
             const el = document.getElementById(id);
             if (!el || el.dataset.exportMediaPersistBound === '1') continue;
@@ -871,8 +885,7 @@
 
     /** First loaded extra track waveform file name (full name with extension). */
     function firstLoadedExtraTrackWaveformName() {
-        const count =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const count = getExtraTrackCount();
         if (typeof isExtraTrackLoaded !== 'function') return '';
         for (let i = 0; i < count; i++) {
             if (!isExtraTrackLoaded(i)) continue;
@@ -1296,8 +1309,7 @@
         const mediaOpts = document.getElementById('sessionExportMediaOpts');
         if (mediaOpts) {
             const mo = new MutationObserver(refreshExportMediaOptionsUi);
-            const count =
-                typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+            const count = getExtraTrackCount();
             for (let i = 0; i < count; i++) {
                 const meta = document.getElementById('extraAudioMeta' + i);
                 if (meta) mo.observe(meta, { attributes: true, attributeFilter: ['hidden'] });

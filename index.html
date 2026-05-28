@@ -350,7 +350,10 @@
                         <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export に Video を含める">
                         <span>Video</span>
                     </label>
-                    <span id="sessionExportExtraMount"></span>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export に追加音声（全 Ex トラック）を含める">
+                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export に追加音声（全 Ex トラック）を含める">
+                        <span>Audio</span>
+                    </label>
                 </div>
                 <div class="session-io-actions" role="group" aria-label="Import and export review">
                     <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title=".mgacr ファイルから review を復元（Ctrl+Shift+Alt+I）">Import Review</button>

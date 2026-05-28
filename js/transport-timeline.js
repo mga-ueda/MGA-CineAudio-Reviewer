@@ -594,8 +594,7 @@
         let m = 0;
         const vd = getVideoTransportDurationSec();
         if (vd > 0) m = vd;
-        const extraCount =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const extraCount = getExtraTrackCount();
         for (let i = 0; i < extraCount; i++) {
             const ed = getExtraTrackDurationSec(i);
             if (ed > m) m = ed;
@@ -1977,7 +1976,7 @@
                   ? isExtraTrackLoaded
                   : null;
         if (!loadFn) return false;
-        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const n = getExtraTrackCount();
         for (let i = 0; i < n; i++) {
             if (loadFn(i)) return true;
         }
@@ -2147,8 +2146,7 @@
 
     function updateLaneContentEndMarkers() {
         setLaneContentEndMarker(document.getElementById('audioWaveformContentEnd'), 0);
-        const extraCount =
-            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+        const extraCount = getExtraTrackCount();
         for (let i = 0; i < extraCount; i++) {
             setLaneContentEndMarker(document.getElementById('extraAudioContentEnd' + i), 0);
         }

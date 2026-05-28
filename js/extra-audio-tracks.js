@@ -1,5 +1,4 @@
-    const EXTRA_TRACK_COUNT =
-        typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
+    const EXTRA_TRACK_COUNT = getExtraTrackCount();
     const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio';
     /**
      * false = 動画は video 要素のネイティブ出力（確実に聴ける）。
