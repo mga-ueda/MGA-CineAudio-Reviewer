@@ -38,10 +38,16 @@
         <main class="guide-main">
             <section class="guide-section" id="intro">
                 <p class="guide-note">
+                    <strong>お知らせ：</strong>このマニュアルは <strong>AI で自動生成</strong>しています。読みづらい表現や分かりにくい箇所が含まれる可能性があり、あらかじめお詫びいたします。アプリの動作がより安定してきた段階で、順次<strong>読みやすさを重視した内容へ改定</strong>していきます。
+                </p>
+                <p class="guide-note">
                     <strong>プライバシー：</strong>動画・音声は<strong>このブラウザ内だけ</strong>でデコード・再生され、サーバーへアップロードされません。<strong>Google Chrome</strong> の利用を推奨します。
                 </p>
                 <p>
                     本ページはアプリ画面の<strong>上から下</strong>の並びに沿って説明します。トランスポート行の <strong>How To</strong> リンクからいつでも開けます。スクリーンショットは使わず、各エリアの位置と操作を文章で記しています。
+                </p>
+                <p>
+                    以降の章は、<strong>ユーザー体験の順番</strong>（読み込み → 再生 → 調整 → コメント → 保存／共有）と、<strong>UI の並び順</strong>（画面の上から下）をそろえて構成しています。初めて使う場合は、目次の上から順に読むと実際の操作順と一致します。
                 </p>
             </section>
 
@@ -98,7 +104,7 @@
                             </ul>
                         </li>
                         <li>
-                            <strong>④ トランスポート</strong> — 波形の直下。3 段に分かれた操作バー（時刻・ループ・再生、レビュー入出力、マスター音量・表示下限）。
+                            <strong>④ 再生・トランスポート操作</strong> — 2 か所に分かれます。<strong>② 映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>③ 波形直下</strong>のオプションバー（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol）。
                         </li>
                         <li>
                             <strong>⑤ スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
@@ -118,8 +124,8 @@
                 <ol class="guide-flow">
                     <li><strong>② 映像エリア</strong>または<strong>③ 波形エリア</strong>へ<strong>動画</strong>をドロップして読み込む。必要なら<strong>追加音声</strong>も同時または後から読み込む。</li>
                     <li><strong>② 映像</strong>を確認し、<strong>④ トランスポート</strong>の <strong>Play</strong> または <span class="guide-kbd">Space</span> で再生・停止する。</li>
-                    <li><strong>③ 波形</strong>上で位置を合わせ、左サイドバーの <strong>Solo / Mute / フェーダー</strong> でミックスを聴き比べる。Ex 音源の開始位置はリージョンのドラッグで調整する。</li>
                     <li>気になる箇所に<strong>マーカー</strong>（点または範囲）と Feedback を付ける（② 右の Markers パネルと③ 波形上の表示が連動）。</li>
+                    <li><strong>③ 波形</strong>上で位置を合わせ、左サイドバーの <strong>Solo / Mute / フェーダー</strong> でミックスを聴き比べる。Ex 音源の開始位置はリージョンのドラッグで調整する。</li>
                     <li><strong>⑤ スペクトラム・メーター</strong>で全体のバランスを確認する。表示下限は④ で変更。</li>
                     <li>共有方法を選ぶ — 相手が同じ素材を持っていれば <strong>Copy</strong> で Slack 等へ、DAW 環境のない相手や一式渡しには <strong>Export Review</strong>（.mgacr）。</li>
                 </ol>
@@ -273,25 +279,39 @@
 
             <section class="guide-section" id="transport">
                 <h2>トランスポート（再生コントロール）</h2>
-                <p><strong>④ トランスポート</strong>は波形の直下、横長の操作バーです。上から 3 段に分かれています。</p>
-
-                <h3>上段（再生・全体操作）</h3>
+                <p><strong>④ 再生・トランスポート操作</strong>は、現在の UI では次の 2 ブロックに分かれています。</p>
                 <ul>
-                    <li><strong>現在時刻 − 総尺</strong> — マスター FPS に基づくタイムコード（左端）。</li>
-                    <li><strong>Playback Drift</strong> — 映像と音声のズレ（フレーム数）。動画読み込み後に表示。</li>
+                    <li><strong>② 映像パネル直下の再生バー</strong> — Loop / How To / Shortcut / All Clear / Play。</li>
+                    <li><strong>③ 波形直下のオプションバー</strong> — Musical Grid、Center lock、Analyze、レビュー入出力、Master Vol など。</li>
+                </ul>
+                <p>また、<strong>現在時刻・総尺・Playback Drift</strong> は再生バーではなく、<strong>② 映像パネル内のステータス行</strong>に表示されます。</p>
+
+                <h3>② 映像パネル直下（再生バー）</h3>
+                <ul>
                     <li><strong>Loop</strong> — 全体のループ再生のオン／オフ（<span class="guide-kbd">L</span>）。設定は次回起動時に復元されます。</li>
                     <li><strong>How To</strong> / <strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
                     <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<span class="guide-kbd">Alt</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Del</span>、Mac では <span class="guide-kbd">Cmd</span> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生／停止（<span class="guide-kbd">Space</span>）。右端。初回再生時は Video / Markers 行が見える位置へ自動スクロールします。</li>
                 </ul>
+                <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、② 映像パネル内の表示を参照してください。</p>
 
-                <h3>中段（レビュー入出力）</h3>
+                <h3>③ 波形直下（オプションバー上段）</h3>
                 <ul>
-                    <li><strong>Include in export</strong> — エクスポートに含めるメディア（Video / Ex 1〜3）のチェック。</li>
-                    <li><strong>Import Review</strong> / <strong>Export Review</strong> — .mgacr の読み込み・保存。</li>
+                    <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
+                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<span class="guide-kbd">T</span>）とメーター入力。</li>
+                    <li><strong>Phrase</strong> — フレーズ着色表示（<span class="guide-kbd">P</span>）とグループ入力。</li>
                 </ul>
 
-                <h3>下段（マスター音量・モニター表示下限）</h3>
+                <h3>③ 波形直下（オプションバー中段）</h3>
+                <ul>
+                    <li><strong>Center lock</strong> — 再生ヘッドを波形ビュー中央に固定（<span class="guide-kbd">C</span>）。</li>
+                    <li><strong>Analyze</strong> — スペクトラム／メーター表示のオン／オフ（<span class="guide-kbd">A</span>）。オフでも CLIP PROTECT は動作します。</li>
+                    <li><strong>Include in export</strong> — エクスポートに含めるメディア（Video / Ex 1〜3）のチェック。</li>
+                    <li><strong>Import Review</strong> / <strong>Export Review</strong> — .mgacr の読み込み・保存。</li>
+                    <li><strong>Export WebM</strong> — タイムコードとマーカーコメントを焼き込んだ WebM を実時間で書き出し。</li>
+                </ul>
+
+                <h3>③ 波形直下（オプションバー下段）</h3>
                 <ul>
                     <li>
                         <strong>Master Vol</strong> — ミックス後のマスター音量（% と dB 表示）。⑤ のレベルメーターで<strong>クリップ（0 dB 超え）を検知すると、CLIP PROTECT としてマスター音量が自動で下がります</strong>（スライダーと表示も連動）。⑥ ログに <code>CLIP PROTECT</code> と減衰量が出ることがあります。<strong>基本的には触らなくて構いません</strong> — 通常のレビューでは 100％（0 dB）のまま使い、過大なレベルは各トラックのフェーダーで調整する想定です。意図的に戻すときは <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">V</span> またはスライダー二重クリックで 100％（0 dB）にリセットできます（Mac では <span class="guide-kbd">Cmd</span> も可）。自動減衰後の値はブラウザに保存され、次回も復元されます。
@@ -325,6 +345,13 @@
                     <li>その左の <strong>Include in export</strong> で、パッケージに含めるメディアを選びます（Video / Ex 1〜3）。チェックしたトラックの動画・追加音声が <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
                     <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In / Out / Feedback）、各トラックのミックス（Solo / Mute / 音量）、Ex リージョンの位置、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
+                </ul>
+
+                <h3>Export WebM</h3>
+                <ul>
+                    <li><strong>Export WebM</strong> は、現在のレビュー内容を確認しやすいように、<strong>タイムコードとマーカーコメントを映像へ焼き込んだ WebM</strong> を書き出します。</li>
+                    <li>書き出し中は操作ロック用オーバーレイが表示され、<span class="guide-kbd">Esc</span> でキャンセルできます。</li>
+                    <li>実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。</li>
                 </ul>
 
                 <h3>Import Review</h3>
