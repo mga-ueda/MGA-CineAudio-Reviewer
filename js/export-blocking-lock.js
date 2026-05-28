@@ -103,6 +103,19 @@
         return String(message || '').trim().indexOf('Now Loading:') === 0;
     }
 
+    function isNowLoadingCountdownLine(message) {
+        return /^>?Auto-dismiss in \d+s if no new log activity$/i.test(
+            String(message || '').trim(),
+        );
+    }
+
+    function isNowLoadingContentLine(message) {
+        const text = String(message || '').trim();
+        if (!text) return false;
+        if (isNowLoadingCountdownLine(text)) return false;
+        return true;
+    }
+
     function isMaskedNowLoadingLogLine(message) {
         const text = message != null ? String(message) : '';
         return text.toLowerCase().includes('debug');
@@ -148,7 +161,7 @@
         const mainLines = mainText
             .split('\n')
             .map((line) => formatLineForNowLoadingMirror(line))
-            .filter((line) => line !== '');
+            .filter((line) => line !== '' && isNowLoadingContentLine(line));
         const cur = getNowLoadingContentLogLines(el);
         const merged = [];
         const seen = new Set();
@@ -160,12 +173,54 @@
         renderNowLoadingLogLines(merged);
     }
 
+    function isSystemReadyLogLine(line) {
+        return /System Ready/i.test(String(line || ''));
+    }
+
+    function isAppStartedLogLine(line) {
+        return /MGA CineAudio Reviewer started/i.test(String(line || ''));
+    }
+
+    /** System Ready → started を先頭2行に固定 */
+    function orderNowLoadingLogLines(lines) {
+        const input = Array.isArray(lines) ? lines : [];
+        let ready = null;
+        let started = null;
+        const rest = [];
+        for (const line of input) {
+            const text = String(line || '').trim();
+            if (!text) continue;
+            if (!ready && isSystemReadyLogLine(text)) {
+                ready = line;
+                continue;
+            }
+            if (!started && isAppStartedLogLine(text)) {
+                started = line;
+                continue;
+            }
+            rest.push(line);
+        }
+        const ordered = [];
+        if (ready) ordered.push(ready);
+        if (started) ordered.push(started);
+        return ordered.concat(rest);
+    }
+
     function renderNowLoadingLogLines(contentLines) {
         const el = minimalLogEl();
         if (!el) return;
-        el.textContent =
-            contentLines && contentLines.length ? contentLines.join('\n') : '';
+        const ordered = orderNowLoadingLogLines(contentLines);
+        el.textContent = ordered.length ? ordered.join('\n') : '';
         showNowLoadingLogUi();
+    }
+
+    function isStaleNowLoadingMinimalOverlayVisible() {
+        const root = overlayEl();
+        return !!(
+            root &&
+            !root.hidden &&
+            root.classList.contains('export-blocking-overlay--minimal')
+        );
     }
 
     function setNowLoadingCountdownLine(countdownSec) {
@@ -182,7 +237,10 @@
     function getNowLoadingContentLogLines(el) {
         const cur = el && el.textContent ? el.textContent : '';
         if (!cur) return [];
-        return cur.split('\n').filter((line) => String(line || '').trim() !== '');
+        return cur
+            .split('\n')
+            .map((line) => String(line || '').trim())
+            .filter((line) => isNowLoadingContentLine(line));
     }
 
     function stopNowLoadingIdleWatch() {
@@ -193,16 +251,15 @@
         nowLoadingIdleWatchStarting = false;
     }
 
-    async function dismissNowLoadingFromIdle(reason) {
+    async function dismissNowLoadingFromIdle(reason, opt) {
         if (nowLoadingIdleDismissInFlight) return;
-        if (blockingMode !== 'waveform-restore') return;
+        if (blockingMode !== 'waveform-restore' && !isStaleNowLoadingMinimalOverlayVisible()) {
+            stopNowLoadingIdleWatch();
+            return;
+        }
         nowLoadingIdleDismissInFlight = true;
         stopNowLoadingIdleWatch();
         try {
-            logNowLoadingDetail(
-                reason ||
-                    'idle timeout — no progress for ' + NOW_LOADING_IDLE_MS / 1000 + 's',
-            );
             if (typeof ensureWaveformRestoreLockDismissed === 'function') {
                 await ensureWaveformRestoreLockDismissed();
             }
@@ -229,36 +286,31 @@
             showNowLoadingLogUi();
             setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
             nowLoadingIdleTimer = setInterval(() => {
-            if (blockingMode !== 'waveform-restore') {
-                stopNowLoadingIdleWatch();
-                return;
-            }
-            const nowTick = performance.now();
-            const idleLeftMs = nowLoadingIdleDeadline - nowTick;
-            const absoluteLeftMs = nowLoadingAbsoluteDeadline - nowTick;
-            setNowLoadingCountdownLine(idleLeftMs / 1000);
-            if (absoluteLeftMs <= 0) {
-                stopNowLoadingIdleWatch();
-                void dismissNowLoadingFromIdle(
-                    'absolute timeout after ' + NOW_LOADING_ABSOLUTE_MAX_MS / 1000 + 's',
-                );
-                return;
-            }
-            if (idleLeftMs <= 0) {
-                if (
-                    typeof isSessionRestoreInProgress === 'function' &&
-                    isSessionRestoreInProgress()
-                ) {
-                    touchNowLoadingIdleDeadline();
+                if (blockingMode !== 'waveform-restore') {
+                    stopNowLoadingIdleWatch();
                     return;
                 }
-                stopNowLoadingIdleWatch();
-                void dismissNowLoadingFromIdle();
-            }
+                const nowTick = performance.now();
+                const idleLeftMs = nowLoadingIdleDeadline - nowTick;
+                const absoluteLeftMs = nowLoadingAbsoluteDeadline - nowTick;
+                setNowLoadingCountdownLine(idleLeftMs / 1000);
+                if (absoluteLeftMs <= 0) {
+                    void dismissNowLoadingFromIdle(
+                        'absolute timeout after ' +
+                            NOW_LOADING_ABSOLUTE_MAX_MS / 1000 +
+                            's',
+                        { force: true },
+                    );
+                    return;
+                }
+                if (idleLeftMs <= 0) {
+                    void dismissNowLoadingFromIdle(
+                        'idle timeout — no new log activity for ' +
+                            NOW_LOADING_IDLE_MS / 1000 +
+                            's',
+                    );
+                }
             }, NOW_LOADING_IDLE_TICK_MS);
-            logNowLoadingDetail(
-                'idle watch started (' + NOW_LOADING_IDLE_MS / 1000 + 's without progress)',
-            );
         } finally {
             nowLoadingIdleWatchStarting = false;
         }
@@ -279,11 +331,16 @@
             return;
         }
         if (isMaskedNowLoadingLogLine(message)) return;
+        if (isNowLoadingCountdownLine(message)) return;
         const el = minimalLogEl();
         if (!el) return;
         const o = opt && typeof opt === 'object' ? opt : {};
         const skipMainSeed = o.skipMainSeed === true;
-        if (!skipMainSeed && !isNowLoadingStatusMessage(message)) {
+        if (
+            !skipMainSeed &&
+            !isNowLoadingStatusMessage(message) &&
+            (window.__appStartupLogComplete === true || isAppStartedLogLine(message))
+        ) {
             ensureNowLoadingSeededFromMainLog();
         }
         let resetIdle = o.resetIdle !== false;
@@ -298,15 +355,11 @@
             lines.push(line);
             renderNowLoadingLogLines(lines);
         }
+        if (!nowLoadingIdleTimer && blockingMode === 'waveform-restore') {
+            startNowLoadingIdleWatch();
+        }
         if (resetIdle) {
             touchNowLoadingIdleDeadline();
-        } else {
-            const leftMs = Math.max(0, nowLoadingIdleDeadline - performance.now());
-            const countdownSec =
-                nowLoadingIdleDeadline > 0
-                    ? leftMs / 1000
-                    : NOW_LOADING_IDLE_MS / 1000;
-            setNowLoadingCountdownLine(countdownSec);
         }
     }
 
@@ -565,7 +618,6 @@
         setOperationBlockingVisible(true, { minimal: true });
         showNowLoadingLogUi();
         startNowLoadingIdleWatch();
-        touchNowLoadingIdleDeadline();
         logNowLoadingDetail(
             'overlay lock engaged (reason=' + (o.reason || 'reload') + ')',
         );

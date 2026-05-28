@@ -951,14 +951,21 @@
     );
 
     (async function boot() {
+        window.__sessionRestoreBootComplete = false;
         if (typeof logNowLoadingDetail === 'function') {
             logNowLoadingDetail('boot — waiting for early session lock');
         }
         try {
-            if (window.__sessionRestoreLockEarly) {
-                await window.__sessionRestoreLockEarly;
-            } else if (typeof prepareSessionRestoreLockBeforeUi === 'function') {
-                await prepareSessionRestoreLockBeforeUi();
+            const earlyLock =
+                window.__sessionRestoreLockEarly ||
+                (typeof prepareSessionRestoreLockBeforeUi === 'function'
+                    ? prepareSessionRestoreLockBeforeUi()
+                    : null);
+            if (earlyLock) {
+                await Promise.race([
+                    earlyLock,
+                    new Promise((resolve) => setTimeout(resolve, 15000)),
+                ]);
             }
         } catch (e) {
             if (typeof logNowLoadingDetail === 'function') {
@@ -1006,14 +1013,15 @@
         if (typeof logNowLoadingDetail === 'function') {
             logNowLoadingDetail('boot — awaiting session restore queue idle');
         }
-        if (typeof whenSessionRestoreIdle === 'function') {
-            await whenSessionRestoreIdle();
-        }
-        if (typeof ensureWaveformRestoreLockDismissed === 'function') {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail('boot — final ensure lock dismissed');
+        try {
+            if (typeof whenSessionRestoreIdle === 'function') {
+                await Promise.race([
+                    whenSessionRestoreIdle(),
+                    new Promise((resolve) => setTimeout(resolve, 120000)),
+                ]);
             }
-            await ensureWaveformRestoreLockDismissed();
+        } finally {
+            window.__sessionRestoreBootComplete = true;
         }
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();

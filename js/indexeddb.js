@@ -359,6 +359,8 @@
 
     /** 起動復元・Import Review などセッション復元を直列化 */
     let sessionRestoreQueue = Promise.resolve();
+    /** apply 完了後の Ex デコード待ち・ロック解除中 */
+    let sessionRestoreTeardownPending = false;
 
     function whenSessionRestoreIdle() {
         return sessionRestoreQueue;
@@ -384,11 +386,18 @@
             try {
                 return await run();
             } finally {
-                if (typeof logNowLoadingDetail === 'function') {
-                    logNowLoadingDetail('session restore task finished — running lock teardown');
-                }
-                if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
-                    await waitForSessionWaveformsAndEndRestoreLock();
+                sessionRestoreTeardownPending = true;
+                try {
+                    if (typeof logNowLoadingDetail === 'function') {
+                        logNowLoadingDetail(
+                            'session restore task finished — running lock teardown',
+                        );
+                    }
+                    if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
+                        await waitForSessionWaveformsAndEndRestoreLock();
+                    }
+                } finally {
+                    sessionRestoreTeardownPending = false;
                 }
             }
         });
@@ -400,6 +409,9 @@
     window.flushPersistSessionNow = flushPersistSessionNow;
     window.isSessionRestoreInProgress = function () {
         return !!sessionRestoreInProgress;
+    };
+    window.isSessionRestoreTeardownPending = function () {
+        return !!sessionRestoreTeardownPending;
     };
 
     const extraTrackPersistReqSeqBySlot = {};

@@ -14,4 +14,11 @@
 
     window.initPrefsFromStorage = initPrefsFromStorage;
 
-    writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');
+    (function logAppStartupLines() {
+        const readyLine = '> System Ready. (' + APP_VERSION_LABEL + ')';
+        if (logEl) {
+            logEl.innerText = readyLine;
+        }
+        window.__appStartupLogComplete = true;
+        writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');
+    })();

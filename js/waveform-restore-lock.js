@@ -136,6 +136,9 @@
 
         if (!lockActive && !bootShell) {
             logRestoreDetail('waitForEnd — nothing to dismiss');
+            if (typeof ensureWaveformRestoreLockDismissed === 'function') {
+                await ensureWaveformRestoreLockDismissed();
+            }
             return;
         }
 
@@ -175,12 +178,6 @@
                                 ')',
                         );
                     }
-                    if (
-                        typeof touchNowLoadingIdleDeadline === 'function' &&
-                        (pollCount === 1 || pollCount % 25 === 0)
-                    ) {
-                        touchNowLoadingIdleDeadline();
-                    }
                     await delay(POLL_MS);
                 }
 
@@ -209,12 +206,9 @@
                     );
                 }
             }
-            logRestoreDetail('finalize — dismissing lock UI');
-            if (typeof ensureWaveformRestoreLockDismissed === 'function') {
-                await ensureWaveformRestoreLockDismissed();
-            } else if (typeof endWaveformRestoreLock === 'function') {
-                await endWaveformRestoreLock();
-            }
+            logRestoreDetail(
+                'finalize — lock dismiss deferred to 3s idle after logs stop',
+            );
             logRestoreDetail('finalize — drawing extra waveforms');
             if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
                 try {

@@ -3056,7 +3056,7 @@
             margin: 0;
             padding: 0;
             text-align: center;
-            font-size: 0.72rem;
+            font-size: 0.84rem;
             font-weight: 500;
             letter-spacing: 0.1em;
             text-transform: none;
@@ -3083,7 +3083,7 @@
             display: block;
             margin: 0;
             max-width: 22rem;
-            font-size: 0.72rem;
+            font-size: 0.8rem;
             font-weight: 500;
             line-height: 1.45;
             letter-spacing: 0.04em;
@@ -3150,7 +3150,7 @@
             padding: 0;
             border: none;
             background: none;
-            font: 500 0.52rem/1.35 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            font: 500 0.58rem/1.4 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
             letter-spacing: 0.02em;
             text-align: left;
             white-space: pre-wrap;
@@ -3166,7 +3166,7 @@
             max-width: 100%;
             margin: 0.35rem 0 0;
             padding: 0;
-            font: 500 0.52rem/1.35 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            font: 500 0.58rem/1.4 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
             letter-spacing: 0.02em;
             text-align: left;
             white-space: pre-wrap;

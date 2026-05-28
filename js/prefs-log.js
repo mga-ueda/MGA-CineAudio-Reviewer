@@ -155,13 +155,7 @@
     function writeLog(m, opt) {
         if (isMaskedDebugLogLine(m)) return;
         const o = opt && typeof opt === 'object' ? opt : {};
-        let resetIdle = !isNowLoadingStatusLogLine(m) && o.resetIdle !== false;
-        if (
-            typeof isWaveformRestoreLockActive === 'function' &&
-            isWaveformRestoreLockActive()
-        ) {
-            resetIdle = o.resetIdle === true;
-        }
+        const resetIdle = !isNowLoadingStatusLogLine(m) && o.resetIdle !== false;
         let formattedLine = null;
         if (logEl) {
             const now = new Date();
