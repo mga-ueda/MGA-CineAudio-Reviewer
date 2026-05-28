@@ -4537,6 +4537,17 @@
     window.extraTrackStatusIndicatesDecoding = extraTrackStatusIndicatesDecoding;
     window.ensureExtraTrackWaveformsDrawnAsync = ensureExtraTrackWaveformsDrawnAsync;
     window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;
+    /** 読み込み済みなのに Decoding 表示が残っている Ex スロットをクリア */
+    function clearStaleExtraTrackDecodingStatus() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLoaded(i)) continue;
+            if (!extraTrackStatusIndicatesDecoding(i)) continue;
+            setExtraTrackStatus(i, '');
+        }
+    }
+
+    window.clearStaleExtraTrackDecodingStatus = clearStaleExtraTrackDecodingStatus;
+
     /** セッション復元ロック解除後: マスター尺確定後に Ex リージョンオーバーレイを再同期 */
     function refreshExtraTrackRegionOverlaysAfterSessionRestore() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {

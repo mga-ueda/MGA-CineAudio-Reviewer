@@ -358,6 +358,29 @@
         return fadeOutWaveformRestoreOverlay();
     }
 
+    /** 復元ロック／起動時ぼかしを確実に外す（エラー時・タイムアウト時のフェイルセーフ） */
+    async function ensureWaveformRestoreLockDismissed() {
+        disarmWaveformRestoreBootPending();
+        if (blockingMode === 'waveform-restore') {
+            return endWaveformRestoreLock();
+        }
+        const root = overlayEl();
+        if (
+            root &&
+            !root.hidden &&
+            root.classList.contains('export-blocking-overlay--minimal')
+        ) {
+            blockingMode = null;
+            document.body.classList.remove('export-blocking-active');
+            cleanupWaveformRestoreOverlayDom();
+            refreshOperationBlockingControlLocks();
+            if (typeof updateControlsEnabled === 'function') {
+                updateControlsEnabled();
+            }
+        }
+        return Promise.resolve();
+    }
+
     function beginWebmExportLock(opt) {
         if (blockingMode === 'waveform-restore') return;
         webmExportUserCancel = false;
@@ -414,6 +437,7 @@
     window.endWebmExportLock = endWebmExportLock;
     window.beginWaveformRestoreLock = beginWaveformRestoreLock;
     window.endWaveformRestoreLock = endWaveformRestoreLock;
+    window.ensureWaveformRestoreLockDismissed = ensureWaveformRestoreLockDismissed;
     window.setWebmExportEmergencyCleanup = setWebmExportEmergencyCleanup;
     window.syncWaveformRestoreBootHint = syncWaveformRestoreBootHint;
     window.clearWaveformRestoreBootHint = clearWaveformRestoreBootHint;

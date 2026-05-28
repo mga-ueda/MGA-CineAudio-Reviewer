@@ -1,6 +1,7 @@
 (function waveformRestoreLockModule() {
     const POLL_MS = 120;
-    const WAIT_TIMEOUT_MS = 120000;
+    /** Ex デコード待ちの上限（メイン動画波形は待たない） */
+    const WAIT_TIMEOUT_MS = 15000;
 
     function sessionRowNeedsWaveformRestoreLock(row) {
         if (!row || typeof row !== 'object') return false;
@@ -13,35 +14,16 @@
         return hasVideo || hasExtra;
     }
 
-    function sessionWaveformsRestorePending() {
-        if (
-            typeof isMainVideoWaveformBuildPending === 'function' &&
-            isMainVideoWaveformBuildPending()
-        ) {
-            return true;
-        }
-        if (
-            typeof areExtraTrackWaveformsRestorePending === 'function' &&
-            areExtraTrackWaveformsRestorePending()
-        ) {
-            return true;
-        }
-        return false;
-    }
-
-    /** Now Loading 解除判定: デコード中のみ待つ（描画レイアウト未確定で永久待ちしない） */
-    function sessionWaveformsBlockingRestorePending() {
-        if (
-            typeof isMainVideoWaveformBuildPending === 'function' &&
-            isMainVideoWaveformBuildPending()
-        ) {
-            return true;
-        }
+    /** Now Loading 解除判定: Ex のデコード中のみ（描画・メイン動画波形は待たない） */
+    function sessionExtraDecodeRestorePending() {
         const extraCount =
             typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
         for (let i = 0; i < extraCount; i++) {
-            if (typeof extraTrackStatusIndicatesDecoding === 'function') {
-                if (extraTrackStatusIndicatesDecoding(i)) return true;
+            if (
+                typeof extraTrackStatusIndicatesDecoding === 'function' &&
+                extraTrackStatusIndicatesDecoding(i)
+            ) {
+                return true;
             }
         }
         return false;
@@ -96,55 +78,60 @@
     }
 
     async function waitForSessionWaveformsAndEndRestoreLock() {
-        if (
-            typeof isWaveformRestoreLockActive !== 'function' ||
-            !isWaveformRestoreLockActive()
-        ) {
-            return;
-        }
+        const lockActive =
+            typeof isWaveformRestoreLockActive === 'function' &&
+            isWaveformRestoreLockActive();
+        let bootShell = false;
+        try {
+            bootShell =
+                document.documentElement.classList.contains(
+                    'waveform-restore-boot-pending',
+                );
+        } catch (_) {}
 
-        prepareLayoutBeforeWaveformRestoreWait();
+        if (!lockActive && !bootShell) return;
 
-        if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
-            try {
-                await ensureExtraTrackWaveformsDrawnAsync({ notifyMaster: true, maxFrames: 48 });
-            } catch (_) {}
-        } else if (typeof ensureExtraTrackWaveformsDrawn === 'function') {
-            ensureExtraTrackWaveformsDrawn({ notifyMaster: true, maxFrames: 48 });
-        }
+        try {
+            if (lockActive) {
+                prepareLayoutBeforeWaveformRestoreWait();
 
-        const deadline = performance.now() + WAIT_TIMEOUT_MS;
-        while (performance.now() < deadline) {
-            if (
-                typeof kickMainVideoWaveformBuild === 'function' &&
-                typeof isMainVideoWaveformBuildPending === 'function' &&
-                isMainVideoWaveformBuildPending()
-            ) {
-                kickMainVideoWaveformBuild({ allowSettle: false });
+                const deadline = performance.now() + WAIT_TIMEOUT_MS;
+                while (performance.now() < deadline) {
+                    if (!sessionExtraDecodeRestorePending()) break;
+                    await delay(POLL_MS);
+                }
+
+                if (sessionExtraDecodeRestorePending() && typeof writeLog === 'function') {
+                    writeLog(
+                        'Waveform restore lock: extra decode wait timed out — releasing lock',
+                    );
+                }
             }
-            if (!sessionWaveformsBlockingRestorePending()) break;
-            await delay(POLL_MS);
-        }
-
-        if (sessionWaveformsBlockingRestorePending() && typeof writeLog === 'function') {
-            writeLog('Waveform restore lock: timed out — releasing lock');
-        }
-
-        if (typeof endWaveformRestoreLock === 'function') {
-            await endWaveformRestoreLock();
-        }
-
-        if (typeof refreshExtraTrackRegionOverlaysAfterSessionRestore === 'function') {
-            refreshExtraTrackRegionOverlaysAfterSessionRestore();
-        }
-
-        if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
-            try {
-                await ensureExtraTrackWaveformsDrawnAsync({ notifyMaster: true, maxFrames: 40 });
-            } catch (_) {}
-        }
-        if (typeof writeLog === 'function') {
-            writeLog('Waveform restore lock: released');
+        } finally {
+            if (typeof clearStaleExtraTrackDecodingStatus === 'function') {
+                clearStaleExtraTrackDecodingStatus();
+            }
+            if (typeof refreshExtraTrackRegionOverlaysAfterSessionRestore === 'function') {
+                try {
+                    refreshExtraTrackRegionOverlaysAfterSessionRestore();
+                } catch (_) {}
+            }
+            if (typeof ensureWaveformRestoreLockDismissed === 'function') {
+                await ensureWaveformRestoreLockDismissed();
+            } else if (typeof endWaveformRestoreLock === 'function') {
+                await endWaveformRestoreLock();
+            }
+            if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
+                try {
+                    await ensureExtraTrackWaveformsDrawnAsync({
+                        notifyMaster: true,
+                        maxFrames: 40,
+                    });
+                } catch (_) {}
+            }
+            if (typeof writeLog === 'function') {
+                writeLog('Waveform restore lock: released');
+            }
         }
     }
 

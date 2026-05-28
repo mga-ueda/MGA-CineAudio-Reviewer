@@ -991,6 +991,9 @@
         if (typeof whenSessionRestoreIdle === 'function') {
             await whenSessionRestoreIdle();
         }
+        if (typeof ensureWaveformRestoreLockDismissed === 'function') {
+            await ensureWaveformRestoreLockDismissed();
+        }
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }

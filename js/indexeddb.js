@@ -381,11 +381,13 @@
             }
         };
         const p = sessionRestoreQueue.then(async () => {
-            const result = await run();
-            if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
-                await waitForSessionWaveformsAndEndRestoreLock();
+            try {
+                return await run();
+            } finally {
+                if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
+                    await waitForSessionWaveformsAndEndRestoreLock();
+                }
             }
-            return result;
         });
         sessionRestoreQueue = p.catch(() => {});
         return p;
