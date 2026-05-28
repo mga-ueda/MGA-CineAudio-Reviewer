@@ -4913,6 +4913,20 @@
             markerPanelEl.addEventListener(
                 'keydown',
                 (e) => {
+                    // テキスト入力中は編集を最優先し、TCナッジの横取りを防ぐ。
+                    // ただし TC 欄は readOnly 入力としてナッジ対象にするため除外する。
+                    const target = e.target;
+                    const inMarkerTcInput =
+                        target &&
+                        target.closest &&
+                        target.closest('.marker-table__tc-input');
+                    if (
+                        !inMarkerTcInput &&
+                        typeof isTypingTarget === 'function' &&
+                        (isTypingTarget(target) || isTypingTarget(document.activeElement))
+                    ) {
+                        return;
+                    }
                     if (handleMarkerPanelTcNudgeKeydown(e)) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
@@ -4924,6 +4938,13 @@
         window.addEventListener(
             'keydown',
             (e) => {
+                // 入力中はマーカー系グローバルショートカットを無効化する。
+                if (
+                    typeof isTypingTarget === 'function' &&
+                    (isTypingTarget(e.target) || isTypingTarget(document.activeElement))
+                ) {
+                    return;
+                }
                 if (handleMarkerHideViewKeydown(e)) {
                     e.preventDefault();
                     e.stopPropagation();

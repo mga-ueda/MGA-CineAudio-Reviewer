@@ -506,6 +506,15 @@
 
     function persistMusicalGridAndRedraw() {
         readMusicalGridFromInputs();
+        // 空欄や不正フォーマットは既定値へフォールバックして保存・復元を安定させる。
+        if (!musicalGridMeterText || !parseMeterSpec(musicalGridMeterText)) {
+            musicalGridMeterText = MUSICAL_GRID_DEFAULT_METER_TEXT;
+            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
+        }
+        if (!musicalGridPhraseText || !parsePhraseGroupingSpec(musicalGridPhraseText)) {
+            musicalGridPhraseText = MUSICAL_GRID_DEFAULT_PHRASE_TEXT;
+            if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+        }
         clearMusicalGridPositionCache();
         if (typeof writePrefs === 'function') writePrefs();
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
@@ -713,6 +722,20 @@
     }
 
     let musicalGridRedrawRaf = 0;
+    let musicalGridAutosaveTimer = 0;
+
+    function scheduleMusicalGridAutosave() {
+        if (musicalGridAutosaveTimer) {
+            clearTimeout(musicalGridAutosaveTimer);
+        }
+        musicalGridAutosaveTimer = setTimeout(() => {
+            musicalGridAutosaveTimer = 0;
+            readMusicalGridFromInputs();
+            clearMusicalGridPositionCache();
+            if (typeof writePrefs === 'function') writePrefs();
+            if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        }, 400);
+    }
 
     function scheduleMusicalGridRedraw() {
         if (musicalGridRedrawRaf) return;
@@ -1616,7 +1639,10 @@
             });
         }
 
-        const onInput = () => scheduleMusicalGridRedraw();
+        const onInput = () => {
+            scheduleMusicalGridRedraw();
+            scheduleMusicalGridAutosave();
+        };
         const focusWaveformTrackFromInput = () => {
             const waveFocus =
                 typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks

@@ -372,6 +372,11 @@
             return;
         }
 
+        // 入力欄フォーカス中はグローバルショートカットを抑止し、文字入力を優先する。
+        // target 取りこぼし対策として activeElement も併用して判定する。
+        // （例: Musical Grid の meter/phrase 入力で Del/Backspace や O/T/P が横取りされないようにする）
+        if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+
         if (matches(e, shortcuts.transportOptionsToggle)) {
             const transportOptionsSection = document.getElementById('transportOptionsSection');
             if (!transportOptionsSection) return;
@@ -461,8 +466,6 @@
         ) {
             return;
         }
-
-        if (isTypingTarget(e.target)) return;
 
         if (
             typeof handleSessionIoShortcutKeydown === 'function' &&
