@@ -4,6 +4,7 @@
     let currentMarkerMemo = '';
     let sessionMarkerMemoRestorePayload = null;
     const MARKER_MEMO_COPY_DELIMITER = '---MEMO---';
+    const MARKER_MEMO_TABLE_ROW_LABEL = 'Additional Comments';
     let currentMarkers = [];
     let pendingRangeStartSec = null;
     let activeMarkerId = null;
@@ -1394,16 +1395,21 @@
         return lines.join('\n');
     }
 
+    function buildMarkerMemoTableRowText(memo) {
+        const memoText = markerCopyCellText(memo);
+        if (!memoText) return '';
+        const row = ['', '', '', MARKER_MEMO_TABLE_ROW_LABEL + ': ' + memoText];
+        return row.map(markerCopyCellText).join('\t');
+    }
+
     function buildMarkersCopyClipboardText() {
         const memo = getCurrentMarkerMemoText();
         const memoTrim = String(memo || '').trim();
-        if (!currentMarkers.length) {
-            if (!memoTrim) return '';
-            return MARKER_MEMO_COPY_DELIMITER + '\n' + memo;
-        }
+        if (!currentMarkers.length && !memoTrim) return '';
         let text = buildMarkersCopyTsvText();
         if (memoTrim) {
-            text += '\n' + MARKER_MEMO_COPY_DELIMITER + '\n' + memo;
+            const memoRow = buildMarkerMemoTableRowText(memo);
+            if (memoRow) text += '\n' + memoRow;
         }
         return text;
     }
@@ -1493,6 +1499,19 @@
         return cells && cells.length >= 2 && isMarkerPasteTcString(cells[1]);
     }
 
+    function parseMarkerMemoFromTableRow(cols) {
+        const inTc = String(cols[1] ?? '').trim();
+        const outTc = String(cols[2] ?? '').trim();
+        if (inTc || outTc) return null;
+        const feedback = String(cols[3] ?? '')
+            .replace(/^\uFEFF/, '')
+            .trim();
+        if (!feedback) return null;
+        const re = new RegExp('^' + MARKER_MEMO_TABLE_ROW_LABEL + '\\s*:\\s*', 'i');
+        if (!re.test(feedback)) return null;
+        return feedback.replace(re, '').trim();
+    }
+
     /** Copy と同じ TSV（# / In / Out / Feedback、Length なし）を解析 */
     function parseMarkersPasteTsv(text) {
         const raw = String(text ?? '').trim();
@@ -1543,6 +1562,7 @@
             };
         }
         const markers = [];
+        const memoRows = [];
         for (let row = dataStartRow; row < lines.length; row++) {
             const lineTrim = String(lines[row] ?? '')
                 .replace(/^\uFEFF/, '')
@@ -1559,6 +1579,11 @@
                         row +
                         ' の列数が不足しています（# / In / Out / Feedback の 4 列、タブ区切り推奨）。',
                 };
+            }
+            const memoFromTableRow = parseMarkerMemoFromTableRow(cols);
+            if (memoFromTableRow != null) {
+                if (memoFromTableRow) memoRows.push(memoFromTableRow);
+                continue;
             }
             const inTc = String(cols[1] ?? '').trim();
             const outTc = String(cols[2] ?? '').trim();
@@ -1630,12 +1655,20 @@
             });
         }
         if (!markers.length) {
+            const memoTextOnly = memoRows.join('\n').trim();
+            if (memoTextOnly) {
+                return { ok: true, markers: [], memoText: memoTextOnly };
+            }
             return {
                 ok: false,
                 error: 'マーカー行がありません。',
             };
         }
-        return { ok: true, markers };
+        return {
+            ok: true,
+            markers,
+            memoText: memoRows.length ? memoRows.join('\n') : undefined,
+        };
     }
 
     function applyMarkerMemoPasteText(memoText, opt) {
@@ -1807,10 +1840,19 @@
                 showMarkersPasteFormatError(parsed.error);
                 return;
             }
+            const mergedMemoText = memoPart != null ? memoPart : parsed.memoText;
+            if (!parsed.markers.length && mergedMemoText != null) {
+                const confirmedMemo = await confirmMarkersPasteReplace(0);
+                if (!confirmedMemo) return;
+                applyMarkerMemoPasteText(mergedMemoText);
+                writeLog('Marker: memo pasted from clipboard');
+                flashSeekHint('Markers', 'Memo pasted', 'notice');
+                return;
+            }
             const confirmed = await confirmMarkersPasteReplace(parsed.markers.length);
             if (!confirmed) return;
             applyMarkersPasteSnapshot(parsed.markers, {
-                memoText: memoPart != null ? memoPart : undefined,
+                memoText: mergedMemoText != null ? mergedMemoText : undefined,
             });
         } catch (err) {
             writeLog(
