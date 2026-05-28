@@ -4,7 +4,6 @@
 
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
-    const NOW_LOADING_LOG_MAX_LINES = 80;
     /** ログ無活動で Now Loading を終了するまでの時間 */
     const NOW_LOADING_IDLE_MS = 5000;
     const NOW_LOADING_IDLE_TICK_MS = 200;
@@ -38,6 +37,15 @@
 
     function minimalLogEl() {
         return document.getElementById('exportBlockingMinimalLog');
+    }
+
+    function minimalLogWrapEl() {
+        return document.getElementById('exportBlockingMinimalLogWrap');
+    }
+
+    function setNowLoadingLogPanelVisible(visible) {
+        const wrap = minimalLogWrapEl();
+        if (wrap) wrap.hidden = !visible;
     }
 
     function isNowLoadingLogMirrorActive() {
@@ -87,7 +95,7 @@
         const secLeft = Math.max(0, Math.ceil(Number(countdownSec) || 0));
         lines.push('Auto-dismiss in ' + secLeft + 's if no new log activity');
         el.textContent = lines.join('\n');
-        el.hidden = false;
+        setNowLoadingLogPanelVisible(true);
     }
 
     function setNowLoadingCountdownLine(countdownSec) {
@@ -161,7 +169,7 @@
         const el = minimalLogEl();
         if (!el) return;
         el.textContent = '';
-        el.hidden = true;
+        setNowLoadingLogPanelVisible(false);
     }
 
     function appendNowLoadingLogLine(message) {
@@ -174,9 +182,6 @@
         const line = formatNowLoadingLogLine(message);
         const lines = getNowLoadingContentLogLines(el);
         lines.push(line);
-        if (lines.length > NOW_LOADING_LOG_MAX_LINES) {
-            lines.splice(0, lines.length - NOW_LOADING_LOG_MAX_LINES);
-        }
         const leftMs = Math.max(0, nowLoadingIdleDeadline - performance.now());
         const countdownSec =
             nowLoadingIdleDeadline > 0 ? leftMs / 1000 : NOW_LOADING_IDLE_MS / 1000;

@@ -97,12 +97,17 @@
             </span>
             <span class="export-blocking-overlay__minimal-hint">Alt+Shift+Ctrl+Del to Cancel and Clear</span>
         </p>
-        <pre
-            class="export-blocking-overlay__minimal-log"
-            id="exportBlockingMinimalLog"
+        <div
+            class="export-blocking-overlay__minimal-log-wrap"
+            id="exportBlockingMinimalLogWrap"
             hidden
-            aria-live="polite"
-        ></pre>
+        >
+            <pre
+                class="export-blocking-overlay__minimal-log"
+                id="exportBlockingMinimalLog"
+                aria-live="polite"
+            ></pre>
+        </div>
         <div class="export-blocking-overlay__panel">
             <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>
             <p class="export-blocking-overlay__esc-hint" id="exportBlockingEscHint">
