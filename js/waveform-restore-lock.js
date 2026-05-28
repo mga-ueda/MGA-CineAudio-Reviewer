@@ -35,6 +35,12 @@
 
     function maybeBeginWaveformRestoreLock(row, opt) {
         if (!sessionRowNeedsWaveformRestoreLock(row)) return false;
+        if (
+            typeof isWaveformRestoreLockActive === 'function' &&
+            isWaveformRestoreLockActive()
+        ) {
+            return true;
+        }
         if (typeof beginWaveformRestoreLock !== 'function') return false;
         const o = opt && typeof opt === 'object' ? opt : {};
         beginWaveformRestoreLock({ reason: o.importReview ? 'import' : 'reload' });

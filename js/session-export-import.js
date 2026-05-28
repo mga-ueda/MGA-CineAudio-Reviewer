@@ -1075,6 +1075,12 @@
             applyExportPrefs(manifest);
 
             const row = manifestToSessionRow(manifest, blobs);
+            if (
+                row &&
+                typeof maybeBeginWaveformRestoreLock === 'function'
+            ) {
+                maybeBeginWaveformRestoreLock(row, { importReview: true });
+            }
             const packageHasVideo = packageManifestHasVideoBlob(manifest, blobs);
             if (!row) {
                 if (!packageHasVideo) {

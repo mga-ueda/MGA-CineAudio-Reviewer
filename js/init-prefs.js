@@ -1,4 +1,4 @@
-    (function initPrefsFromStorage() {
+    function initPrefsFromStorage() {
         try {
             if (typeof applyTransportPrefsFromStorage === 'function') {
                 applyTransportPrefsFromStorage(readPrefs());
@@ -10,6 +10,8 @@
                 }
             }
         } catch (_) {}
-    })();
+    }
+
+    window.initPrefsFromStorage = initPrefsFromStorage;
 
     writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');

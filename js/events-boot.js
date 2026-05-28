@@ -932,6 +932,29 @@
     );
 
     (async function boot() {
+        try {
+            if (window.__sessionRestoreLockEarly) {
+                await window.__sessionRestoreLockEarly;
+            } else if (typeof prepareSessionRestoreLockBeforeUi === 'function') {
+                await prepareSessionRestoreLockBeforeUi();
+            }
+        } catch (e) {
+            writeLog(
+                'Session restore lock (early): ' + (e && e.message ? e.message : String(e)),
+            );
+        } finally {
+            window.__sessionRestoreLockEarly = null;
+        }
+        if (
+            typeof isWaveformRestoreLockActive === 'function' &&
+            !isWaveformRestoreLockActive() &&
+            typeof dismissWaveformRestoreBootShellIfIdle === 'function'
+        ) {
+            dismissWaveformRestoreBootShellIfIdle();
+        }
+        if (typeof initPrefsFromStorage === 'function') {
+            initPrefsFromStorage();
+        }
         if (typeof initTimecodeOverlay === 'function') {
             initTimecodeOverlay();
         }

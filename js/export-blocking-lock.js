@@ -1,5 +1,6 @@
 (function exportBlockingLockModule() {
     const WAVEFORM_RESTORE_FADE_MS = 200;
+    const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
 
     /** @type {null | 'webm-export' | 'waveform-restore'} */
     let blockingMode = null;
@@ -193,9 +194,77 @@
         }
     }
 
+    function sessionRowNeedsWaveformRestoreBootHint(row) {
+        if (!row || typeof row !== 'object') return false;
+        const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
+        const hasExtra =
+            Array.isArray(row.extraTracks) &&
+            row.extraTracks.some(
+                (e) => e && e.blob && (e.byteLength || e.blob.size || 0) > 0,
+            );
+        return hasVideo || hasExtra;
+    }
+
+    function readWaveformRestoreBootHint() {
+        try {
+            return (
+                localStorage.getItem(WAVEFORM_RESTORE_BOOT_HINT_KEY) === '1' ||
+                sessionStorage.getItem(WAVEFORM_RESTORE_BOOT_HINT_KEY) === '1'
+            );
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function syncWaveformRestoreBootHint(row) {
+        try {
+            if (sessionRowNeedsWaveformRestoreBootHint(row)) {
+                localStorage.setItem(WAVEFORM_RESTORE_BOOT_HINT_KEY, '1');
+            } else {
+                localStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
+            }
+            sessionStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
+        } catch (_) {}
+    }
+
+    function clearWaveformRestoreBootHint() {
+        try {
+            localStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
+            sessionStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
+        } catch (_) {}
+    }
+
+    function armWaveformRestoreBootPending() {
+        try {
+            document.documentElement.classList.add('waveform-restore-boot-pending');
+        } catch (_) {}
+    }
+
+    function disarmWaveformRestoreBootPending() {
+        try {
+            document.documentElement.classList.remove('waveform-restore-boot-pending');
+        } catch (_) {}
+    }
+
+    /** 復元不要と判明したら head の即時ぼかしを外す */
+    function dismissWaveformRestoreBootShellIfIdle() {
+        if (blockingMode !== null) return;
+        disarmWaveformRestoreBootPending();
+    }
+
+    /** 前回保存のヒントだけで、スクリプト読込直後に Now Loading を出す */
+    function maybeBeginWaveformRestoreOverlayFromBootHint() {
+        if (!readWaveformRestoreBootHint()) return false;
+        armWaveformRestoreBootPending();
+        if (blockingMode !== null) return true;
+        beginWaveformRestoreLock({ reason: 'reload' });
+        return true;
+    }
+
     function beginWaveformRestoreLock(opt) {
         if (blockingMode === 'webm-export') return;
         blockingMode = 'waveform-restore';
+        disarmWaveformRestoreBootPending();
         setOperationBlockingVisible(true, { minimal: true });
         try {
             const ae = document.activeElement;
@@ -206,6 +275,7 @@
     }
 
     function cleanupWaveformRestoreOverlayDom() {
+        clearWaveformRestoreBootHint();
         const root = overlayEl();
         if (!root) return;
         root.classList.remove(
@@ -320,4 +390,11 @@
     window.beginWaveformRestoreLock = beginWaveformRestoreLock;
     window.endWaveformRestoreLock = endWaveformRestoreLock;
     window.setWebmExportEmergencyCleanup = setWebmExportEmergencyCleanup;
+    window.syncWaveformRestoreBootHint = syncWaveformRestoreBootHint;
+    window.clearWaveformRestoreBootHint = clearWaveformRestoreBootHint;
+    window.maybeBeginWaveformRestoreOverlayFromBootHint =
+        maybeBeginWaveformRestoreOverlayFromBootHint;
+    window.armWaveformRestoreBootPending = armWaveformRestoreBootPending;
+    window.disarmWaveformRestoreBootPending = disarmWaveformRestoreBootPending;
+    window.dismissWaveformRestoreBootShellIfIdle = dismissWaveformRestoreBootShellIfIdle;
 })();

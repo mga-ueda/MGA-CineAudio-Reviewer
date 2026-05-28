@@ -796,6 +796,9 @@
             return;
         }
         await idbPut(IDB_KEY_LAST, row);
+        if (typeof syncWaveformRestoreBootHint === 'function') {
+            syncWaveformRestoreBootHint(row);
+        }
         cacheLastSessionRow(row);
         updateRegionPersistFloorFromRow(row);
         if (Array.isArray(row.extraTracks)) {
@@ -1262,23 +1265,73 @@
             await applySessionPersistRow(row, opt);
             if (row && sessionRowHasRestorableContent(row) && window.indexedDB) {
                 await idbPut(IDB_KEY_LAST, row);
+                if (typeof syncWaveformRestoreBootHint === 'function') {
+                    syncWaveformRestoreBootHint(row);
+                }
             }
         });
     }
 
     window.importAndPersistSessionRow = importAndPersistSessionRow;
 
+    function dismissSessionRestoreBootShellIfIdle() {
+        if (typeof dismissWaveformRestoreBootShellIfIdle === 'function') {
+            dismissWaveformRestoreBootShellIfIdle();
+        } else if (typeof disarmWaveformRestoreBootPending === 'function') {
+            disarmWaveformRestoreBootPending();
+        }
+    }
+
+    /** 起動時: UI 初期化・復元描画の前に Now Loading を出す */
+    async function prepareSessionRestoreLockBeforeUi() {
+        if (!window.indexedDB) {
+            dismissSessionRestoreBootShellIfIdle();
+            return false;
+        }
+        let row;
+        try {
+            row = await idbGet(IDB_KEY_LAST);
+        } catch (e) {
+            writeLog(
+                'Session restore lock (early): read failed — ' +
+                    (e && e.message ? e.message : String(e)),
+            );
+            dismissSessionRestoreBootShellIfIdle();
+            return false;
+        }
+        if (!sessionRowHasRestorableContent(row)) {
+            dismissSessionRestoreBootShellIfIdle();
+            if (typeof clearWaveformRestoreBootHint === 'function') {
+                clearWaveformRestoreBootHint();
+            }
+            return false;
+        }
+        if (
+            typeof sessionRowNeedsWaveformRestoreLock === 'function' &&
+            !sessionRowNeedsWaveformRestoreLock(row)
+        ) {
+            dismissSessionRestoreBootShellIfIdle();
+            if (typeof clearWaveformRestoreBootHint === 'function') {
+                clearWaveformRestoreBootHint();
+            }
+            return false;
+        }
+        if (typeof maybeBeginWaveformRestoreLock !== 'function') return false;
+        return maybeBeginWaveformRestoreLock(row, {});
+    }
+
+    window.prepareSessionRestoreLockBeforeUi = prepareSessionRestoreLockBeforeUi;
+
     async function restoreSessionFromStorage() {
         return runSerializedSessionRestore(async () => {
-            const prefs = readPrefs();
-            applySavedLoopPlayback(prefs.loopPlayback);
-            if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
-                applyUserMonitorDisplayPrefsFromStorage(prefs);
-            } else if (typeof applyTransportPrefsFromStorage === 'function') {
-                applyTransportPrefsFromStorage(prefs);
-            }
-
             if (!window.indexedDB) {
+                const prefs = readPrefs();
+                applySavedLoopPlayback(prefs.loopPlayback);
+                if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                    applyUserMonitorDisplayPrefsFromStorage(prefs);
+                } else if (typeof applyTransportPrefsFromStorage === 'function') {
+                    applyTransportPrefsFromStorage(prefs);
+                }
                 writeLog('IndexedDB unavailable; skipped video blob restore.');
                 return;
             }
@@ -1297,8 +1350,29 @@
                     (Number.isFinite(row && row.__saveStamp) ? row.__saveStamp : 'none'),
             );
             if (!sessionRowHasRestorableContent(row)) {
+                dismissSessionRestoreBootShellIfIdle();
+                if (typeof clearWaveformRestoreBootHint === 'function') {
+                    clearWaveformRestoreBootHint();
+                }
+                const prefs = readPrefs();
+                applySavedLoopPlayback(prefs.loopPlayback);
+                if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                    applyUserMonitorDisplayPrefsFromStorage(prefs);
+                } else if (typeof applyTransportPrefsFromStorage === 'function') {
+                    applyTransportPrefsFromStorage(prefs);
+                }
                 writeLog('No stored session (user display prefs from localStorage).');
                 return;
+            }
+            if (typeof maybeBeginWaveformRestoreLock === 'function') {
+                maybeBeginWaveformRestoreLock(row, {});
+            }
+            const prefs = readPrefs();
+            applySavedLoopPlayback(prefs.loopPlayback);
+            if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                applyUserMonitorDisplayPrefsFromStorage(prefs);
+            } else if (typeof applyTransportPrefsFromStorage === 'function') {
+                applyTransportPrefsFromStorage(prefs);
             }
             await applySessionPersistRow(row);
             if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {

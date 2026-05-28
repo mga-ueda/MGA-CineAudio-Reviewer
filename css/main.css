@@ -3011,6 +3011,8 @@
 
         /** セッション復元・Import 時の波形待ち — ぼかし＋中央テキストのみ */
         .export-blocking-overlay--minimal {
+            align-items: flex-start;
+            justify-content: center;
             background: rgba(8, 10, 16, 0.28);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
@@ -3061,6 +3063,12 @@
         }
         .export-blocking-overlay--minimal .export-blocking-overlay__minimal {
             display: block;
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: min(90vw, 24rem);
         }
         .export-blocking-overlay__minimal-label {
             animation: export-blocking-minimal-breathe 2.4s ease-in-out infinite;
