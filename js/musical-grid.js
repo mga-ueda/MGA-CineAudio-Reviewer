@@ -784,6 +784,10 @@
         return String(n);
     }
 
+    function phraseGroupLogLabelForIndex(index) {
+        return String(index | 0);
+    }
+
     function getPhraseGroupRangesSnapshot() {
         if (!getMusicalGridPhraseFillVisible()) return [];
         const settings = musicalGridDrawSettings();
@@ -1545,8 +1549,8 @@
                 if (typeof schedulePersistSession === 'function') schedulePersistSession();
                 scheduleMusicalGridRedraw();
                 if (typeof writeLog === 'function') {
-                    const left = phraseGroupLabelForIndex(boundaryIdx);
-                    const right = phraseGroupLabelForIndex(boundaryIdx + 1);
+                    const left = phraseGroupLogLabelForIndex(boundaryIdx);
+                    const right = phraseGroupLogLabelForIndex(boundaryIdx + 1);
                     writeLog(
                         'Phrase boundary ' +
                             left +
