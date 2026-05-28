@@ -3027,7 +3027,8 @@
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
         .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint,
-        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log-wrap {
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log-wrap,
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-countdown {
             animation: none;
             opacity: 0;
             transition: opacity 0.16s ease-out;
@@ -3039,7 +3040,8 @@
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots,
             .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-hint,
-            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log-wrap {
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-log-wrap,
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-countdown {
                 transition: none;
             }
         }
@@ -3054,9 +3056,9 @@
             margin: 0;
             padding: 0;
             text-align: center;
-            font-size: 0.92rem;
+            font-size: 0.72rem;
             font-weight: 500;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.1em;
             text-transform: none;
             color: rgba(236, 240, 248, 0.68);
             user-select: none;
@@ -3136,7 +3138,7 @@
         .export-blocking-overlay__minimal-log-wrap[hidden] {
             display: none !important;
         }
-        .export-blocking-overlay--minimal .export-blocking-overlay__minimal-log-wrap:not([hidden]) {
+        .export-blocking-overlay--minimal .export-blocking-overlay__minimal-log-wrap {
             display: flex;
         }
         .export-blocking-overlay__minimal-log {
@@ -3148,7 +3150,7 @@
             padding: 0;
             border: none;
             background: none;
-            font: 500 0.58rem/1.4 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            font: 500 0.52rem/1.35 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
             letter-spacing: 0.02em;
             text-align: left;
             white-space: pre-wrap;
@@ -3156,6 +3158,30 @@
             color: rgba(210, 220, 235, 0.62);
             user-select: text;
             cursor: text;
+        }
+        .export-blocking-overlay__minimal-countdown {
+            display: none;
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 100%;
+            margin: 0.35rem 0 0;
+            padding: 0;
+            font: 500 0.52rem/1.35 ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+            letter-spacing: 0.02em;
+            text-align: left;
+            white-space: pre-wrap;
+            word-break: break-word;
+            color: rgba(255, 118, 108, 0.95);
+            text-shadow: 0 0 12px rgba(255, 80, 70, 0.35);
+            user-select: text;
+            cursor: text;
+        }
+        .export-blocking-overlay__minimal-countdown[hidden] {
+            display: none !important;
+        }
+        .export-blocking-overlay--minimal
+            .export-blocking-overlay__minimal-countdown:not([hidden]) {
+            display: block;
         }
 
         .export-blocking-overlay__panel {

@@ -7,12 +7,16 @@
     /** ログ無活動で Now Loading を終了するまでの時間 */
     const NOW_LOADING_IDLE_MS = 3000;
     const NOW_LOADING_IDLE_TICK_MS = 200;
+    /** 復元ロックの絶対上限（アイドル解除が効かない場合のフェイルセーフ） */
+    const NOW_LOADING_ABSOLUTE_MAX_MS = 90000;
     /** @type {null | 'webm-export' | 'waveform-restore'} */
     let blockingMode = null;
     let webmExportUserCancel = false;
     let webmExportEmergencyCleanup = null;
     let nowLoadingIdleDeadline = 0;
+    let nowLoadingAbsoluteDeadline = 0;
     let nowLoadingIdleTimer = 0;
+    let nowLoadingIdleWatchStarting = false;
     let nowLoadingIdleDismissInFlight = false;
 
     function overlayEl() {
@@ -43,9 +47,37 @@
         return document.getElementById('exportBlockingMinimalLogWrap');
     }
 
-    function setNowLoadingLogPanelVisible(visible) {
+    function minimalCountdownEl() {
+        return document.getElementById('exportBlockingMinimalCountdown');
+    }
+
+    function showNowLoadingLogUi() {
         const wrap = minimalLogWrapEl();
-        if (wrap) wrap.hidden = !visible;
+        if (wrap) wrap.removeAttribute('hidden');
+    }
+
+    function hideNowLoadingLogUi() {
+        const wrap = minimalLogWrapEl();
+        if (wrap) wrap.hidden = true;
+        const cd = minimalCountdownEl();
+        if (cd) {
+            cd.textContent = '';
+            cd.hidden = true;
+        }
+    }
+
+    /** Now Loading 向けの詳細ログ（アイドルタイマーはリセットしない） */
+    function logNowLoadingDetail(message) {
+        const text =
+            message != null && String(message).trim() !== ''
+                ? 'Now Loading: ' + String(message)
+                : 'Now Loading: (empty)';
+        if (typeof appendNowLoadingLogLine === 'function') {
+            appendNowLoadingLogLine(text, { resetIdle: false });
+        }
+        if (typeof writeLog === 'function') {
+            writeLog(text, { skipNowLoadingMirror: true, resetIdle: false });
+        }
     }
 
     function isNowLoadingLogMirrorActive() {
@@ -58,6 +90,16 @@
         } catch (_) {
             return false;
         }
+    }
+
+    function isNowLoadingOverlayReadyForLogs() {
+        if (!NOW_LOADING_ENABLED || blockingMode !== 'waveform-restore') return false;
+        const root = overlayEl();
+        return !!(root && !root.hidden);
+    }
+
+    function isNowLoadingStatusMessage(message) {
+        return String(message || '').trim().indexOf('Now Loading:') === 0;
     }
 
     function isMaskedNowLoadingLogLine(message) {
@@ -78,31 +120,29 @@
         return time + ' - ' + String(message);
     }
 
-    function isNowLoadingCountdownLogLine(line) {
-        return /^Auto-dismiss in \d+s if no new log activity$/.test(String(line || ''));
+    function renderNowLoadingLogLines(contentLines) {
+        const el = minimalLogEl();
+        if (!el) return;
+        el.textContent =
+            contentLines && contentLines.length ? contentLines.join('\n') : '';
+        showNowLoadingLogUi();
+    }
+
+    function setNowLoadingCountdownLine(countdownSec) {
+        if (!isNowLoadingOverlayReadyForLogs()) return;
+        const cd = minimalCountdownEl();
+        if (!cd) return;
+        const secLeft = Math.max(0, Math.ceil(Number(countdownSec) || 0));
+        cd.textContent =
+            'Auto-dismiss in ' + secLeft + 's if no new log activity';
+        cd.hidden = false;
+        showNowLoadingLogUi();
     }
 
     function getNowLoadingContentLogLines(el) {
         const cur = el && el.textContent ? el.textContent : '';
         if (!cur) return [];
-        return cur.split('\n').filter((line) => !isNowLoadingCountdownLogLine(line));
-    }
-
-    function renderNowLoadingLogLines(contentLines, countdownSec) {
-        const el = minimalLogEl();
-        if (!el) return;
-        const lines = contentLines.slice();
-        const secLeft = Math.max(0, Math.ceil(Number(countdownSec) || 0));
-        lines.push('Auto-dismiss in ' + secLeft + 's if no new log activity');
-        el.textContent = lines.join('\n');
-        setNowLoadingLogPanelVisible(true);
-    }
-
-    function setNowLoadingCountdownLine(countdownSec) {
-        if (!isNowLoadingLogMirrorActive()) return;
-        const el = minimalLogEl();
-        if (!el) return;
-        renderNowLoadingLogLines(getNowLoadingContentLogLines(el), countdownSec);
+        return cur.split('\n').filter((line) => String(line || '').trim() !== '');
     }
 
     function stopNowLoadingIdleWatch() {
@@ -110,19 +150,19 @@
             clearInterval(nowLoadingIdleTimer);
             nowLoadingIdleTimer = 0;
         }
+        nowLoadingIdleWatchStarting = false;
     }
 
-    async function dismissNowLoadingFromIdle() {
+    async function dismissNowLoadingFromIdle(reason) {
         if (nowLoadingIdleDismissInFlight) return;
-        if (!isNowLoadingLogMirrorActive() && blockingMode !== 'waveform-restore') {
-            return;
-        }
+        if (blockingMode !== 'waveform-restore') return;
         nowLoadingIdleDismissInFlight = true;
         stopNowLoadingIdleWatch();
         try {
-            if (typeof writeLog === 'function') {
-                writeLog('Now Loading: auto-dismiss (no log activity for 3s)');
-            }
+            logNowLoadingDetail(
+                reason ||
+                    'idle timeout — no progress for ' + NOW_LOADING_IDLE_MS / 1000 + 's',
+            );
             if (typeof ensureWaveformRestoreLockDismissed === 'function') {
                 await ensureWaveformRestoreLockDismissed();
             }
@@ -131,63 +171,91 @@
         }
     }
 
-    function notifyNowLoadingLogActivity() {
+    function touchNowLoadingIdleDeadline() {
         if (nowLoadingIdleDismissInFlight) return;
-        if (!isNowLoadingLogMirrorActive()) return;
+        if (blockingMode !== 'waveform-restore') return;
         nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
         setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
     }
 
     function startNowLoadingIdleWatch() {
-        stopNowLoadingIdleWatch();
-        if (!NOW_LOADING_ENABLED) return;
-        nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
-        setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
-        nowLoadingIdleTimer = setInterval(() => {
-            if (!isNowLoadingLogMirrorActive() && blockingMode !== 'waveform-restore') {
+        if (nowLoadingIdleTimer || nowLoadingIdleWatchStarting) return;
+        if (!NOW_LOADING_ENABLED || blockingMode !== 'waveform-restore') return;
+        nowLoadingIdleWatchStarting = true;
+        try {
+            const now = performance.now();
+            nowLoadingIdleDeadline = now + NOW_LOADING_IDLE_MS;
+            nowLoadingAbsoluteDeadline = now + NOW_LOADING_ABSOLUTE_MAX_MS;
+            showNowLoadingLogUi();
+            setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
+            nowLoadingIdleTimer = setInterval(() => {
+            if (blockingMode !== 'waveform-restore') {
                 stopNowLoadingIdleWatch();
                 return;
             }
-            const leftMs = nowLoadingIdleDeadline - performance.now();
-            setNowLoadingCountdownLine(leftMs / 1000);
-            if (leftMs <= 0) {
+            const nowTick = performance.now();
+            const idleLeftMs = nowLoadingIdleDeadline - nowTick;
+            const absoluteLeftMs = nowLoadingAbsoluteDeadline - nowTick;
+            setNowLoadingCountdownLine(idleLeftMs / 1000);
+            if (absoluteLeftMs <= 0) {
+                stopNowLoadingIdleWatch();
+                void dismissNowLoadingFromIdle(
+                    'absolute timeout after ' + NOW_LOADING_ABSOLUTE_MAX_MS / 1000 + 's',
+                );
+                return;
+            }
+            if (idleLeftMs <= 0) {
+                if (
+                    typeof isSessionRestoreInProgress === 'function' &&
+                    isSessionRestoreInProgress()
+                ) {
+                    touchNowLoadingIdleDeadline();
+                    return;
+                }
                 stopNowLoadingIdleWatch();
                 void dismissNowLoadingFromIdle();
             }
-        }, NOW_LOADING_IDLE_TICK_MS);
-    }
-
-    function ensureNowLoadingIdleWatchStarted() {
-        if (nowLoadingIdleDismissInFlight) return;
-        if (nowLoadingIdleTimer) return;
-        if (!isNowLoadingLogMirrorActive()) return;
-        startNowLoadingIdleWatch();
+            }, NOW_LOADING_IDLE_TICK_MS);
+            logNowLoadingDetail(
+                'idle watch started (' + NOW_LOADING_IDLE_MS / 1000 + 's without progress)',
+            );
+        } finally {
+            nowLoadingIdleWatchStarting = false;
+        }
     }
 
     function clearNowLoadingLog() {
         stopNowLoadingIdleWatch();
+        nowLoadingAbsoluteDeadline = 0;
         const el = minimalLogEl();
-        if (!el) return;
-        el.textContent = '';
-        setNowLoadingLogPanelVisible(false);
+        if (el) el.textContent = '';
+        hideNowLoadingLogUi();
     }
 
-    function appendNowLoadingLogLine(message) {
-        if (!isNowLoadingLogMirrorActive()) return;
+    function appendNowLoadingLogLine(message, opt) {
+        if (!NOW_LOADING_ENABLED) return;
+        if (!isNowLoadingOverlayReadyForLogs() && !isNowLoadingLogMirrorActive()) {
+            return;
+        }
         if (isMaskedNowLoadingLogLine(message)) return;
-        if (isNowLoadingCountdownLogLine(message)) return;
         const el = minimalLogEl();
         if (!el) return;
-        ensureNowLoadingIdleWatchStarted();
+        const o = opt && typeof opt === 'object' ? opt : {};
+        let resetIdle = o.resetIdle !== false;
+        if (isNowLoadingStatusMessage(message)) resetIdle = false;
         const line = formatNowLoadingLogLine(message);
         const lines = getNowLoadingContentLogLines(el);
         lines.push(line);
-        const leftMs = Math.max(0, nowLoadingIdleDeadline - performance.now());
-        const countdownSec =
-            nowLoadingIdleDeadline > 0 ? leftMs / 1000 : NOW_LOADING_IDLE_MS / 1000;
-        renderNowLoadingLogLines(lines, countdownSec);
-        if (!nowLoadingIdleDismissInFlight) {
-            nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
+        renderNowLoadingLogLines(lines);
+        if (resetIdle) {
+            touchNowLoadingIdleDeadline();
+        } else {
+            const leftMs = Math.max(0, nowLoadingIdleDeadline - performance.now());
+            const countdownSec =
+                nowLoadingIdleDeadline > 0
+                    ? leftMs / 1000
+                    : NOW_LOADING_IDLE_MS / 1000;
+            setNowLoadingCountdownLine(countdownSec);
         }
     }
 
@@ -272,6 +340,7 @@
         if (panel) panel.hidden = minimal;
         if (minimal) {
             root.setAttribute('aria-labelledby', 'exportBlockingMinimal');
+            showNowLoadingLogUi();
         } else {
             root.setAttribute('aria-labelledby', 'exportBlockingTitle');
         }
@@ -429,6 +498,7 @@
     function maybeBeginWaveformRestoreOverlayFromBootHint() {
         if (!NOW_LOADING_ENABLED) return false;
         if (!readWaveformRestoreBootHint()) return false;
+        logNowLoadingDetail('boot hint found — arming early shell');
         armWaveformRestoreBootPending();
         if (blockingMode !== null) return true;
         beginWaveformRestoreLock({ reason: 'reload' });
@@ -438,10 +508,16 @@
     function beginWaveformRestoreLock(opt) {
         if (!NOW_LOADING_ENABLED) return;
         if (blockingMode === 'webm-export') return;
+        const o = opt && typeof opt === 'object' ? opt : {};
         blockingMode = 'waveform-restore';
         disarmWaveformRestoreBootPending();
         setOperationBlockingVisible(true, { minimal: true });
+        showNowLoadingLogUi();
         startNowLoadingIdleWatch();
+        touchNowLoadingIdleDeadline();
+        logNowLoadingDetail(
+            'overlay lock engaged (reason=' + (o.reason || 'reload') + ')',
+        );
         try {
             const ae = document.activeElement;
             if (ae && ae !== document.body && typeof ae.blur === 'function') {
@@ -474,6 +550,7 @@
             cleanupWaveformRestoreOverlayDom();
             return Promise.resolve();
         }
+        logNowLoadingDetail('fading out overlay');
 
         const reducedMotion =
             typeof window.matchMedia === 'function' &&
@@ -512,6 +589,7 @@
 
     function endWaveformRestoreLock() {
         if (blockingMode !== 'waveform-restore') return Promise.resolve();
+        logNowLoadingDetail('ending waveform-restore lock');
         blockingMode = null;
         document.body.classList.remove('export-blocking-active');
         refreshOperationBlockingControlLocks();
@@ -526,6 +604,7 @@
         stopNowLoadingIdleWatch();
         disarmWaveformRestoreBootPending();
         if (blockingMode === 'waveform-restore') {
+            logNowLoadingDetail('ensure dismiss — active lock');
             return endWaveformRestoreLock();
         }
         const root = overlayEl();
@@ -534,6 +613,7 @@
             !root.hidden &&
             root.classList.contains('export-blocking-overlay--minimal')
         ) {
+            logNowLoadingDetail('ensure dismiss — minimal overlay still visible');
             blockingMode = null;
             document.body.classList.remove('export-blocking-active');
             cleanupWaveformRestoreOverlayDom();
@@ -592,6 +672,8 @@
     window.isNowLoadingLogMirrorActive = isNowLoadingLogMirrorActive;
     window.appendNowLoadingLogLine = appendNowLoadingLogLine;
     window.clearNowLoadingLog = clearNowLoadingLog;
+    window.logNowLoadingDetail = logNowLoadingDetail;
+    window.touchNowLoadingIdleDeadline = touchNowLoadingIdleDeadline;
     window.setExportBlockingVisible = setExportBlockingVisible;
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;

@@ -384,6 +384,9 @@
             try {
                 return await run();
             } finally {
+                if (typeof logNowLoadingDetail === 'function') {
+                    logNowLoadingDetail('session restore task finished — running lock teardown');
+                }
                 if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
                     await waitForSessionWaveformsAndEndRestoreLock();
                 }
@@ -844,10 +847,18 @@
 
     async function restoreExtraTracksFromRow(row) {
         if (!Array.isArray(row.extraTracks) || row.extraTracks.length < 1) {
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail('restoreExtraTracks — none stored');
+            }
             if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
                 await finalizeReviewMixAfterSessionRestore();
             }
             return;
+        }
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail(
+                'restoreExtraTracks — loading ' + row.extraTracks.length + ' track(s)',
+            );
         }
         writeLog('Restoring ' + row.extraTracks.length + ' extra audio track(s)...');
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
@@ -917,6 +928,21 @@
                         (Array.isArray(restoreRegionSegments) ? restoreRegionSegments.length : 0),
                 );
                 writeLog('Extra audio ' + (entry.slot + 1) + ': restore decode start');
+                if (typeof logNowLoadingDetail === 'function') {
+                    logNowLoadingDetail(
+                        'Ex' +
+                            (entry.slot + 1) +
+                            ' decode start — ' +
+                            (entry.name || 'audio.wav') +
+                            ' (' +
+                            blobBytes +
+                            ' bytes, regions=' +
+                            (Array.isArray(restoreRegionSegments)
+                                ? restoreRegionSegments.length
+                                : 0) +
+                            ')',
+                    );
+                }
                 await loadExtraTrackFile(entry.slot, af, {
                     fromSessionRestore: true,
                     timelineStartSec: entry.timelineStartSec,
@@ -982,6 +1008,11 @@
                 }
                 if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(entry.slot)) {
                     restoredCount += 1;
+                    if (typeof logNowLoadingDetail === 'function') {
+                        logNowLoadingDetail(
+                            'Ex' + (entry.slot + 1) + ' restore OK — ' + (entry.name || 'audio.wav'),
+                        );
+                    }
                 } else {
                     writeLog(
                         'Extra audio ' +
@@ -1188,6 +1219,12 @@
     async function applySessionPersistRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail(
+                'applySessionPersistRow — start' +
+                    (o.importReview ? ' (import review)' : ''),
+            );
+        }
         if (typeof maybeBeginWaveformRestoreLock === 'function') {
             maybeBeginWaveformRestoreLock(row, o);
         }
@@ -1286,7 +1323,13 @@
 
     /** 起動時: UI 初期化・復元描画の前に Now Loading を出す */
     async function prepareSessionRestoreLockBeforeUi() {
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('early prepare — reading IndexedDB session');
+        }
         if (!window.indexedDB) {
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail('early prepare — IndexedDB unavailable');
+            }
             dismissSessionRestoreBootShellIfIdle();
             return false;
         }
@@ -1294,14 +1337,19 @@
         try {
             row = await idbGet(IDB_KEY_LAST);
         } catch (e) {
-            writeLog(
-                'Session restore lock (early): read failed — ' +
-                    (e && e.message ? e.message : String(e)),
-            );
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail(
+                    'early prepare — session read failed: ' +
+                        (e && e.message ? e.message : String(e)),
+                );
+            }
             dismissSessionRestoreBootShellIfIdle();
             return false;
         }
         if (!sessionRowHasRestorableContent(row)) {
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail('early prepare — no restorable session');
+            }
             dismissSessionRestoreBootShellIfIdle();
             if (typeof clearWaveformRestoreBootHint === 'function') {
                 clearWaveformRestoreBootHint();
@@ -1312,6 +1360,9 @@
             typeof sessionRowNeedsWaveformRestoreLock === 'function' &&
             !sessionRowNeedsWaveformRestoreLock(row)
         ) {
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail('early prepare — no waveform lock required');
+            }
             dismissSessionRestoreBootShellIfIdle();
             if (typeof clearWaveformRestoreBootHint === 'function') {
                 clearWaveformRestoreBootHint();
@@ -1365,6 +1416,16 @@
                 }
                 writeLog('No stored session (user display prefs from localStorage).');
                 return;
+            }
+            if (typeof logNowLoadingDetail === 'function') {
+                const extraN = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
+                logNowLoadingDetail(
+                    'restoreSession — applying row (video=' +
+                        (row.mBlob && row.mBlob.size ? 'yes' : 'no') +
+                        ', extraTracks=' +
+                        extraN +
+                        ')',
+                );
             }
             if (typeof maybeBeginWaveformRestoreLock === 'function') {
                 maybeBeginWaveformRestoreLock(row, {});

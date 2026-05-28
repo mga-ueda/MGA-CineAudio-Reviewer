@@ -39,7 +39,7 @@
             transform: translateX(-50%);
             margin: 0;
             max-width: min(90vw, 22rem);
-            font: 600 1.05rem/1.4 system-ui, sans-serif;
+            font: 600 0.72rem/1.4 system-ui, sans-serif;
             letter-spacing: 0.06em;
             text-align: center;
             white-space: pre-line;
@@ -107,6 +107,12 @@
                 id="exportBlockingMinimalLog"
                 aria-live="polite"
             ></pre>
+            <div
+                class="export-blocking-overlay__minimal-countdown"
+                id="exportBlockingMinimalCountdown"
+                hidden
+                aria-live="polite"
+            ></div>
         </div>
         <div class="export-blocking-overlay__panel">
             <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>

@@ -3,6 +3,14 @@
     /** Ex デコード待ちの上限（メイン動画波形は待たない） */
     const WAIT_TIMEOUT_MS = 15000;
 
+    function logRestoreDetail(message) {
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('restore — ' + message);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Now Loading: restore — ' + message);
+        }
+    }
+
     function sessionRowNeedsWaveformRestoreLock(row) {
         if (!row || typeof row !== 'object') return false;
         const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
@@ -12,6 +20,21 @@
                 (e) => e && e.blob && (e.byteLength || e.blob.size || 0) > 0,
             );
         return hasVideo || hasExtra;
+    }
+
+    function formatExtraDecodePendingSummary() {
+        const extraCount =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        const pending = [];
+        for (let i = 0; i < extraCount; i++) {
+            if (
+                typeof extraTrackStatusIndicatesDecoding === 'function' &&
+                extraTrackStatusIndicatesDecoding(i)
+            ) {
+                pending.push('Ex' + (i + 1));
+            }
+        }
+        return pending.length ? pending.join(', ') : 'none';
     }
 
     /** Now Loading 解除判定: Ex のデコード中のみ（描画・メイン動画波形は待たない） */
@@ -30,11 +53,14 @@
     }
 
     function prepareLayoutBeforeWaveformRestoreWait() {
+        logRestoreDetail('preparing lane layout before decode wait');
         if (typeof syncExtraLaneVisibilityAfterSessionRestore === 'function') {
             syncExtraLaneVisibilityAfterSessionRestore();
+            logRestoreDetail('synced extra lane visibility');
         }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
+            logRestoreDetail('refreshed waveform composite layout');
         }
         if (
             typeof pendingLaneUiRestore !== 'undefined' &&
@@ -43,6 +69,7 @@
         ) {
             applySavedWaveformLaneUi(pendingLaneUiRestore);
             pendingLaneUiRestore = null;
+            logRestoreDetail('applied saved lane UI snapshot');
         }
     }
 
@@ -55,25 +82,35 @@
             typeof isNowLoadingEnabled === 'function' &&
             !isNowLoadingEnabled()
         ) {
+            logRestoreDetail('skipped — Now Loading disabled');
             return false;
         }
-        if (!sessionRowNeedsWaveformRestoreLock(row)) return false;
+        if (!sessionRowNeedsWaveformRestoreLock(row)) {
+            logRestoreDetail('skipped — session row needs no waveform lock');
+            return false;
+        }
         if (
             typeof isWaveformRestoreLockActive === 'function' &&
             isWaveformRestoreLockActive()
         ) {
+            logRestoreDetail('lock already active');
             return true;
         }
         if (typeof beginWaveformRestoreLock !== 'function') return false;
         const o = opt && typeof opt === 'object' ? opt : {};
-        beginWaveformRestoreLock({ reason: o.importReview ? 'import' : 'reload' });
-        if (typeof writeLog === 'function') {
-            writeLog(
-                'Waveform restore lock: started (' +
-                    (o.importReview ? 'import' : 'reload') +
-                    ')',
-            );
-        }
+        const reason = o.importReview ? 'import' : 'reload';
+        const extraN = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
+        const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
+        logRestoreDetail(
+            'begin lock (' +
+                reason +
+                ', video=' +
+                (hasVideo ? 'yes' : 'no') +
+                ', extraTracks=' +
+                extraN +
+                ')',
+        );
+        beginWaveformRestoreLock({ reason: reason });
         return true;
     }
 
@@ -89,55 +126,110 @@
                 );
         } catch (_) {}
 
-        if (!lockActive && !bootShell) return;
+        logRestoreDetail(
+            'waitForEnd entered (lockActive=' +
+                lockActive +
+                ', bootShell=' +
+                bootShell +
+                ')',
+        );
+
+        if (!lockActive && !bootShell) {
+            logRestoreDetail('waitForEnd — nothing to dismiss');
+            return;
+        }
 
         try {
             if (lockActive) {
                 prepareLayoutBeforeWaveformRestoreWait();
 
                 const deadline = performance.now() + WAIT_TIMEOUT_MS;
+                let pollCount = 0;
                 while (performance.now() < deadline) {
+                    pollCount += 1;
                     if (
                         typeof isWaveformRestoreLockActive === 'function' &&
                         !isWaveformRestoreLockActive()
                     ) {
+                        logRestoreDetail(
+                            'decode wait stopped — lock dismissed externally (poll #' +
+                                pollCount +
+                                ')',
+                        );
                         break;
                     }
-                    if (!sessionExtraDecodeRestorePending()) break;
+                    if (!sessionExtraDecodeRestorePending()) {
+                        logRestoreDetail(
+                            'decode wait finished — no Ex tracks decoding (poll #' +
+                                pollCount +
+                                ')',
+                        );
+                        break;
+                    }
+                    if (pollCount === 1 || pollCount % 25 === 0) {
+                        logRestoreDetail(
+                            'waiting for Ex decode: ' +
+                                formatExtraDecodePendingSummary() +
+                                ' (poll #' +
+                                pollCount +
+                                ')',
+                        );
+                    }
+                    if (
+                        typeof touchNowLoadingIdleDeadline === 'function' &&
+                        (pollCount === 1 || pollCount % 25 === 0)
+                    ) {
+                        touchNowLoadingIdleDeadline();
+                    }
                     await delay(POLL_MS);
                 }
 
-                if (sessionExtraDecodeRestorePending() && typeof writeLog === 'function') {
-                    writeLog(
-                        'Waveform restore lock: extra decode wait timed out — releasing lock',
+                if (sessionExtraDecodeRestorePending()) {
+                    logRestoreDetail(
+                        'decode wait timed out after ' +
+                            WAIT_TIMEOUT_MS / 1000 +
+                            's — still decoding: ' +
+                            formatExtraDecodePendingSummary(),
                     );
                 }
             }
         } finally {
+            logRestoreDetail('finalize — clearing stale decoding status');
             if (typeof clearStaleExtraTrackDecodingStatus === 'function') {
                 clearStaleExtraTrackDecodingStatus();
             }
+            logRestoreDetail('finalize — refreshing region overlays');
             if (typeof refreshExtraTrackRegionOverlaysAfterSessionRestore === 'function') {
                 try {
                     refreshExtraTrackRegionOverlaysAfterSessionRestore();
-                } catch (_) {}
+                } catch (e) {
+                    logRestoreDetail(
+                        'region overlay refresh failed — ' +
+                            (e && e.message ? e.message : String(e)),
+                    );
+                }
             }
+            logRestoreDetail('finalize — dismissing lock UI');
             if (typeof ensureWaveformRestoreLockDismissed === 'function') {
                 await ensureWaveformRestoreLockDismissed();
             } else if (typeof endWaveformRestoreLock === 'function') {
                 await endWaveformRestoreLock();
             }
+            logRestoreDetail('finalize — drawing extra waveforms');
             if (typeof ensureExtraTrackWaveformsDrawnAsync === 'function') {
                 try {
                     await ensureExtraTrackWaveformsDrawnAsync({
                         notifyMaster: true,
                         maxFrames: 40,
                     });
-                } catch (_) {}
+                } catch (e) {
+                    logRestoreDetail(
+                        'extra waveform draw failed — ' +
+                            (e && e.message ? e.message : String(e)),
+                    );
+                }
             }
-            if (typeof writeLog === 'function') {
-                writeLog('Waveform restore lock: released');
-            }
+            logRestoreDetail('waitForEnd complete');
         }
     }
 

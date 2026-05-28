@@ -951,6 +951,9 @@
     );
 
     (async function boot() {
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('boot — waiting for early session lock');
+        }
         try {
             if (window.__sessionRestoreLockEarly) {
                 await window.__sessionRestoreLockEarly;
@@ -958,11 +961,16 @@
                 await prepareSessionRestoreLockBeforeUi();
             }
         } catch (e) {
-            writeLog(
-                'Session restore lock (early): ' + (e && e.message ? e.message : String(e)),
-            );
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail(
+                    'boot — early lock failed: ' + (e && e.message ? e.message : String(e)),
+                );
+            }
         } finally {
             window.__sessionRestoreLockEarly = null;
+        }
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('boot — initializing UI modules');
         }
         if (
             typeof isWaveformRestoreLockActive === 'function' &&
@@ -983,15 +991,28 @@
         if (typeof initExtraAudioTracksUi === 'function') {
             initExtraAudioTracksUi();
         }
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('boot — restoreSessionFromStorage');
+        }
         try {
             await restoreSessionFromStorage();
         } catch (e) {
-            writeLog('Session restore: ' + (e && e.message ? e.message : String(e)));
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail(
+                    'boot — restoreSession failed: ' + (e && e.message ? e.message : String(e)),
+                );
+            }
+        }
+        if (typeof logNowLoadingDetail === 'function') {
+            logNowLoadingDetail('boot — awaiting session restore queue idle');
         }
         if (typeof whenSessionRestoreIdle === 'function') {
             await whenSessionRestoreIdle();
         }
         if (typeof ensureWaveformRestoreLockDismissed === 'function') {
+            if (typeof logNowLoadingDetail === 'function') {
+                logNowLoadingDetail('boot — final ensure lock dismissed');
+            }
             await ensureWaveformRestoreLockDismissed();
         }
         if (typeof updateSessionAllClearButton === 'function') {

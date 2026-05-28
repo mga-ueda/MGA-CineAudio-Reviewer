@@ -148,9 +148,27 @@
         return text.toLowerCase().includes('debug');
     }
 
-    function writeLog(m) {
-        if (!logEl) return;
+    function isNowLoadingStatusLogLine(message) {
+        return String(message || '').trim().indexOf('Now Loading:') === 0;
+    }
+
+    function writeLog(m, opt) {
         if (isMaskedDebugLogLine(m)) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        let resetIdle = !isNowLoadingStatusLogLine(m) && o.resetIdle !== false;
+        if (
+            typeof isWaveformRestoreLockActive === 'function' &&
+            isWaveformRestoreLockActive()
+        ) {
+            resetIdle = o.resetIdle === true;
+        }
+        if (
+            !(o.skipNowLoadingMirror === true) &&
+            typeof appendNowLoadingLogLine === 'function'
+        ) {
+            appendNowLoadingLogLine(m, { resetIdle: resetIdle });
+        }
+        if (!logEl) return;
         const now = new Date();
         const time =
             '[' +
@@ -168,9 +186,6 @@
         }
         logEl.innerText = lines.join('\n');
         logEl.scrollTop = logEl.scrollHeight;
-        if (typeof appendNowLoadingLogLine === 'function') {
-            appendNowLoadingLogLine(m);
-        }
     }
 
     window.clearLog = clearLog;
