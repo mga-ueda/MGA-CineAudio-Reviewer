@@ -3401,7 +3401,7 @@
         const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
         if (OfflineCtx) {
             try {
-                const offline = new OfflineCtx(2, 2, 44100);
+                const offline = new OfflineCtx(2, 2, 48000);
                 return await decodeArrayBufferToAudioBuffer(offline, ab);
             } catch (err) {
                 writeLog(
