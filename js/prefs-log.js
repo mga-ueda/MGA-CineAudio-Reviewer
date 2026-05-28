@@ -162,30 +162,36 @@
         ) {
             resetIdle = o.resetIdle === true;
         }
+        let formattedLine = null;
+        if (logEl) {
+            const now = new Date();
+            const time =
+                '[' +
+                String(now.getHours()).padStart(2, '0') +
+                ':' +
+                String(now.getMinutes()).padStart(2, '0') +
+                ':' +
+                String(now.getSeconds()).padStart(2, '0') +
+                ']';
+            const cur = logEl.innerText;
+            const lines = cur ? cur.split('\n') : [];
+            formattedLine = time + ' - ' + m;
+            lines.push(formattedLine);
+            if (lines.length > LOG_MAX_LINES) {
+                lines.splice(0, lines.length - LOG_MAX_LINES);
+            }
+            logEl.innerText = lines.join('\n');
+            logEl.scrollTop = logEl.scrollHeight;
+        }
         if (
             !(o.skipNowLoadingMirror === true) &&
             typeof appendNowLoadingLogLine === 'function'
         ) {
-            appendNowLoadingLogLine(m, { resetIdle: resetIdle });
+            appendNowLoadingLogLine(formattedLine != null ? formattedLine : m, {
+                resetIdle: resetIdle,
+                preformatted: formattedLine != null,
+            });
         }
-        if (!logEl) return;
-        const now = new Date();
-        const time =
-            '[' +
-            String(now.getHours()).padStart(2, '0') +
-            ':' +
-            String(now.getMinutes()).padStart(2, '0') +
-            ':' +
-            String(now.getSeconds()).padStart(2, '0') +
-            ']';
-        const cur = logEl.innerText;
-        const lines = cur ? cur.split('\n') : [];
-        lines.push(time + ' - ' + m);
-        if (lines.length > LOG_MAX_LINES) {
-            lines.splice(0, lines.length - LOG_MAX_LINES);
-        }
-        logEl.innerText = lines.join('\n');
-        logEl.scrollTop = logEl.scrollHeight;
     }
 
     window.clearLog = clearLog;

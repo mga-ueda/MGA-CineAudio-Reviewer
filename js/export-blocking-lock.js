@@ -18,6 +18,7 @@
     let nowLoadingIdleTimer = 0;
     let nowLoadingIdleWatchStarting = false;
     let nowLoadingIdleDismissInFlight = false;
+    let nowLoadingMainLogSeeded = false;
 
     function overlayEl() {
         return document.getElementById('exportBlockingOverlay');
@@ -73,7 +74,7 @@
                 ? 'Now Loading: ' + String(message)
                 : 'Now Loading: (empty)';
         if (typeof appendNowLoadingLogLine === 'function') {
-            appendNowLoadingLogLine(text, { resetIdle: false });
+            appendNowLoadingLogLine(text, { resetIdle: false, skipMainSeed: true });
         }
         if (typeof writeLog === 'function') {
             writeLog(text, { skipNowLoadingMirror: true, resetIdle: false });
@@ -118,6 +119,45 @@
             String(now.getSeconds()).padStart(2, '0') +
             ']';
         return time + ' - ' + String(message);
+    }
+
+    /** メインログの行を Now Loading 用に整形（System Ready 行はそのまま） */
+    function formatLineForNowLoadingMirror(raw) {
+        const text = String(raw || '').trim();
+        if (!text) return '';
+        if (/^\[\d{2}:\d{2}:\d{2}\] - /.test(text)) return text;
+        if (text.charAt(0) === '>') return text;
+        return formatNowLoadingLogLine(text);
+    }
+
+    /** writeLog ミラー前に、メインログ先頭行（System Ready 等）を一度だけ取り込む */
+    function ensureNowLoadingSeededFromMainLog() {
+        if (nowLoadingMainLogSeeded) return;
+        if (!NOW_LOADING_ENABLED) return;
+        if (!isNowLoadingOverlayReadyForLogs() && !isNowLoadingLogMirrorActive()) {
+            return;
+        }
+        const mainLogEl =
+            typeof logEl !== 'undefined' && logEl ? logEl : document.getElementById('log');
+        const mainText = mainLogEl ? String(mainLogEl.innerText || '').trim() : '';
+        if (!mainText) return;
+        const el = minimalLogEl();
+        if (!el) return;
+
+        nowLoadingMainLogSeeded = true;
+        const mainLines = mainText
+            .split('\n')
+            .map((line) => formatLineForNowLoadingMirror(line))
+            .filter((line) => line !== '');
+        const cur = getNowLoadingContentLogLines(el);
+        const merged = [];
+        const seen = new Set();
+        for (const line of mainLines.concat(cur)) {
+            if (seen.has(line)) continue;
+            seen.add(line);
+            merged.push(line);
+        }
+        renderNowLoadingLogLines(merged);
     }
 
     function renderNowLoadingLogLines(contentLines) {
@@ -227,6 +267,7 @@
     function clearNowLoadingLog() {
         stopNowLoadingIdleWatch();
         nowLoadingAbsoluteDeadline = 0;
+        nowLoadingMainLogSeeded = false;
         const el = minimalLogEl();
         if (el) el.textContent = '';
         hideNowLoadingLogUi();
@@ -241,12 +282,22 @@
         const el = minimalLogEl();
         if (!el) return;
         const o = opt && typeof opt === 'object' ? opt : {};
+        const skipMainSeed = o.skipMainSeed === true;
+        if (!skipMainSeed && !isNowLoadingStatusMessage(message)) {
+            ensureNowLoadingSeededFromMainLog();
+        }
         let resetIdle = o.resetIdle !== false;
         if (isNowLoadingStatusMessage(message)) resetIdle = false;
-        const line = formatNowLoadingLogLine(message);
+        const line =
+            o.preformatted === true
+                ? String(message || '').trim()
+                : formatLineForNowLoadingMirror(message);
+        if (!line) return;
         const lines = getNowLoadingContentLogLines(el);
-        lines.push(line);
-        renderNowLoadingLogLines(lines);
+        if (!lines.includes(line)) {
+            lines.push(line);
+            renderNowLoadingLogLines(lines);
+        }
         if (resetIdle) {
             touchNowLoadingIdleDeadline();
         } else {
