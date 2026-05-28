@@ -844,7 +844,7 @@
             if (
                 region &&
                 typeof isPointerOnRegionResizeHandle === 'function' &&
-                !isPointerOnRegionResizeHandle(region, ev.clientX)
+                !isPointerOnRegionResizeHandle(region, ev.clientX, ev.clientY)
             ) {
                 return false;
             }

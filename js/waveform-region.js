@@ -1191,24 +1191,63 @@
         return false;
     }
 
-    function isPointerOnRegionResizeHandle(regionEl, clientX) {
+    function getFadeHandleHitRect(regionEl, edgeKind) {
+        if (!regionEl) return null;
+        const sel =
+            edgeKind === 'in'
+                ? '.audio-waveform-lane__playback-region__handle--fade-in'
+                : edgeKind === 'out'
+                  ? '.audio-waveform-lane__playback-region__handle--fade-out'
+                  : null;
+        if (!sel) return null;
+        const handleEl = regionEl.querySelector(sel);
+        if (!handleEl || handleEl.hidden) return null;
+        return fadeHandleHitTestRect(handleEl.getBoundingClientRect());
+    }
+
+    /** In/Out とフェード三角の操作帯が重なるとき、端リサイズ判定から除外する */
+    function isPointerInFadeHandleHitZone(regionEl, edgeKind, clientX, clientY) {
+        const hitRect = getFadeHandleHitRect(regionEl, edgeKind);
+        if (!hitRect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return false;
+        }
+        return (
+            clientX >= hitRect.left &&
+            clientX <= hitRect.right &&
+            clientY >= hitRect.top &&
+            clientY <= hitRect.bottom
+        );
+    }
+
+    function isPointerOnRegionEdgeResizeHandle(regionEl, edgeKind, clientX, clientY) {
         if (!regionEl || !Number.isFinite(clientX)) return false;
         const pad = REGION_HANDLE_HIT_PAD_PX;
-        const handleIn = regionEl.querySelector(
-            '.audio-waveform-lane__playback-region__handle--in',
-        );
-        const handleOut = regionEl.querySelector(
-            '.audio-waveform-lane__playback-region__handle--out',
-        );
-        if (handleIn) {
-            const r = handleIn.getBoundingClientRect();
-            if (clientX >= r.left - pad && clientX <= r.right + pad) return true;
+        const sel =
+            edgeKind === 'in'
+                ? '.audio-waveform-lane__playback-region__handle--in'
+                : edgeKind === 'out'
+                  ? '.audio-waveform-lane__playback-region__handle--out'
+                  : null;
+        if (!sel) return false;
+        const handleEl = regionEl.querySelector(sel);
+        if (!handleEl) return false;
+        const r = handleEl.getBoundingClientRect();
+        if (clientX < r.left - pad || clientX > r.right + pad) return false;
+        if (
+            Number.isFinite(clientY) &&
+            isPointerInFadeHandleHitZone(regionEl, edgeKind, clientX, clientY)
+        ) {
+            return false;
         }
-        if (handleOut) {
-            const r = handleOut.getBoundingClientRect();
-            if (clientX >= r.left - pad && clientX <= r.right + pad) return true;
-        }
-        return false;
+        return true;
+    }
+
+    function isPointerOnRegionResizeHandle(regionEl, clientX, clientY) {
+        if (!regionEl || !Number.isFinite(clientX)) return false;
+        return (
+            isPointerOnRegionEdgeResizeHandle(regionEl, 'in', clientX, clientY) ||
+            isPointerOnRegionEdgeResizeHandle(regionEl, 'out', clientX, clientY)
+        );
     }
 
     /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
@@ -1289,15 +1328,19 @@
                 },
             ];
             for (let c = 0; c < edgeCandidates.length; c++) {
+                const kind = edgeCandidates[c].kind;
                 const handleEl = edgeCandidates[c].el;
                 if (!handleEl) continue;
                 const rect = handleEl.getBoundingClientRect();
                 if (clientX < rect.left - pad || clientX > rect.right + pad) continue;
+                if (isPointerInFadeHandleHitZone(regionEl, kind, clientX, clientY)) {
+                    continue;
+                }
                 const cx = (rect.left + rect.right) * 0.5;
                 const dist = Math.abs(clientX - cx);
                 if (dist < bestDist) {
                     bestDist = dist;
-                    best = { segmentIndex, kind: edgeCandidates[c].kind, regionEl };
+                    best = { segmentIndex, kind, regionEl };
                 }
             }
         }
