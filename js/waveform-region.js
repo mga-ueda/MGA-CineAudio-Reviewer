@@ -31,6 +31,34 @@
     let pendingPlaybackRegionRestore = null;
     /** @type {{ slot: number, segment: object } | null} */
     let regionSegmentClipboard = null;
+    const regionPersistEpochBySlot = {};
+    const regionShrinkPersistIntentUntilBySlot = {};
+    const REGION_SHRINK_PERSIST_INTENT_MS = 6000;
+
+    function noteRegionShrinkPersistIntent(slot) {
+        if (!(slot >= 0)) return;
+        regionShrinkPersistIntentUntilBySlot[slot] =
+            performance.now() + REGION_SHRINK_PERSIST_INTENT_MS;
+    }
+
+    function canPersistRegionShrink(slot) {
+        if (!(slot >= 0)) return false;
+        const until = Number(regionShrinkPersistIntentUntilBySlot[slot] || 0);
+        return until > 0 && performance.now() <= until;
+    }
+
+    function bumpRegionPersistEpoch(slot) {
+        if (!(slot >= 0)) return;
+        regionPersistEpochBySlot[slot] = (regionPersistEpochBySlot[slot] || 0) + 1;
+    }
+
+    function getRegionPersistEpoch(slot) {
+        if (!(slot >= 0)) return 0;
+        return Number(regionPersistEpochBySlot[slot] || 0);
+    }
+
+    window.canPersistRegionShrink = canPersistRegionShrink;
+    window.getRegionPersistEpoch = getRegionPersistEpoch;
 
     function deepCloneJson(value) {
         return JSON.parse(JSON.stringify(value));
@@ -334,12 +362,11 @@
         const seg = segments[splitIndex];
         const fullDur = getSegmentSourceDurationSec(track, seg);
         if (!fullDur) return false;
-        if (
-            sourceSplit <= seg.sourceInSec + PLAYBACK_REGION_MIN_SEC ||
-            sourceSplit >= seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC
-        ) {
-            return false;
-        }
+        const minSplit = seg.sourceInSec + PLAYBACK_REGION_MIN_SEC;
+        const maxSplit = seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC;
+        if (!(maxSplit > minSplit)) return false;
+        if (sourceSplit < minSplit) sourceSplit = minSplit;
+        if (sourceSplit > maxSplit) sourceSplit = maxSplit;
 
         const leftStart = getSegmentTimelineStart(track, splitIndex);
         const leftDur = sourceSplit - seg.sourceInSec;
@@ -359,10 +386,21 @@
         };
         const next = segments.slice();
         next.splice(splitIndex, 1, left, right);
-        return !!setTrackSegments(track, next, {
+        const ok = !!setTrackSegments(track, next, {
             silent: true,
             skipUndo: !!(opt && opt.skipUndo),
         });
+        if (ok && typeof schedulePersistExtraTrackSlot === 'function') {
+            schedulePersistExtraTrackSlot(track.slot);
+        }
+        if (
+            ok &&
+            !(opt && opt.skipPersistFlush) &&
+            typeof flushPersistSessionNow === 'function'
+        ) {
+            void flushPersistSessionNow().catch(() => {});
+        }
+        return ok;
     }
 
     function resolveMarkerRegionTargetSlot() {
@@ -771,6 +809,17 @@
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
             opt && typeof opt.sameSlotOnly === 'number' ? opt.sameSlotOnly : -1;
+        if (sameSlotOnly >= 0) {
+            const snappedSameSlot = snapToNearestStop(
+                n,
+                collectRegionSnapStops(exclude, sameSlotOnly),
+                threshold,
+                opt,
+            );
+            if (Math.abs(snappedSameSlot - n) > 1e-9) {
+                return Math.max(0, snappedSameSlot);
+            }
+        }
         const priority = resolveTimelineSnapPriorityMode();
         if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
             n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
@@ -837,6 +886,17 @@
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const sameSlotOnly =
             opt && typeof opt.sameSlotOnly === 'number' ? opt.sameSlotOnly : -1;
+        if (sameSlotOnly >= 0) {
+            const snappedSameSlot = snapToNearestStop(
+                n,
+                collectRegionEndSnapStops(exclude, sameSlotOnly),
+                threshold,
+                opt,
+            );
+            if (Math.abs(snappedSameSlot - n) > 1e-9) {
+                return Math.max(0, snappedSameSlot);
+            }
+        }
         const priority = resolveTimelineSnapPriorityMode();
         if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
             n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
@@ -1257,7 +1317,7 @@
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         let start = regionIn > segT0 + 0.00001 ? regionIn : playbackStart;
-        return Math.min(start, getSegmentWaveformDrawTimelineStart(track, segmentIndex));
+        return start;
     }
 
     /** 再生上の音声開始（リージョン内先頭ギャップの後） */
@@ -1274,15 +1334,15 @@
         return anchor;
     }
 
-    /** タイムライン位置をクリップ内ソース秒へ（アンカー基準） */
+    /** タイムライン位置をクリップ内ソース秒へ（実再生開始基準） */
     function segmentSourceSecFromTransport(track, segmentIndex, transportSec) {
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return 0;
-        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const t = Number(transportSec);
         const span = Math.max(0, seg.sourceOutSec - seg.sourceInSec);
-        const local = Math.max(0, Math.min(span, t - anchor));
+        const local = Math.max(0, Math.min(span, t - playbackStart));
         return seg.sourceInSec + local;
     }
 
@@ -2374,6 +2434,13 @@
         const state = getPlaybackRegionsState(track);
         state.segments = segments;
         state.active = true;
+        bumpRegionPersistEpoch(track.slot);
+        if (
+            !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) &&
+            !(opt && opt.keepPendingRestore)
+        ) {
+            pendingPlaybackRegionRestore = null;
+        }
 
         updateTrackRegionOverlays(track);
         redrawAfterRegionChange(track.slot, { invalidatePeakCache: true });
@@ -2432,6 +2499,7 @@
         updateTrackRegionOverlays(track);
         syncLaneFileNameForTrack(track);
         if (was) {
+            noteRegionShrinkPersistIntent(track.slot);
             redrawAfterRegionChange(track.slot);
             if (!(opt && opt.silent)) {
                 writeLog('Ex ' + (track.slot + 1) + ' regions: off');
@@ -2640,35 +2708,45 @@
     }
 
     function getRegionSplitTargetTransportSec(track, clientX, clientY) {
-        const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
-        if (regionEl && Number.isFinite(clientX)) {
-            const fromPointer = transportSecAtClientX(clientX);
-            if (Number.isFinite(fromPointer)) {
-                const thresholdSec = regionSnapThresholdSec();
-                const altSuppressed =
-                    typeof isSnapSuppressedByAlt === 'function'
-                        ? isSnapSuppressedByAlt()
-                        : false;
-                const markersShownOnWaveform =
-                    typeof audioWaveformMarkers !== 'undefined' &&
-                    audioWaveformMarkers &&
-                    !audioWaveformMarkers.hidden;
-                let snapped = fromPointer;
-                if (markersShownOnWaveform) {
-                    if (typeof snapSecToMarkerInOut === 'function') {
-                        snapped = snapSecToMarkerInOut(fromPointer, {
-                            thresholdSec,
-                            altKey: altSuppressed,
-                        });
-                    }
-                } else if (typeof snapRegionTransportSec === 'function') {
-                    snapped = snapRegionTransportSec(fromPointer, {
-                        sameSlotOnly: -1,
+        let pointerSec = null;
+        if (Number.isFinite(clientX)) {
+            const laneSlot =
+                Number.isFinite(clientY) && typeof extraLaneSlotFromClientY === 'function'
+                    ? extraLaneSlotFromClientY(clientY)
+                    : -1;
+            const canUsePointer =
+                laneSlot === track.slot ||
+                (!Number.isFinite(clientY) &&
+                    !!findPlaybackRegionElAtPointer(clientX, clientY));
+            if (canUsePointer) {
+                pointerSec = transportSecAtClientX(clientX);
+            }
+        }
+        if (Number.isFinite(pointerSec)) {
+            const thresholdSec = regionSnapThresholdSec();
+            const altSuppressed =
+                typeof isSnapSuppressedByAlt === 'function'
+                    ? isSnapSuppressedByAlt()
+                    : false;
+            const markersShownOnWaveform =
+                typeof audioWaveformMarkers !== 'undefined' &&
+                audioWaveformMarkers &&
+                !audioWaveformMarkers.hidden;
+            let snapped = pointerSec;
+            if (markersShownOnWaveform) {
+                if (typeof snapSecToMarkerInOut === 'function') {
+                    snapped = snapSecToMarkerInOut(pointerSec, {
+                        thresholdSec,
                         altKey: altSuppressed,
                     });
                 }
-                return clampRegionEditTransportSec(track, snapped);
+            } else if (typeof snapRegionTransportSec === 'function') {
+                snapped = snapRegionTransportSec(pointerSec, {
+                    sameSlotOnly: -1,
+                    altKey: altSuppressed,
+                });
             }
+            return clampRegionEditTransportSec(track, snapped);
         }
         return clampRegionEditTransportSec(track, transportSecFromSeekbar());
     }
@@ -2728,6 +2806,20 @@
         }
         if (splitPlaybackRegionAtTransportSec(track, splitTransport)) {
             return true;
+        }
+        const frameStep =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0 ? masterFrameSec : 1 / 60;
+        const retryOffsets = [1, -1, 2, -2, 3, -3];
+        for (let i = 0; i < retryOffsets.length; i++) {
+            const tRetry = splitTransport + retryOffsets[i] * frameStep;
+            if (splitPlaybackRegionAtTransportSec(track, tRetry)) {
+                writeLog(
+                    'Playback region: split retried at ±' +
+                        Math.abs(retryOffsets[i]) +
+                        ' frame(s)',
+                );
+                return true;
+            }
         }
         writeLog('Playback region: split inside a region (not at edges)');
         flashSeekHint('Region', 'Split inside region', 'notice');
@@ -3272,6 +3364,7 @@
         const { clientX, clientY } = waveformPointerClientXY();
         const segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
         if (segmentIndex < 0) return false;
+        noteRegionShrinkPersistIntent(track.slot);
         return deleteRegionSegmentAt(track, segmentIndex);
     }
 
@@ -3740,6 +3833,7 @@
             }
             return false;
         }
+        noteRegionShrinkPersistIntent(track.slot);
 
         writeLog(
             'Ex ' +
@@ -4694,6 +4788,7 @@
     function restorePlaybackRegionFromPersist(data, opt) {
         if (!data || typeof data !== 'object') return false;
         let restoreFailed = false;
+        let restoreDeferred = false;
         regionUndoPaused = true;
         try {
         if (Array.isArray(data.extra)) {
@@ -4704,7 +4799,10 @@
                     const loaded =
                         typeof isExtraTrackLoaded === 'function' &&
                         isExtraTrackLoaded(entry.slot);
-                    if (!loaded) continue;
+                    if (!loaded) {
+                        restoreDeferred = true;
+                        continue;
+                    }
                     const ok = setTrackSegments(
                         track,
                         entry.segments,
@@ -4770,7 +4868,7 @@
         if (!(opt && opt.keepUndoHistory)) {
             clearRegionUndoStack();
         }
-        return !restoreFailed;
+        return !restoreFailed && !restoreDeferred;
         } finally {
             regionUndoPaused = false;
         }

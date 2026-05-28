@@ -17,6 +17,42 @@
         });
     }
 
+    let lastSessionRowSnapshot = null;
+    let sessionSaveStampSeq = 0;
+    const regionPersistFloorBySlot = {};
+    const regionPersistFloorPayloadBySlot = {};
+    const regionPersistEpochSavedBySlot = {};
+
+    function cacheLastSessionRow(row) {
+        if (!row || typeof row !== 'object') return;
+        lastSessionRowSnapshot = deepCloneForPersist(row);
+        if (Number.isFinite(row.__saveStamp)) {
+            sessionSaveStampSeq = Math.max(sessionSaveStampSeq, Number(row.__saveStamp) || 0);
+        }
+    }
+
+    function rememberRegionPersistFloorFromEntry(slot, entry, playbackEntry) {
+        if (!(slot >= 0) || !entry) return;
+        const count = regionSegmentsCountFromEntry(entry);
+        const prev = Number(regionPersistFloorBySlot[slot] || 0);
+        if (count < prev) return;
+        regionPersistFloorBySlot[slot] = count;
+        regionPersistFloorPayloadBySlot[slot] = {
+            entry: deepCloneForPersist(entry),
+            playback: deepCloneForPersist(playbackEntry || null),
+        };
+    }
+
+    function updateRegionPersistFloorFromRow(row) {
+        if (!row || !Array.isArray(row.extraTracks)) return;
+        for (let i = 0; i < row.extraTracks.length; i++) {
+            const entry = row.extraTracks[i];
+            if (!entry || !(entry.slot >= 0)) continue;
+            const playbackEntry = getPlaybackRegionExtraBySlot(row, entry.slot);
+            rememberRegionPersistFloorFromEntry(entry.slot, entry, playbackEntry);
+        }
+    }
+
     function idbPut(key, val) {
         return openIdb().then(
             (db) =>
@@ -39,6 +75,268 @@
                     r.onerror = () => reject(r.error || new Error('IDB get'));
                 })
         );
+    }
+
+    function deepCloneForPersist(value) {
+        if (!value || typeof value !== 'object') return value;
+        try {
+            return JSON.parse(JSON.stringify(value));
+        } catch (_) {
+            return value;
+        }
+    }
+
+    function regionSegmentsCountFromEntry(entry) {
+        return Array.isArray(entry && entry.regionSegments) ? entry.regionSegments.length : 0;
+    }
+
+    function getPlaybackRegionExtraBySlot(row, slot) {
+        if (
+            !row ||
+            !row.playbackRegion ||
+            !Array.isArray(row.playbackRegion.extra) ||
+            !(slot >= 0)
+        ) {
+            return null;
+        }
+        return row.playbackRegion.extra.find((e) => e && e.slot === slot) || null;
+    }
+
+    function upsertPlaybackRegionExtraForSlot(row, entry) {
+        if (!row || !entry || !(entry.slot >= 0)) return;
+        if (!row.playbackRegion || typeof row.playbackRegion !== 'object') {
+            row.playbackRegion = { extra: [] };
+        }
+        if (!Array.isArray(row.playbackRegion.extra)) {
+            row.playbackRegion.extra = [];
+        }
+        row.playbackRegion.extra = row.playbackRegion.extra.filter(
+            (e) => !e || e.slot !== entry.slot,
+        );
+        row.playbackRegion.extra.push(entry);
+    }
+
+    function protectRegionShrinkOnPersist(row, prevRow) {
+        if (
+            !row ||
+            !Array.isArray(row.extraTracks) ||
+            !prevRow ||
+            !Array.isArray(prevRow.extraTracks)
+        ) {
+            return;
+        }
+        for (let i = 0; i < prevRow.extraTracks.length; i++) {
+            const prev = prevRow.extraTracks[i];
+            if (!prev || !(prev.slot >= 0)) continue;
+            const slot = prev.slot;
+            const nextIdx = row.extraTracks.findIndex((e) => e && e.slot === slot);
+            if (nextIdx < 0) continue;
+            const next = row.extraTracks[nextIdx];
+            const prevCount = regionSegmentsCountFromEntry(prev);
+            const nextCount = regionSegmentsCountFromEntry(next);
+            const floorCount = Number(regionPersistFloorBySlot[slot] || 0);
+            if (prevCount <= nextCount) continue;
+            const allowShrink =
+                typeof canPersistRegionShrink === 'function' && canPersistRegionShrink(slot);
+            if (allowShrink) continue;
+            row.extraTracks[nextIdx] = deepCloneForPersist(prev);
+            const prevPr = getPlaybackRegionExtraBySlot(prevRow, slot);
+            if (prevPr) {
+                upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(prevPr));
+            }
+            if (floorCount > prevCount) {
+                const floorPayload = regionPersistFloorPayloadBySlot[slot];
+                if (floorPayload && floorPayload.entry) {
+                    row.extraTracks[nextIdx] = deepCloneForPersist(floorPayload.entry);
+                    if (floorPayload.playback) {
+                        upsertPlaybackRegionExtraForSlot(
+                            row,
+                            deepCloneForPersist(floorPayload.playback),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    function keepPreviousRegionsWhenNoNewRegionEdit(row, prevRow) {
+        if (
+            !row ||
+            !Array.isArray(row.extraTracks) ||
+            !prevRow ||
+            !Array.isArray(prevRow.extraTracks)
+        ) {
+            return;
+        }
+        for (let i = 0; i < row.extraTracks.length; i++) {
+            const next = row.extraTracks[i];
+            if (!next || !(next.slot >= 0)) continue;
+            const slot = next.slot;
+            const prev = prevRow.extraTracks.find((e) => e && e.slot === slot);
+            if (!prev) continue;
+            const curEpoch =
+                typeof getRegionPersistEpoch === 'function' ? getRegionPersistEpoch(slot) : 0;
+            const savedEpoch = Number(regionPersistEpochSavedBySlot[slot] || 0);
+            const hasNewRegionEdit = curEpoch > savedEpoch;
+            if (hasNewRegionEdit) continue;
+            const nextCount = regionSegmentsCountFromEntry(next);
+            const prevCount = regionSegmentsCountFromEntry(prev);
+            if (nextCount === prevCount) continue;
+            const prevSegments = Array.isArray(prev.regionSegments)
+                ? deepCloneForPersist(prev.regionSegments)
+                : null;
+            if (prevSegments && prevSegments.length) {
+                next.regionSegments = prevSegments;
+            } else {
+                delete next.regionSegments;
+            }
+            if (Number.isFinite(prev.regionHeadPadSec)) {
+                next.regionHeadPadSec = prev.regionHeadPadSec;
+            } else {
+                delete next.regionHeadPadSec;
+            }
+            if (Number.isFinite(prev.regionTimelineInSec)) {
+                next.regionTimelineInSec = prev.regionTimelineInSec;
+            } else {
+                delete next.regionTimelineInSec;
+            }
+            if (Number.isFinite(prev.regionLeadPadSec)) {
+                next.regionLeadPadSec = prev.regionLeadPadSec;
+            } else {
+                delete next.regionLeadPadSec;
+            }
+            const prevPr = getPlaybackRegionExtraBySlot(prevRow, slot);
+            if (prevPr) {
+                upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(prevPr));
+            }
+        }
+    }
+
+    function enforceRegionPersistFloor(row) {
+        if (!row || !Array.isArray(row.extraTracks)) return;
+        for (let i = 0; i < row.extraTracks.length; i++) {
+            const next = row.extraTracks[i];
+            if (!next || !(next.slot >= 0)) continue;
+            const slot = next.slot;
+            const floorCount = Number(regionPersistFloorBySlot[slot] || 0);
+            if (!(floorCount > 0)) continue;
+            const nextCount = regionSegmentsCountFromEntry(next);
+            if (nextCount >= floorCount) continue;
+            const allowShrink =
+                typeof canPersistRegionShrink === 'function' && canPersistRegionShrink(slot);
+            if (allowShrink) {
+                regionPersistFloorBySlot[slot] = nextCount;
+                const playback = getPlaybackRegionExtraBySlot(row, slot);
+                regionPersistFloorPayloadBySlot[slot] = {
+                    entry: deepCloneForPersist(next),
+                    playback: deepCloneForPersist(playback),
+                };
+                continue;
+            }
+            const floorPayload = regionPersistFloorPayloadBySlot[slot];
+            if (floorPayload && floorPayload.entry) {
+                row.extraTracks[i] = deepCloneForPersist(floorPayload.entry);
+                if (floorPayload.playback) {
+                    upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(floorPayload.playback));
+                }
+            }
+        }
+    }
+
+    function regionCountsBySlotFromRow(row) {
+        const out = {};
+        if (!row || typeof row !== 'object') return out;
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const e = row.extraTracks[i];
+                if (!e || !(e.slot >= 0)) continue;
+                if (!out[e.slot]) out[e.slot] = { entry: 0, playback: 0 };
+                out[e.slot].entry = regionSegmentsCountFromEntry(e);
+            }
+        }
+        if (row.playbackRegion && Array.isArray(row.playbackRegion.extra)) {
+            for (let i = 0; i < row.playbackRegion.extra.length; i++) {
+                const e = row.playbackRegion.extra[i];
+                if (!e || !(e.slot >= 0)) continue;
+                if (!out[e.slot]) out[e.slot] = { entry: 0, playback: 0 };
+                out[e.slot].playback = Array.isArray(e.segments) ? e.segments.length : 0;
+            }
+        }
+        return out;
+    }
+
+    function formatRegionCountsForLog(row) {
+        const counts = regionCountsBySlotFromRow(row);
+        const slots = Object.keys(counts)
+            .map((s) => Number(s))
+            .filter((n) => Number.isFinite(n))
+            .sort((a, b) => a - b);
+        if (!slots.length) return 'none';
+        return slots
+            .map((slot) => {
+                const c = counts[slot];
+                return 'Ex' + (slot + 1) + '(entry ' + c.entry + ', playback ' + c.playback + ')';
+            })
+            .join(', ');
+    }
+
+    function getPinnedRegionBySlot(row, slot) {
+        if (!row || !row.__regionPinnedBySlot || !(slot >= 0)) return null;
+        const key = String(slot);
+        const pin = row.__regionPinnedBySlot[key];
+        if (!pin || !Array.isArray(pin.entrySegments) || !pin.entrySegments.length) return null;
+        return pin;
+    }
+
+    function updatePinnedRegionBySlot(row, slot, entry, playbackEntry) {
+        if (!row || !(slot >= 0) || !entry) return;
+        const segs = Array.isArray(entry.regionSegments) ? entry.regionSegments : null;
+        if (!segs || !segs.length) return;
+        if (!row.__regionPinnedBySlot || typeof row.__regionPinnedBySlot !== 'object') {
+            row.__regionPinnedBySlot = {};
+        }
+        row.__regionPinnedBySlot[String(slot)] = {
+            entrySegments: deepCloneForPersist(segs),
+            entryRegionHeadPadSec: Number.isFinite(entry.regionHeadPadSec)
+                ? entry.regionHeadPadSec
+                : undefined,
+            entryRegionTimelineInSec: Number.isFinite(entry.regionTimelineInSec)
+                ? entry.regionTimelineInSec
+                : undefined,
+            entryRegionLeadPadSec: Number.isFinite(entry.regionLeadPadSec)
+                ? entry.regionLeadPadSec
+                : undefined,
+            playback: deepCloneForPersist(playbackEntry || null),
+            count: segs.length,
+        };
+    }
+
+    function applyPinnedRegionIfNeeded(row, slot, entry, allowShrink) {
+        if (!row || !entry || !(slot >= 0)) return;
+        const pin = getPinnedRegionBySlot(row, slot);
+        if (!pin) return;
+        const nextCount = regionSegmentsCountFromEntry(entry);
+        const pinCount = Number(pin.count || 0);
+        if (!(pinCount > nextCount) || allowShrink) return;
+        entry.regionSegments = deepCloneForPersist(pin.entrySegments);
+        if (Number.isFinite(pin.entryRegionHeadPadSec)) {
+            entry.regionHeadPadSec = pin.entryRegionHeadPadSec;
+        } else {
+            delete entry.regionHeadPadSec;
+        }
+        if (Number.isFinite(pin.entryRegionTimelineInSec)) {
+            entry.regionTimelineInSec = pin.entryRegionTimelineInSec;
+        } else {
+            delete entry.regionTimelineInSec;
+        }
+        if (Number.isFinite(pin.entryRegionLeadPadSec)) {
+            entry.regionLeadPadSec = pin.entryRegionLeadPadSec;
+        } else {
+            delete entry.regionLeadPadSec;
+        }
+        if (pin.playback) {
+            upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(pin.playback));
+        }
     }
 
     function schedulePersistSession() {
@@ -93,21 +391,39 @@
         return !!sessionRestoreInProgress;
     };
 
+    const extraTrackPersistReqSeqBySlot = {};
+
     /** Ex トラック1本を即時マージ保存（リロード直前の欠落防止） */
     async function persistExtraTrackEntryToSession(entry) {
         const maxExtra =
             typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 3;
         if (!window.indexedDB || !entry || entry.slot < 0 || entry.slot >= maxExtra) return;
-        if (!entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
+        const slot = entry.slot;
+        const reqSeq = (extraTrackPersistReqSeqBySlot[slot] || 0) + 1;
+        extraTrackPersistReqSeqBySlot[slot] = reqSeq;
+        if (typeof getExtraTrackPersistEntry === 'function') {
+            const fresh = getExtraTrackPersistEntry(slot);
+            if (fresh) entry = fresh;
+        }
+        if (!entry || !entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
         let row;
         try {
             row = await idbGet(IDB_KEY_LAST);
         } catch (e) {
-            throw e;
+            row = null;
         }
+        if ((!row || typeof row !== 'object') && lastSessionRowSnapshot) {
+            row = deepCloneForPersist(lastSessionRowSnapshot);
+        }
+        writeLog(
+            'Session debug: pre-merge row regions = ' + formatRegionCountsForLog(row),
+        );
+        if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         if (!row || typeof row !== 'object') {
             row = { v: 4, audioOnlySession: true, extraTracks: [] };
         }
+        const nextStamp = sessionSaveStampSeq + 1;
+        row.__saveStamp = nextStamp;
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
             if (mem && mem.length) {
@@ -128,19 +444,99 @@
                 delete row.markerMemo;
             }
         }
+        let persistedRegionSegments = 0;
+        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            const playbackRegion = getPlaybackRegionPersistSnapshot();
+            if (playbackRegion) {
+                row.playbackRegion = playbackRegion;
+                if (Array.isArray(playbackRegion.extra)) {
+                    const hit = playbackRegion.extra.find(
+                        (e) => e && e.slot === entry.slot && Array.isArray(e.segments),
+                    );
+                    if (hit) persistedRegionSegments = hit.segments.length;
+                }
+            } else {
+                delete row.playbackRegion;
+            }
+        }
+        const entryRegionSegments = Array.isArray(entry.regionSegments)
+            ? entry.regionSegments.length
+            : 0;
+        if (entryRegionSegments > 0) {
+            if (!row.playbackRegion || typeof row.playbackRegion !== 'object') {
+                row.playbackRegion = { extra: [] };
+            }
+            if (!Array.isArray(row.playbackRegion.extra)) {
+                row.playbackRegion.extra = [];
+            }
+            const forced = {
+                slot,
+                segments: entry.regionSegments.map((seg) =>
+                    seg && typeof seg === 'object' ? { ...seg } : seg,
+                ),
+            };
+            if (Number.isFinite(entry.regionHeadPadSec)) {
+                forced.headPadSec = entry.regionHeadPadSec;
+            }
+            if (Number.isFinite(entry.regionTimelineInSec)) {
+                forced.regionTimelineInSec = entry.regionTimelineInSec;
+            }
+            if (Number.isFinite(entry.regionLeadPadSec)) {
+                forced.regionLeadPadSec = entry.regionLeadPadSec;
+            }
+            row.playbackRegion.extra = row.playbackRegion.extra.filter(
+                (e) => !e || e.slot !== slot,
+            );
+            row.playbackRegion.extra.push(forced);
+            persistedRegionSegments = forced.segments.length;
+        }
+        const currentPlayback = getPlaybackRegionExtraBySlot(row, slot);
+        rememberRegionPersistFloorFromEntry(slot, entry, currentPlayback);
+        enforceRegionPersistFloor(row);
+        let prevRegionSegments = 0;
+        let prevEntry = null;
+        if (Array.isArray(row.extraTracks)) {
+            prevEntry = row.extraTracks.find((e) => e && e.slot === slot) || null;
+            prevRegionSegments = Array.isArray(prevEntry && prevEntry.regionSegments)
+                ? prevEntry.regionSegments.length
+                : 0;
+        }
+        if (
+            prevRegionSegments > entryRegionSegments &&
+            typeof canPersistRegionShrink === 'function' &&
+            !canPersistRegionShrink(slot)
+        ) {
+            entry = prevEntry || entry;
+        }
+        const allowShrinkNow =
+            typeof canPersistRegionShrink === 'function' && canPersistRegionShrink(slot);
+        applyPinnedRegionIfNeeded(row, slot, entry, allowShrinkNow);
         if (!row.mBlob) {
             row.audioOnlySession = true;
             if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
             row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
             row.extraTracks.push(entry);
             row.v = typeof row.v === 'number' ? row.v : 4;
+            if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
             await idbPut(IDB_KEY_LAST, row);
+            cacheLastSessionRow(row);
+            updateRegionPersistFloorFromRow(row);
+            updatePinnedRegionBySlot(row, slot, entry, getPlaybackRegionExtraBySlot(row, slot));
+            writeLog(
+                'Session debug: post-merge row regions = ' + formatRegionCountsForLog(row),
+            );
+            writeLog('Session debug: saved stamp = ' + nextStamp);
+            if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
             writeLog(
                 'Session: extra audio ' +
                     (entry.slot + 1) +
                     ' saved (' +
                     (entry.byteLength || entry.blob.size || 0) +
-                    ' bytes)',
+                    ' bytes, entry regions ' +
+                    entryRegionSegments +
+                    ', playback regions ' +
+                    persistedRegionSegments +
+                    ')',
             );
             return;
         }
@@ -148,13 +544,26 @@
         row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
         row.extraTracks.push(entry);
         row.v = typeof row.v === 'number' ? row.v : 4;
+        if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         await idbPut(IDB_KEY_LAST, row);
+        cacheLastSessionRow(row);
+        updateRegionPersistFloorFromRow(row);
+        updatePinnedRegionBySlot(row, slot, entry, getPlaybackRegionExtraBySlot(row, slot));
+        writeLog(
+            'Session debug: post-merge row regions = ' + formatRegionCountsForLog(row),
+        );
+        writeLog('Session debug: saved stamp = ' + nextStamp);
+        if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         writeLog(
             'Session: extra audio ' +
                 (entry.slot + 1) +
                 ' saved (' +
                 (entry.byteLength || entry.blob.size || 0) +
-                ' bytes)',
+                ' bytes, entry regions ' +
+                entryRegionSegments +
+                ', playback regions ' +
+                persistedRegionSegments +
+                ')',
         );
     }
 
@@ -337,6 +746,39 @@
     async function persistSessionToStorage() {
         if (!window.indexedDB) return;
         const row = await buildSessionPersistRow();
+        const nextStamp = sessionSaveStampSeq + 1;
+        row.__saveStamp = nextStamp;
+        writeLog('Session debug: periodic row regions = ' + formatRegionCountsForLog(row));
+        let prevRow = null;
+        try {
+            prevRow = await idbGet(IDB_KEY_LAST);
+        } catch (_) {
+            prevRow = null;
+        }
+        if ((!prevRow || typeof prevRow !== 'object') && lastSessionRowSnapshot) {
+            prevRow = deepCloneForPersist(lastSessionRowSnapshot);
+        }
+        writeLog('Session debug: periodic prev regions = ' + formatRegionCountsForLog(prevRow));
+        keepPreviousRegionsWhenNoNewRegionEdit(row, prevRow);
+        protectRegionShrinkOnPersist(row, prevRow);
+        enforceRegionPersistFloor(row);
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const e = row.extraTracks[i];
+                if (!e || !(e.slot >= 0)) continue;
+                const allowShrinkNow =
+                    typeof canPersistRegionShrink === 'function' && canPersistRegionShrink(e.slot);
+                applyPinnedRegionIfNeeded(row, e.slot, e, allowShrinkNow);
+                if (!allowShrinkNow) {
+                    updatePinnedRegionBySlot(
+                        row,
+                        e.slot,
+                        e,
+                        getPlaybackRegionExtraBySlot(row, e.slot),
+                    );
+                }
+            }
+        }
         if (!sessionRowHasRestorableContent(row)) {
             try {
                 const db = await openIdb();
@@ -350,6 +792,21 @@
             return;
         }
         await idbPut(IDB_KEY_LAST, row);
+        cacheLastSessionRow(row);
+        updateRegionPersistFloorFromRow(row);
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const e = row.extraTracks[i];
+                if (!e || !(e.slot >= 0)) continue;
+                const slot = e.slot;
+                regionPersistEpochSavedBySlot[slot] =
+                    typeof getRegionPersistEpoch === 'function'
+                        ? getRegionPersistEpoch(slot)
+                        : regionPersistEpochSavedBySlot[slot] || 0;
+            }
+        }
+        writeLog('Session debug: periodic saved regions = ' + formatRegionCountsForLog(row));
+        writeLog('Session debug: periodic saved stamp = ' + nextStamp);
     }
 
     function prepareLaneUiRestoreFromRow(row) {
@@ -414,6 +871,23 @@
                 continue;
             }
             if (typeof loadExtraTrackFile !== 'function') continue;
+            const prEntry = playbackRegionEntryForSlot(row, entry.slot);
+            const restoreRegionSegments =
+                prEntry && Array.isArray(prEntry.segments)
+                    ? prEntry.segments
+                    : entry.regionSegments;
+            const restoreRegionHeadPadSec =
+                prEntry && Number.isFinite(prEntry.headPadSec)
+                    ? prEntry.headPadSec
+                    : entry.regionHeadPadSec;
+            const restoreRegionTimelineInSec =
+                prEntry && Number.isFinite(prEntry.regionTimelineInSec)
+                    ? prEntry.regionTimelineInSec
+                    : entry.regionTimelineInSec;
+            const restoreRegionLeadPadSec =
+                prEntry && Number.isFinite(prEntry.regionLeadPadSec)
+                    ? prEntry.regionLeadPadSec
+                    : entry.regionLeadPadSec;
             let previewOk = false;
             if (typeof applyExtraTrackPeaksPreview === 'function') {
                 previewOk = applyExtraTrackPeaksPreview(entry.slot, entry);
@@ -430,14 +904,20 @@
                     typeof entry.lastModified === 'number' ? entry.lastModified : Date.now(),
             });
             try {
+                writeLog(
+                    'Extra audio ' +
+                        (entry.slot + 1) +
+                        ': restore payload regions ' +
+                        (Array.isArray(restoreRegionSegments) ? restoreRegionSegments.length : 0),
+                );
                 writeLog('Extra audio ' + (entry.slot + 1) + ': restore decode start');
                 await loadExtraTrackFile(entry.slot, af, {
                     fromSessionRestore: true,
                     timelineStartSec: entry.timelineStartSec,
-                    regionSegments: entry.regionSegments,
-                    regionHeadPadSec: entry.regionHeadPadSec,
-                    regionTimelineInSec: entry.regionTimelineInSec,
-                    regionLeadPadSec: entry.regionLeadPadSec,
+                    regionSegments: restoreRegionSegments,
+                    regionHeadPadSec: restoreRegionHeadPadSec,
+                    regionTimelineInSec: restoreRegionTimelineInSec,
+                    regionLeadPadSec: restoreRegionLeadPadSec,
                     regionSourceInSec: entry.regionSourceInSec,
                     regionSourceOutSec: entry.regionSourceOutSec,
                 });
@@ -483,13 +963,13 @@
                         }
                     }
                     if (
-                        Array.isArray(entry.regionSegments) &&
-                        entry.regionSegments.length &&
+                        Array.isArray(restoreRegionSegments) &&
+                        restoreRegionSegments.length &&
                         typeof setTrackSegments === 'function'
                     ) {
                         setTrackSegments(
                             { type: 'extra', slot: entry.slot },
-                            entry.regionSegments,
+                            restoreRegionSegments,
                             { silent: true },
                         );
                     }
@@ -556,6 +1036,21 @@
         if (row.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(row.playbackRegion);
         }
+    }
+
+    function playbackRegionEntryForSlot(row, slot) {
+        if (
+            !row ||
+            !row.playbackRegion ||
+            !Array.isArray(row.playbackRegion.extra) ||
+            !(slot >= 0)
+        ) {
+            return null;
+        }
+        const hit = row.playbackRegion.extra.find(
+            (e) => e && e.slot === slot && Array.isArray(e.segments),
+        );
+        return hit || null;
     }
 
     async function finishSessionRestoreFromRow(row, opt) {
@@ -631,7 +1126,9 @@
 
         prepareLaneUiRestoreFromRow(row);
         applyRangeLoopRestoreFromRow(row);
-        applyPlaybackRegionRestoreFromRow(row);
+        if (typeof setPendingPlaybackRegionRestore === 'function') {
+            setPendingPlaybackRegionRestore(null);
+        }
 
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
@@ -672,6 +1169,9 @@
             flushPendingSessionMarkersRestore();
         }
 
+        if (typeof setPendingPlaybackRegionRestore === 'function') {
+            setPendingPlaybackRegionRestore(null);
+        }
         await finishSessionRestoreFromRow(row, {
             restoreTransportSec: restoreTransportSec,
         });
@@ -785,6 +1285,13 @@
                 writeLog('Session read failed: ' + (e && e.message ? e.message : String(e)));
                 return;
             }
+            cacheLastSessionRow(row);
+            updateRegionPersistFloorFromRow(row);
+            writeLog('Session debug: restore row regions = ' + formatRegionCountsForLog(row));
+            writeLog(
+                'Session debug: restore row stamp = ' +
+                    (Number.isFinite(row && row.__saveStamp) ? row.__saveStamp : 'none'),
+            );
             if (!sessionRowHasRestorableContent(row)) {
                 writeLog('No stored session (user display prefs from localStorage).');
                 return;

@@ -113,6 +113,34 @@
         logEl.scrollTop = 0;
     }
 
+    async function copyLogToClipboard() {
+        if (!logEl) return false;
+        const text = String(logEl.innerText || '');
+        if (!text) return false;
+        try {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+        } catch (_) {}
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        let ok = false;
+        try {
+            ok = document.execCommand('copy');
+        } catch (_) {
+            ok = false;
+        }
+        document.body.removeChild(ta);
+        return ok;
+    }
+
     function writeLog(m) {
         if (!logEl) return;
         const now = new Date();
@@ -135,6 +163,26 @@
     }
 
     window.clearLog = clearLog;
+
+    (function bindLogActionButtons() {
+        const clearBtn = document.getElementById('logClearBtn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                clearLog();
+            });
+        }
+        const copyBtn = document.getElementById('logCopyBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async () => {
+                const ok = await copyLogToClipboard();
+                if (ok) {
+                    writeLog('Log copied to clipboard');
+                } else {
+                    writeLog('Log copy failed');
+                }
+            });
+        }
+    })();
 
     function logArrowSeekDebounced(msg) {
         const now = performance.now();

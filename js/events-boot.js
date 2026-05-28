@@ -844,6 +844,13 @@
             haltTransportOnPageExit();
         }
         writePrefs();
+        if (
+            typeof isSessionRestoreInProgress === 'function' &&
+            isSessionRestoreInProgress()
+        ) {
+            writeLog('Session: skip persist on exit (restore in progress)');
+            return;
+        }
         if (typeof flushPersistSessionNow === 'function') {
             flushPersistSessionNow().catch(() => {});
         } else {
@@ -857,6 +864,13 @@
                 haltTransportOnPageExit();
             }
             writePrefs();
+            if (
+                typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()
+            ) {
+                writeLog('Session: skip persist (tab hidden during restore)');
+                return;
+            }
             const p =
                 typeof flushPersistSessionNow === 'function'
                     ? flushPersistSessionNow()

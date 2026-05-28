@@ -2747,23 +2747,19 @@
             peaks,
             timelineStartSec: timelineStart > 0 ? timelineStart : 0,
         };
-        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
-            const snap = getPlaybackRegionPersistSnapshot();
-            const reg =
-                snap && snap.extra
-                    ? snap.extra.find((e) => e && e.slot === slot)
-                    : null;
-            if (reg && Array.isArray(reg.segments) && reg.segments.length) {
-                entry.regionSegments = reg.segments;
-                if (Number.isFinite(reg.headPadSec) && reg.headPadSec > 0) {
-                    entry.regionHeadPadSec = reg.headPadSec;
-                }
-                if (Number.isFinite(reg.regionTimelineInSec)) {
-                    entry.regionTimelineInSec = reg.regionTimelineInSec;
-                }
-                if (Number.isFinite(reg.regionLeadPadSec) && reg.regionLeadPadSec > 0) {
-                    entry.regionLeadPadSec = reg.regionLeadPadSec;
-                }
+        const reg = tr.playbackRegions;
+        if (reg && reg.active && Array.isArray(reg.segments) && reg.segments.length) {
+            entry.regionSegments = reg.segments.map((seg) =>
+                seg && typeof seg === 'object' ? { ...seg } : seg,
+            );
+            if (Number.isFinite(reg.headPadSec) && reg.headPadSec > 0) {
+                entry.regionHeadPadSec = reg.headPadSec;
+            }
+            if (Number.isFinite(reg.regionTimelineInSec)) {
+                entry.regionTimelineInSec = reg.regionTimelineInSec;
+            }
+            if (Number.isFinite(reg.regionLeadPadSec) && reg.regionLeadPadSec > 0) {
+                entry.regionLeadPadSec = reg.regionLeadPadSec;
             }
         }
         const clips = ensureExtraTrackClips(tr);
@@ -2947,6 +2943,8 @@
         }
         return out.length ? out : null;
     }
+
+    window.getExtraTrackPersistEntry = getExtraTrackPersistEntry;
 
     function schedulePersistExtraTrackSlot(slot) {
         const entry = getExtraTrackPersistEntry(slot);
@@ -4706,7 +4704,9 @@
             if (typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            schedulePersistExtraTrackSlot(slot);
+            if (!(opt && opt.fromSessionRestore)) {
+                schedulePersistExtraTrackSlot(slot);
+            }
             if (!(opt && opt.fromSessionRestore) && typeof schedulePersistSession === 'function') {
                 schedulePersistSession();
             }
