@@ -34,6 +34,12 @@
     }
 
     function maybeBeginWaveformRestoreLock(row, opt) {
+        if (
+            typeof isNowLoadingEnabled === 'function' &&
+            !isNowLoadingEnabled()
+        ) {
+            return false;
+        }
         if (!sessionRowNeedsWaveformRestoreLock(row)) return false;
         if (
             typeof isWaveformRestoreLockActive === 'function' &&

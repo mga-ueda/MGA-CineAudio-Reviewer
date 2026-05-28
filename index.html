@@ -47,8 +47,10 @@
             pointer-events: none;
         }
     </style>
+    <script src="js/export-blocking-lock.js"></script>
     <script>
         (function armWaveformRestoreBootPendingFromStorage() {
+            if (window.NOW_LOADING_ENABLED === false) return;
             try {
                 var key = 'mgaWaveformRestoreBootHint';
                 var active =
@@ -103,7 +105,6 @@
             <p class="export-blocking-overlay__sub" id="exportBlockingSub"></p>
         </div>
     </div>
-    <script src="js/export-blocking-lock.js"></script>
     <script>
         (function showWaveformRestoreOverlayFromBootHint() {
             if (typeof maybeBeginWaveformRestoreOverlayFromBootHint === 'function') {

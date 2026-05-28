@@ -1,4 +1,7 @@
 (function exportBlockingLockModule() {
+    /** Now Loading（波形復元ロック UI・起動時ぼかし）の有効／無効 */
+    const NOW_LOADING_ENABLED = false;
+
     const WAVEFORM_RESTORE_FADE_MS = 200;
     const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
 
@@ -209,6 +212,7 @@
     }
 
     function readWaveformRestoreBootHint() {
+        if (!NOW_LOADING_ENABLED) return false;
         try {
             return (
                 localStorage.getItem(WAVEFORM_RESTORE_BOOT_HINT_KEY) === '1' ||
@@ -220,6 +224,10 @@
     }
 
     function syncWaveformRestoreBootHint(row) {
+        if (!NOW_LOADING_ENABLED) {
+            clearWaveformRestoreBootHint();
+            return;
+        }
         try {
             if (sessionRowNeedsWaveformRestoreBootHint(row)) {
                 localStorage.setItem(WAVEFORM_RESTORE_BOOT_HINT_KEY, '1');
@@ -238,6 +246,7 @@
     }
 
     function armWaveformRestoreBootPending() {
+        if (!NOW_LOADING_ENABLED) return;
         try {
             document.documentElement.classList.add('waveform-restore-boot-pending');
         } catch (_) {}
@@ -257,6 +266,7 @@
 
     /** 前回保存のヒントだけで、スクリプト読込直後に Now Loading を出す */
     function maybeBeginWaveformRestoreOverlayFromBootHint() {
+        if (!NOW_LOADING_ENABLED) return false;
         if (!readWaveformRestoreBootHint()) return false;
         armWaveformRestoreBootPending();
         if (blockingMode !== null) return true;
@@ -265,6 +275,7 @@
     }
 
     function beginWaveformRestoreLock(opt) {
+        if (!NOW_LOADING_ENABLED) return;
         if (blockingMode === 'webm-export') return;
         blockingMode = 'waveform-restore';
         disarmWaveformRestoreBootPending();
@@ -380,6 +391,17 @@
         webmExportEmergencyCleanup = typeof fn === 'function' ? fn : null;
     }
 
+    function isNowLoadingEnabled() {
+        return NOW_LOADING_ENABLED;
+    }
+
+    if (!NOW_LOADING_ENABLED) {
+        clearWaveformRestoreBootHint();
+        disarmWaveformRestoreBootPending();
+    }
+
+    window.NOW_LOADING_ENABLED = NOW_LOADING_ENABLED;
+    window.isNowLoadingEnabled = isNowLoadingEnabled;
     window.setExportBlockingVisible = setExportBlockingVisible;
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;
