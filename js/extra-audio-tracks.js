@@ -3945,6 +3945,96 @@
             ui.addTrackBtn.hidden = slot >= EXTRA_TRACK_COUNT - 1 && !canAdd;
         }
         refreshExtraTrackClearButtons();
+        refreshExtraTrackMoveButtons();
+    }
+
+    function findShownExtraTrackSlotAbove(slot) {
+        for (let i = slot - 1; i >= 0; i--) {
+            if (isExtraTrackLaneShown(i)) return i;
+        }
+        return -1;
+    }
+
+    function findShownExtraTrackSlotBelow(slot) {
+        for (let i = slot + 1; i < EXTRA_TRACK_COUNT; i++) {
+            if (isExtraTrackLaneShown(i)) return i;
+        }
+        return -1;
+    }
+
+    function refreshExtraTrackMoveButtons() {
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const ui = getExtraUi(slot);
+            if (!ui) continue;
+            const shown = isExtraTrackLaneShown(slot);
+            const upSlot = findShownExtraTrackSlotAbove(slot);
+            const downSlot = findShownExtraTrackSlotBelow(slot);
+            if (ui.moveUpBtn) ui.moveUpBtn.disabled = !shown || upSlot < 0;
+            if (ui.moveDownBtn) ui.moveDownBtn.disabled = !shown || downSlot < 0;
+        }
+    }
+
+    function swapExtraTrackSlots(aSlot, bSlot) {
+        if (
+            !Number.isInteger(aSlot) ||
+            !Number.isInteger(bSlot) ||
+            aSlot < 0 ||
+            bSlot < 0 ||
+            aSlot >= EXTRA_TRACK_COUNT ||
+            bSlot >= EXTRA_TRACK_COUNT ||
+            aSlot === bSlot
+        ) {
+            return false;
+        }
+        stopAllExtraTrackSources();
+        const tmpTrack = extraTracks[aSlot];
+        extraTracks[aSlot] = extraTracks[bSlot];
+        extraTracks[bSlot] = tmpTrack;
+        const tmpOpen = extraLaneUiOpen[aSlot];
+        extraLaneUiOpen[aSlot] = extraLaneUiOpen[bSlot];
+        extraLaneUiOpen[bSlot] = tmpOpen;
+        applyExtraTrackLaneVisibility(aSlot);
+        applyExtraTrackLaneVisibility(bSlot);
+        refreshExtraTrackUi(aSlot);
+        refreshExtraTrackUi(bSlot);
+        if (typeof refreshTrackLaneControlsUi === 'function') {
+            refreshTrackLaneControlsUi();
+        }
+        if (typeof refreshReviewMixUi === 'function') {
+            refreshReviewMixUi();
+        }
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof schedulePersistExtraTrackSlot === 'function') {
+            schedulePersistExtraTrackSlot(aSlot);
+            schedulePersistExtraTrackSlot(bSlot);
+        } else if (typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        return true;
+    }
+
+    function moveExtraTrackSlot(slot, direction) {
+        if (!isExtraTrackLaneShown(slot)) return false;
+        const target =
+            direction < 0
+                ? findShownExtraTrackSlotAbove(slot)
+                : findShownExtraTrackSlotBelow(slot);
+        if (target < 0) return false;
+        if (!swapExtraTrackSlots(slot, target)) return false;
+        writeLog(
+            'Extra audio track moved: Ex ' +
+                (slot + 1) +
+                ' ' +
+                (direction < 0 ? 'up' : 'down') +
+                ' to Ex ' +
+                (target + 1),
+        );
+        return true;
     }
 
     function applyExtraTrackLaneVisibility(slot) {
@@ -4965,6 +5055,8 @@
                 soloBtn: document.getElementById('extraAudioSoloBtn' + slot),
                 muteBtn: document.getElementById('extraAudioMuteBtn' + slot),
                 clearBtn: document.getElementById('extraAudioClearBtn' + slot),
+                moveUpBtn: document.getElementById('extraAudioMoveUpBtn' + slot),
+                moveDownBtn: document.getElementById('extraAudioMoveDownBtn' + slot),
                 addTrackBtn: document.getElementById('extraAudioAddTrackBtn' + slot),
             };
             extraTrackUi[slot] = ui;
@@ -4987,6 +5079,18 @@
                     }
                     clearExtraTrack(slot);
                     writeLog('Extra audio ' + (slot + 1) + ': cleared');
+                });
+            }
+            if (ui.moveUpBtn) {
+                ui.moveUpBtn.addEventListener('click', () => {
+                    moveExtraTrackSlot(slot, -1);
+                    refreshExtraTrackAddLaneButtons();
+                });
+            }
+            if (ui.moveDownBtn) {
+                ui.moveDownBtn.addEventListener('click', () => {
+                    moveExtraTrackSlot(slot, 1);
+                    refreshExtraTrackAddLaneButtons();
                 });
             }
             if (ui.soloBtn) {

@@ -1653,12 +1653,18 @@
             flex: 0 0 auto;
             box-sizing: border-box;
         }
-        .track-lane-add-btn {
-            display: block;
+        .track-lane-bottom-actions {
+            display: grid;
+            grid-template-columns: 22px 22px minmax(0, 1fr);
+            column-gap: 4px;
+            align-items: center;
             width: var(--track-lane-controls-w);
             min-width: var(--track-lane-controls-w);
             max-width: var(--track-lane-controls-w);
             margin-top: 4px;
+        }
+        .track-lane-move-btn,
+        .track-lane-add-btn {
             padding: 1px 6px;
             font-size: 10px;
             line-height: 1.15;
@@ -1669,6 +1675,27 @@
             cursor: pointer;
             box-sizing: border-box;
         }
+        .track-lane-move-btn {
+            width: 22px;
+            min-width: 22px;
+            max-width: 22px;
+            padding: 1px 0;
+            text-align: center;
+        }
+        .track-lane-add-btn {
+            display: block;
+            width: var(--track-lane-controls-w);
+            min-width: var(--track-lane-controls-w);
+            max-width: var(--track-lane-controls-w);
+            margin-top: 4px;
+        }
+        .track-lane-bottom-actions .track-lane-add-btn {
+            width: auto;
+            min-width: 0;
+            max-width: none;
+            margin-top: 0;
+        }
+        .track-lane-move-btn:hover:not(:disabled),
         .track-lane-add-btn:hover:not(:disabled) {
             color: var(--text, #e8ecf1);
             border-color: rgba(120, 200, 255, 0.45);
@@ -1677,6 +1704,10 @@
         .track-lane-add-btn:disabled,
         .track-lane-add-btn[hidden] {
             display: none;
+        }
+        .track-lane-move-btn:disabled {
+            opacity: 0.45;
+            cursor: default;
         }
         .track-lane-meter-row,
         .track-lane-fader-row {

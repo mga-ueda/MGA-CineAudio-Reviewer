@@ -54,11 +54,19 @@
             '<span class="audio-waveform-lane-meta__status" id="extraAudioStatus' +
             slot +
             '" hidden></span>' +
+            '<div class="track-lane-bottom-actions">' +
+            '<button type="button" class="track-lane-move-btn" id="extraAudioMoveUpBtn' +
+            slot +
+            '" title="このトラックを上へ移動" aria-label="Move this track up">▲</button>' +
+            '<button type="button" class="track-lane-move-btn" id="extraAudioMoveDownBtn' +
+            slot +
+            '" title="このトラックを下へ移動" aria-label="Move this track down">▼</button>' +
             '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
             slot +
             '" title="次の extra audio track を表示"' +
             addAttrs +
-            '>+ Add Track</button>';
+            '>+ Add Track</button>' +
+            '</div>';
         return wrap;
     }
 
