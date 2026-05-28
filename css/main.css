@@ -3004,6 +3004,95 @@
         .export-blocking-overlay[hidden] {
             display: none !important;
         }
+
+        /** セッション復元・Import 時の波形待ち — ぼかし＋中央テキストのみ */
+        .export-blocking-overlay--minimal {
+            background: rgba(8, 10, 16, 0.28);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            opacity: 1;
+            transition:
+                opacity 0.2s ease-out,
+                backdrop-filter 0.2s ease-out,
+                -webkit-backdrop-filter 0.2s ease-out,
+                background-color 0.2s ease-out;
+        }
+        .export-blocking-overlay--minimal.export-blocking-overlay--fading-out {
+            opacity: 0;
+            backdrop-filter: blur(0);
+            -webkit-backdrop-filter: blur(0);
+            background: rgba(8, 10, 16, 0);
+            pointer-events: none;
+        }
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
+        .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots {
+            animation: none;
+            opacity: 0;
+            transition: opacity 0.16s ease-out;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .export-blocking-overlay--minimal {
+                transition: none;
+            }
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-label,
+            .export-blocking-overlay--fading-out .export-blocking-overlay__minimal-dots {
+                transition: none;
+            }
+        }
+        .export-blocking-overlay--minimal .export-blocking-overlay__panel {
+            display: none !important;
+        }
+        .export-blocking-overlay__minimal {
+            display: none;
+            margin: 0;
+            padding: 0;
+            text-align: center;
+            font-size: 0.92rem;
+            font-weight: 500;
+            letter-spacing: 0.14em;
+            text-transform: none;
+            color: rgba(236, 240, 248, 0.68);
+            user-select: none;
+            pointer-events: none;
+        }
+        .export-blocking-overlay--minimal .export-blocking-overlay__minimal {
+            display: block;
+        }
+        .export-blocking-overlay__minimal-label {
+            animation: export-blocking-minimal-breathe 2.4s ease-in-out infinite;
+        }
+        .export-blocking-overlay__minimal-dots span {
+            display: inline-block;
+            animation: export-blocking-minimal-dot 1.2s ease-in-out infinite;
+            opacity: 0.35;
+        }
+        .export-blocking-overlay__minimal-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .export-blocking-overlay__minimal-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes export-blocking-minimal-breathe {
+            0%,
+            100% {
+                opacity: 0.52;
+            }
+            50% {
+                opacity: 0.88;
+            }
+        }
+        @keyframes export-blocking-minimal-dot {
+            0%,
+            100% {
+                opacity: 0.2;
+                transform: translateY(0);
+            }
+            50% {
+                opacity: 0.85;
+                transform: translateY(-1px);
+            }
+        }
+
         .export-blocking-overlay__panel {
             max-width: 28rem;
             text-align: center;

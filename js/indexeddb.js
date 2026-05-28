@@ -380,7 +380,13 @@
                 }
             }
         };
-        const p = sessionRestoreQueue.then(run, run);
+        const p = sessionRestoreQueue.then(async () => {
+            const result = await run();
+            if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
+                await waitForSessionWaveformsAndEndRestoreLock();
+            }
+            return result;
+        });
         sessionRestoreQueue = p.catch(() => {});
         return p;
     }
@@ -1177,6 +1183,9 @@
     async function applySessionPersistRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
+        if (typeof maybeBeginWaveformRestoreLock === 'function') {
+            maybeBeginWaveformRestoreLock(row, o);
+        }
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(row.musicalGrid);

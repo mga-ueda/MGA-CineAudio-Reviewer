@@ -1038,7 +1038,7 @@
     window.pauseTransportBeforeSeek = pauseTransportBeforeSeek;
 
     async function handleMasterTransportEndReached() {
-        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
             return false;
         }
         if (handlingMasterTransportEnd) return false;
@@ -1113,7 +1113,8 @@
     function updateControlsEnabled() {
         const locked =
             (typeof isVideoLoadLockActive === 'function' && isVideoLoadLockActive()) ||
-            (typeof isWebmExportActive === 'function' && isWebmExportActive());
+            (typeof isOperationBlockingActive === 'function' &&
+                isOperationBlockingActive());
         const ready =
             !locked &&
             (typeof transportControlsReady === 'function'

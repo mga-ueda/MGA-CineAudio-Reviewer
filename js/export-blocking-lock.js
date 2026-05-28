@@ -1,5 +1,8 @@
 (function exportBlockingLockModule() {
-    let webmExportActive = false;
+    const WAVEFORM_RESTORE_FADE_MS = 200;
+
+    /** @type {null | 'webm-export' | 'waveform-restore'} */
+    let blockingMode = null;
     let webmExportUserCancel = false;
     let webmExportEmergencyCleanup = null;
 
@@ -7,8 +10,25 @@
         return document.getElementById('exportBlockingOverlay');
     }
 
+    function titleEl() {
+        return document.getElementById('exportBlockingTitle');
+    }
+
+    function escHintEl() {
+        return document.getElementById('exportBlockingEscHint');
+    }
+
     function subEl() {
         return document.getElementById('exportBlockingSub');
+    }
+
+    function minimalEl() {
+        return document.getElementById('exportBlockingMinimal');
+    }
+
+    function panelEl() {
+        const root = overlayEl();
+        return root ? root.querySelector('.export-blocking-overlay__panel') : null;
     }
 
     function formatExportProgressClock(sec) {
@@ -36,8 +56,8 @@
         );
     }
 
-    function refreshWebmExportControlLocks() {
-        const xl = webmExportActive;
+    function refreshOperationBlockingControlLocks() {
+        const xl = blockingMode !== null;
         const exportBtn = document.getElementById('sessionExportBtn');
         const importBtn = document.getElementById('sessionImportBtn');
         const exportWebmBtn = document.getElementById('sessionExportVideoBtn');
@@ -55,14 +75,52 @@
         }
     }
 
-    function setExportBlockingVisible(visible) {
+    function applyBlockingOverlayChrome(opt) {
+        const title = titleEl();
+        const esc = escHintEl();
+        if (title && opt && opt.title) title.textContent = String(opt.title);
+        if (esc) {
+            if (opt && opt.escHint != null) {
+                esc.hidden = false;
+                esc.textContent = String(opt.escHint);
+            } else if (opt && opt.hideEscHint) {
+                esc.hidden = true;
+            } else {
+                esc.hidden = false;
+                esc.innerHTML =
+                    '操作はロックされています。<kbd>Esc</kbd> キーで書き出しをキャンセルできます。';
+            }
+        }
+    }
+
+    function applyBlockingOverlayLayout(opt) {
         const root = overlayEl();
         if (!root) return;
-        webmExportActive = !!visible;
+        const minimal = !!(opt && opt.minimal);
+        root.classList.toggle('export-blocking-overlay--minimal', minimal);
+        const minEl = minimalEl();
+        const panel = panelEl();
+        if (minEl) minEl.hidden = !minimal;
+        if (panel) panel.hidden = minimal;
+        if (minimal) {
+            root.setAttribute('aria-labelledby', 'exportBlockingMinimal');
+        } else {
+            root.setAttribute('aria-labelledby', 'exportBlockingTitle');
+        }
+    }
+
+    function setOperationBlockingVisible(visible, opt) {
+        const root = overlayEl();
+        if (!root) return;
         if (visible) {
+            root.classList.remove('export-blocking-overlay--fading-out');
+            applyBlockingOverlayLayout(opt);
+            if (!(opt && opt.minimal)) {
+                applyBlockingOverlayChrome(opt);
+            }
             root.hidden = false;
             root.setAttribute('aria-hidden', 'false');
-            if (subEl()) subEl().textContent = '';
+            if (subEl()) subEl().textContent = (opt && opt.sub) || '';
             document.body.classList.add('export-blocking-active');
             try {
                 root.focus({ preventScroll: true });
@@ -70,21 +128,53 @@
         } else {
             root.hidden = true;
             root.setAttribute('aria-hidden', 'true');
+            root.classList.remove('export-blocking-overlay--minimal');
             if (subEl()) subEl().textContent = '';
+            const minEl = minimalEl();
+            if (minEl) minEl.hidden = true;
+            const panel = panelEl();
+            if (panel) panel.hidden = false;
+            root.setAttribute('aria-labelledby', 'exportBlockingTitle');
             document.body.classList.remove('export-blocking-active');
+            blockingMode = null;
             webmExportUserCancel = false;
             webmExportEmergencyCleanup = null;
+            applyBlockingOverlayChrome({
+                title: 'Exporting WebM',
+                hideEscHint: false,
+            });
         }
-        refreshWebmExportControlLocks();
+        refreshOperationBlockingControlLocks();
+    }
+
+    function setExportBlockingVisible(visible) {
+        if (visible) {
+            blockingMode = 'webm-export';
+            setOperationBlockingVisible(true, {
+                title: 'Exporting WebM',
+                hideEscHint: false,
+            });
+        } else if (blockingMode === 'webm-export') {
+            setOperationBlockingVisible(false);
+        }
     }
 
     function updateExportBlockingSub(text) {
+        if (blockingMode === 'waveform-restore') return;
         const sub = subEl();
         if (sub && text != null) sub.textContent = String(text);
     }
 
     function isWebmExportActive() {
-        return webmExportActive;
+        return blockingMode === 'webm-export';
+    }
+
+    function isWaveformRestoreLockActive() {
+        return blockingMode === 'waveform-restore';
+    }
+
+    function isOperationBlockingActive() {
+        return blockingMode !== null;
     }
 
     function isWebmExportCancelRequested() {
@@ -92,7 +182,7 @@
     }
 
     function tryCancelWebmExportFromEsc() {
-        if (!webmExportActive) return;
+        if (!isWebmExportActive()) return;
         webmExportUserCancel = true;
         updateExportBlockingSub('Cancelling…');
         if (typeof webmExportEmergencyCleanup === 'function') {
@@ -103,10 +193,96 @@
         }
     }
 
+    function beginWaveformRestoreLock(opt) {
+        if (blockingMode === 'webm-export') return;
+        blockingMode = 'waveform-restore';
+        setOperationBlockingVisible(true, { minimal: true });
+        try {
+            const ae = document.activeElement;
+            if (ae && ae !== document.body && typeof ae.blur === 'function') {
+                ae.blur();
+            }
+        } catch (_) {}
+    }
+
+    function cleanupWaveformRestoreOverlayDom() {
+        const root = overlayEl();
+        if (!root) return;
+        root.classList.remove(
+            'export-blocking-overlay--fading-out',
+            'export-blocking-overlay--minimal',
+        );
+        root.hidden = true;
+        root.setAttribute('aria-hidden', 'true');
+        const minEl = minimalEl();
+        if (minEl) minEl.hidden = true;
+        const panel = panelEl();
+        if (panel) panel.hidden = false;
+        root.setAttribute('aria-labelledby', 'exportBlockingTitle');
+    }
+
+    function fadeOutWaveformRestoreOverlay() {
+        const root = overlayEl();
+        if (!root || root.hidden) {
+            cleanupWaveformRestoreOverlayDom();
+            return Promise.resolve();
+        }
+
+        const reducedMotion =
+            typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const fadeMs = reducedMotion ? 0 : WAVEFORM_RESTORE_FADE_MS;
+
+        return new Promise((resolve) => {
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
+                cleanupWaveformRestoreOverlayDom();
+                resolve();
+            };
+
+            if (fadeMs <= 0) {
+                finish();
+                return;
+            }
+
+            const onTransitionEnd = (ev) => {
+                if (ev.target !== root || ev.propertyName !== 'opacity') return;
+                root.removeEventListener('transitionend', onTransitionEnd);
+                finish();
+            };
+            root.addEventListener('transitionend', onTransitionEnd);
+            requestAnimationFrame(() => {
+                root.classList.add('export-blocking-overlay--fading-out');
+            });
+            setTimeout(() => {
+                root.removeEventListener('transitionend', onTransitionEnd);
+                finish();
+            }, fadeMs + 40);
+        });
+    }
+
+    function endWaveformRestoreLock() {
+        if (blockingMode !== 'waveform-restore') return Promise.resolve();
+        blockingMode = null;
+        document.body.classList.remove('export-blocking-active');
+        refreshOperationBlockingControlLocks();
+        if (typeof updateControlsEnabled === 'function') {
+            updateControlsEnabled();
+        }
+        return fadeOutWaveformRestoreOverlay();
+    }
+
     function beginWebmExportLock(opt) {
+        if (blockingMode === 'waveform-restore') return;
         webmExportUserCancel = false;
         webmExportEmergencyCleanup = null;
-        setExportBlockingVisible(true);
+        blockingMode = 'webm-export';
+        setOperationBlockingVisible(true, {
+            title: 'Exporting WebM',
+            hideEscHint: false,
+        });
         try {
             const ae = document.activeElement;
             if (ae && ae !== document.body && typeof ae.blur === 'function') {
@@ -122,7 +298,9 @@
     }
 
     function endWebmExportLock() {
-        setExportBlockingVisible(false);
+        if (blockingMode === 'webm-export') {
+            setOperationBlockingVisible(false);
+        }
     }
 
     function setWebmExportEmergencyCleanup(fn) {
@@ -133,9 +311,13 @@
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;
     window.isWebmExportActive = isWebmExportActive;
+    window.isWaveformRestoreLockActive = isWaveformRestoreLockActive;
+    window.isOperationBlockingActive = isOperationBlockingActive;
     window.isWebmExportCancelRequested = isWebmExportCancelRequested;
     window.tryCancelWebmExportFromEsc = tryCancelWebmExportFromEsc;
     window.beginWebmExportLock = beginWebmExportLock;
     window.endWebmExportLock = endWebmExportLock;
+    window.beginWaveformRestoreLock = beginWaveformRestoreLock;
+    window.endWaveformRestoreLock = endWaveformRestoreLock;
     window.setWebmExportEmergencyCleanup = setWebmExportEmergencyCleanup;
 })();

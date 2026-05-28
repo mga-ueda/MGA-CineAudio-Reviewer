@@ -1964,6 +1964,20 @@
     }
 
     window.onContainerMetaReadyForWaveform = onContainerMetaReadyForWaveform;
+    function isMainVideoWaveformBuildPending() {
+        if (!urlMain) return false;
+        if (containerHasAudio.main === false) return false;
+        if (waveformDecodeInFlight) return true;
+        if (waveformBuildTimer || waveformLoadKickTimer) return true;
+        const status = audioWaveformStatus ? audioWaveformStatus.textContent || '' : '';
+        if (status === 'No audio track' || status === 'Waveform unavailable') return false;
+        if (status.indexOf('Too large') >= 0) return false;
+        if (status.indexOf(' ch · ') >= 0) return false;
+        if (waveformPeaks && waveformPeaks.length > 0) return false;
+        return true;
+    }
+
+    window.isMainVideoWaveformBuildPending = isMainVideoWaveformBuildPending;
     window.ensureMainVideoWaveformBuildForLoad = ensureMainVideoWaveformBuildForLoad;
     window.kickMainVideoWaveformBuild = kickMainVideoWaveformBuild;
     window.kickMainVideoWaveformAfterLoadLock = kickMainVideoWaveformAfterLoadLock;

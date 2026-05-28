@@ -38,6 +38,9 @@
         aria-labelledby="exportBlockingTitle"
         tabindex="-1"
     >
+        <p class="export-blocking-overlay__minimal" id="exportBlockingMinimal" hidden aria-live="polite">
+            <span class="export-blocking-overlay__minimal-label">Now Loading</span><span class="export-blocking-overlay__minimal-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+        </p>
         <div class="export-blocking-overlay__panel">
             <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>
             <p class="export-blocking-overlay__esc-hint" id="exportBlockingEscHint">
@@ -509,6 +512,7 @@
     <script src="js/view-layout.js"></script>
     <script src="js/indexeddb.js"></script>
     <script src="js/export-blocking-lock.js"></script>
+    <script src="js/waveform-restore-lock.js"></script>
     <script src="js/video-export-review.js"></script>
     <script src="js/session-export-import.js"></script>
     <script src="js/init-prefs.js"></script>

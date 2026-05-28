@@ -478,7 +478,7 @@
      * @returns {boolean} handleMasterTransportEndReached を起動した
      */
     function maybeFinishMasterTransportPlayback() {
-        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
             return false;
         }
         if (typeof isTransportPlaying !== 'function' || !isTransportPlaying()) {

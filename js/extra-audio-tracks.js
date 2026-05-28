@@ -3777,6 +3777,87 @@
     }
 
     /** レイアウト未確定時は rAF で再試行し、peaks 欠落時は再生成する。 */
+    function extraTrackStatusIndicatesDecoding(slot) {
+        const ui = getExtraUi(slot);
+        if (!ui || !ui.status) return false;
+        const text = ui.status.textContent || '';
+        return /decoding/i.test(text);
+    }
+
+    function areExtraTrackWaveformsRestorePending() {
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!isExtraTrackLoaded(i) && !hasExtraTrackWaveformPeaks(i)) continue;
+            if (!isExtraTrackLaneShown(i) && !isExtraTrackLoaded(i)) continue;
+            if (extraTrackStatusIndicatesDecoding(i)) return true;
+            if (isExtraTrackLoaded(i) && !extraTrackWaveformDrawReady(i)) return true;
+        }
+        return false;
+    }
+
+    function ensureExtraTrackWaveformsDrawnAsync(opt) {
+        return new Promise((resolve) => {
+            const gen = ++extraWaveformEnsureGen;
+            const maxFrames = opt && opt.maxFrames > 0 ? opt.maxFrames : 28;
+            const slots =
+                opt && Array.isArray(opt.slots) && opt.slots.length
+                    ? opt.slots.filter((s) => s >= 0 && s < EXTRA_TRACK_COUNT)
+                    : null;
+            let frame = 0;
+
+            const targets = () => {
+                const out = [];
+                for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+                    if (slots && slots.indexOf(i) < 0) continue;
+                    if (isExtraTrackLoaded(i) || hasExtraTrackWaveformPeaks(i)) out.push(i);
+                }
+                return out;
+            };
+
+            const paintSlot = (slot) => {
+                const layoutW =
+                    typeof waveformTimelineViewportWidthCss === 'function'
+                        ? waveformTimelineViewportWidthCss()
+                        : rawMasterTimelineWidthCss();
+                if (layoutW < EXTRA_WAVEFORM_LAYOUT_MIN_CSS) return;
+                if (!rebuildExtraTrackPeaksIfNeeded(slot)) return;
+                drawExtraTrackWaveform(slot);
+            };
+
+            const step = () => {
+                if (gen !== extraWaveformEnsureGen) {
+                    resolve();
+                    return;
+                }
+                frame += 1;
+                if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                    refreshWaveformCompositeLaneLayout();
+                }
+                const list = targets();
+                let pending = false;
+                for (let j = 0; j < list.length; j++) {
+                    const slot = list[j];
+                    if (!extraTrackWaveformDrawReady(slot)) {
+                        pending = true;
+                        paintSlot(slot);
+                    }
+                }
+                if (pending && frame < maxFrames) {
+                    requestAnimationFrame(step);
+                    return;
+                }
+                if (pending && frame >= maxFrames) {
+                    for (let j = 0; j < list.length; j++) paintSlot(list[j]);
+                }
+                if (opt && opt.notifyMaster && typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
+                resolve();
+            };
+
+            requestAnimationFrame(step);
+        });
+    }
+
     function ensureExtraTrackWaveformsDrawn(opt) {
         const gen = ++extraWaveformEnsureGen;
         const maxFrames = opt && opt.maxFrames > 0 ? opt.maxFrames : 28;
@@ -4451,6 +4532,8 @@
     window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
     window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
+    window.areExtraTrackWaveformsRestorePending = areExtraTrackWaveformsRestorePending;
+    window.ensureExtraTrackWaveformsDrawnAsync = ensureExtraTrackWaveformsDrawnAsync;
     window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;
     window.finalizeReviewMixAfterSessionRestore = finalizeReviewMixAfterSessionRestore;
     window.prepareReviewMixForNewVideoLoad = prepareReviewMixForNewVideoLoad;

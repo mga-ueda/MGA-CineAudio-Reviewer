@@ -330,7 +330,10 @@
     document.addEventListener(
         'wheel',
         (ev) => {
-            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+            if (
+                typeof isOperationBlockingActive === 'function' &&
+                isOperationBlockingActive()
+            ) {
                 ev.preventDefault();
             }
         },
@@ -339,7 +342,10 @@
     document.addEventListener(
         'touchmove',
         (ev) => {
-            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
+            if (
+                typeof isOperationBlockingActive === 'function' &&
+                isOperationBlockingActive()
+            ) {
                 ev.preventDefault();
             }
         },
@@ -360,8 +366,12 @@
             typeof window.getNumpadSeekDigit === 'function'
                 ? window.getNumpadSeekDigit
                 : () => null;
-        if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
-            if (matches(e, shortcuts.regionEscape)) {
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
+            if (
+                typeof isWebmExportActive === 'function' &&
+                isWebmExportActive() &&
+                matches(e, shortcuts.regionEscape)
+            ) {
                 e.preventDefault();
                 if (typeof tryCancelWebmExportFromEsc === 'function') {
                     tryCancelWebmExportFromEsc();

@@ -461,7 +461,9 @@
         }
         const exportVideoBtn = document.getElementById('sessionExportVideoBtn');
         const exportLocked =
-            typeof isWebmExportActive === 'function' && isWebmExportActive();
+            (typeof isWebmExportActive === 'function' && isWebmExportActive()) ||
+            (typeof isWaveformRestoreLockActive === 'function' &&
+                isWaveformRestoreLockActive());
         if (exportVideoBtn) {
             exportVideoBtn.disabled = !hasVideo || exportLocked;
         }
@@ -1107,7 +1109,7 @@
                             : '…'),
                 );
             }
-            await importAndPersistSessionRow(row);
+            await importAndPersistSessionRow(row, { importReview: true });
             logImportReviewSuccess(manifest, file, row);
         } finally {
             if (typeof whenSessionRestoreIdle === 'function') {
