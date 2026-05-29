@@ -3985,6 +3985,10 @@
         .transport-bar__row--secondary > .session-io-btn--clear-all {
             flex-shrink: 0;
         }
+        .transport-bar__row--export > .session-io-actions {
+            flex: 0 0 auto;
+            padding-block: var(--transport-bar-chip-pad-y);
+        }
         .transport-bar .session-io-actions {
             display: inline-flex;
             align-items: center;
