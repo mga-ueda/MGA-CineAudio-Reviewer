@@ -1,5 +1,5 @@
 /**
- * 波形ピーク計算 Worker（ロード時の最細レベル生成用）。
+ * waveform-peaks-worker.js — 波形ピーク計算 Web Worker（最細レベル生成、waveform-peaks から起動）。
  */
 self.onmessage = function (ev) {
     const data = ev.data;

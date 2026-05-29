@@ -1,3 +1,6 @@
+/**
+ * player-timecode-overlay.js — プレイヤー上の焼き込みタイムコードオーバーレイ（配置・スケール・復元）。
+ */
     // 映像上タイムコードオーバーレイ（ドラッグ・サイズ変更・中心スナップ・位置復元）
     const TC_OVERLAY_KEY = 'main';
     const TC_OVERLAY_DEFAULT_TOP_PX = 10;
@@ -674,28 +677,10 @@
         };
     }
 
-    /** @deprecated use getTcOverlayBurnInDrawMetrics */
-    function getTcOverlayBurnInLayout(videoW, videoH, tcText) {
-        const m = getTcOverlayBurnInDrawMetrics(videoW, videoH, tcText, null);
-        if (!m) return null;
-        return {
-            left: m.left,
-            bottom: m.bottom,
-            fontPx: m.fontPx,
-            padX: m.padL,
-            padY: m.padT,
-            borderR: m.borderRadius,
-            boxW: m.boxW,
-            boxH: m.boxH,
-            scale: m.layoutScale,
-        };
-    }
-
     window.getTimecodeOverlayPersistSnapshot = getTimecodeOverlayPersistSnapshot;
     window.applyTimecodeOverlayPersistSnapshot = applyTimecodeOverlayPersistSnapshot;
     window.getVideoExportLayoutScale = getVideoExportLayoutScale;
     window.getTcOverlayBurnInDrawMetrics = getTcOverlayBurnInDrawMetrics;
-    window.getTcOverlayBurnInLayout = getTcOverlayBurnInLayout;
 
     function initTimecodeOverlay() {
         loadTcOverlayPosition();

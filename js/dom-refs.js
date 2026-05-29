@@ -1,5 +1,6 @@
-    window.EXTRA_TRACK_COUNT = 16;
-
+/**
+ * dom-refs.js — 主要 DOM 参照（動画・波形・ログ・トランスポート UI）。videoMain 差し替え API。
+ */
     const filePicker = document.getElementById('filePicker');
     var videoMain = document.getElementById('videoMain');
     window.setVideoMainElement = function setVideoMainElement(el) {
@@ -36,6 +37,15 @@
     const markerHideViewBtn = document.getElementById('markerHideViewBtn');
     const markerCopyBtn = document.getElementById('markerCopyBtn');
     const markerPasteBtn = document.getElementById('markerPasteBtn');
+    const markerPasteOverlay = document.getElementById('markerPasteOverlay');
+    const markerPasteTextarea = document.getElementById('markerPasteTextarea');
+    const markerPasteOk = document.getElementById('markerPasteOk');
+    const markerPasteCancel = document.getElementById('markerPasteCancel');
+    const sessionAllClearBtn = document.getElementById('sessionAllClearBtn');
+    const transportGuideLink = document.getElementById('transportGuideLink');
+    const transportShortcutsLink = document.getElementById('transportShortcutsLink');
+    const transportOptionsSection = document.getElementById('transportOptionsSection');
+    const logSection = document.getElementById('logSection');
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
     const markerMemoTextarea = document.getElementById('markerMemoTextarea');
     const videoClearBtn = document.getElementById('videoClearBtn');

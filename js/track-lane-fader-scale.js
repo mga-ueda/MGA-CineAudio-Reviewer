@@ -1,3 +1,6 @@
+/**
+ * track-lane-fader-scale.js — トラックフェーダー用 dB ↔ 線形ゲイン変換（スライダーカーブ）。
+ */
 (function trackLaneFaderScaleModule() {
     /** MGA-Layer-Music-Checker getPracticalGain と同一: スライダー正規化位置 → 線形ゲイン（0 dB 以下） */
     const FADER_GAIN_EXPONENT = 1.5;

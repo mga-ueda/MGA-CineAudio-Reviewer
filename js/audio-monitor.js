@@ -1,4 +1,7 @@
-﻿(function reviewMixAudioMonitorModule() {
+﻿/**
+ * audio-monitor.js — レビューミックスのモニター（スペクトラム・メーター床・表示 prefs）。
+ */
+(function reviewMixAudioMonitorModule() {
     const DISPLAY_ANALYSIS_FLOOR_DB = Object.freeze([-50, -60, -70, -80, -96]);
     const DEFAULT_SPECTRUM_FLOOR_DB = -50;
     const DEFAULT_METER_FLOOR_DB = -50;

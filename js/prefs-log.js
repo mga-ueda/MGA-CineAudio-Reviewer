@@ -1,5 +1,6 @@
-    const LOG_MAX_LINES = 500;
-    const LOG_MASK_DEBUG_OUTPUT = true;
+/**
+ * prefs-log.js — localStorage 設定の読み書き、ログパネル、確認ダイアログ、writeLog。
+ */
     let logLines = [];
 
     function syncLogEl() {
@@ -151,14 +152,7 @@
         return ok;
     }
 
-    function isMaskedDebugLogLine(message) {
-        if (!LOG_MASK_DEBUG_OUTPUT) return false;
-        const text = message != null ? String(message) : '';
-        return text.toLowerCase().includes('debug');
-    }
-
     function writeLog(m, opt) {
-        if (isMaskedDebugLogLine(m)) return;
         let formattedLine = null;
         if (logEl) {
             const now = new Date();

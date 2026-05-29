@@ -1,3 +1,6 @@
+/**
+ * timecode-seek.js — シークバー・タイムコード表示、loadVideoFile、セッション復元用の動画待ち。
+ */
     function syncSeekMax() {
         refreshMasterFrameSec();
         const dur =

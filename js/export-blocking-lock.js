@@ -1,3 +1,6 @@
+/**
+ * export-blocking-lock.js — レビュー WebM 書き出し中の全画面ブロックとキャンセル制御。
+ */
 (function exportBlockingLockModule() {
     /** @type {null | 'webm-export'} */
     let blockingMode = null;

@@ -1,3 +1,6 @@
+/**
+ * session-export-import.js — .mgacr セッションパッケージの Export Review / Import Review。
+ */
 (function sessionExportImportModule() {
     const MGACR_MAGIC = new Uint8Array([0x4d, 0x47, 0x41, 0x43, 0x52, 0x01]);
     const EXPORT_FORMAT = 'mgacr-session-v1';
@@ -1056,7 +1059,7 @@
                 if (restoreWasActive) {
                     writeLog('Import Review: cancelling in-progress session restore…');
                 }
-                abortPendingSessionRestore();
+                await abortPendingSessionRestore();
             }
             if (typeof clearEntireSession === 'function') {
                 writeLog('Import Review: All Clear before restore…');

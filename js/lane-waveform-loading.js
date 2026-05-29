@@ -1,3 +1,6 @@
+/**
+ * lane-waveform-loading.js — 各波形レーンの「読込中／デコード中」表示の同期。
+ */
 (function laneWaveformLoadingModule() {
     function resolveWaveformLaneEl(laneOrTrackEl) {
         if (!laneOrTrackEl) return null;

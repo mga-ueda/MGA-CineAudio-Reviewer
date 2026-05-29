@@ -1,8 +1,8 @@
 /**
- * 共有ランタイム: トラック数・オプショナル window API 呼び出し・トランスポート停止。
+ * app-runtime.js — 共有ランタイム（getExtraTrackCount・callIf・セッション変更時のトランスポート停止）。
  * dom-refs 直後に読み込み、他モジュールより先に利用可能にする。
  */
-(function () {
+(function appRuntimeModule() {
     const DEFAULT_EXTRA_TRACK_COUNT = 16;
 
     function getExtraTrackCount() {

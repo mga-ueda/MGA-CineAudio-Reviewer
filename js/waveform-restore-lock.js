@@ -1,3 +1,6 @@
+/**
+ * waveform-restore-lock.js — セッション復元後の Ex デコード待ちと波形ロック解除。
+ */
 (function waveformRestoreLockModule() {
     const POLL_MS = 120;
     /** Ex デコード待ちの上限（メイン動画波形は待たない） */

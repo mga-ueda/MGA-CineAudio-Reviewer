@@ -1,3 +1,6 @@
+/**
+ * extra-audio-tracks.js — Ex 音声トラック（読込・デコード・ミックス・Web Audio 再生・波形・永続化スナップショット）。
+ */
     const EXTRA_TRACK_COUNT = getExtraTrackCount();
     const VIDEO_AUDIO_SLOT_LABEL = 'Video Audio';
     /**
@@ -1064,14 +1067,13 @@
         btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
 
-    function clampTrackLaneGainLinear(v) {
+    function laneGainLinear(v) {
         if (typeof trackLaneClampGainLinear === 'function') {
             return trackLaneClampGainLinear(v);
         }
         const n = Number(v);
         if (!isFinite(n) || n < 0) return 1;
-        if (n === 0) return 0;
-        return n;
+        return n === 0 ? 0 : n;
     }
 
     function ensureVideoTrackAnalyser(ctx) {
@@ -1098,7 +1100,7 @@
         if (videoExportAudioInclude && !videoExportAudioInclude.includeVideo) return 0;
         if (!isVideoAudioAudible()) return 0;
         if (!isVideoMixOutputActive()) return 0;
-        return clampTrackLaneGainLinear(videoMix.volLinear);
+        return laneGainLinear(videoMix.volLinear);
     }
 
     function getExtraTrackEffectiveGain(slot) {
@@ -1112,7 +1114,7 @@
         if (!isExtraTrackAudible(slot)) return 0;
         const tr = extraTrackBySlot(slot);
         if (!tr) return 0;
-        return clampTrackLaneGainLinear(tr.volLinear);
+        return laneGainLinear(tr.volLinear);
     }
 
     function applyExtraTrackLaneGain(slot) {
@@ -1140,7 +1142,7 @@
     }
 
     function setVideoTrackVolLinear(v) {
-        videoMix.volLinear = clampTrackLaneGainLinear(v);
+        videoMix.volLinear = laneGainLinear(v);
         applyReviewMixVideoGain();
     }
 
@@ -1152,7 +1154,7 @@
     function setExtraTrackVolLinear(slot, v) {
         const tr = extraTrackBySlot(slot);
         if (!tr) return;
-        tr.volLinear = clampTrackLaneGainLinear(v);
+        tr.volLinear = laneGainLinear(v);
         applyExtraTrackLaneGain(slot);
     }
 
@@ -1249,7 +1251,7 @@
 
     function videoMixNeedsWebAudioBoost() {
         if (!isVideoAudioAudible()) return false;
-        return clampTrackLaneGainLinear(videoMix.volLinear) > 1.0001;
+        return laneGainLinear(videoMix.volLinear) > 1.0001;
     }
 
     /** ROUTE_VIDEO_AUDIO_VIA_WEB_AUDIO 時のみ MediaElementSource 経由。 */
@@ -1301,7 +1303,7 @@
         }
         const g =
             isVideoMixOutputActive() && isVideoAudioAudible()
-                ? clampTrackLaneGainLinear(videoMix.volLinear)
+                ? laneGainLinear(videoMix.volLinear)
                 : 0;
         if (g > 0) {
             videoMain.muted = false;
@@ -1759,7 +1761,7 @@
         videoMix.muted = !!sessionMixRestore.video.muted;
         videoMix.solo = !!sessionMixRestore.video.solo;
         if (typeof sessionMixRestore.video.vol === 'number' && isFinite(sessionMixRestore.video.vol)) {
-            videoMix.volLinear = clampTrackLaneGainLinear(sessionMixRestore.video.vol);
+            videoMix.volLinear = laneGainLinear(sessionMixRestore.video.vol);
         }
         refreshReviewMixUi();
         syncExtraAudioToTransport();
@@ -1814,7 +1816,7 @@
         tr.muted = !!entry.muted;
         tr.solo = !!entry.solo;
         if (typeof entry.vol === 'number' && isFinite(entry.vol)) {
-            tr.volLinear = clampTrackLaneGainLinear(entry.vol);
+            tr.volLinear = laneGainLinear(entry.vol);
         }
         refreshExtraTrackUi(slot);
         refreshReviewMixUi();
@@ -4523,11 +4525,9 @@
     window.clearExtraTrackVolumeUnityHold = clearExtraTrackVolumeUnityHold;
     window.isExtraTrackLoaded = isExtraTrackLoaded;
     window.isPastAllLoadedTrackPlaybackEnds = isPastAllLoadedTrackPlaybackEnds;
-    window.hasAnyExtraTrackTimelineContent = hasAnyExtraTrackTimelineContent;
     window.extraTrackSlotHasContent = extraTrackSlotHasContent;
     window.isExtraTrackLaneShown = isExtraTrackLaneShown;
     window.EXTRA_TRACK_COUNT = EXTRA_TRACK_COUNT;
-    window.loadExtraTrackFile = loadExtraTrackFile;
     window.redrawAllExtraTrackWaveforms = redrawAllExtraTrackWaveforms;
     window.syncExtraTrackLaneMixVisual = syncExtraTrackLaneMixVisual;
     window.scheduleExtraTrackWaveformRedraw = scheduleExtraTrackWaveformRedraw;
@@ -5214,6 +5214,8 @@
         }
     }
 
+    window.loadExtraTrackFile = loadExtraTrackFile;
+
     function firstEmptyExtraSlot() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             if (!isExtraTrackLoaded(i)) return i;
@@ -5320,6 +5322,8 @@
         }
         return false;
     }
+
+    window.hasAnyExtraTrackTimelineContent = hasAnyExtraTrackTimelineContent;
 
     /** 波形エリア全体へのドロップ（Ex レーン指定なし）— 複数ファイルはトラックごとに割当 */
     function isBulkOneFilePerTrackDropTarget(target) {

@@ -1,3 +1,6 @@
+/**
+ * indexeddb.js — IndexedDB セッション保存・起動復元・Ex 逐次マージ・Import 直列化キュー。
+ */
     // IndexedDB による動画セッション保存
     function openIdb() {
         return new Promise((resolve, reject) => {
@@ -75,15 +78,6 @@
                     r.onerror = () => reject(r.error || new Error('IDB get'));
                 })
         );
-    }
-
-    function deepCloneForPersist(value) {
-        if (!value || typeof value !== 'object') return value;
-        try {
-            return JSON.parse(JSON.stringify(value));
-        } catch (_) {
-            return value;
-        }
     }
 
     function regionSegmentsCountFromEntry(entry) {
@@ -275,9 +269,9 @@
         return slots
             .map((slot) => {
                 const c = counts[slot];
-                return 'Ex' + (slot + 1) + '(entry ' + c.entry + ', playback ' + c.playback + ')';
+                return 'Ex' + (slot + 1) + ' ' + c.entry + '/' + c.playback;
             })
-            .join(', ');
+            .join(' ');
     }
 
     function getPinnedRegionBySlot(row, slot) {
@@ -377,19 +371,20 @@
     }
 
     /** 進行中の起動復元・teardown を打ち切り、Import / All Clear を先に進める */
-    function abortPendingSessionRestore() {
+    async function abortPendingSessionRestore() {
+        const pending = sessionRestoreQueue;
         sessionRestoreWorkToken += 1;
         sessionRestoreListenersArmed = false;
         sessionRestoreInProgress = false;
         sessionRestoreTeardownPending = false;
         sessionRestoreActiveWorkToken = null;
-        sessionRestoreQueue = Promise.resolve();
         if (typeof cancelExtraTrackWaveformEnsure === 'function') {
             cancelExtraTrackWaveformEnsure();
         }
         if (typeof clearStaleExtraTrackDecodingStatus === 'function') {
             clearStaleExtraTrackDecodingStatus();
         }
+        await pending.catch(() => {});
     }
 
     function runSerializedSessionRestore(task) {
@@ -472,7 +467,7 @@
             row = deepCloneForPersist(lastSessionRowSnapshot);
         }
         writeLog(
-            'Session debug: pre-merge row regions = ' + formatRegionCountsForLog(row),
+            'Session: pre-merge rgn ' + formatRegionCountsForLog(row),
         );
         if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         if (!row || typeof row !== 'object') {
@@ -579,9 +574,9 @@
             updateRegionPersistFloorFromRow(row);
             updatePinnedRegionBySlot(row, slot, entry, getPlaybackRegionExtraBySlot(row, slot));
             writeLog(
-                'Session debug: post-merge row regions = ' + formatRegionCountsForLog(row),
+                'Session: post-merge rgn ' + formatRegionCountsForLog(row),
             );
-            writeLog('Session debug: saved stamp = ' + nextStamp);
+            writeLog('Session: saved stamp = ' + nextStamp);
             if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
             writeLog(
                 'Session: extra audio ' +
@@ -606,9 +601,9 @@
         updateRegionPersistFloorFromRow(row);
         updatePinnedRegionBySlot(row, slot, entry, getPlaybackRegionExtraBySlot(row, slot));
         writeLog(
-            'Session debug: post-merge row regions = ' + formatRegionCountsForLog(row),
+            'Session: post-merge rgn ' + formatRegionCountsForLog(row),
         );
-        writeLog('Session debug: saved stamp = ' + nextStamp);
+        writeLog('Session: saved stamp = ' + nextStamp);
         if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         writeLog(
             'Session: extra audio ' +
@@ -803,7 +798,7 @@
         const row = await buildSessionPersistRow();
         const nextStamp = sessionSaveStampSeq + 1;
         row.__saveStamp = nextStamp;
-        writeLog('Session debug: periodic row regions = ' + formatRegionCountsForLog(row));
+        writeLog('Session: persist row ' + formatRegionCountsForLog(row));
         let prevRow = null;
         try {
             prevRow = await idbGet(IDB_KEY_LAST);
@@ -813,7 +808,7 @@
         if ((!prevRow || typeof prevRow !== 'object') && lastSessionRowSnapshot) {
             prevRow = deepCloneForPersist(lastSessionRowSnapshot);
         }
-        writeLog('Session debug: periodic prev regions = ' + formatRegionCountsForLog(prevRow));
+        writeLog('Session: persist prev ' + formatRegionCountsForLog(prevRow));
         keepPreviousRegionsWhenNoNewRegionEdit(row, prevRow);
         protectRegionShrinkOnPersist(row, prevRow);
         enforceRegionPersistFloor(row);
@@ -860,8 +855,8 @@
                         : regionPersistEpochSavedBySlot[slot] || 0;
             }
         }
-        writeLog('Session debug: periodic saved regions = ' + formatRegionCountsForLog(row));
-        writeLog('Session debug: periodic saved stamp = ' + nextStamp);
+        writeLog('Session: persist saved ' + formatRegionCountsForLog(row));
+        writeLog('Session: periodic saved stamp = ' + nextStamp);
     }
 
     function prepareLaneUiRestoreFromRow(row) {
@@ -889,9 +884,13 @@
     }
 
     async function restoreExtraTracksFromRow(row) {
-        const restoreWorkToken = currentSessionRestoreWorkToken;
+        const restoreWorkToken =
+            currentSessionRestoreWorkToken != null
+                ? currentSessionRestoreWorkToken
+                : sessionRestoreActiveWorkToken;
         const restoreAborted = () =>
-            restoreWorkToken == null || isSessionRestoreWorkCancelled(restoreWorkToken);
+            restoreWorkToken != null && isSessionRestoreWorkCancelled(restoreWorkToken);
+        let loadApiMissingLogged = false;
         if (!Array.isArray(row.extraTracks) || row.extraTracks.length < 1) {
             if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
                 await finalizeReviewMixAfterSessionRestore();
@@ -909,7 +908,16 @@
         for (const entry of row.extraTracks) {
             if (restoreAborted()) return;
             const maxExtraRestore = getExtraTrackCount();
-            if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) continue;
+            if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) {
+                writeLog(
+                    'Extra audio restore: skipped invalid entry (slot=' +
+                        (entry && entry.slot != null ? entry.slot : '—') +
+                        ', max=' +
+                        maxExtraRestore +
+                        ')',
+                );
+                continue;
+            }
             const blobBytes =
                 typeof entry.byteLength === 'number'
                     ? entry.byteLength
@@ -926,7 +934,20 @@
                 );
                 continue;
             }
-            if (typeof loadExtraTrackFile !== 'function') continue;
+            const loadExtraTrackFileFn = window.loadExtraTrackFile;
+            const isExtraTrackLoadedFn = window.isExtraTrackLoaded;
+            const applyExtraTrackPeaksPreviewFn = window.applyExtraTrackPeaksPreview;
+            const buildExtraTrackPeaksPreviewFromWavBlobFn =
+                window.buildExtraTrackPeaksPreviewFromWavBlob;
+            if (typeof loadExtraTrackFileFn !== 'function') {
+                if (!loadApiMissingLogged) {
+                    loadApiMissingLogged = true;
+                    writeLog(
+                        'Extra audio restore: loadExtraTrackFile unavailable — check that extra-audio-tracks.js loaded',
+                    );
+                }
+                continue;
+            }
             const prEntry = playbackRegionEntryForSlot(row, entry.slot);
             const restoreRegionSegments =
                 prEntry && Array.isArray(prEntry.segments)
@@ -945,11 +966,11 @@
                     ? prEntry.regionLeadPadSec
                     : entry.regionLeadPadSec;
             let previewOk = false;
-            if (typeof applyExtraTrackPeaksPreview === 'function') {
-                previewOk = applyExtraTrackPeaksPreview(entry.slot, entry);
+            if (typeof applyExtraTrackPeaksPreviewFn === 'function') {
+                previewOk = applyExtraTrackPeaksPreviewFn(entry.slot, entry);
             }
-            if (!previewOk && typeof buildExtraTrackPeaksPreviewFromWavBlob === 'function') {
-                previewOk = await buildExtraTrackPeaksPreviewFromWavBlob(entry.slot, entry);
+            if (!previewOk && typeof buildExtraTrackPeaksPreviewFromWavBlobFn === 'function') {
+                previewOk = await buildExtraTrackPeaksPreviewFromWavBlobFn(entry.slot, entry);
             }
             if (restoreAborted()) return;
             const af = new File([entry.blob], entry.name || 'audio.wav', {
@@ -970,7 +991,7 @@
                 writeLog('Extra audio ' + (entry.slot + 1) + ': restore decode start');
                 const hasMultipleClips =
                     Array.isArray(entry.clips) && entry.clips.length > 1;
-                await loadExtraTrackFile(entry.slot, af, {
+                await loadExtraTrackFileFn(entry.slot, af, {
                     fromSessionRestore: true,
                     deferRegionFinalize: hasMultipleClips,
                     timelineStartSec: entry.timelineStartSec,
@@ -1007,7 +1028,7 @@
                             },
                         );
                         try {
-                            await loadExtraTrackFile(entry.slot, clipAf, {
+                            await loadExtraTrackFileFn(entry.slot, clipAf, {
                                 addClip: true,
                                 fromSessionRestore: true,
                                 preservedClipId: clipEntry.id,
@@ -1038,7 +1059,10 @@
                         }
                     }
                 }
-                if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(entry.slot)) {
+                if (
+                    typeof isExtraTrackLoadedFn === 'function' &&
+                    isExtraTrackLoadedFn(entry.slot)
+                ) {
                     restoredCount += 1;
                 } else {
                     writeLog(
@@ -1057,9 +1081,11 @@
             }
         }
         if (restoredCount === 0) {
-            writeLog(
-                'Extra audio restore: no tracks loaded — load Ex audio again, then check for "Session: extra audio N saved" in log before reload',
-            );
+            if (!restoreAborted()) {
+                writeLog(
+                    'Extra audio restore: no tracks loaded — load Ex audio again, then check for "Session: extra audio N saved" in log before reload',
+                );
+            }
         } else {
             writeLog('Extra audio restore: ' + restoredCount + ' track(s) decoded');
         }
@@ -1300,13 +1326,13 @@
                     ? ' (transport restore pending)'
                     : ' (transport at head)'),
         );
+        await restoreExtraTracksFromRow(row);
         if (typeof waitForVideoReadyForSessionRestore === 'function') {
             const metaOk = await waitForVideoReadyForSessionRestore();
             if (!metaOk) {
-                writeLog('Session restore: video metadata not ready (extra tracks deferred)');
+                writeLog('Session restore: video metadata not ready');
             }
         }
-        await restoreExtraTracksFromRow(row);
         await finishSessionRestoreFromRow(row, {
             restoreTransportSec: restoreTransportSec,
         });
@@ -1351,9 +1377,9 @@
             }
             cacheLastSessionRow(row);
             updateRegionPersistFloorFromRow(row);
-            writeLog('Session debug: restore row regions = ' + formatRegionCountsForLog(row));
+            writeLog('Session: restore rgn ' + formatRegionCountsForLog(row));
             writeLog(
-                'Session debug: restore row stamp = ' +
+                'Session: restore row stamp = ' +
                     (Number.isFinite(row && row.__saveStamp) ? row.__saveStamp : 'none'),
             );
             if (!sessionRowHasRestorableContent(row)) {

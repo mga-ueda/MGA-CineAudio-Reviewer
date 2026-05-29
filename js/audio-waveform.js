@@ -1,3 +1,6 @@
+/**
+ * audio-waveform.js — Video Audio レーンの波形（デコード・描画・ズーム・ドラッグ・LKFS 連携）。
+ */
     let waveformPeaks = null;
     /** 可視範囲のみの高解像度ピーク（拡大停止時） */
     let waveformViewportPeaks = null;
@@ -256,11 +259,6 @@
         if (!refreshingVideoAudioLaneVisibility) {
             refreshVideoAudioLaneVisibility();
         }
-    }
-
-    /** @deprecated 互換: 枠を開いて visibility を更新 */
-    function showVideoAudioLane() {
-        restoreVideoAudioLaneForNewVideo();
     }
 
     /** × で Video Audio レーンのみ非表示（動画ファイルはそのまま） */
@@ -535,7 +533,6 @@
         return styleW >= VIDEO_WAVEFORM_LAYOUT_MIN_CSS;
     }
 
-    window.showVideoAudioLane = showVideoAudioLane;
     window.restoreVideoAudioLaneForNewVideo = restoreVideoAudioLaneForNewVideo;
     window.isVideoAudioLaneShown = isVideoAudioLaneShown;
     window.dismissVideoAudioLane = dismissVideoAudioLane;
@@ -1848,11 +1845,6 @@
         if (!opt || !opt.skipScheduleBuild) {
             scheduleBackgroundWaveformBuild(WAVEFORM_BG_BUILD_DELAY_MS);
         }
-    }
-
-    /** @deprecated 互換用 */
-    function scheduleAudioWaveformBuild() {
-        resetAudioWaveformForNewVideo();
     }
 
     function scheduleAudioWaveformBuildAfterPlayback() {

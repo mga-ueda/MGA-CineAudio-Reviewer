@@ -1,3 +1,6 @@
+/**
+ * boot-prefs.js — 起動時の prefs 初期化（initPrefsFromStorage、transport-prefs へ委譲）。
+ */
     function initPrefsFromStorage() {
         try {
             if (typeof applyTransportPrefsFromStorage === 'function') {

@@ -1,5 +1,5 @@
 /**
- * ITU-R BS.1770 系のインテグレーテッドラウドネス（LKFS / LUFS）を AudioBuffer から計測する。
+ * loudness-lkfs.js — ITU-R BS.1770 系 LKFS/LUFS 計測（AudioBuffer からインテグレーテッドラウドネス）。
  */
 (function loudnessLkfsModule() {
     const TARGET_RATE = 48000;

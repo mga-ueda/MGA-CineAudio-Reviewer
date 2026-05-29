@@ -1,3 +1,6 @@
+/**
+ * musical-grid.js — 拍子グリッド（表示・拍/小節設定・フレーズ塗り）と prefs 永続化。
+ */
 (function musicalGridModule() {
     const musicalGridMeterInput = document.getElementById('musicalGridMeterInput');
     const musicalGridPhraseInput = document.getElementById('musicalGridPhraseInput');
@@ -1308,18 +1311,7 @@
         if (typeof snapToNearestStop === 'function') {
             return Math.max(0, snapToNearestStop(n, stops, threshold, opt));
         }
-        let best = n;
-        let bestDist = threshold + 1;
-        for (let i = 0; i < stops.length; i++) {
-            const s = stops[i];
-            if (!Number.isFinite(s)) continue;
-            const d = Math.abs(s - n);
-            if (d <= threshold && d < bestDist) {
-                bestDist = d;
-                best = s;
-            }
-        }
-        return Math.max(0, best);
+        return Math.max(0, n);
     }
 
     function snapBoundaryBarIndexForTransportSec(

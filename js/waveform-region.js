@@ -1,3 +1,6 @@
+/**
+ * waveform-region.js — 再生リージョン／セグメント編集、波形上の IN/OUT・結合・クロスフェード。
+ */
 (function waveformRegionModule() {
     const PLAYBACK_REGION_MIN_SEC = 0.05;
     const SEGMENT_BOUNDARY_JOIN_EPS_SEC = 0.002;
@@ -5867,6 +5870,7 @@
     window.snapRegionTransportSec = snapRegionTransportSec;
     window.snapSecToPlaybackRegionInOut = snapSecToPlaybackRegionInOut;
     window.snapTransportSecForWaveformSeek = snapTransportSecForWaveformSeek;
+    window.snapToNearestStop = snapToNearestStop;
     window.collectRegionSnapStops = collectRegionSnapStops;
     window.regionSnapThresholdSec = regionSnapThresholdSec;
 

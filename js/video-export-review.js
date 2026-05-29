@@ -1,3 +1,6 @@
+/**
+ * video-export-review.js — レビュー用 WebM 書き出し（MediaRecorder・ミックスタップ・進捗 UI）。
+ */
 (function videoExportReviewModule() {
     const EXPORT_FPS = 30;
     const VIDEO_BITRATE = 8_000_000;

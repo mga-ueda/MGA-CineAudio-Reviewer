@@ -1,3 +1,6 @@
+/**
+ * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
+ */
     const APP_VERSION = '0.01';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 

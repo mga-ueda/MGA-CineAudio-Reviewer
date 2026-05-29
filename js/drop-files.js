@@ -1,3 +1,6 @@
+/**
+ * drop-files.js — ドラッグ＆ドロップ（動画エリア・波形・Ex レーン）とファイル割当。
+ */
     function assignVideoFiles(files) {
         const list = files ? Array.from(files) : [];
         const videos = pickVideoFiles(list);

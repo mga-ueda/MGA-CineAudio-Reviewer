@@ -1,3 +1,6 @@
+/**
+ * transport-timeline.js — マスタートランスポート（再生・一時停止・尺・シーク・動画同期・焼き込み TC）。
+ */
     /*
      * トランスポート（transportPlaybackSec / シークバー）= 音声の再生位置（マスタークロック）。
      * 映像はトランスポート位置と同期。焼き込み TC は video.currentTime のみ。
@@ -1029,11 +1032,6 @@
         ctx.lineTo(xi, hCss);
         ctx.stroke();
         ctx.restore();
-    }
-
-    /** @deprecated 赤線は廃止。互換のため空オブジェクトのみ返す。 */
-    function timelineContentEndDrawOpt() {
-        return {};
     }
 
     /** レーン全面の下地（濃いグレー・単色） */

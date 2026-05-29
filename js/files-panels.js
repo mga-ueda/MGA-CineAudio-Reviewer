@@ -1,3 +1,6 @@
+/**
+ * files-panels.js — 動画ファイル読込・パネル表示、MIME 判定、動画のみ revoke、All Clear 連携。
+ */
     const VIDEO_FILE_EXT = new Set([
         '.mp4', '.m4v', '.webm', '.ogv', '.mov', '.qt', '.avi', '.mkv', '.wmv', '.flv',
         '.ts', '.mts', '.m2ts', '.mpg', '.mpeg', '.m1v', '.m2v', '.3gp', '.3g2', '.asf', '.f4v',
@@ -225,8 +228,6 @@
         if (typeof resetVideoMix === 'function') resetVideoMix();
         if (typeof dismissVideoAudioLane === 'function') {
             dismissVideoAudioLane();
-        } else if (typeof showVideoAudioLane === 'function') {
-            showVideoAudioLane();
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
@@ -290,7 +291,7 @@
             (typeof isSessionRestoreTeardownPending === 'function' &&
                 isSessionRestoreTeardownPending());
         if (restoreActive && typeof abortPendingSessionRestore === 'function') {
-            abortPendingSessionRestore();
+            await abortPendingSessionRestore();
         }
     }
 

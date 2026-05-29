@@ -1,3 +1,6 @@
+/**
+ * track-lane-controls.js — トラックレーン UI（メーター・Solo/Mute・フェーダー連携・表示更新）。
+ */
 (function trackLaneControlsModule() {
     const TRACK_LANE_METER_BUF = new Uint8Array(128);
 
@@ -41,7 +44,12 @@
 
     function formatLaneMeterDbFromPct(pct) {
         const p = Math.max(0, Math.min(100, pct)) / 100;
-        const db = p <= 1e-8 ? -96 : 20 * Math.log10(p);
+        const db =
+            p <= 1e-8
+                ? typeof trackLaneLinearGainToDb === 'function'
+                    ? trackLaneLinearGainToDb(0)
+                    : -96
+                : 20 * Math.log10(p);
         if (typeof trackLaneFormatDbValue === 'function') {
             return trackLaneFormatDbValue(db) + ' dB';
         }
@@ -68,11 +76,19 @@
         syncFaderDbLabel(el);
     }
 
+    function findFaderDbEl(faderEl) {
+        if (!faderEl) return null;
+        if (laneUi.video.fader === faderEl) return laneUi.video.faderDb;
+        ensureExtraLaneUiRefs();
+        for (let slot = 0; slot < laneUi.extra.length; slot++) {
+            if (laneUi.extra[slot].fader === faderEl) return laneUi.extra[slot].faderDb;
+        }
+        return null;
+    }
+
     function syncFaderDbLabel(faderEl) {
         if (!faderEl) return;
-        const dbEl = document.getElementById(
-            faderEl.id.replace('trackLaneFader', 'trackLaneFaderDb'),
-        );
+        const dbEl = findFaderDbEl(faderEl);
         if (dbEl) {
             dbEl.textContent = formatFaderDbLabel(readFaderLinear(faderEl));
         }

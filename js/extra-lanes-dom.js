@@ -1,5 +1,5 @@
 /**
- * Ex 音声レーンのサイドバー・波形を EXTRA_TRACK_COUNT 分生成する。
+ * extra-lanes-dom.js — Ex 音声レーンの DOM（メタ・キャンバス）をスロット数分生成。
  * dom-refs / app-runtime 直後、他スクリプトより先に同期実行する。
  */
 (function buildExtraLanesDom() {

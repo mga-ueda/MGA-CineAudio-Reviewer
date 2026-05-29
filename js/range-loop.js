@@ -1,3 +1,6 @@
+/**
+ * range-loop.js — レンジループ区間（IN/OUT）の UI・ドラッグ・再生時のループ制御。
+ */
     let loopRangeActive = false;
     let loopRangeInSec = 0;
     let loopRangeOutSec = 0;
@@ -309,15 +312,6 @@
             audioT >= loopRangeInSec - 0.001 &&
             audioT < loopRangeOutSec
         );
-    }
-
-    /** @deprecated 互換。範囲は音声マスター秒で保持する。 */
-    function rangeLoopVideoTimeInSpan(vt) {
-        const audioT =
-            typeof audioSecFromVideoSec === 'function'
-                ? audioSecFromVideoSec(vt)
-                : vt;
-        return rangeLoopAudioTimeInSpan(audioT);
     }
 
     /**

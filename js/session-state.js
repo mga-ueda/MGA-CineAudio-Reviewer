@@ -1,3 +1,6 @@
+/**
+ * session-state.js — 共有セッション状態（動画 blob URL・シーク・トランスポート時計・復元待ち位置）。
+ */
     let urlMain = null;
     let fileMain = null;
     let isSeeking = false;
@@ -9,14 +12,6 @@
     let transportPlayInFlight = null;
     let transportPlayGeneration = 0;
 
-    const LS_PREFS_KEY = 'cineaudio_reviewer_prefs_v1';
-    /** @deprecated monitorPrefs は LS_PREFS_KEY に統合。読み取り時に一度だけマイグレーション */
-    const LS_MONITOR_PREFS_LEGACY_KEY = 'mga_cineaudio_reviewer_monitor_prefs_v1';
-    const IDB_NAME = 'cineaudio_reviewer_session_v1';
-    const IDB_STORE = 'kv';
-    const IDB_KEY_LAST = 'lastSession';
-    const IDB_VER = 1;
-
     let pendingRestoreTime = null;
     /** 直近の再生開始位置（Alt+Enter でここから再生し直す）。未再生時は null。 */
     let transportPlaybackStartSec = null;
@@ -26,7 +21,6 @@
     let sessionRestoreListenersArmed = false;
     let sessionRestoreInProgress = false;
 
-    const DISPLAY_FPS = 60;
     let masterFrameSec = 1 / DISPLAY_FPS;
 
     const containerFps = { main: null };

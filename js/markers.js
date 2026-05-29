@@ -1,3 +1,6 @@
+/**
+ * markers.js — マーカー（点・範囲）・セッションメモ・一覧 UI・シークバー表示・Import/Export 連携。
+ */
     // マーカー（点・範囲）とコメント、表一覧・シークバー表示
     const markersByVideoKey = new Map();
     const markerMemoByVideoKey = new Map();
@@ -1226,9 +1229,8 @@
             );
         }
         syncMarkerMemoTextarea();
-        const pasteBtn = document.getElementById('markerPasteBtn');
-        if (pasteBtn) {
-            pasteBtn.disabled = !timelineReady;
+        if (markerPasteBtn) {
+            markerPasteBtn.disabled = !timelineReady;
         }
         updateMarkerHideViewButton();
     }
@@ -1731,10 +1733,10 @@
 
     function readMarkersPasteTextFromOverlay() {
         return new Promise((resolve) => {
-            const root = document.getElementById('markerPasteOverlay');
-            const textarea = document.getElementById('markerPasteTextarea');
-            const okBtn = document.getElementById('markerPasteOk');
-            const cancelBtn = document.getElementById('markerPasteCancel');
+            const root = markerPasteOverlay;
+            const textarea = markerPasteTextarea;
+            const okBtn = markerPasteOk;
+            const cancelBtn = markerPasteCancel;
             if (!root || !textarea || !okBtn || !cancelBtn) {
                 resolve(null);
                 return;
@@ -5049,10 +5051,9 @@
                 copyMarkersToClipboard();
             });
         }
-        const markerPasteBtnEl = document.getElementById('markerPasteBtn');
-        if (markerPasteBtnEl) {
-            markerPasteBtnEl.addEventListener('click', () => {
-                if (markerPasteBtnEl.disabled) {
+        if (markerPasteBtn) {
+            markerPasteBtn.addEventListener('click', () => {
+                if (markerPasteBtn.disabled) {
                     showMarkersPasteFormatError(
                         '動画または追加音声を読み込んでから貼り付けてください。',
                     );

@@ -1,3 +1,6 @@
+/**
+ * ui-helpers.js — UI 補助（トランスポートオプションの glow、レーンステータス文言、シークヒント）。
+ */
     const transportOptGlowClearTimers = { playback: 0, centerLock: 0, analyze: 0 };
     let videoPanelDriftGlowTimer = 0;
 
@@ -43,17 +46,16 @@
     };
 
     function flashVideoPanelDrift() {
-        const panel = document.getElementById('panelMain');
-        if (!panel) return;
-        panel.classList.remove('video-panel--drift-glow');
+        if (!panelMain) return;
+        panelMain.classList.remove('video-panel--drift-glow');
         if (videoPanelDriftGlowTimer) {
             clearTimeout(videoPanelDriftGlowTimer);
             videoPanelDriftGlowTimer = 0;
         }
-        void panel.offsetWidth;
-        panel.classList.add('video-panel--drift-glow');
+        void panelMain.offsetWidth;
+        panelMain.classList.add('video-panel--drift-glow');
         videoPanelDriftGlowTimer = setTimeout(() => {
-            panel.classList.remove('video-panel--drift-glow');
+            panelMain.classList.remove('video-panel--drift-glow');
             videoPanelDriftGlowTimer = 0;
         }, 900);
     }
@@ -68,10 +70,9 @@
     function scrollToPlayerStageOnPlaybackStart() {
         if (!playbackScrollPlayerStageRequested) return;
         playbackScrollPlayerStageRequested = false;
-        const stage = document.getElementById('playerStage');
-        if (!stage) return;
+        if (!playerStage) return;
         requestAnimationFrame(() => {
-            stage.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+            playerStage.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
         });
     }
 

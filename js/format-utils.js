@@ -1,3 +1,6 @@
+/**
+ * format-utils.js — 表示用フォーマット（拡張子・バイトサイズ・タイムコードログ用 TC）。
+ */
 (function formatUtilsModule() {
     function fileExtLower(name) {
         const s = String(name || '').toLowerCase();

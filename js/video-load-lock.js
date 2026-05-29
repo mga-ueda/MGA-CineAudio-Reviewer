@@ -1,3 +1,6 @@
+/**
+ * video-load-lock.js — 動画読込中のローディングロック表示と完了待ち。
+ */
 (function videoLoadLockModule() {
     const LOCK_MIN_VISIBLE_MS = 350;
     /** 波形デコードは待たない。メタデータ／再生準備のフォールバック用。 */
