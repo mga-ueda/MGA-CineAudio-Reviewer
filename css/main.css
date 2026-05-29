@@ -3209,7 +3209,7 @@
             font-size: 1em;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
-            min-width: 15ch;
+            min-width: 18ch;
             text-align: left;
         }
         .transport-bar .monitor-floor-options {
@@ -3258,7 +3258,7 @@
             -webkit-text-fill-color: var(--accent-ink);
             font-family: var(--font-mono);
             font-size: 1em;
-            font-weight: 700;
+            font-weight: 400;
             line-height: calc(var(--transport-frame-inner-h) - 2px);
             box-sizing: border-box;
         }

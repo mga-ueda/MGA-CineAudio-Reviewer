@@ -369,10 +369,10 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
-            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume（ダブルクリックまたは Ctrl+Shift+V で 100%）">
+            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
                 <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="ダブルクリックまたは Ctrl+Shift+V で 100%">
-                <span class="transport-opt-value" id="masterVolDisp">100% (0.0 dB)</span>
+                <span class="transport-opt-value" id="masterVolDisp" aria-live="polite">0.0 dB / ----- LKFS</span>
             </div>
             <div class="monitor-floor-options transport-opt-chip" role="group" aria-label="Analysis display lower limit">
                 <label class="transport-opt-label" for="spectrumFloorDbSelect">Spectrum floor</label>

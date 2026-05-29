@@ -115,6 +115,11 @@
             blockLoudness.push(blockLoudnessFromPower(weightedPower));
         }
         if (!blockLoudness.length) return null;
+        return integratedLkfsFromBlockLoudness(blockLoudness);
+    }
+
+    function integratedLkfsFromBlockLoudness(blockLoudness) {
+        if (!blockLoudness || !blockLoudness.length) return null;
 
         let linSum = 0;
         for (let i = 0; i < blockLoudness.length; i++) {
@@ -156,6 +161,139 @@
     function formatLkfsDisplay(lkfs) {
         if (!Number.isFinite(lkfs)) return '';
         return lkfs.toFixed(1) + ' LKFS';
+    }
+
+    function formatSessionLkfsDisplay(lkfs) {
+        if (!Number.isFinite(lkfs)) return '----- LKFS';
+        return lkfs.toFixed(1) + ' LKFS';
+    }
+
+    function biquadStep(x, b, a, state) {
+        const b0 = b[0];
+        const b1 = b[1];
+        const b2 = b[2];
+        const a1 = a[1];
+        const a2 = a[2];
+        const y = b0 * x + state.z1;
+        state.z1 = b1 * x - a1 * y + state.z2;
+        state.z2 = b2 * x - a2 * y;
+        return y;
+    }
+
+    function kWeightSample(x, filt) {
+        let y = biquadStep(x, K_SHELF_B, K_SHELF_A, filt.shelf);
+        y = biquadStep(y, K_HP_B, K_HP_A, filt.hp);
+        return y;
+    }
+
+    /** 再生開始からの ITU-R BS.1770 インテグレーテッド LKFS 計測（400 ms / 100 ms hop、48 kHz 基準）。 */
+    function createSessionIntegratedLkfsMeter(sourceSampleRate) {
+        let srcSr = sourceSampleRate > 0 ? sourceSampleRate | 0 : TARGET_RATE;
+        const sr = TARGET_RATE;
+        let blockSamples = Math.max(1, Math.round(BLOCK_SEC * sr));
+        let hopSamples = Math.max(1, Math.round(HOP_SEC * sr));
+        let ringL = new Float32Array(blockSamples);
+        let ringR = new Float32Array(blockSamples);
+        let writeIdx = 0;
+        let totalKwSamples = 0;
+        const blockLoudness = [];
+        const filtL = {
+            shelf: { z1: 0, z2: 0 },
+            hp: { z1: 0, z2: 0 },
+        };
+        const filtR = {
+            shelf: { z1: 0, z2: 0 },
+            hp: { z1: 0, z2: 0 },
+        };
+
+        function clearMeterState() {
+            writeIdx = 0;
+            totalKwSamples = 0;
+            blockLoudness.length = 0;
+            ringL.fill(0);
+            ringR.fill(0);
+            filtL.shelf.z1 = filtL.shelf.z2 = filtL.hp.z1 = filtL.hp.z2 = 0;
+            filtR.shelf.z1 = filtR.shelf.z2 = filtR.hp.z1 = filtR.hp.z2 = 0;
+        }
+
+        function computeBlockLoudnessFromRing() {
+            let sumL = 0;
+            let sumR = 0;
+            for (let i = 0; i < blockSamples; i++) {
+                const idx = (writeIdx + i) % blockSamples;
+                const l = ringL[idx];
+                const r = ringR[idx];
+                sumL += l * l;
+                sumR += r * r;
+            }
+            return blockLoudnessFromPower((sumL + sumR) / blockSamples);
+        }
+
+        function pushSample(rawL, rawR) {
+            const l = kWeightSample(rawL, filtL);
+            const r = kWeightSample(rawR, filtR);
+            ringL[writeIdx] = l;
+            ringR[writeIdx] = r;
+            writeIdx = (writeIdx + 1) % blockSamples;
+            totalKwSamples++;
+            if (
+                totalKwSamples >= blockSamples &&
+                (totalKwSamples - blockSamples) % hopSamples === 0
+            ) {
+                blockLoudness.push(computeBlockLoudnessFromRing());
+            }
+        }
+
+        function pushResampledPairAtSourceRate(lBuf, rBuf, i0, i1, frac) {
+            const l = lBuf[i0] * (1 - frac) + lBuf[i1] * frac;
+            const r = rBuf[i0] * (1 - frac) + rBuf[i1] * frac;
+            pushSample(l, r);
+        }
+
+        function pushBlockAtSourceRate(lBuf, rBuf, count) {
+            const n = Math.min(count | 0, lBuf.length, rBuf.length);
+            if (n <= 0) return;
+            if (srcSr === sr) {
+                for (let i = 0; i < n; i++) {
+                    pushSample(lBuf[i], rBuf[i]);
+                }
+                return;
+            }
+            const ratio = sr / srcSr;
+            const outLen = Math.max(1, Math.floor(n * ratio));
+            const maxSrc = n - 1;
+            for (let i = 0; i < outLen; i++) {
+                const pos = i / ratio;
+                const i0 = pos | 0;
+                const i1 = i0 < maxSrc ? i0 + 1 : maxSrc;
+                const frac = pos - i0;
+                pushResampledPairAtSourceRate(lBuf, rBuf, i0, i1, frac);
+            }
+        }
+
+        function getSessionIntegratedLkfs() {
+            return integratedLkfsFromBlockLoudness(blockLoudness);
+        }
+
+        function reset(nextSourceRate) {
+            if (
+                typeof nextSourceRate === 'number' &&
+                isFinite(nextSourceRate) &&
+                (nextSourceRate | 0) !== srcSr
+            ) {
+                srcSr = nextSourceRate | 0;
+            }
+            clearMeterState();
+        }
+
+        clearMeterState();
+
+        return {
+            getSourceSampleRate: () => srcSr,
+            pushBlockAtSourceRate,
+            getSessionIntegratedLkfs,
+            reset,
+        };
     }
 
     function getTrackLkfsEl(trackEl) {
@@ -207,7 +345,9 @@
     }
 
     window.measureAudioBufferIntegratedLkfs = measureAudioBufferIntegratedLkfs;
+    window.createSessionIntegratedLkfsMeter = createSessionIntegratedLkfsMeter;
     window.formatLkfsDisplay = formatLkfsDisplay;
+    window.formatSessionLkfsDisplay = formatSessionLkfsDisplay;
     window.setWaveformTrackLkfsDisplay = setWaveformTrackLkfsDisplay;
     window.clearWaveformTrackLkfs = clearWaveformTrackLkfs;
     window.scheduleWaveformTrackLkfsMeasure = scheduleWaveformTrackLkfsMeasure;

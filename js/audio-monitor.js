@@ -25,15 +25,14 @@
     }
 
     /**
-     * マスター線形ゲイン g（スライダー値＝GainNode.gain）に対し、100%=1.0 を 0 dB とした振幅比表示。
+     * マスター線形ゲイン g（スライダー値＝GainNode.gain）に対し、1.0 を 0 dB とした振幅比表示。
      */
     function formatMasterVolDisplayText(linearGain) {
         const safeG = normalizeMasterVolLinear(linearGain);
-        const pct = Math.round(safeG * 100);
-        if (safeG <= 0) return `${pct}% (−∞ dB)`;
+        if (safeG <= 0) return '−∞ dB';
         const db = 20 * Math.log10(safeG);
         const dbStr = db > 0 ? `+${db.toFixed(1)}` : db.toFixed(1);
-        return `${pct}% (${dbStr} dB)`;
+        return `${dbStr} dB`;
     }
 
     function readMasterVolSliderLinear() {
@@ -43,8 +42,159 @@
     }
 
     function syncMasterVolDisplay(linearGain) {
+        renderMasterVolDisp(linearGain);
+    }
+
+    let sessionIntegratedLkfsMeter = null;
+    let sessionLkfsScratchL = null;
+    let sessionLkfsScratchR = null;
+    let sessionLkfsScratchV = null;
+    let sessionLkfsScratchLen = 0;
+    /** 再生開始からのインテグレーテッド LKFS（停止後も最後の値を保持）。 */
+    let sessionIntegratedLkfs = null;
+    /** 可聴コンテンツ終端を過ぎたらサンプル取り込みを止める（同一再生セッション内）。 */
+    let sessionLkfsIngestFrozen = false;
+    /** Analyser 重複回避: 再生開始時刻と取り込み済みサンプル数。 */
+    let sessionLkfsStartCtxTime = null;
+    let sessionLkfsPushedSamples = 0;
+
+    function formatMasterVolDispText(linearGain, sessionLkfs) {
+        const dbPart = formatMasterVolDisplayText(linearGain);
+        const lkfsPart =
+            typeof formatSessionLkfsDisplay === 'function'
+                ? formatSessionLkfsDisplay(sessionLkfs)
+                : '----- LKFS';
+        return `${dbPart} / ${lkfsPart}`;
+    }
+
+    function ensureSessionIntegratedLkfsMeter(ctx) {
+        if (!ctx || typeof createSessionIntegratedLkfsMeter !== 'function') return null;
+        const sr = ctx.sampleRate | 0;
+        if (!sessionIntegratedLkfsMeter) {
+            sessionIntegratedLkfsMeter = createSessionIntegratedLkfsMeter(sr);
+        } else if (sessionIntegratedLkfsMeter.getSourceSampleRate() !== sr) {
+            sessionIntegratedLkfsMeter.reset(sr);
+        }
+        return sessionIntegratedLkfsMeter;
+    }
+
+    function beginSessionIntegratedLkfsMeasurement() {
+        sessionIntegratedLkfs = null;
+        sessionLkfsIngestFrozen = false;
+        sessionLkfsStartCtxTime = null;
+        sessionLkfsPushedSamples = 0;
+        if (sessionIntegratedLkfsMeter) sessionIntegratedLkfsMeter.reset();
+        renderMasterVolDisp();
+    }
+
+    function resetSessionIntegratedLkfsDisplay() {
+        sessionIntegratedLkfs = null;
+        sessionLkfsIngestFrozen = false;
+        sessionLkfsStartCtxTime = null;
+        sessionLkfsPushedSamples = 0;
+        if (sessionIntegratedLkfsMeter) sessionIntegratedLkfsMeter.reset();
+        renderMasterVolDisp();
+    }
+
+    function getSessionLkfsTransportSec() {
+        if (typeof getTransportSec === 'function') {
+            const t = getTransportSec();
+            if (Number.isFinite(t)) return t;
+        }
+        return null;
+    }
+
+    function shouldIngestSessionLkfsSamples() {
+        if (sessionLkfsIngestFrozen) return false;
+        const t = getSessionLkfsTransportSec();
+        if (!Number.isFinite(t)) return true;
+        if (typeof isPastAllLoadedTrackPlaybackEnds !== 'function') return true;
+        if (isPastAllLoadedTrackPlaybackEnds(t)) {
+            sessionLkfsIngestFrozen = true;
+            return false;
+        }
+        return true;
+    }
+
+    function mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, vScratch) {
+        if (
+            typeof isVideoAudioPlaybackViaNativeElement !== 'function' ||
+            !isVideoAudioPlaybackViaNativeElement() ||
+            typeof getVideoTrackAnalyser !== 'function'
+        ) {
+            return;
+        }
+        const vAna = getVideoTrackAnalyser();
+        if (!vAna) return;
+        vAna.getFloatTimeDomainData(vScratch);
+        const vLen = vScratch.length;
+        if (vLen < 1) return;
+        const mergeLen = Math.min(len, vLen);
+        for (let i = 0; i < mergeLen; i++) {
+            const vl = vScratch[i];
+            if (Math.abs(vl) > Math.abs(lBuf[i])) lBuf[i] = vl;
+            if (Math.abs(vl) > Math.abs(rBuf[i])) rBuf[i] = vl;
+        }
+    }
+
+    function updateSessionIntegratedLkfsFromAnalysers(ctx) {
+        if (!monitorTransportActive || !ctx || !anaL || !anaR) return;
+        if (!shouldIngestSessionLkfsSamples()) return;
+        const meter = ensureSessionIntegratedLkfsMeter(ctx);
+        if (!meter) return;
+
+        const len = anaL.fftSize | 0;
+        if (len <= 0) return;
+        if (!sessionLkfsScratchL || sessionLkfsScratchLen !== len) {
+            sessionLkfsScratchLen = len;
+            sessionLkfsScratchL = new Float32Array(len);
+            sessionLkfsScratchR = new Float32Array(len);
+            sessionLkfsScratchV = new Float32Array(len);
+        }
+        const lBuf = sessionLkfsScratchL;
+        const rBuf = sessionLkfsScratchR;
+        anaL.getFloatTimeDomainData(lBuf);
+        anaR.getFloatTimeDomainData(rBuf);
+        mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, sessionLkfsScratchV);
+
+        const ctxNow = ctx.currentTime;
+        const sr = ctx.sampleRate | 0;
+        if (sessionLkfsStartCtxTime == null) {
+            sessionLkfsStartCtxTime = ctxNow;
+            sessionLkfsPushedSamples = 0;
+            return;
+        }
+
+        const targetTotal = Math.floor((ctxNow - sessionLkfsStartCtxTime) * sr + 1e-6);
+        let newSamples = targetTotal - sessionLkfsPushedSamples;
+        if (newSamples <= 0) return;
+        if (newSamples > len) {
+            sessionLkfsPushedSamples = targetTotal - len;
+            newSamples = len;
+        }
+        sessionLkfsPushedSamples += newSamples;
+
+        const startIdx = len - newSamples;
+        meter.pushBlockAtSourceRate(
+            lBuf.subarray(startIdx, len),
+            rBuf.subarray(startIdx, len),
+            newSamples,
+        );
+
+        const lkfs = meter.getSessionIntegratedLkfs();
+        if (Number.isFinite(lkfs)) {
+            sessionIntegratedLkfs = lkfs;
+        }
+    }
+
+    function renderMasterVolDisp(linearGainOpt) {
         const disp = document.getElementById('masterVolDisp');
-        if (disp) disp.textContent = formatMasterVolDisplayText(linearGain);
+        if (!disp) return;
+        const safeG =
+            typeof linearGainOpt === 'number'
+                ? normalizeMasterVolLinear(linearGainOpt)
+                : normalizeMasterVolLinear(reviewMixMasterLinearGain);
+        disp.textContent = formatMasterVolDispText(safeG, sessionIntegratedLkfs);
     }
 
     function applyMasterVolToMix(linearGain, smooth, ctxOpt) {
@@ -438,8 +588,10 @@
     bindAnalyzeOnCheckbox();
 
     function setReviewMixMonitorTransportActive(active) {
+        const wasActive = monitorTransportActive;
         monitorTransportActive = !!active;
         if (monitorTransportActive) {
+            if (!wasActive) beginSessionIntegratedLkfsMeasurement();
             const ctx = getReviewMixAudioCtx();
             if (ctx && ctx.state === 'suspended') void ctx.resume();
             if (ctx && reviewMixMasterNode && !masterAnalyser && typeof ensureReviewMixMonitorOutput === 'function') {
@@ -451,6 +603,7 @@
                 cancelAnimationFrame(requestAnimId);
                 requestAnimId = null;
             }
+            renderMasterVolDisp();
             extinguishMonitorDisplays();
             if (typeof extinguishTrackLaneMeters === 'function') {
                 extinguishTrackLaneMeters();
@@ -821,6 +974,8 @@ window.addEventListener('resize', () => {
         const ctxNow = audioCtx.currentTime;
 
         if (!analyzeOn) {
+            updateSessionIntegratedLkfsFromAnalysers(audioCtx);
+            renderMasterVolDisp();
             let maxPeakDb = -Infinity;
             if (anaL) {
                 const res = peakDbFromAnalyser(anaL, peakScratchL);
@@ -860,6 +1015,8 @@ window.addEventListener('resize', () => {
 
         let l = getMeterValues(anaL, 'l', ctxNow);
         let r = getMeterValues(anaR, 'r', ctxNow);
+        updateSessionIntegratedLkfsFromAnalysers(audioCtx);
+        renderMasterVolDisp();
         if (
             typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
             isVideoAudioPlaybackViaNativeElement() &&
@@ -1726,6 +1883,7 @@ window.addEventListener('resize', () => {
         spectrumPeakHoldDb = null;
         spectrumPeakHoldUntil = null;
         lastSpectrumDrawT = 0;
+        renderMasterVolDisp();
         if (analyzeOn) paintSpectrumIdle();
     }
     function isReviewMixMonitorAnalyzersWired() {
@@ -1773,6 +1931,7 @@ window.addEventListener('resize', () => {
     /** All Clear 後: マスター音量を 0 dB（線形ゲイン 1.0）にリセット */
     function resetMasterVolumeForSessionClear() {
         applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, false);
+        resetSessionIntegratedLkfsDisplay();
         saveUiPrefsToLocalStorage();
     }
 
