@@ -290,17 +290,7 @@
         btn.disabled = !sessionHasClearableContent();
     }
 
-    async function releaseWaveformRestoreLockIfActive() {
-        if (typeof clearWaveformRestoreBootHint === 'function') {
-            clearWaveformRestoreBootHint();
-        }
-        if (typeof endWaveformRestoreLock === 'function') {
-            await endWaveformRestoreLock();
-        }
-        if (typeof dismissWaveformRestoreBootShellIfIdle === 'function') {
-            dismissWaveformRestoreBootShellIfIdle();
-        }
-    }
+    async function releaseWaveformRestoreLockIfActive() {}
 
     async function clearEntireSession() {
         if (!sessionHasClearableContent()) {

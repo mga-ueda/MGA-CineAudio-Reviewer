@@ -148,14 +148,8 @@
         return text.toLowerCase().includes('debug');
     }
 
-    function isNowLoadingStatusLogLine(message) {
-        return String(message || '').trim().indexOf('Now Loading:') === 0;
-    }
-
     function writeLog(m, opt) {
         if (isMaskedDebugLogLine(m)) return;
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const resetIdle = !isNowLoadingStatusLogLine(m) && o.resetIdle !== false;
         let formattedLine = null;
         if (logEl) {
             const now = new Date();
@@ -176,15 +170,6 @@
             }
             logEl.innerText = lines.join('\n');
             logEl.scrollTop = logEl.scrollHeight;
-        }
-        if (
-            !(o.skipNowLoadingMirror === true) &&
-            typeof appendNowLoadingLogLine === 'function'
-        ) {
-            appendNowLoadingLogLine(formattedLine != null ? formattedLine : m, {
-                resetIdle: resetIdle,
-                preformatted: formattedLine != null,
-            });
         }
     }
 

@@ -1,24 +1,8 @@
 (function exportBlockingLockModule() {
-    /** Now Loading（波形復元ロック UI・起動時ぼかし）の有効／無効 */
-    const NOW_LOADING_ENABLED = true;
-
-    const WAVEFORM_RESTORE_FADE_MS = 200;
-    const WAVEFORM_RESTORE_BOOT_HINT_KEY = 'mgaWaveformRestoreBootHint';
-    /** ログ無活動で Now Loading を終了するまでの時間 */
-    const NOW_LOADING_IDLE_MS = 3000;
-    const NOW_LOADING_IDLE_TICK_MS = 200;
-    /** 復元ロックの絶対上限（アイドル解除が効かない場合のフェイルセーフ） */
-    const NOW_LOADING_ABSOLUTE_MAX_MS = 90000;
-    /** @type {null | 'webm-export' | 'waveform-restore'} */
+    /** @type {null | 'webm-export'} */
     let blockingMode = null;
     let webmExportUserCancel = false;
     let webmExportEmergencyCleanup = null;
-    let nowLoadingIdleDeadline = 0;
-    let nowLoadingAbsoluteDeadline = 0;
-    let nowLoadingIdleTimer = 0;
-    let nowLoadingIdleWatchStarting = false;
-    let nowLoadingIdleDismissInFlight = false;
-    let nowLoadingMainLogSeeded = false;
 
     function overlayEl() {
         return document.getElementById('exportBlockingOverlay');
@@ -34,333 +18,6 @@
 
     function subEl() {
         return document.getElementById('exportBlockingSub');
-    }
-
-    function minimalEl() {
-        return document.getElementById('exportBlockingMinimal');
-    }
-
-    function minimalLogEl() {
-        return document.getElementById('exportBlockingMinimalLog');
-    }
-
-    function minimalLogWrapEl() {
-        return document.getElementById('exportBlockingMinimalLogWrap');
-    }
-
-    function minimalCountdownEl() {
-        return document.getElementById('exportBlockingMinimalCountdown');
-    }
-
-    function showNowLoadingLogUi() {
-        const wrap = minimalLogWrapEl();
-        if (wrap) wrap.removeAttribute('hidden');
-    }
-
-    function hideNowLoadingLogUi() {
-        const wrap = minimalLogWrapEl();
-        if (wrap) wrap.hidden = true;
-        const cd = minimalCountdownEl();
-        if (cd) {
-            cd.textContent = '';
-            cd.hidden = true;
-        }
-    }
-
-    /** Now Loading 向けの詳細ログ（アイドルタイマーはリセットしない） */
-    function logNowLoadingDetail(message) {
-        const text =
-            message != null && String(message).trim() !== ''
-                ? 'Now Loading: ' + String(message)
-                : 'Now Loading: (empty)';
-        if (typeof appendNowLoadingLogLine === 'function') {
-            appendNowLoadingLogLine(text, { resetIdle: false, skipMainSeed: true });
-        }
-        if (typeof writeLog === 'function') {
-            writeLog(text, { skipNowLoadingMirror: true, resetIdle: false });
-        }
-    }
-
-    function isNowLoadingLogMirrorActive() {
-        if (!NOW_LOADING_ENABLED) return false;
-        if (blockingMode === 'waveform-restore') return true;
-        try {
-            return document.documentElement.classList.contains(
-                'waveform-restore-boot-pending',
-            );
-        } catch (_) {
-            return false;
-        }
-    }
-
-    function isNowLoadingOverlayReadyForLogs() {
-        if (!NOW_LOADING_ENABLED || blockingMode !== 'waveform-restore') return false;
-        const root = overlayEl();
-        return !!(root && !root.hidden);
-    }
-
-    function isNowLoadingStatusMessage(message) {
-        return String(message || '').trim().indexOf('Now Loading:') === 0;
-    }
-
-    function isNowLoadingCountdownLine(message) {
-        return /^>?Auto-dismiss in \d+s if no new log activity$/i.test(
-            String(message || '').trim(),
-        );
-    }
-
-    function isNowLoadingContentLine(message) {
-        const text = String(message || '').trim();
-        if (!text) return false;
-        if (isNowLoadingCountdownLine(text)) return false;
-        return true;
-    }
-
-    function isMaskedNowLoadingLogLine(message) {
-        const text = message != null ? String(message) : '';
-        return text.toLowerCase().includes('debug');
-    }
-
-    function formatNowLoadingLogLine(message) {
-        const now = new Date();
-        const time =
-            '[' +
-            String(now.getHours()).padStart(2, '0') +
-            ':' +
-            String(now.getMinutes()).padStart(2, '0') +
-            ':' +
-            String(now.getSeconds()).padStart(2, '0') +
-            ']';
-        return time + ' - ' + String(message);
-    }
-
-    /** メインログの行を Now Loading 用に整形（System Ready 行はそのまま） */
-    function formatLineForNowLoadingMirror(raw) {
-        const text = String(raw || '').trim();
-        if (!text) return '';
-        if (/^\[\d{2}:\d{2}:\d{2}\] - /.test(text)) return text;
-        if (text.charAt(0) === '>') return text;
-        return formatNowLoadingLogLine(text);
-    }
-
-    /** writeLog ミラー前に、メインログ先頭行（System Ready 等）を一度だけ取り込む */
-    function ensureNowLoadingSeededFromMainLog() {
-        if (nowLoadingMainLogSeeded) return;
-        if (!NOW_LOADING_ENABLED) return;
-        if (!isNowLoadingOverlayReadyForLogs() && !isNowLoadingLogMirrorActive()) {
-            return;
-        }
-        const mainLogEl =
-            typeof logEl !== 'undefined' && logEl ? logEl : document.getElementById('log');
-        const mainText = mainLogEl ? String(mainLogEl.innerText || '').trim() : '';
-        if (!mainText) return;
-        const el = minimalLogEl();
-        if (!el) return;
-
-        nowLoadingMainLogSeeded = true;
-        const mainLines = mainText
-            .split('\n')
-            .map((line) => formatLineForNowLoadingMirror(line))
-            .filter((line) => line !== '' && isNowLoadingContentLine(line));
-        const cur = getNowLoadingContentLogLines(el);
-        const merged = [];
-        const seen = new Set();
-        for (const line of mainLines.concat(cur)) {
-            if (seen.has(line)) continue;
-            seen.add(line);
-            merged.push(line);
-        }
-        renderNowLoadingLogLines(merged);
-    }
-
-    function isSystemReadyLogLine(line) {
-        return /System Ready/i.test(String(line || ''));
-    }
-
-    function isAppStartedLogLine(line) {
-        return /MGA CineAudio Reviewer started/i.test(String(line || ''));
-    }
-
-    /** System Ready → started を先頭2行に固定 */
-    function orderNowLoadingLogLines(lines) {
-        const input = Array.isArray(lines) ? lines : [];
-        let ready = null;
-        let started = null;
-        const rest = [];
-        for (const line of input) {
-            const text = String(line || '').trim();
-            if (!text) continue;
-            if (!ready && isSystemReadyLogLine(text)) {
-                ready = line;
-                continue;
-            }
-            if (!started && isAppStartedLogLine(text)) {
-                started = line;
-                continue;
-            }
-            rest.push(line);
-        }
-        const ordered = [];
-        if (ready) ordered.push(ready);
-        if (started) ordered.push(started);
-        return ordered.concat(rest);
-    }
-
-    function renderNowLoadingLogLines(contentLines) {
-        const el = minimalLogEl();
-        if (!el) return;
-        const ordered = orderNowLoadingLogLines(contentLines);
-        el.textContent = ordered.length ? ordered.join('\n') : '';
-        showNowLoadingLogUi();
-    }
-
-    function isStaleNowLoadingMinimalOverlayVisible() {
-        const root = overlayEl();
-        return !!(
-            root &&
-            !root.hidden &&
-            root.classList.contains('export-blocking-overlay--minimal')
-        );
-    }
-
-    function setNowLoadingCountdownLine(countdownSec) {
-        if (!isNowLoadingOverlayReadyForLogs()) return;
-        const cd = minimalCountdownEl();
-        if (!cd) return;
-        const secLeft = Math.max(0, Math.ceil(Number(countdownSec) || 0));
-        cd.textContent =
-            'Auto-dismiss in ' + secLeft + 's if no new log activity';
-        cd.hidden = false;
-        showNowLoadingLogUi();
-    }
-
-    function getNowLoadingContentLogLines(el) {
-        const cur = el && el.textContent ? el.textContent : '';
-        if (!cur) return [];
-        return cur
-            .split('\n')
-            .map((line) => String(line || '').trim())
-            .filter((line) => isNowLoadingContentLine(line));
-    }
-
-    function stopNowLoadingIdleWatch() {
-        if (nowLoadingIdleTimer) {
-            clearInterval(nowLoadingIdleTimer);
-            nowLoadingIdleTimer = 0;
-        }
-        nowLoadingIdleWatchStarting = false;
-    }
-
-    async function dismissNowLoadingFromIdle(reason, opt) {
-        if (nowLoadingIdleDismissInFlight) return;
-        if (blockingMode !== 'waveform-restore' && !isStaleNowLoadingMinimalOverlayVisible()) {
-            stopNowLoadingIdleWatch();
-            return;
-        }
-        nowLoadingIdleDismissInFlight = true;
-        stopNowLoadingIdleWatch();
-        try {
-            if (typeof ensureWaveformRestoreLockDismissed === 'function') {
-                await ensureWaveformRestoreLockDismissed();
-            }
-        } finally {
-            nowLoadingIdleDismissInFlight = false;
-        }
-    }
-
-    function touchNowLoadingIdleDeadline() {
-        if (nowLoadingIdleDismissInFlight) return;
-        if (blockingMode !== 'waveform-restore') return;
-        nowLoadingIdleDeadline = performance.now() + NOW_LOADING_IDLE_MS;
-        setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
-    }
-
-    function startNowLoadingIdleWatch() {
-        if (nowLoadingIdleTimer || nowLoadingIdleWatchStarting) return;
-        if (!NOW_LOADING_ENABLED || blockingMode !== 'waveform-restore') return;
-        nowLoadingIdleWatchStarting = true;
-        try {
-            const now = performance.now();
-            nowLoadingIdleDeadline = now + NOW_LOADING_IDLE_MS;
-            nowLoadingAbsoluteDeadline = now + NOW_LOADING_ABSOLUTE_MAX_MS;
-            showNowLoadingLogUi();
-            setNowLoadingCountdownLine(NOW_LOADING_IDLE_MS / 1000);
-            nowLoadingIdleTimer = setInterval(() => {
-                if (blockingMode !== 'waveform-restore') {
-                    stopNowLoadingIdleWatch();
-                    return;
-                }
-                const nowTick = performance.now();
-                const idleLeftMs = nowLoadingIdleDeadline - nowTick;
-                const absoluteLeftMs = nowLoadingAbsoluteDeadline - nowTick;
-                setNowLoadingCountdownLine(idleLeftMs / 1000);
-                if (absoluteLeftMs <= 0) {
-                    void dismissNowLoadingFromIdle(
-                        'absolute timeout after ' +
-                            NOW_LOADING_ABSOLUTE_MAX_MS / 1000 +
-                            's',
-                        { force: true },
-                    );
-                    return;
-                }
-                if (idleLeftMs <= 0) {
-                    void dismissNowLoadingFromIdle(
-                        'idle timeout — no new log activity for ' +
-                            NOW_LOADING_IDLE_MS / 1000 +
-                            's',
-                    );
-                }
-            }, NOW_LOADING_IDLE_TICK_MS);
-        } finally {
-            nowLoadingIdleWatchStarting = false;
-        }
-    }
-
-    function clearNowLoadingLog() {
-        stopNowLoadingIdleWatch();
-        nowLoadingAbsoluteDeadline = 0;
-        nowLoadingMainLogSeeded = false;
-        const el = minimalLogEl();
-        if (el) el.textContent = '';
-        hideNowLoadingLogUi();
-    }
-
-    function appendNowLoadingLogLine(message, opt) {
-        if (!NOW_LOADING_ENABLED) return;
-        if (!isNowLoadingOverlayReadyForLogs() && !isNowLoadingLogMirrorActive()) {
-            return;
-        }
-        if (isMaskedNowLoadingLogLine(message)) return;
-        if (isNowLoadingCountdownLine(message)) return;
-        const el = minimalLogEl();
-        if (!el) return;
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const skipMainSeed = o.skipMainSeed === true;
-        if (
-            !skipMainSeed &&
-            !isNowLoadingStatusMessage(message) &&
-            (window.__appStartupLogComplete === true || isAppStartedLogLine(message))
-        ) {
-            ensureNowLoadingSeededFromMainLog();
-        }
-        let resetIdle = o.resetIdle !== false;
-        if (isNowLoadingStatusMessage(message)) resetIdle = false;
-        const line =
-            o.preformatted === true
-                ? String(message || '').trim()
-                : formatLineForNowLoadingMirror(message);
-        if (!line) return;
-        const lines = getNowLoadingContentLogLines(el);
-        if (!lines.includes(line)) {
-            lines.push(line);
-            renderNowLoadingLogLines(lines);
-        }
-        if (!nowLoadingIdleTimer && blockingMode === 'waveform-restore') {
-            startNowLoadingIdleWatch();
-        }
-        if (resetIdle) {
-            touchNowLoadingIdleDeadline();
-        }
     }
 
     function panelEl() {
@@ -402,10 +59,7 @@
         if (exportBtn) exportBtn.disabled = xl;
         if (importBtn) importBtn.disabled = xl;
         if (exportWebmBtn) exportWebmBtn.disabled = xl;
-        // waveform-restore（Now Loading）中は All Clear を残す（ショートカット／ボタンで脱出可能に）
-        if (allClearBtn && xl && blockingMode !== 'waveform-restore') {
-            allClearBtn.disabled = true;
-        }
+        if (allClearBtn && xl) allClearBtn.disabled = true;
         if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
         if (!xl && typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
@@ -433,32 +87,11 @@
         }
     }
 
-    function applyBlockingOverlayLayout(opt) {
-        const root = overlayEl();
-        if (!root) return;
-        const minimal = !!(opt && opt.minimal);
-        root.classList.toggle('export-blocking-overlay--minimal', minimal);
-        const minEl = minimalEl();
-        const panel = panelEl();
-        if (minEl) minEl.hidden = !minimal;
-        if (panel) panel.hidden = minimal;
-        if (minimal) {
-            root.setAttribute('aria-labelledby', 'exportBlockingMinimal');
-            showNowLoadingLogUi();
-        } else {
-            root.setAttribute('aria-labelledby', 'exportBlockingTitle');
-        }
-    }
-
     function setOperationBlockingVisible(visible, opt) {
         const root = overlayEl();
         if (!root) return;
         if (visible) {
-            root.classList.remove('export-blocking-overlay--fading-out');
-            applyBlockingOverlayLayout(opt);
-            if (!(opt && opt.minimal)) {
-                applyBlockingOverlayChrome(opt);
-            }
+            applyBlockingOverlayChrome(opt);
             root.hidden = false;
             root.setAttribute('aria-hidden', 'false');
             if (subEl()) subEl().textContent = (opt && opt.sub) || '';
@@ -469,13 +102,7 @@
         } else {
             root.hidden = true;
             root.setAttribute('aria-hidden', 'true');
-            root.classList.remove('export-blocking-overlay--minimal');
             if (subEl()) subEl().textContent = '';
-            const minEl = minimalEl();
-            if (minEl) minEl.hidden = true;
-            const panel = panelEl();
-            if (panel) panel.hidden = false;
-            root.setAttribute('aria-labelledby', 'exportBlockingTitle');
             document.body.classList.remove('export-blocking-active');
             blockingMode = null;
             webmExportUserCancel = false;
@@ -501,7 +128,6 @@
     }
 
     function updateExportBlockingSub(text) {
-        if (blockingMode === 'waveform-restore') return;
         const sub = subEl();
         if (sub && text != null) sub.textContent = String(text);
     }
@@ -511,7 +137,7 @@
     }
 
     function isWaveformRestoreLockActive() {
-        return blockingMode === 'waveform-restore';
+        return false;
     }
 
     function isOperationBlockingActive() {
@@ -534,202 +160,7 @@
         }
     }
 
-    function sessionRowNeedsWaveformRestoreBootHint(row) {
-        if (!row || typeof row !== 'object') return false;
-        const hasVideo = row.mBlob && (row.mBlob.size || 0) > 0;
-        const hasExtra =
-            Array.isArray(row.extraTracks) &&
-            row.extraTracks.some(
-                (e) => e && e.blob && (e.byteLength || e.blob.size || 0) > 0,
-            );
-        return hasVideo || hasExtra;
-    }
-
-    function readWaveformRestoreBootHint() {
-        if (!NOW_LOADING_ENABLED) return false;
-        try {
-            return (
-                localStorage.getItem(WAVEFORM_RESTORE_BOOT_HINT_KEY) === '1' ||
-                sessionStorage.getItem(WAVEFORM_RESTORE_BOOT_HINT_KEY) === '1'
-            );
-        } catch (_) {
-            return false;
-        }
-    }
-
-    function syncWaveformRestoreBootHint(row) {
-        if (!NOW_LOADING_ENABLED) {
-            clearWaveformRestoreBootHint();
-            return;
-        }
-        try {
-            if (sessionRowNeedsWaveformRestoreBootHint(row)) {
-                localStorage.setItem(WAVEFORM_RESTORE_BOOT_HINT_KEY, '1');
-            } else {
-                localStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
-            }
-            sessionStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
-        } catch (_) {}
-    }
-
-    function clearWaveformRestoreBootHint() {
-        try {
-            localStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
-            sessionStorage.removeItem(WAVEFORM_RESTORE_BOOT_HINT_KEY);
-        } catch (_) {}
-    }
-
-    function armWaveformRestoreBootPending() {
-        if (!NOW_LOADING_ENABLED) return;
-        try {
-            document.documentElement.classList.add('waveform-restore-boot-pending');
-        } catch (_) {}
-    }
-
-    function disarmWaveformRestoreBootPending() {
-        try {
-            document.documentElement.classList.remove('waveform-restore-boot-pending');
-        } catch (_) {}
-    }
-
-    /** 復元不要と判明したら head の即時ぼかしを外す */
-    function dismissWaveformRestoreBootShellIfIdle() {
-        if (blockingMode !== null) return;
-        disarmWaveformRestoreBootPending();
-    }
-
-    /** 前回保存のヒントだけで、スクリプト読込直後に Now Loading を出す */
-    function maybeBeginWaveformRestoreOverlayFromBootHint() {
-        if (!NOW_LOADING_ENABLED) return false;
-        if (!readWaveformRestoreBootHint()) return false;
-        logNowLoadingDetail('boot hint found — arming early shell');
-        armWaveformRestoreBootPending();
-        if (blockingMode !== null) return true;
-        beginWaveformRestoreLock({ reason: 'reload' });
-        return true;
-    }
-
-    function beginWaveformRestoreLock(opt) {
-        if (!NOW_LOADING_ENABLED) return;
-        if (blockingMode === 'webm-export') return;
-        const o = opt && typeof opt === 'object' ? opt : {};
-        blockingMode = 'waveform-restore';
-        disarmWaveformRestoreBootPending();
-        setOperationBlockingVisible(true, { minimal: true });
-        showNowLoadingLogUi();
-        startNowLoadingIdleWatch();
-        logNowLoadingDetail(
-            'overlay lock engaged (reason=' + (o.reason || 'reload') + ')',
-        );
-        try {
-            const ae = document.activeElement;
-            if (ae && ae !== document.body && typeof ae.blur === 'function') {
-                ae.blur();
-            }
-        } catch (_) {}
-    }
-
-    function cleanupWaveformRestoreOverlayDom() {
-        clearWaveformRestoreBootHint();
-        clearNowLoadingLog();
-        const root = overlayEl();
-        if (!root) return;
-        root.classList.remove(
-            'export-blocking-overlay--fading-out',
-            'export-blocking-overlay--minimal',
-        );
-        root.hidden = true;
-        root.setAttribute('aria-hidden', 'true');
-        const minEl = minimalEl();
-        if (minEl) minEl.hidden = true;
-        const panel = panelEl();
-        if (panel) panel.hidden = false;
-        root.setAttribute('aria-labelledby', 'exportBlockingTitle');
-    }
-
-    function fadeOutWaveformRestoreOverlay() {
-        const root = overlayEl();
-        if (!root || root.hidden) {
-            cleanupWaveformRestoreOverlayDom();
-            return Promise.resolve();
-        }
-        logNowLoadingDetail('fading out overlay');
-
-        const reducedMotion =
-            typeof window.matchMedia === 'function' &&
-            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        const fadeMs = reducedMotion ? 0 : WAVEFORM_RESTORE_FADE_MS;
-
-        return new Promise((resolve) => {
-            let finished = false;
-            const finish = () => {
-                if (finished) return;
-                finished = true;
-                cleanupWaveformRestoreOverlayDom();
-                resolve();
-            };
-
-            if (fadeMs <= 0) {
-                finish();
-                return;
-            }
-
-            const onTransitionEnd = (ev) => {
-                if (ev.target !== root || ev.propertyName !== 'opacity') return;
-                root.removeEventListener('transitionend', onTransitionEnd);
-                finish();
-            };
-            root.addEventListener('transitionend', onTransitionEnd);
-            requestAnimationFrame(() => {
-                root.classList.add('export-blocking-overlay--fading-out');
-            });
-            setTimeout(() => {
-                root.removeEventListener('transitionend', onTransitionEnd);
-                finish();
-            }, fadeMs + 40);
-        });
-    }
-
-    function endWaveformRestoreLock() {
-        if (blockingMode !== 'waveform-restore') return Promise.resolve();
-        logNowLoadingDetail('ending waveform-restore lock');
-        blockingMode = null;
-        document.body.classList.remove('export-blocking-active');
-        refreshOperationBlockingControlLocks();
-        if (typeof updateControlsEnabled === 'function') {
-            updateControlsEnabled();
-        }
-        return fadeOutWaveformRestoreOverlay();
-    }
-
-    /** 復元ロック／起動時ぼかしを確実に外す（エラー時・タイムアウト時のフェイルセーフ） */
-    async function ensureWaveformRestoreLockDismissed() {
-        stopNowLoadingIdleWatch();
-        disarmWaveformRestoreBootPending();
-        if (blockingMode === 'waveform-restore') {
-            logNowLoadingDetail('ensure dismiss — active lock');
-            return endWaveformRestoreLock();
-        }
-        const root = overlayEl();
-        if (
-            root &&
-            !root.hidden &&
-            root.classList.contains('export-blocking-overlay--minimal')
-        ) {
-            logNowLoadingDetail('ensure dismiss — minimal overlay still visible');
-            blockingMode = null;
-            document.body.classList.remove('export-blocking-active');
-            cleanupWaveformRestoreOverlayDom();
-            refreshOperationBlockingControlLocks();
-            if (typeof updateControlsEnabled === 'function') {
-                updateControlsEnabled();
-            }
-        }
-        return Promise.resolve();
-    }
-
     function beginWebmExportLock(opt) {
-        if (blockingMode === 'waveform-restore') return;
         webmExportUserCancel = false;
         webmExportEmergencyCleanup = null;
         blockingMode = 'webm-export';
@@ -761,22 +192,6 @@
         webmExportEmergencyCleanup = typeof fn === 'function' ? fn : null;
     }
 
-    function isNowLoadingEnabled() {
-        return NOW_LOADING_ENABLED;
-    }
-
-    if (!NOW_LOADING_ENABLED) {
-        clearWaveformRestoreBootHint();
-        disarmWaveformRestoreBootPending();
-    }
-
-    window.NOW_LOADING_ENABLED = NOW_LOADING_ENABLED;
-    window.isNowLoadingEnabled = isNowLoadingEnabled;
-    window.isNowLoadingLogMirrorActive = isNowLoadingLogMirrorActive;
-    window.appendNowLoadingLogLine = appendNowLoadingLogLine;
-    window.clearNowLoadingLog = clearNowLoadingLog;
-    window.logNowLoadingDetail = logNowLoadingDetail;
-    window.touchNowLoadingIdleDeadline = touchNowLoadingIdleDeadline;
     window.setExportBlockingVisible = setExportBlockingVisible;
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;
@@ -787,15 +202,5 @@
     window.tryCancelWebmExportFromEsc = tryCancelWebmExportFromEsc;
     window.beginWebmExportLock = beginWebmExportLock;
     window.endWebmExportLock = endWebmExportLock;
-    window.beginWaveformRestoreLock = beginWaveformRestoreLock;
-    window.endWaveformRestoreLock = endWaveformRestoreLock;
-    window.ensureWaveformRestoreLockDismissed = ensureWaveformRestoreLockDismissed;
     window.setWebmExportEmergencyCleanup = setWebmExportEmergencyCleanup;
-    window.syncWaveformRestoreBootHint = syncWaveformRestoreBootHint;
-    window.clearWaveformRestoreBootHint = clearWaveformRestoreBootHint;
-    window.maybeBeginWaveformRestoreOverlayFromBootHint =
-        maybeBeginWaveformRestoreOverlayFromBootHint;
-    window.armWaveformRestoreBootPending = armWaveformRestoreBootPending;
-    window.disarmWaveformRestoreBootPending = disarmWaveformRestoreBootPending;
-    window.dismissWaveformRestoreBootShellIfIdle = dismissWaveformRestoreBootShellIfIdle;
 })();

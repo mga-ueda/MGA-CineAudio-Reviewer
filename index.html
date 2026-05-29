@@ -11,64 +11,7 @@
     <link rel="apple-touch-icon" href="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4dd.png">
     <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22MGA%20CineAudio%20Reviewer%22%2C%22short_name%22%3A%22MGA%20CineAudio%22%2C%22description%22%3A%22%E5%8B%95%E7%94%BB%E3%83%BB%E8%BF%BD%E5%8A%A0%E9%9F%B3%E5%A3%B0%E3%81%AE%E5%90%8C%E6%9C%9F%E5%86%8D%E7%94%9F%E3%81%A8%E3%83%AC%E3%83%93%E3%83%A5%E3%83%BC%E7%94%A8%E3%82%A6%E3%82%A7%E3%83%96%E3%82%A2%E3%83%97%E3%83%AA%EF%BC%88%E6%B3%A2%E5%BD%A2%E3%83%BB%E3%82%B9%E3%83%9A%E3%82%AF%E3%83%88%E3%83%A9%E3%83%A0%EF%BC%8F%E3%83%A1%E3%83%BC%E3%82%BF%E3%83%BC%E3%83%BB%E3%83%9E%E3%83%BC%E3%82%AB%E3%83%BC%E4%BB%98%E3%81%8D%EF%BC%89%E3%80%82%22%2C%22start_url%22%3A%22.%2F%22%2C%22scope%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231a1012%22%2C%22theme_color%22%3A%22%231a1012%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fcdn.jsdelivr.net%2Fgh%2Ftwitter%2Ftwemoji%4014.0.2%2Fassets%2F72x72%2F1f4dd.png%22%2C%22sizes%22%3A%2272x72%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%2C%7B%22src%22%3A%22https%3A%2F%2Fcdn.jsdelivr.net%2Fgh%2Ftwitter%2Ftwemoji%4014.0.2%2Fassets%2F72x72%2F1f4dd.png%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fpng%22%2C%22purpose%22%3A%22any%22%7D%5D%7D">
     <link rel="stylesheet" href="css/main.css">
-    <style>
-        /* セッション復元リロード: body 描画前から全画面ぼかし（JS 読込前のフェイルセーフ） */
-        html.waveform-restore-boot-pending {
-            background-color: #1a1012;
-        }
-        html.waveform-restore-boot-pending body {
-            overflow: hidden;
-        }
-        html.waveform-restore-boot-pending::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            z-index: 19990;
-            pointer-events: auto;
-            cursor: wait;
-            background: rgba(8, 10, 16, 0.28);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-        }
-        html.waveform-restore-boot-pending::after {
-            content: 'Now Loading ...\A Alt+Shift+Ctrl+Del to Cancel and Clear';
-            position: fixed;
-            z-index: 19991;
-            left: 50%;
-            top: 30%;
-            transform: translateX(-50%);
-            margin: 0;
-            max-width: min(90vw, 22rem);
-            font: 600 0.84rem/1.4 system-ui, sans-serif;
-            letter-spacing: 0.06em;
-            text-align: center;
-            white-space: pre-line;
-            color: #fff;
-            text-shadow:
-                0 0 2px rgba(0, 0, 0, 1),
-                0 1px 4px rgba(0, 0, 0, 1),
-                0 3px 16px rgba(0, 0, 0, 0.95),
-                0 6px 36px rgba(0, 0, 0, 0.92);
-            pointer-events: none;
-        }
-    </style>
     <script src="js/export-blocking-lock.js"></script>
-    <script>
-        (function armWaveformRestoreBootPendingFromStorage() {
-            if (window.NOW_LOADING_ENABLED === false) return;
-            try {
-                var key = 'mgaWaveformRestoreBootHint';
-                var active =
-                    localStorage.getItem(key) === '1' || sessionStorage.getItem(key) === '1';
-                if (!active) return;
-                document.documentElement.classList.add('waveform-restore-boot-pending');
-                if (sessionStorage.getItem(key) === '1') {
-                    localStorage.setItem(key, '1');
-                    sessionStorage.removeItem(key);
-                }
-            } catch (_) {}
-        })();
-    </script>
 </head>
 <body>
 
@@ -96,29 +39,6 @@
         aria-labelledby="exportBlockingTitle"
         tabindex="-1"
     >
-        <p class="export-blocking-overlay__minimal" id="exportBlockingMinimal" hidden aria-live="polite">
-            <span class="export-blocking-overlay__minimal-heading">
-                <span class="export-blocking-overlay__minimal-label">Now Loading</span><span class="export-blocking-overlay__minimal-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
-            </span>
-            <span class="export-blocking-overlay__minimal-hint">Alt+Shift+Ctrl+Del to Cancel and Clear</span>
-        </p>
-        <div
-            class="export-blocking-overlay__minimal-log-wrap"
-            id="exportBlockingMinimalLogWrap"
-            hidden
-        >
-            <pre
-                class="export-blocking-overlay__minimal-log"
-                id="exportBlockingMinimalLog"
-                aria-live="polite"
-            ></pre>
-            <div
-                class="export-blocking-overlay__minimal-countdown"
-                id="exportBlockingMinimalCountdown"
-                hidden
-                aria-live="polite"
-            ></div>
-        </div>
         <div class="export-blocking-overlay__panel">
             <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>
             <p class="export-blocking-overlay__esc-hint" id="exportBlockingEscHint">
@@ -127,13 +47,6 @@
             <p class="export-blocking-overlay__sub" id="exportBlockingSub"></p>
         </div>
     </div>
-    <script>
-        (function showWaveformRestoreOverlayFromBootHint() {
-            if (typeof maybeBeginWaveformRestoreOverlayFromBootHint === 'function') {
-                maybeBeginWaveformRestoreOverlayFromBootHint();
-            }
-        })();
-    </script>
 
     <div id="appConfirmOverlay" class="app-confirm-overlay" hidden aria-hidden="true" role="alertdialog" aria-modal="true" aria-labelledby="appConfirmTitle" aria-describedby="appConfirmBody">
         <div class="app-confirm-overlay__box">
@@ -597,12 +510,6 @@
     <script src="js/view-layout.js"></script>
     <script src="js/indexeddb.js"></script>
     <script src="js/waveform-restore-lock.js"></script>
-    <script>
-        (function startSessionRestoreLockEarly() {
-            if (typeof prepareSessionRestoreLockBeforeUi !== 'function') return;
-            window.__sessionRestoreLockEarly = prepareSessionRestoreLockBeforeUi();
-        })();
-    </script>
     <script src="js/video-export-review.js"></script>
     <script src="js/session-export-import.js"></script>
     <script src="js/init-prefs.js"></script>

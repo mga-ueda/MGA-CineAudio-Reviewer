@@ -388,11 +388,6 @@
             } finally {
                 sessionRestoreTeardownPending = true;
                 try {
-                    if (typeof logNowLoadingDetail === 'function') {
-                        logNowLoadingDetail(
-                            'session restore task finished — running lock teardown',
-                        );
-                    }
                     if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
                         await waitForSessionWaveformsAndEndRestoreLock();
                     }
@@ -813,9 +808,6 @@
             return;
         }
         await idbPut(IDB_KEY_LAST, row);
-        if (typeof syncWaveformRestoreBootHint === 'function') {
-            syncWaveformRestoreBootHint(row);
-        }
         cacheLastSessionRow(row);
         updateRegionPersistFloorFromRow(row);
         if (Array.isArray(row.extraTracks)) {
@@ -859,18 +851,10 @@
 
     async function restoreExtraTracksFromRow(row) {
         if (!Array.isArray(row.extraTracks) || row.extraTracks.length < 1) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail('restoreExtraTracks — none stored');
-            }
             if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
                 await finalizeReviewMixAfterSessionRestore();
             }
             return;
-        }
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail(
-                'restoreExtraTracks — loading ' + row.extraTracks.length + ' track(s)',
-            );
         }
         writeLog('Restoring ' + row.extraTracks.length + ' extra audio track(s)...');
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
@@ -940,21 +924,6 @@
                         (Array.isArray(restoreRegionSegments) ? restoreRegionSegments.length : 0),
                 );
                 writeLog('Extra audio ' + (entry.slot + 1) + ': restore decode start');
-                if (typeof logNowLoadingDetail === 'function') {
-                    logNowLoadingDetail(
-                        'Ex' +
-                            (entry.slot + 1) +
-                            ' decode start — ' +
-                            (entry.name || 'audio.wav') +
-                            ' (' +
-                            blobBytes +
-                            ' bytes, regions=' +
-                            (Array.isArray(restoreRegionSegments)
-                                ? restoreRegionSegments.length
-                                : 0) +
-                            ')',
-                    );
-                }
                 await loadExtraTrackFile(entry.slot, af, {
                     fromSessionRestore: true,
                     timelineStartSec: entry.timelineStartSec,
@@ -1020,11 +989,6 @@
                 }
                 if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(entry.slot)) {
                     restoredCount += 1;
-                    if (typeof logNowLoadingDetail === 'function') {
-                        logNowLoadingDetail(
-                            'Ex' + (entry.slot + 1) + ' restore OK — ' + (entry.name || 'audio.wav'),
-                        );
-                    }
                 } else {
                     writeLog(
                         'Extra audio ' +
@@ -1231,15 +1195,6 @@
     async function applySessionPersistRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail(
-                'applySessionPersistRow — start' +
-                    (o.importReview ? ' (import review)' : ''),
-            );
-        }
-        if (typeof maybeBeginWaveformRestoreLock === 'function') {
-            maybeBeginWaveformRestoreLock(row, o);
-        }
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(row.musicalGrid);
@@ -1316,76 +1271,11 @@
             await applySessionPersistRow(row, opt);
             if (row && sessionRowHasRestorableContent(row) && window.indexedDB) {
                 await idbPut(IDB_KEY_LAST, row);
-                if (typeof syncWaveformRestoreBootHint === 'function') {
-                    syncWaveformRestoreBootHint(row);
-                }
             }
         });
     }
 
     window.importAndPersistSessionRow = importAndPersistSessionRow;
-
-    function dismissSessionRestoreBootShellIfIdle() {
-        if (typeof dismissWaveformRestoreBootShellIfIdle === 'function') {
-            dismissWaveformRestoreBootShellIfIdle();
-        } else if (typeof disarmWaveformRestoreBootPending === 'function') {
-            disarmWaveformRestoreBootPending();
-        }
-    }
-
-    /** 起動時: UI 初期化・復元描画の前に Now Loading を出す */
-    async function prepareSessionRestoreLockBeforeUi() {
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail('early prepare — reading IndexedDB session');
-        }
-        if (!window.indexedDB) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail('early prepare — IndexedDB unavailable');
-            }
-            dismissSessionRestoreBootShellIfIdle();
-            return false;
-        }
-        let row;
-        try {
-            row = await idbGet(IDB_KEY_LAST);
-        } catch (e) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail(
-                    'early prepare — session read failed: ' +
-                        (e && e.message ? e.message : String(e)),
-                );
-            }
-            dismissSessionRestoreBootShellIfIdle();
-            return false;
-        }
-        if (!sessionRowHasRestorableContent(row)) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail('early prepare — no restorable session');
-            }
-            dismissSessionRestoreBootShellIfIdle();
-            if (typeof clearWaveformRestoreBootHint === 'function') {
-                clearWaveformRestoreBootHint();
-            }
-            return false;
-        }
-        if (
-            typeof sessionRowNeedsWaveformRestoreLock === 'function' &&
-            !sessionRowNeedsWaveformRestoreLock(row)
-        ) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail('early prepare — no waveform lock required');
-            }
-            dismissSessionRestoreBootShellIfIdle();
-            if (typeof clearWaveformRestoreBootHint === 'function') {
-                clearWaveformRestoreBootHint();
-            }
-            return false;
-        }
-        if (typeof maybeBeginWaveformRestoreLock !== 'function') return false;
-        return maybeBeginWaveformRestoreLock(row, {});
-    }
-
-    window.prepareSessionRestoreLockBeforeUi = prepareSessionRestoreLockBeforeUi;
 
     async function restoreSessionFromStorage() {
         return runSerializedSessionRestore(async () => {
@@ -1415,10 +1305,6 @@
                     (Number.isFinite(row && row.__saveStamp) ? row.__saveStamp : 'none'),
             );
             if (!sessionRowHasRestorableContent(row)) {
-                dismissSessionRestoreBootShellIfIdle();
-                if (typeof clearWaveformRestoreBootHint === 'function') {
-                    clearWaveformRestoreBootHint();
-                }
                 const prefs = readPrefs();
                 applySavedLoopPlayback(prefs.loopPlayback);
                 if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
@@ -1428,19 +1314,6 @@
                 }
                 writeLog('No stored session (user display prefs from localStorage).');
                 return;
-            }
-            if (typeof logNowLoadingDetail === 'function') {
-                const extraN = Array.isArray(row.extraTracks) ? row.extraTracks.length : 0;
-                logNowLoadingDetail(
-                    'restoreSession — applying row (video=' +
-                        (row.mBlob && row.mBlob.size ? 'yes' : 'no') +
-                        ', extraTracks=' +
-                        extraN +
-                        ')',
-                );
-            }
-            if (typeof maybeBeginWaveformRestoreLock === 'function') {
-                maybeBeginWaveformRestoreLock(row, {});
             }
             const prefs = readPrefs();
             applySavedLoopPlayback(prefs.loopPlayback);

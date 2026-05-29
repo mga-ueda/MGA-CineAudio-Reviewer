@@ -378,16 +378,6 @@
                 }
                 return;
             }
-            // Now Loading が止まったときの脱出用: 波形復元ロック中も All Clear を許可
-            if (
-                typeof isWaveformRestoreLockActive === 'function' &&
-                isWaveformRestoreLockActive() &&
-                matches(e, shortcuts.sessionAllClear) &&
-                typeof handleSessionIoShortcutKeydown === 'function' &&
-                handleSessionIoShortcutKeydown(e)
-            ) {
-                return;
-            }
             e.preventDefault();
             return;
         }
@@ -952,40 +942,6 @@
 
     (async function boot() {
         window.__sessionRestoreBootComplete = false;
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail('boot — waiting for early session lock');
-        }
-        try {
-            const earlyLock =
-                window.__sessionRestoreLockEarly ||
-                (typeof prepareSessionRestoreLockBeforeUi === 'function'
-                    ? prepareSessionRestoreLockBeforeUi()
-                    : null);
-            if (earlyLock) {
-                await Promise.race([
-                    earlyLock,
-                    new Promise((resolve) => setTimeout(resolve, 15000)),
-                ]);
-            }
-        } catch (e) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail(
-                    'boot — early lock failed: ' + (e && e.message ? e.message : String(e)),
-                );
-            }
-        } finally {
-            window.__sessionRestoreLockEarly = null;
-        }
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail('boot — initializing UI modules');
-        }
-        if (
-            typeof isWaveformRestoreLockActive === 'function' &&
-            !isWaveformRestoreLockActive() &&
-            typeof dismissWaveformRestoreBootShellIfIdle === 'function'
-        ) {
-            dismissWaveformRestoreBootShellIfIdle();
-        }
         if (typeof initPrefsFromStorage === 'function') {
             initPrefsFromStorage();
         }
@@ -998,21 +954,9 @@
         if (typeof initExtraAudioTracksUi === 'function') {
             initExtraAudioTracksUi();
         }
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail('boot — restoreSessionFromStorage');
-        }
         try {
             await restoreSessionFromStorage();
-        } catch (e) {
-            if (typeof logNowLoadingDetail === 'function') {
-                logNowLoadingDetail(
-                    'boot — restoreSession failed: ' + (e && e.message ? e.message : String(e)),
-                );
-            }
-        }
-        if (typeof logNowLoadingDetail === 'function') {
-            logNowLoadingDetail('boot — awaiting session restore queue idle');
-        }
+        } catch (_) {}
         try {
             if (typeof whenSessionRestoreIdle === 'function') {
                 await Promise.race([
