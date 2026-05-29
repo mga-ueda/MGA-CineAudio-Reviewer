@@ -168,7 +168,7 @@
     function buildMarkerMemoTableRowText(memo) {
         const memoText = markerCopyCellText(memo);
         if (!memoText) return '';
-        const row = ['', '', '', MARKER_MEMO_TABLE_ROW_LABEL + ': ' + memoText];
+        const row = ['', '', '', memoText];
         return row.map(markerCopyCellText).join('\t');
     }
 
@@ -278,8 +278,8 @@
             .trim();
         if (!feedback) return null;
         const re = new RegExp('^' + MARKER_MEMO_TABLE_ROW_LABEL + '\\s*:\\s*', 'i');
-        if (!re.test(feedback)) return null;
-        return feedback.replace(re, '').trim();
+        if (re.test(feedback)) return feedback.replace(re, '').trim();
+        return feedback;
     }
 
     /** Copy と同じ TSV（# / In / Out / Feedback、Length なし）を解析 */
