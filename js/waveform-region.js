@@ -12,6 +12,7 @@
     let regionHandleDragBoundaryIndex = -1;
     let regionHandleDragKind = null;
     let regionHandleDragPointerId = null;
+    let regionHandleDragStartClientX = NaN;
     let regionHandleDragDocMove = null;
     let regionHandleDragDocUp = null;
     /** Out ドラッグ中のみ、当該 Ex のタイムラインをクリップ最大長まで一時拡張 */
@@ -1040,6 +1041,33 @@
             }
         }
         return Math.max(0, snapToNearestStop(n, stops, threshold, opt));
+    }
+
+    /** 波形クリック／シークバー: リージョン In/Out（またはマーカー表示時はマーカー）へスナップ */
+    function snapTransportSecForWaveformSeek(sec, opt) {
+        const n = Number(sec);
+        if (!Number.isFinite(n)) return 0;
+        if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
+        const thresholdSec = regionSnapThresholdSec();
+        const markersShownOnWaveform =
+            typeof audioWaveformMarkers !== 'undefined' &&
+            audioWaveformMarkers &&
+            !audioWaveformMarkers.hidden;
+        if (markersShownOnWaveform && typeof snapSecToMarkerInOut === 'function') {
+            return snapSecToMarkerInOut(n, {
+                thresholdSec,
+                altKey: !!(opt && opt.altKey),
+            });
+        }
+        if (typeof snapRegionTransportSec === 'function') {
+            return snapRegionTransportSec(n, {
+                sameSlotOnly: -1,
+                altKey: !!(opt && opt.altKey),
+            });
+        }
+        return Math.max(0, n);
     }
 
     /** マーカードラッグ: 全 Ex トラックのリージョン In/Out へスナップ */
@@ -5134,6 +5162,7 @@
         regionHandleDragBoundaryIndex = -1;
         regionHandleDragKind = null;
         regionHandleDragPointerId = null;
+        regionHandleDragStartClientX = NaN;
         detachRegionHandleDragDocListeners();
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
@@ -5240,6 +5269,7 @@
         regionHandleDragBoundaryIndex = -1;
         regionHandleDragKind = kind;
         regionHandleDragPointerId = ev.pointerId;
+        regionHandleDragStartClientX = ev.clientX;
         if (typeof ev.target.setPointerCapture === 'function') {
             try {
                 ev.target.setPointerCapture(ev.pointerId);
@@ -5303,6 +5333,45 @@
                     e.target.releasePointerCapture(e.pointerId);
                 } catch (_) {}
             }
+            const clickOnly =
+                Number.isFinite(regionHandleDragStartClientX) &&
+                Math.abs(e.clientX - regionHandleDragStartClientX) <= 5;
+            if (
+                clickOnly &&
+                (regionHandleDragKind === 'in' || regionHandleDragKind === 'out') &&
+                regionHandleDragTrack &&
+                regionHandleDragSegmentIndex >= 0
+            ) {
+                const track = regionHandleDragTrack;
+                const seg = regionHandleDragSegmentIndex;
+                let sec =
+                    regionHandleDragKind === 'in'
+                        ? getSegmentRegionTimelineIn(track, seg)
+                        : getSegmentTimelineEnd(track, seg);
+                if (typeof snapRegionHandleTransportSec === 'function') {
+                    sec = snapRegionHandleTransportSec(sec, {
+                        exclude: { slot: track.slot, segmentIndex: seg },
+                        sameSlotOnly: -1,
+                    });
+                }
+                if (typeof clampTransportSec === 'function') {
+                    sec = clampTransportSec(sec);
+                }
+                if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+                    suppressRangeLoopSnapForExplicitSeek();
+                }
+                if (typeof applyTransportAtSec === 'function') {
+                    applyTransportAtSec(sec, { logInput: true, flash: true, markers: true });
+                }
+                syncRegionNavSeekTransportUi(sec);
+                if (typeof updateAllWaveformPlayheads === 'function') {
+                    updateAllWaveformPlayheads();
+                }
+                if (typeof schedulePersistSession === 'function') schedulePersistSession();
+                endRegionHandleDrag({ cancelled: true });
+                regionHandleDragStartClientX = NaN;
+                return;
+            }
             if (
                 regionHandleDragKind === 'out' &&
                 regionHandleDragTrack &&
@@ -5318,6 +5387,7 @@
                 );
             }
             endRegionHandleDrag();
+            regionHandleDragStartClientX = NaN;
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         };
         document.addEventListener('pointermove', regionHandleDragDocMove);
@@ -5918,6 +5988,7 @@
     window.isPointerOnAnyRegionResizeHandle = isPointerOnAnyRegionResizeHandle;
     window.snapRegionTransportSec = snapRegionTransportSec;
     window.snapSecToPlaybackRegionInOut = snapSecToPlaybackRegionInOut;
+    window.snapTransportSecForWaveformSeek = snapTransportSecForWaveformSeek;
     window.collectRegionSnapStops = collectRegionSnapStops;
     window.regionSnapThresholdSec = regionSnapThresholdSec;
 

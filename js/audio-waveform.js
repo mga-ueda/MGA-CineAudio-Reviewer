@@ -1247,9 +1247,35 @@
     }
 
     function seekFromWaveformPointer(clientX, opt) {
-        if (typeof applyTransportAtRatio === 'function') {
-            applyTransportAtRatio(transportRatioFromClientX(clientX), opt);
+        if (typeof applyTransportAtRatio !== 'function') return;
+        let ratio = transportRatioFromClientX(clientX);
+        if (
+            typeof transportSecFromClientX === 'function' &&
+            typeof snapTransportSecForWaveformSeek === 'function'
+        ) {
+            const raw = transportSecFromClientX(clientX);
+            const altSuppressed =
+                typeof isSnapSuppressedByAlt === 'function' ? isSnapSuppressedByAlt() : false;
+            const snapped = snapTransportSecForWaveformSeek(raw, { altKey: altSuppressed });
+            const master =
+                typeof getMasterTransportDurationSec === 'function'
+                    ? getMasterTransportDurationSec()
+                    : 0;
+            if (master > 0 && Number.isFinite(snapped)) {
+                ratio = Math.max(0, Math.min(1, snapped / master));
+            }
         }
+        applyTransportAtRatio(ratio, opt);
+    }
+
+    function snapSeekBarTransportSec(t) {
+        if (!Number.isFinite(t)) return t;
+        if (typeof snapTransportSecForWaveformSeek === 'function') {
+            const altSuppressed =
+                typeof isSnapSuppressedByAlt === 'function' ? isSnapSuppressedByAlt() : false;
+            return snapTransportSecForWaveformSeek(t, { altKey: altSuppressed });
+        }
+        return t;
     }
 
     let waveformOffsetDragSegmentIndex = -1;
@@ -1916,7 +1942,7 @@
         if (typeof seekBar !== 'undefined' && seekBar) {
             const onSeekBarInput = () => {
                 if (seekBar.disabled) return;
-                const t = parseFloat(seekBar.value);
+                const t = snapSeekBarTransportSec(parseFloat(seekBar.value));
                 if (!Number.isFinite(t)) return;
                 isSeeking = true;
                 if (typeof applyTransportAtSec === 'function') {
@@ -1928,7 +1954,7 @@
             };
             const onSeekBarChange = () => {
                 if (seekBar.disabled) return;
-                const t = parseFloat(seekBar.value);
+                const t = snapSeekBarTransportSec(parseFloat(seekBar.value));
                 if (!Number.isFinite(t)) return;
                 if (typeof applyTransportAtSec === 'function') {
                     applyTransportAtSec(t, { logInput: true, flash: true, markers: true });
