@@ -1063,9 +1063,16 @@
                     (manifest.appVersion ? ', exported with ' + manifest.appVersion : '') +
                     ')',
             );
-            if (typeof whenSessionRestoreIdle === 'function') {
-                writeLog('Import Review: waiting for any in-progress session restore…');
-                await whenSessionRestoreIdle();
+            const restoreWasActive =
+                (typeof isSessionRestoreInProgress === 'function' &&
+                    isSessionRestoreInProgress()) ||
+                (typeof isSessionRestoreTeardownPending === 'function' &&
+                    isSessionRestoreTeardownPending());
+            if (typeof abortPendingSessionRestore === 'function') {
+                if (restoreWasActive) {
+                    writeLog('Import Review: cancelling in-progress session restore…');
+                }
+                abortPendingSessionRestore();
             }
             if (typeof clearEntireSession === 'function') {
                 writeLog('Import Review: All Clear before restore…');
@@ -1109,6 +1116,9 @@
                 );
             }
             await importAndPersistSessionRow(row, { importReview: true });
+            if (typeof whenSessionRestoreIdle === 'function') {
+                await whenSessionRestoreIdle();
+            }
             logImportReviewSuccess(manifest, file, row);
         } finally {
             if (typeof whenSessionRestoreIdle === 'function') {

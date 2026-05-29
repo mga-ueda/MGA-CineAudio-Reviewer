@@ -361,19 +361,55 @@
     let sessionRestoreQueue = Promise.resolve();
     /** apply 完了後の Ex デコード待ち・ロック解除中 */
     let sessionRestoreTeardownPending = false;
+    /** Import / All Clear で中断された復元を識別 */
+    let sessionRestoreWorkToken = 0;
+    /** runSerializedSessionRestore 内で実行中タスクの workToken（ループ先頭でスナップショットする） */
+    let currentSessionRestoreWorkToken = null;
+    /** sessionRestoreInProgress の現在の所有者 */
+    let sessionRestoreActiveWorkToken = null;
 
     function whenSessionRestoreIdle() {
         return sessionRestoreQueue;
     }
 
+    function isSessionRestoreWorkCancelled(workToken) {
+        return workToken !== sessionRestoreWorkToken;
+    }
+
+    /** 進行中の起動復元・teardown を打ち切り、Import / All Clear を先に進める */
+    function abortPendingSessionRestore() {
+        sessionRestoreWorkToken += 1;
+        sessionRestoreListenersArmed = false;
+        sessionRestoreInProgress = false;
+        sessionRestoreTeardownPending = false;
+        sessionRestoreActiveWorkToken = null;
+        sessionRestoreQueue = Promise.resolve();
+        if (typeof cancelExtraTrackWaveformEnsure === 'function') {
+            cancelExtraTrackWaveformEnsure();
+        }
+        if (typeof clearStaleExtraTrackDecodingStatus === 'function') {
+            clearStaleExtraTrackDecodingStatus();
+        }
+    }
+
     function runSerializedSessionRestore(task) {
+        const workToken = sessionRestoreWorkToken;
         const run = async () => {
+            if (isSessionRestoreWorkCancelled(workToken)) return;
             sessionRestoreListenersArmed = false;
+            sessionRestoreActiveWorkToken = workToken;
+            currentSessionRestoreWorkToken = workToken;
             sessionRestoreInProgress = true;
             try {
                 return await task();
             } finally {
-                sessionRestoreInProgress = false;
+                if (currentSessionRestoreWorkToken === workToken) {
+                    currentSessionRestoreWorkToken = null;
+                }
+                if (sessionRestoreActiveWorkToken === workToken) {
+                    sessionRestoreActiveWorkToken = null;
+                    sessionRestoreInProgress = false;
+                }
                 if (typeof updateSessionAllClearButton === 'function') {
                     updateSessionAllClearButton();
                 }
@@ -383,9 +419,11 @@
             }
         };
         const p = sessionRestoreQueue.then(async () => {
+            if (isSessionRestoreWorkCancelled(workToken)) return;
             try {
                 return await run();
             } finally {
+                if (isSessionRestoreWorkCancelled(workToken)) return;
                 sessionRestoreTeardownPending = true;
                 try {
                     if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
@@ -401,6 +439,7 @@
     }
 
     window.whenSessionRestoreIdle = whenSessionRestoreIdle;
+    window.abortPendingSessionRestore = abortPendingSessionRestore;
     window.flushPersistSessionNow = flushPersistSessionNow;
     window.isSessionRestoreInProgress = function () {
         return !!sessionRestoreInProgress;
@@ -850,6 +889,9 @@
     }
 
     async function restoreExtraTracksFromRow(row) {
+        const restoreWorkToken = currentSessionRestoreWorkToken;
+        const restoreAborted = () =>
+            restoreWorkToken == null || isSessionRestoreWorkCancelled(restoreWorkToken);
         if (!Array.isArray(row.extraTracks) || row.extraTracks.length < 1) {
             if (typeof finalizeReviewMixAfterSessionRestore === 'function') {
                 await finalizeReviewMixAfterSessionRestore();
@@ -865,6 +907,7 @@
         }
         let restoredCount = 0;
         for (const entry of row.extraTracks) {
+            if (restoreAborted()) return;
             const maxExtraRestore = getExtraTrackCount();
             if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) continue;
             const blobBytes =
@@ -908,6 +951,7 @@
             if (!previewOk && typeof buildExtraTrackPeaksPreviewFromWavBlob === 'function') {
                 previewOk = await buildExtraTrackPeaksPreviewFromWavBlob(entry.slot, entry);
             }
+            if (restoreAborted()) return;
             const af = new File([entry.blob], entry.name || 'audio.wav', {
                 type:
                     typeof mimeTypeHintForAudioFileName === 'function'
@@ -937,6 +981,7 @@
                     regionSourceInSec: entry.regionSourceInSec,
                     regionSourceOutSec: entry.regionSourceOutSec,
                 });
+                if (restoreAborted()) return;
                 if (Array.isArray(entry.clips) && entry.clips.length > 1) {
                     for (const clipEntry of entry.clips) {
                         if (!clipEntry || clipEntry.id === 'main' || !clipEntry.blob) continue;
@@ -1018,6 +1063,7 @@
         } else {
             writeLog('Extra audio restore: ' + restoredCount + ' track(s) decoded');
         }
+        if (restoreAborted()) return;
         if (typeof refreshAllExtraTrackLaneVisibility === 'function') {
             refreshAllExtraTrackLaneVisibility();
         }

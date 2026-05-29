@@ -4556,6 +4556,12 @@
 
     window.clearStaleExtraTrackDecodingStatus = clearStaleExtraTrackDecodingStatus;
 
+    function cancelExtraTrackWaveformEnsure() {
+        extraWaveformEnsureGen += 1;
+    }
+
+    window.cancelExtraTrackWaveformEnsure = cancelExtraTrackWaveformEnsure;
+
     /** セッション復元ロック解除後: マスター尺確定後に Ex リージョンオーバーレイを再同期 */
     function refreshExtraTrackRegionOverlaysAfterSessionRestore() {
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {

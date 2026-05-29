@@ -290,11 +290,20 @@
         btn.disabled = !sessionHasClearableContent();
     }
 
-    async function releaseWaveformRestoreLockIfActive() {}
+    async function releaseWaveformRestoreLockIfActive() {
+        const restoreActive =
+            (typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()) ||
+            (typeof isSessionRestoreTeardownPending === 'function' &&
+                isSessionRestoreTeardownPending());
+        if (restoreActive && typeof abortPendingSessionRestore === 'function') {
+            abortPendingSessionRestore();
+        }
+    }
 
     async function clearEntireSession() {
+        await releaseWaveformRestoreLockIfActive();
         if (!sessionHasClearableContent()) {
-            await releaseWaveformRestoreLockIfActive();
             if (typeof clearLog === 'function') clearLog();
             writeLog('Session: nothing to clear');
             return;
@@ -325,7 +334,6 @@
             }
         }
         revokeAll();
-        await releaseWaveformRestoreLockIfActive();
         if (typeof resetVideoDriftMonitorSchedule === 'function') {
             resetVideoDriftMonitorSchedule();
         }
