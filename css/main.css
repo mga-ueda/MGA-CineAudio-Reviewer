@@ -1599,7 +1599,7 @@
         }
         .audio-waveform-lane-meta__row {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) 22px 22px 22px;
+            grid-template-columns: minmax(0, 1fr) 22px 22px;
             column-gap: 4px;
             align-items: center;
             min-height: 0;
@@ -1628,9 +1628,7 @@
         .audio-waveform-lane-meta--active .audio-waveform-lane-meta__title {
             background: linear-gradient(
                 90deg,
-                rgba(255, 80, 104, 0.46) 0%,
-                rgba(228, 48, 72, 0.36) 32%,
-                rgba(120, 20, 36, 0.28) 62%,
+                rgba(255, 0, 34, 0.46) 0%,
                 rgba(36, 8, 14, 0.32) 100%
             );
             color: #ffe8ec;
@@ -1671,13 +1669,31 @@
         }
         .track-lane-bottom-actions {
             display: grid;
-            grid-template-columns: 22px 22px minmax(0, 1fr);
+            grid-template-columns: 22px minmax(0, 1fr) 22px 22px;
             column-gap: 4px;
-            align-items: center;
+            align-items: stretch;
             width: var(--track-lane-controls-w);
             min-width: var(--track-lane-controls-w);
             max-width: var(--track-lane-controls-w);
             margin-top: 4px;
+        }
+        .track-lane-bottom-actions--compact {
+            grid-template-columns: 22px minmax(0, 1fr);
+        }
+        .track-lane-bottom-actions .track-mix-btn--clear {
+            width: 22px;
+            min-width: 22px;
+            max-width: 22px;
+            padding: 1px 0;
+            font-size: 10px;
+            line-height: 1.15;
+            text-align: center;
+            border-radius: 4px;
+            box-sizing: border-box;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .track-lane-move-btn,
         .track-lane-add-btn {
@@ -1710,6 +1726,16 @@
             min-width: 0;
             max-width: none;
             margin-top: 0;
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .track-lane-bottom-actions .track-lane-move-btn {
+            align-self: stretch;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         .track-lane-move-btn:hover:not(:disabled),
         .track-lane-add-btn:hover:not(:disabled) {
@@ -1760,7 +1786,7 @@
             background-image: linear-gradient(
                 90deg,
                 #000000 0%,
-                #ff8818 50%,
+                #ff7b00 50%,
                 #ffffff 100%
             );
             background-size: var(--track-lane-control-w) 100%;
@@ -2027,11 +2053,9 @@
         }
         .audio-waveform-lane--video .audio-waveform-lane__track-bg,
         .audio-waveform-lane--video .audio-waveform-lane__canvas,
-        .audio-waveform-lane--video .audio-waveform-lane__file-name,
         .audio-waveform-lane--video .audio-waveform-lane__content-end,
         .audio-waveform-lane--extra .audio-waveform-lane__track-bg,
         .audio-waveform-lane--extra .audio-waveform-lane__canvas,
-        .audio-waveform-lane--extra .audio-waveform-lane__file-name,
         .audio-waveform-lane--extra .audio-waveform-lane__content-end {
             pointer-events: none;
         }
@@ -2062,30 +2086,6 @@
             line-height: 1.2;
             text-align: center;
         }
-        .audio-waveform-lane__file-name {
-            position: absolute;
-            left: 6px;
-            bottom: 4px;
-            z-index: 2;
-            max-width: calc(100% - 12px);
-            margin: 0;
-            font-size: 0.58rem;
-            font-weight: 500;
-            line-height: 1.2;
-            letter-spacing: 0.02em;
-            color: var(--accent-ink);
-            -webkit-text-fill-color: var(--accent-ink);
-            pointer-events: none;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .audio-waveform-lane__file-name[hidden] {
-            display: none !important;
-        }
-        .audio-waveform-lane--has-regions > .audio-waveform-lane__file-name {
-            display: none !important;
-        }
         .audio-waveform-lane__playback-region__gain-db {
             position: absolute;
             left: 50%;
@@ -2102,25 +2102,6 @@
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
-            white-space: nowrap;
-        }
-        .audio-waveform-lane__playback-region__label {
-            position: absolute;
-            left: 5px;
-            bottom: 4px;
-            z-index: 3;
-            max-width: calc(100% - 10px);
-            font-size: 0.58rem;
-            font-weight: 500;
-            line-height: 1.2;
-            letter-spacing: 0.02em;
-            color: var(--accent-ink);
-            -webkit-text-fill-color: var(--accent-ink);
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-            overflow: hidden;
-            text-overflow: ellipsis;
             white-space: nowrap;
         }
         .audio-waveform-composite__markers.seek-bar-markers .seek-bar-marker {

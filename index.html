@@ -199,7 +199,6 @@
                         <div class="track-mix-actions">
                             <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo（このレーンのみ再生）" aria-pressed="false">S</button>
                             <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（このレーンをミュート）" aria-pressed="false">M</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません">×</button>
                         </div>
                     </div>
                     <div class="track-lane-controls">
@@ -215,7 +214,10 @@
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
-                    <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の extra audio track を表示">+ Add Track</button>
+                    <div class="track-lane-bottom-actions track-lane-bottom-actions--compact">
+                        <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません">×</button>
+                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の extra audio track を表示">+ Add Track</button>
+                    </div>
                 </div>
                 <div id="extraLaneMetaMount"></div>
             </div>
@@ -232,7 +234,6 @@
                     <div class="audio-waveform-lane__track" id="audioWaveformTrack">
                         <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
                         <canvas id="audioWaveformCanvas" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>
-                        <span class="audio-waveform-lane__file-name" id="audioWaveformFileName" hidden aria-hidden="true"></span>
                         <div class="audio-waveform-lane__content-end" id="audioWaveformContentEnd" hidden aria-hidden="true"></div>
                     </div>
                     <div class="audio-waveform-lane__loading" id="audioWaveformTrackLoading" hidden aria-live="polite">

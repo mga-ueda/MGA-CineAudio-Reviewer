@@ -202,9 +202,6 @@
             if (tip) parts.push(tip);
             titleEl.title = parts.join(' — ');
         }
-        if (typeof refreshVideoAudioLaneFileName === 'function') {
-            refreshVideoAudioLaneFileName();
-        }
     }
 
     /** Video Audio 行の loaded。composite の赤枠は refreshAudioWaveformCompositeLoadedState で別管理。 */
@@ -280,9 +277,6 @@
             resetVideoTrackMixToDefault();
         }
         refreshVideoAudioLaneVisibility();
-        if (typeof refreshVideoAudioLaneFileName === 'function') {
-            refreshVideoAudioLaneFileName();
-        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
@@ -406,9 +400,6 @@
             );
         }
         if (typeof refreshReviewMixUi === 'function') refreshReviewMixUi();
-        if (typeof refreshVideoAudioLaneFileName === 'function') {
-            refreshVideoAudioLaneFileName();
-        }
         if (typeof refreshExtraTrackAddLaneButtons === 'function') {
             refreshExtraTrackAddLaneButtons();
         }

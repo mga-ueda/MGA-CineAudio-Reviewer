@@ -898,10 +898,9 @@
                     if (entry && entry.name) return entry.name;
                 }
             }
-            const el = document.getElementById('extraAudioFileName' + i);
-            if (el && el.textContent) {
-                const t = String(el.textContent).trim();
-                if (t) return t;
+            if (typeof extraTrackBySlot === 'function') {
+                const tr = extraTrackBySlot(i);
+                if (tr && tr.file && tr.file.name) return String(tr.file.name);
             }
         }
         return '';

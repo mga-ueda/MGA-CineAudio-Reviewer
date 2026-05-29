@@ -3024,7 +3024,7 @@
         delete state.regionTimelineInSec;
         delete state.regionLeadPadSec;
         updateTrackRegionOverlays(track);
-        syncLaneFileNameForTrack(track);
+        syncExtraLaneRegionsClassForTrack(track);
         if (was) {
             noteRegionShrinkPersistIntent(track.slot);
             redrawAfterRegionChange(track.slot);
@@ -3433,42 +3433,22 @@
         return lane.querySelector('.audio-waveform-lane__playback-regions');
     }
 
-    function getTrackRegionFileName(track) {
-        if (!isExtraTrackRef(track)) return '';
-        const tr =
-            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(track.slot) : null;
-        return tr && tr.file && tr.file.name ? tr.file.name : '';
-    }
-
-    function syncLaneFileNameForTrack(track) {
+    function syncExtraLaneRegionsClassForTrack(track) {
         if (!isExtraTrackRef(track)) return;
-        const el = document.getElementById('extraAudioFileName' + track.slot);
-        if (!el) return;
         const lane = document.getElementById('extraAudioLane' + track.slot);
+        if (!lane) return;
         const hasRegions = isTrackRegionActive(track);
-        if (lane) {
-            const hadRegions = lane.classList.contains('audio-waveform-lane--has-regions');
-            lane.classList.toggle('audio-waveform-lane--has-regions', hasRegions);
-            if (
-                hadRegions !== hasRegions &&
-                typeof renderAudioWaveformMarkers === 'function'
-            ) {
-                renderAudioWaveformMarkers();
-            }
-        }
-        if (hasRegions) {
-            el.hidden = true;
-            el.textContent = '';
-            el.removeAttribute('title');
-        } else {
-            const name = getTrackRegionFileName(track);
-            el.textContent = name;
-            el.title = name;
-            el.hidden = !name;
+        const hadRegions = lane.classList.contains('audio-waveform-lane--has-regions');
+        lane.classList.toggle('audio-waveform-lane--has-regions', hasRegions);
+        if (
+            hadRegions !== hasRegions &&
+            typeof renderAudioWaveformMarkers === 'function'
+        ) {
+            renderAudioWaveformMarkers();
         }
     }
 
-    function buildRegionOverlayEl(track, segmentIndex, seg, fileName) {
+    function buildRegionOverlayEl(track, segmentIndex, seg) {
         const el = document.createElement('div');
         el.className = 'audio-waveform-lane__playback-region';
         el.dataset.segmentIndex = String(segmentIndex);
@@ -3526,11 +3506,6 @@
         fadeOutHandle.title = 'Fade Out（内側へドラッグ）';
         el.appendChild(fadeOutHandle);
 
-        const label = document.createElement('span');
-        label.className = 'audio-waveform-lane__playback-region__label';
-        label.textContent = fileName || 'Region ' + (segmentIndex + 1);
-        label.title = fileName || '';
-        el.appendChild(label);
         const gainDb = getSegmentGainDb(track, segmentIndex);
         const gainLabel = document.createElement('span');
         gainLabel.className = 'audio-waveform-lane__playback-region__gain-db';
@@ -3630,52 +3605,6 @@
             fadeCurve.style.setProperty('--region-fade-in-width', fadeInRatio * 100 + '%');
             fadeCurve.style.setProperty('--region-fade-out-width', fadeOutRatio * 100 + '%');
         }
-        applyPlaybackRegionLabelCrossfadePriority(el, track, segmentIndex);
-    }
-
-    /** クロスフェード重なりでファイル名ラベルが重なるとき、後着（大きい segmentIndex）を手前にする */
-    function applyPlaybackRegionLabelCrossfadePriority(el, track, segmentIndex) {
-        const label = el.querySelector('.audio-waveform-lane__playback-region__label');
-        if (!label) return;
-
-        el.style.zIndex = String(segmentIndex + 1);
-        label.style.removeProperty('max-width');
-
-        const trackStart =
-            typeof getTrackTimelineStartSec === 'function'
-                ? getTrackTimelineStartSec(track)
-                : 0;
-        const inTransport = Math.max(
-            trackStart,
-            getSegmentRegionTimelineIn(track, segmentIndex),
-        );
-        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
-        const regionDur = Math.max(0.001, outTransport - inTransport);
-
-        let earliestLaterOverlapStart = outTransport;
-        for (let j = segmentIndex + 1; j < getTrackSegments(track).length; j++) {
-            const oStart = Math.max(
-                getSegmentPlaybackTimelineStart(track, segmentIndex),
-                getSegmentPlaybackTimelineStart(track, j),
-            );
-            const oEnd = Math.min(
-                outTransport,
-                getSegmentTimelineEnd(track, j),
-            );
-            if (oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC) continue;
-            earliestLaterOverlapStart = Math.min(earliestLaterOverlapStart, oStart);
-        }
-
-        if (earliestLaterOverlapStart >= outTransport - 0.0005) return;
-
-        const pct = Math.max(
-            0,
-            Math.min(
-                100,
-                ((earliestLaterOverlapStart - inTransport) / regionDur) * 100,
-            ),
-        );
-        label.style.maxWidth = 'max(0px, calc(' + pct + '% - 10px))';
     }
 
     const CROSSFADE_OVERLAP_MIN_SEC = 0.25;
@@ -4421,14 +4350,13 @@
         }
         if (!segments.length) {
             container.hidden = true;
-            syncLaneFileNameForTrack(track);
+            syncExtraLaneRegionsClassForTrack(track);
             return;
         }
         container.hidden = false;
-        const fileName = getTrackRegionFileName(track);
         for (let i = 0; i < segments.length; i++) {
             const seg = segments[i];
-            const el = buildRegionOverlayEl(track, i, seg, fileName);
+            const el = buildRegionOverlayEl(track, i, seg);
             positionRegionOverlayEl(el, track, i, seg);
             container.appendChild(el);
         }
@@ -4445,7 +4373,7 @@
             positionSplitHandleEl(splitEl, track, b);
             container.appendChild(splitEl);
         }
-        syncLaneFileNameForTrack(track);
+        syncExtraLaneRegionsClassForTrack(track);
         if (
             restoreHover &&
             Number.isFinite(hoverClientX) &&
@@ -6163,8 +6091,8 @@
     window.getTrackSegmentCount = function (slot) {
         return getSegmentCount({ type: 'extra', slot });
     };
-    window.syncExtraLaneFileNameForRegions = function (slot) {
-        syncLaneFileNameForTrack({ type: 'extra', slot });
+    window.syncExtraLaneRegionsForSlot = function (slot) {
+        syncExtraLaneRegionsClassForTrack({ type: 'extra', slot });
     };
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;

@@ -17,9 +17,9 @@
             '<div class="audio-waveform-lane-meta__row">' +
             '<span class="audio-waveform-lane-meta__title" id="extraAudioTitle' +
             slot +
-            '">Ex ' +
+            '">' +
             n +
-            ' Track</span>' +
+            '.</span>' +
             '<div class="track-mix-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn' +
             slot +
@@ -27,9 +27,6 @@
             '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
             slot +
             '" disabled title="Mute（このレーンをミュート）" aria-pressed="false">M</button>' +
-            '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
-            slot +
-            '" title="Clear（レーンを非表示）">×</button>' +
             '</div></div>' +
             '<div class="track-lane-controls">' +
             '<div class="track-lane-meter-row">' +
@@ -55,17 +52,20 @@
             slot +
             '" hidden></span>' +
             '<div class="track-lane-bottom-actions">' +
+            '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
+            slot +
+            '" title="Clear（レーンを非表示）">×</button>' +
+            '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
+            slot +
+            '" title="次の extra audio track を表示"' +
+            addAttrs +
+            '>+ Add Track</button>' +
             '<button type="button" class="track-lane-move-btn" id="extraAudioMoveUpBtn' +
             slot +
             '" title="このトラックを上へ移動" aria-label="Move this track up">▲</button>' +
             '<button type="button" class="track-lane-move-btn" id="extraAudioMoveDownBtn' +
             slot +
             '" title="このトラックを下へ移動" aria-label="Move this track down">▼</button>' +
-            '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
-            slot +
-            '" title="次の extra audio track を表示"' +
-            addAttrs +
-            '>+ Add Track</button>' +
             '</div>';
         return wrap;
     }
@@ -83,9 +83,6 @@
             '<canvas id="extraAudioCanvas' +
             slot +
             '" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>' +
-            '<span class="audio-waveform-lane__file-name" id="extraAudioFileName' +
-            slot +
-            '" hidden aria-hidden="true"></span>' +
             '<div class="audio-waveform-lane__content-end" id="extraAudioContentEnd' +
             slot +
             '" hidden aria-hidden="true"></div></div>' +
