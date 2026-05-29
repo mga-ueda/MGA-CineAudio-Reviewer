@@ -1467,19 +1467,6 @@
         return ab;
     }
 
-    function decodeArrayBufferToAudioBuffer(ctx, ab) {
-        const copy = ab.slice(0);
-        return Promise.race([
-            ctx.decodeAudioData(copy),
-            new Promise((_, reject) => {
-                setTimeout(
-                    () => reject(new Error('decodeAudioData timeout')),
-                    WAVEFORM_DECODE_TIMEOUT_MS
-                );
-            }),
-        ]);
-    }
-
     async function buildAudioWaveformForCurrentVideo() {
         const gen = ++waveformBuildGen;
         if (!urlMain) {
@@ -1537,7 +1524,11 @@
             await yieldToBrowser();
             if (waveformBuildGenerationStale(gen)) return;
             try {
-                buffer = await decodeArrayBufferToAudioBuffer(ctx, ab);
+                buffer = await decodeArrayBufferToAudioBuffer(
+                    ctx,
+                    ab,
+                    WAVEFORM_DECODE_TIMEOUT_MS,
+                );
             } catch (err1) {
                 if (!urlMain) throw err1;
                 const res = await fetch(urlMain);
@@ -1545,7 +1536,11 @@
                 ab = await res.arrayBuffer();
                 if (waveformBuildGenerationStale(gen)) return;
                 await yieldToBrowser();
-                buffer = await decodeArrayBufferToAudioBuffer(ctx, ab);
+                buffer = await decodeArrayBufferToAudioBuffer(
+                    ctx,
+                    ab,
+                    WAVEFORM_DECODE_TIMEOUT_MS,
+                );
             }
             if (waveformBuildGenerationStale(gen)) return;
             const videoDur = getDuration(videoMain);

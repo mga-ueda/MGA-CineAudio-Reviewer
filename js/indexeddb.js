@@ -943,7 +943,7 @@
                 if (!loadApiMissingLogged) {
                     loadApiMissingLogged = true;
                     writeLog(
-                        'Extra audio restore: loadExtraTrackFile unavailable — check that extra-audio-tracks.js loaded',
+                        'Extra audio restore: loadExtraTrackFile unavailable — check that extra-audio-load.js loaded',
                     );
                 }
                 continue;

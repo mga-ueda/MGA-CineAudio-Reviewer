@@ -119,6 +119,30 @@
         }
     }
 
+    /** 明示シーク後のトランスポート UI（タイムコード・プレイヘッド・ループ／マーカーオーバーレイ） */
+    function syncTransportSeekUi(t, opt) {
+        if (!Number.isFinite(t)) return;
+        if (typeof setTransportSec === 'function') {
+            setTransportSec(t);
+        } else if (typeof seekBar !== 'undefined' && seekBar) {
+            seekBar.value = String(t);
+        }
+        if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
+            if (typeof formatTimecodeForTransport === 'function') {
+                currentTimeEl.textContent = formatTimecodeForTransport(t);
+            }
+        }
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+        if (typeof updateMarkerCommentOverlay === 'function') {
+            updateMarkerCommentOverlay();
+        } else if (opt && opt.markerHighlight && typeof updateTransportMarkerHighlight === 'function') {
+            updateTransportMarkerHighlight(t);
+        }
+    }
+
     window.isSnapSuppressedByAlt = isSnapSuppressedByAlt;
     window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
     window.syncSnapSuppressionFromPointerEvent = syncSnapSuppressionFromPointerEvent;
+    window.syncTransportSeekUi = syncTransportSeekUi;

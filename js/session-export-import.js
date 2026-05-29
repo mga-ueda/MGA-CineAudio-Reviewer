@@ -1287,12 +1287,19 @@
         const sessionIoRow = document.querySelector('.transport-bar__row--export');
         if (!exportBtn || !importBtn || !importFile) return;
 
-        applyExportMediaIncludePrefs(readExportMediaIncludePrefs());
-        refreshExportMediaOptionsUi();
-        if (typeof updateSessionAllClearButton === 'function') {
-            updateSessionAllClearButton();
+        try {
+            applyExportMediaIncludePrefs(readExportMediaIncludePrefs());
+            refreshExportMediaOptionsUi();
+            if (typeof updateSessionAllClearButton === 'function') {
+                updateSessionAllClearButton();
+            }
+            bindExportMediaIncludeCheckboxPersistence();
+        } catch (e) {
+            const msg = e && e.message ? e.message : String(e);
+            if (typeof writeLog === 'function') {
+                writeLog('Session IO UI: init refresh failed — ' + msg);
+            }
         }
-        bindExportMediaIncludeCheckboxPersistence();
         if (typeof whenSessionRestoreIdle === 'function') {
             void whenSessionRestoreIdle().then(() => {
                 refreshExportMediaOptionsUi();
