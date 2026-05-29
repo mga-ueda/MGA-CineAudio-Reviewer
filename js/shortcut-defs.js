@@ -100,7 +100,14 @@
         // ---------- 波形タイムライン ----------
         waveformTimelineZoomIn: { codes: ['Equal', 'NumpadAdd'] },
         waveformTimelineZoomOut: { codes: ['Minus', 'NumpadSubtract'] },
-        waveformTimelineFit: { code: 'KeyF', shift: true, ctrl: false, alt: false, meta: false },
+        waveformTimelineFit: {
+            code: 'KeyZ',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
         waveformTimelineScrollBack: { code: 'PageUp' },
         waveformTimelineScrollForward: { code: 'PageDown' },
         waveformLaneSeekHome: { code: 'Home' },
