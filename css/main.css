@@ -3902,6 +3902,7 @@
             min-height: 148px;
             max-height: 148px;
             resize: none;
+            white-space: pre-line;
             overflow-x: hidden;
             overflow-y: scroll;
             background: #242629;

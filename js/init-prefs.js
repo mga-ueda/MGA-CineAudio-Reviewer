@@ -16,7 +16,9 @@
 
     (function logAppStartupLines() {
         const readyLine = '> System Ready. (' + APP_VERSION_LABEL + ')';
-        if (logEl) {
+        if (typeof seedLogLines === 'function') {
+            seedLogLines(readyLine);
+        } else if (logEl) {
             logEl.innerText = readyLine;
         }
         window.__appStartupLogComplete = true;

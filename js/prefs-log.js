@@ -1,5 +1,19 @@
     const LOG_MAX_LINES = 500;
     const LOG_MASK_DEBUG_OUTPUT = true;
+    let logLines = [];
+
+    function syncLogEl() {
+        if (!logEl) return;
+        logEl.innerText = logLines.join('\n');
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function seedLogLines(lines) {
+        logLines = Array.isArray(lines) ? lines.slice() : lines != null && lines !== '' ? [String(lines)] : [];
+        syncLogEl();
+    }
+
+    window.seedLogLines = seedLogLines;
 
     function showAppAlert(title, body) {
         const t = title != null ? String(title) : '';
@@ -109,14 +123,14 @@
     })();
 
     function clearLog() {
+        logLines = [];
         if (!logEl) return;
         logEl.innerText = '';
         logEl.scrollTop = 0;
     }
 
     async function copyLogToClipboard() {
-        if (!logEl) return false;
-        const text = String(logEl.innerText || '');
+        const text = logLines.join('\n');
         if (!text) return false;
         try {
             if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -161,15 +175,12 @@
                 ':' +
                 String(now.getSeconds()).padStart(2, '0') +
                 ']';
-            const cur = logEl.innerText;
-            const lines = cur ? cur.split('\n') : [];
             formattedLine = time + ' - ' + m;
-            lines.push(formattedLine);
-            if (lines.length > LOG_MAX_LINES) {
-                lines.splice(0, lines.length - LOG_MAX_LINES);
+            logLines.push(formattedLine);
+            if (logLines.length > LOG_MAX_LINES) {
+                logLines.splice(0, logLines.length - LOG_MAX_LINES);
             }
-            logEl.innerText = lines.join('\n');
-            logEl.scrollTop = logEl.scrollHeight;
+            syncLogEl();
         }
     }
 
