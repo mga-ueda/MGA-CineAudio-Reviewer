@@ -4,73 +4,15 @@
     position: relative;
     padding: 28px 24px 20px;
     text-align: center;
-    border-bottom: 1px solid var(--panel-border);
 }
 
 .shortcuts-page__title {
-    margin: 0 0 6px;
+    margin: 0;
     font-size: 1.55rem;
     font-weight: 700;
     letter-spacing: -0.03em;
     color: var(--app-heading);
     line-height: 1.15;
-}
-
-.shortcuts-page__title span {
-    color: var(--app-accent);
-}
-
-.shortcuts-page__subtitle {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--app-text-muted);
-}
-
-.shortcuts-page__actions {
-    margin-top: 14px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
-}
-
-.shortcuts-page__back {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 32px;
-    padding: 0 14px;
-    border-radius: 6px;
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--docs-heading-text);
-    text-decoration: none;
-    background: var(--docs-btn-gradient);
-    border: 1px solid var(--docs-heading-border);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    transition: filter 0.15s ease, transform 0.15s ease;
-}
-
-.shortcuts-page__back:hover {
-    filter: brightness(1.06);
-    transform: translateY(-1px);
-    text-decoration: none;
-}
-
-.shortcuts-page__back--ghost {
-    color: var(--app-doc-text);
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.shortcuts-page__back--ghost:hover {
-    color: var(--app-accent);
-    border-color: var(--accent-border);
-    background: var(--accent-bg-soft);
-    filter: none;
-    box-shadow: 0 2px 12px var(--accent-glow-weak);
 }
 
 .shortcuts-page__main {
@@ -110,27 +52,17 @@
     pointer-events: none;
 }
 
-.shortcut-table thead th {
-    padding: 10px 12px;
-    text-align: left;
-    vertical-align: middle;
-    font-weight: 700;
-    color: var(--docs-heading-text);
-    background: var(--docs-heading-gradient);
-    border: 1px solid var(--docs-heading-border);
-    border-top: none;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.shortcut-table thead th:nth-child(1) {
+.shortcut-table tbody td:nth-child(1) {
     width: 28%;
 }
 
-.shortcut-table thead th:nth-child(2) {
+.shortcut-table tbody td:nth-child(2) {
     width: 32%;
+    white-space: normal;
+    line-height: 1.65;
 }
 
-.shortcut-table thead th:nth-child(3) {
+.shortcut-table tbody td:nth-child(3) {
     width: 40%;
 }
 
@@ -158,11 +90,6 @@
 .shortcut-table tbody td:first-child {
     font-weight: 700;
     color: var(--app-shortcut-col1);
-}
-
-.shortcut-table tbody td:nth-child(2) {
-    white-space: normal;
-    line-height: 1.65;
 }
 
 .shortcut-table kbd + kbd {
