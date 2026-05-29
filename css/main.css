@@ -3968,7 +3968,7 @@
         .transport-bar .session-io-actions {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 10px;
             flex: 0 0 auto;
             padding: 0;
             border: none;
