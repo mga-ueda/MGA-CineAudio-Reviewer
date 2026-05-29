@@ -1061,6 +1061,9 @@
         if (ctx && audioWaveformCanvas) {
             ctx.clearRect(0, 0, audioWaveformCanvas.width, audioWaveformCanvas.height);
         }
+        if (typeof clearWaveformTrackLkfs === 'function' && audioWaveformTrack) {
+            clearWaveformTrackLkfs(audioWaveformTrack);
+        }
     }
 
     function peaksFromAudioBuffer(buffer, barCount) {
@@ -1572,6 +1575,9 @@
             const msg = err && err.message ? err.message : String(err);
             writeLog('Waveform: decode failed — ' + msg);
             setAudioWaveformStatus('Waveform unavailable');
+            if (typeof clearWaveformTrackLkfs === 'function' && audioWaveformTrack) {
+                clearWaveformTrackLkfs(audioWaveformTrack);
+            }
             drawAudioWaveformCanvas();
             notifyVideoAudioLoadSettled();
             if (typeof syncVideoTrackWaveformLoading === 'function') {
@@ -1609,6 +1615,9 @@
                 (rate ? rate + ' Hz' : '') +
                 (dur > 0 ? ' · ' + dur.toFixed(2) + ' s' : ''),
         );
+        if (typeof scheduleWaveformTrackLkfsMeasure === 'function' && audioWaveformTrack) {
+            void scheduleWaveformTrackLkfsMeasure(audioWaveformTrack, buffer);
+        }
         drawAudioWaveformCanvas();
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();

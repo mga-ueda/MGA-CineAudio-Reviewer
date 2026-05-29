@@ -83,6 +83,9 @@
             '<canvas id="extraAudioCanvas' +
             slot +
             '" class="audio-waveform-lane__canvas" aria-hidden="true"></canvas>' +
+            '<span class="audio-waveform-lane__lkfs" id="extraAudioLkfs' +
+            slot +
+            '" hidden aria-hidden="true"></span>' +
             '<div class="audio-waveform-lane__content-end" id="extraAudioContentEnd' +
             slot +
             '" hidden aria-hidden="true"></div></div>' +

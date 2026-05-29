@@ -4754,6 +4754,10 @@
         tr.analyser = null;
         setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
         setExtraTrackStatus(slot, 'Not Loaded');
+        const uiClear = getExtraUi(slot);
+        if (typeof clearWaveformTrackLkfs === 'function' && uiClear && uiClear.track) {
+            clearWaveformTrackLkfs(uiClear.track);
+        }
         refreshExtraTrackUi(slot);
         if (typeof syncExtraTrackWaveformLoading === 'function') {
             syncExtraTrackWaveformLoading(slot);
@@ -4992,6 +4996,10 @@
             tr.persistBlob = null;
             setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
             setExtraTrackStatus(slot, 'Decode failed');
+            const uiDecodeFail = getExtraUi(slot);
+            if (typeof clearWaveformTrackLkfs === 'function' && uiDecodeFail && uiDecodeFail.track) {
+                clearWaveformTrackLkfs(uiDecodeFail.track);
+            }
             refreshExtraTrackUi(slot);
             if (typeof syncExtraTrackWaveformLoading === 'function') {
                 syncExtraTrackWaveformLoading(slot);
@@ -5104,6 +5112,10 @@
                 tr.peaks = null;
                 tr.persistBlob = null;
                 setExtraTrackStatus(slot, '');
+                const uiAbort = getExtraUi(slot);
+                if (typeof clearWaveformTrackLkfs === 'function' && uiAbort && uiAbort.track) {
+                    clearWaveformTrackLkfs(uiAbort.track);
+                }
                 return;
             }
             const ui = getExtraUi(slot);
@@ -5141,6 +5153,10 @@
                     buffer.duration.toFixed(2) +
                     ' s'
             );
+            const trackEl = ui && ui.track ? ui.track : null;
+            if (typeof scheduleWaveformTrackLkfsMeasure === 'function' && trackEl) {
+                void scheduleWaveformTrackLkfsMeasure(trackEl, buffer);
+            }
             setExtraTrackLoaded(slot, true, { skipLayoutRefresh: true });
             refreshExtraTrackUi(slot);
             if (opt && opt.fromSessionRestore) {
