@@ -1196,11 +1196,15 @@
         if (!markerHideViewBtn) return;
         const hasMarkers = currentMarkers.length > 0;
         markerHideViewBtn.textContent = markersDisplayHidden ? 'View' : 'Hide';
+        const hintV =
+            typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.markerHide
+                ? window.SHORTCUT_HINTS.markerHide
+                : 'V';
         markerHideViewBtn.title = hasMarkers
             ? markersDisplayHidden
-                ? 'Show markers on timeline and video (V)'
-                : 'Hide markers on timeline and video (V)'
-            : 'Add markers to use Hide/View';
+                ? 'タイムラインと映像上のマーカーを表示（' + hintV + '）'
+                : 'タイムラインと映像上のマーカーを非表示（' + hintV + '）'
+            : 'マーカーを追加すると Hide/View が使えます';
         markerHideViewBtn.setAttribute(
             'aria-pressed',
             markersDisplayHidden ? 'true' : 'false',
@@ -2669,6 +2673,31 @@
         if (input && input.focus) input.focus();
     }
 
+    function markerTcFieldTooltip(edge, isRange) {
+        const th = typeof window.SHORTCUT_HINTS !== 'undefined' ? window.SHORTCUT_HINTS : {};
+        const tcFrame = th.tcNudgeFrame || '+/−';
+        const tcSec = th.tcNudgeSec || 'Shift++/−';
+        const tcDel = th.tcClearOut || 'Del';
+        const tcDone = (th.submitEdit || 'Enter') + '/' + (th.cancelEdit || 'Esc');
+        if (edge === 'in') {
+            return 'In TC: ' + tcFrame + ' で ±1f、' + tcSec + ' で ±1s（' + tcDone + ' で終了）';
+        }
+        if (isRange) {
+            return (
+                'Out TC: ' +
+                tcFrame +
+                ' で ±1f、' +
+                tcSec +
+                ' で ±1s、' +
+                tcDel +
+                ' で Out クリア（' +
+                tcDone +
+                ' で終了）'
+            );
+        }
+        return 'Out TC: ' + tcFrame + ' で range Out を設定（±1f / ' + tcSec + ' で ±1s）';
+    }
+
     function createMarkerTcInput(m, edge) {
         const input = document.createElement('input');
         input.type = 'text';
@@ -2685,13 +2714,10 @@
         if (edge === 'in') {
             input.value =
                 m.type === 'range' ? tcLabelForSec(m.startSec) : tcLabelForSec(m.timeSec);
-            input.title = 'In TC: [+][-] で ±1f ・ [Shift][+][-] で ±1s（Enter/Esc で終了）';
+            input.title = markerTcFieldTooltip('in', m.type === 'range');
         } else {
             input.value = m.type === 'range' ? tcLabelForSec(m.endSec) : '';
-            input.title =
-                m.type === 'range'
-                    ? 'Out TC: [+][-] ±1f · [Shift][+][-] ±1s · [Del] clear Out (Enter/Esc to finish)'
-                    : 'Out TC: [+][-] sets range Out (±1f / Shift ±1s)';
+            input.title = markerTcFieldTooltip('out', m.type === 'range');
         }
         const restoreDisplayedTc = () => {
             const sec = markerTcSecForEdge(m, edge);
@@ -3232,12 +3258,10 @@
         if (outInput) {
             if (m.type === 'range') {
                 outInput.value = tcLabelForSec(m.endSec);
-                outInput.title =
-                    'Out TC: [+][-] ±1f · [Shift][+][-] ±1s · [Del] clear Out (Enter/Esc to finish)';
             } else {
                 outInput.value = '';
-                outInput.title = 'Out TC: [+][-] で range Out を設定（±1f / Shift ±1s）';
             }
+            outInput.title = markerTcFieldTooltip('out', m.type === 'range');
         }
         if (durCell) {
             durCell.textContent = markerDurationLabel(m);
@@ -4819,7 +4843,16 @@
             comment.rows = 1;
             comment.placeholder = '';
             comment.value = m.comment || '';
-            comment.title = 'コメントを編集';
+            const th =
+                typeof window.SHORTCUT_HINTS !== 'undefined' ? window.SHORTCUT_HINTS : {};
+            const feedbackNav = th.feedbackRowNav || 'Alt+↑/↓';
+            const cancelEdit = th.cancelEdit || 'Esc';
+            comment.title =
+                'Feedback を編集（' +
+                feedbackNav +
+                ' で前後の行、' +
+                cancelEdit +
+                ' で編集終了）';
             comment.dataset.markerComment = m.id;
             comment.addEventListener('pointerdown', (ev) => {
                 if (ev.button !== 0) return;
@@ -4857,7 +4890,11 @@
             delBtn.type = 'button';
             delBtn.className = 'marker-table__btn marker-table__btn--danger';
             delBtn.textContent = '×';
-            delBtn.title = '削除';
+            const delHint =
+                typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.markerDelete
+                    ? window.SHORTCUT_HINTS.markerDelete
+                    : 'Del';
+            delBtn.title = 'マーカーを削除（' + delHint + '）';
             delBtn.addEventListener('click', () => removeMarker(m.id));
             actWrap.appendChild(delBtn);
             tdAct.appendChild(actWrap);

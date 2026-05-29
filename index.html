@@ -147,7 +147,7 @@
                 <div class="marker-panel__head-row">
                     <h3 class="marker-panel__title">Markers</h3>
                     <div class="marker-panel__head-actions">
-                        <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled title="Hide/View を使うにはマーカーを追加">Hide</button>
+                        <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled title="マーカーを追加すると Hide/View が使えます（V）">Hide</button>
                         <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled title="マーカーテーブルをコピー（タブ区切り・時刻は 00:00:00.000 ms・Length 列なし）">Copy</button>
                         <button type="button" id="markerPasteBtn" class="marker-panel__paste-btn" disabled title="マーカーテーブルを貼り付け（Copy と同形式・ms をフレームに変換・全マーカーを置換）">Paste</button>
                         <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="すべてのマーカーを削除">Clear</button>
@@ -197,8 +197,8 @@
                     <div class="audio-waveform-lane-meta__row">
                         <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
                         <div class="track-mix-actions">
-                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo（このレーンのみ再生）" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（このレーンをミュート）" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo（S / Alt+S）" aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（M / Alt+M）" aria-pressed="false">M</button>
                         </div>
                     </div>
                     <div class="track-lane-controls">
@@ -215,8 +215,8 @@
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
                     <div class="track-lane-bottom-actions track-lane-bottom-actions--compact">
-                        <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません">×</button>
-                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の extra audio track を表示">+ Add Track</button>
+                        <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません（最後の1トラック）">×</button>
+                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の extra audio track を表示（Ctrl+N）">+ Add Track</button>
                     </div>
                 </div>
                 <div id="extraLaneMetaMount"></div>
@@ -286,7 +286,7 @@
                 class="transport-opt-chip transport-musical-pos"
                 id="musicalGridPlayheadPos"
                 aria-live="polite"
-                title="現在地（小節・拍・ミリセック）"
+                title="現在地（小節・拍・ms）"
             >---:--:--</div>
             <div class="musical-grid-options transport-opt-chip" role="group" aria-label="Musical grid">
                 <label
@@ -330,7 +330,7 @@
         <div class="transport-bar__row transport-bar__row--export">
             <div
                 class="playhead-center-lock-options transport-opt-chip"
-                title="ズーム時に波形ビューの中央へ playhead を固定（C で切替）"
+                title="ズームや横スクロール時、波形ビュー内のシークバー（再生位置）を常に中央に固定（C で切替）"
             >
                 <label
                     class="transport-compact-lbl transport-compact-lbl--row transport-opt-label"
@@ -341,7 +341,7 @@
                         type="checkbox"
                         id="playheadCenterLockCheckbox"
                         aria-label="Center lock (C to toggle)"
-                        title="Center lock の ON/OFF を切替"
+                        title="Center lock — ズームや横スクロール時、波形ビュー内のシークバー（再生位置）を常に中央に固定（C で ON/OFF）"
                     >
                 </label>
             </div>

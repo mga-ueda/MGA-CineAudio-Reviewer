@@ -104,7 +104,7 @@
             handle = document.createElement('div');
             handle.className = 'video-timecode__resize-handle';
             handle.setAttribute('aria-hidden', 'true');
-            handle.title = 'ドラッグで timecode サイズを変更';
+            handle.title = 'ドラッグでタイムコード表示のサイズを変更';
             el.appendChild(handle);
         }
         return { textEl: textEl, handle: handle };
@@ -473,7 +473,7 @@
         if (!el) return;
         ensureTcOverlayStructure(el);
         el.title =
-            'Drag to move · resize with corner handle (snaps to center) · double-click: bottom-center ~10px · reset to default size';
+            'ドラッグで移動・右下角のハンドルでサイズ変更（中央にスナップ）・ダブルクリックで下中央付近へ・既定サイズに戻す';
         const parts = ensureTcOverlayStructure(el);
         el.addEventListener('pointerdown', onTcOverlayPointerDown);
         el.addEventListener('pointermove', onTcOverlayPointerMove);

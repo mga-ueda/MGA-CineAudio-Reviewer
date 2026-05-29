@@ -223,8 +223,201 @@
         return false;
     }
 
+    const CODE_LABELS = Object.freeze({
+        Space: 'Space',
+        Insert: 'Ins',
+        Delete: 'Del',
+        Backspace: 'Backspace',
+        ArrowLeft: '←',
+        ArrowRight: '→',
+        ArrowUp: '↑',
+        ArrowDown: '↓',
+        PageUp: 'PgUp',
+        PageDown: 'PgDn',
+        Home: 'Home',
+        End: 'End',
+        Equal: '+',
+        Minus: '−',
+        NumpadAdd: '+',
+        NumpadSubtract: '−',
+        Escape: 'Esc',
+        Enter: 'Enter',
+    });
+
+    function shortcutKeyLabel(def) {
+        if (!def) return '';
+        if (def.key) {
+            const k = def.key;
+            if (k === ' ') return 'Space';
+            if (k.length === 1) return k;
+            return k;
+        }
+        if (def.code) return CODE_LABELS[def.code] || def.code.replace(/^Key/, '');
+        if (def.codes && def.codes.length) {
+            const labels = def.codes.map((c) => CODE_LABELS[c] || c.replace(/^Key/, ''));
+            return [...new Set(labels)].join('/');
+        }
+        if (def.keys && def.keys.length) {
+            const labels = def.keys.map((k) => (k.length === 1 ? k : k));
+            return [...new Set(labels)].join('/');
+        }
+        return '';
+    }
+
+    /** ツールチップ用の修飾キー+キー表記（Mac では Ctrl を Cmd と読み替え）。 */
+    function formatShortcutDef(def) {
+        if (!def) return '';
+        const mods = [];
+        if (def.primary) mods.push('Ctrl');
+        if (def.ctrl) mods.push('Ctrl');
+        if (def.meta) mods.push('Cmd');
+        if (def.alt) mods.push('Alt');
+        if (def.shift) mods.push('Shift');
+        const key = shortcutKeyLabel(def);
+        if (key) mods.push(key);
+        return mods.join('+');
+    }
+
+    function chordWithArrows(prefixMods, upCode, downCode) {
+        const up = CODE_LABELS[upCode] || upCode;
+        const down = CODE_LABELS[downCode] || downCode;
+        const mods = prefixMods.length ? prefixMods.join('+') + '+' : '';
+        return mods + up + '/' + down;
+    }
+
+    function buildShortcutHints() {
+        const s = USER_SHORTCUTS;
+        return Object.freeze({
+            playStop: formatShortcutDef(s.transportToggle),
+            preroll: formatShortcutDef(s.prerollPlay),
+            replayFromStart: formatShortcutDef(s.replayFromPlaybackStart),
+            loop: formatShortcutDef(s.loopToggle),
+            solo: formatShortcutDef(s.mixLaneSoloToggle),
+            soloExclusive: formatShortcutDef(s.mixLaneSoloExclusive),
+            mute: formatShortcutDef(s.mixLaneMuteToggle),
+            muteClearAll: formatShortcutDef(s.mixLaneMuteClearAll),
+            laneVolume: chordWithArrows([], 'PageUp', 'PageDown'),
+            addExtraTrack: formatShortcutDef(s.addExtraTrack),
+            markerHide: formatShortcutDef(s.markerHideToggle),
+            analyze: formatShortcutDef(s.analyzeToggle),
+            centerLock: formatShortcutDef(s.playheadCenterLockToggle),
+            musicalGrid: formatShortcutDef(s.musicalGridToggle),
+            musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
+            sessionImport: formatShortcutDef(s.sessionImport),
+            sessionExport: formatShortcutDef(s.sessionExport),
+            sessionAllClear: formatShortcutDef(s.sessionAllClear),
+            masterVolReset: formatShortcutDef(s.masterVolumeResetUnity),
+            markerDelete: formatShortcutDef(s.regionDelete),
+            feedbackRowNav: chordWithArrows(['Alt'], 'ArrowUp', 'ArrowDown'),
+            markerRowNav: chordWithArrows(['Shift'], 'ArrowUp', 'ArrowDown'),
+            cancelEdit: formatShortcutDef(s.cancelEditing),
+            submitEdit: formatShortcutDef(s.submitEditing),
+            zoomIn: shortcutKeyLabel(s.waveformTimelineZoomIn),
+            zoomOut: shortcutKeyLabel(s.waveformTimelineZoomOut),
+            zoomFit: formatShortcutDef(s.waveformTimelineFit),
+            tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
+            tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
+            tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
+        });
+    }
+
+    const SHORTCUT_HINTS = buildShortcutHints();
+
+    function setElementTitle(el, text) {
+        if (el && text) el.title = text;
+    }
+
+    function applyShortcutTooltips() {
+        const h = SHORTCUT_HINTS;
+        const playTitle = `再生／停止（${h.playStop}、${h.preroll} でプリロール、${h.replayFromStart} で再生開始位置から再生し直し）`;
+        setElementTitle(document.getElementById('playStopBtn'), playTitle);
+
+        const loopTitle = `再生をループ（${h.loop}）`;
+        const loopChk = document.getElementById('loopPlaybackCheckbox');
+        setElementTitle(loopChk, loopTitle);
+        if (loopChk) {
+            const loopLbl = loopChk.closest('label');
+            setElementTitle(loopLbl, loopTitle);
+        }
+
+        setElementTitle(
+            document.getElementById('markerMemoTextarea'),
+            `セッション全体の追加メモを入力（${h.cancelEdit} でフォーカス解除）`,
+        );
+
+        const soloTitle = `Solo（このレーンのみ再生・${h.solo}、${h.soloExclusive} で対象のみソロ）`;
+        const muteTitle = `Mute（このレーンをミュート・${h.mute}、${h.muteClearAll} で全ミュート解除）`;
+        const volTitle = `音量を調整（レーン上で ${h.laneVolume} は ±1 dB）`;
+        const addTrackTitle = `次の extra audio track を表示（${h.addExtraTrack}）`;
+
+        setElementTitle(document.getElementById('videoAudioSoloBtn'), soloTitle);
+        setElementTitle(document.getElementById('videoAudioMuteBtn'), muteTitle);
+        setElementTitle(document.getElementById('trackLaneFaderVideo'), volTitle);
+        setElementTitle(document.getElementById('videoAudioAddTrackBtn'), addTrackTitle);
+
+        const trackCount =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < trackCount; slot++) {
+            setElementTitle(document.getElementById('extraAudioSoloBtn' + slot), soloTitle);
+            setElementTitle(document.getElementById('extraAudioMuteBtn' + slot), muteTitle);
+            setElementTitle(document.getElementById('trackLaneFader' + slot), volTitle);
+            const addBtn = document.getElementById('extraAudioAddTrackBtn' + slot);
+            if (addBtn) setElementTitle(addBtn, addTrackTitle);
+        }
+
+        const lanes = document.getElementById('audioWaveformLanesTracks');
+        setElementTitle(
+            lanes,
+            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomIn}/${h.zoomOut} でズーム、${h.zoomFit} で全体表示、Ctrl+ホイールで高速ズーム（3倍）、Shift+ホイールで横スクロール、Shift+Ctrl+ホイールで高速スクロール（3倍）。`,
+        );
+
+        const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
+        const gridChk = document.getElementById('musicalGridVisibleCheckbox');
+        setElementTitle(gridChk, gridTitle);
+        if (gridChk) {
+            const gridLbl = gridChk.closest('label');
+            setElementTitle(gridLbl, gridTitle);
+        }
+
+        const phraseTitle = `フレーズ着色と番号（${h.musicalPhrase}）`;
+        const phraseChk = document.getElementById('musicalGridPhraseFillCheckbox');
+        setElementTitle(phraseChk, phraseTitle);
+        if (phraseChk) {
+            const phraseLbl = phraseChk.closest('label');
+            setElementTitle(phraseLbl, phraseTitle);
+        }
+
+        const centerExplain =
+            'ズームや横スクロール時、波形ビュー内のシークバー（再生位置）を常に中央に固定する';
+        const centerTitle = `Center lock — ${centerExplain}（${h.centerLock} で ON/OFF）`;
+        setElementTitle(document.getElementById('playheadCenterLockCheckbox'), centerTitle);
+        const centerWrap = document.querySelector('.playhead-center-lock-options');
+        setElementTitle(centerWrap, centerTitle);
+        const centerLbl = document.getElementById('playheadCenterLockLabel');
+        setElementTitle(centerLbl, centerTitle);
+
+        const analyzeTitle = `スペクトラムとレベルメーターを表示（${h.analyze} で切替）`;
+        setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);
+        setElementTitle(
+            document.getElementById('analyzeToggleWrap'),
+            `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
+        );
+
+        setElementTitle(
+            document.getElementById('masterVolSlider'),
+            `ダブルクリックまたは ${h.masterVolReset} で 100%`,
+        );
+        setElementTitle(
+            document.getElementById('masterVolWrap'),
+            `Master volume（ダブルクリックまたは ${h.masterVolReset} で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。`,
+        );
+    }
+
     window.SHORTCUTS = SHORTCUTS;
+    window.SHORTCUT_HINTS = SHORTCUT_HINTS;
+    window.formatShortcutDef = formatShortcutDef;
     window.matchesShortcut = matchesShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;
+    window.applyShortcutTooltips = applyShortcutTooltips;
 })();

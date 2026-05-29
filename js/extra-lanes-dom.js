@@ -23,10 +23,10 @@
             '<div class="track-mix-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn' +
             slot +
-            '" disabled title="Solo（このレーンのみ再生）" aria-pressed="false">S</button>' +
+            '" disabled title="Solo（S / Alt+S）" aria-pressed="false">S</button>' +
             '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
             slot +
-            '" disabled title="Mute（このレーンをミュート）" aria-pressed="false">M</button>' +
+            '" disabled title="Mute（M / Alt+M）" aria-pressed="false">M</button>' +
             '</div></div>' +
             '<div class="track-lane-controls">' +
             '<div class="track-lane-meter-row">' +
@@ -54,10 +54,10 @@
             '<div class="track-lane-bottom-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
             slot +
-            '" title="Clear（レーンを非表示）">×</button>' +
+            '" title="レーンを非表示">×</button>' +
             '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
             slot +
-            '" title="次の extra audio track を表示"' +
+            '" title="次の extra audio track を表示（Ctrl+N）"' +
             addAttrs +
             '>+ Add Track</button>' +
             '<button type="button" class="track-lane-move-btn" id="extraAudioMoveUpBtn' +

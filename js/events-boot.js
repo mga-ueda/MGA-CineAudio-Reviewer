@@ -1029,4 +1029,7 @@
         if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
             scheduleMarkersUiRefreshAfterLayout();
         }
+        if (typeof applyShortcutTooltips === 'function') {
+            applyShortcutTooltips();
+        }
     })();
