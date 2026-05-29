@@ -570,6 +570,52 @@
         return markerNavIndexForCurrent();
     }
 
+    /** Alt+↑↓: フォーカス中の In / Out TC 欄の行インデックス */
+    function markerNavIndexForTcNav(edge) {
+        const ae = document.activeElement;
+        if (
+            ae &&
+            ae.classList &&
+            ae.classList.contains('marker-table__tc-input') &&
+            ae.dataset.markerTcEdge === edge
+        ) {
+            const id = ae.dataset.markerFor;
+            const i = currentMarkers.findIndex((m) => m.id === id);
+            if (i >= 0) return i;
+        }
+        return markerNavIndexForCurrent();
+    }
+
+    function markerNavIndexForOutNav() {
+        return markerNavIndexForTcNav('out');
+    }
+
+    /** Out TC 確定済み（range + endSec）の行だけを対象に前後へ */
+    function findAdjacentMarkerIndexWithValidOut(fromIdx, dir) {
+        const n = currentMarkers.length;
+        if (n === 0) return -1;
+        let i = fromIdx;
+        if (i < 0) i = 0;
+        for (let step = 0; step < n; step++) {
+            i = (i + dir + n) % n;
+            if (markerHasOutTc(currentMarkers[i])) return i;
+        }
+        return -1;
+    }
+
+    /** Alt+↑↓: Comment / In / Out 列。MARKERS 外からは null（Comment 扱い） */
+    function markerListNavColumnFromFocus() {
+        const ae = document.activeElement;
+        if (!ae || !ae.closest) return null;
+        if (ae.closest('.marker-table__comment[data-marker-comment]')) return 'comment';
+        if (ae.classList && ae.classList.contains('marker-table__tc-input')) {
+            const edge = ae.dataset.markerTcEdge;
+            if (edge === 'in') return 'in';
+            if (edge === 'out') return 'out';
+        }
+        return null;
+    }
+
     function markerNavStopEpsilonSec() {
         return Math.max(masterFrameSec > 0 ? masterFrameSec : 1 / 24, 0.001);
     }
@@ -877,9 +923,28 @@
                 : '';
         writeLog('Marker: seek to ' + hintTc + hintSuffix);
         flashSeekHint('Marker', hintTc + hintSuffix);
+        const focusTcEdge = opt && opt.focusTcEdge;
         if (focusComment) {
             suppressMarkerRowHoverSeek(300);
             focusMarkerCommentField(m.id, { sync: true });
+        } else if (focusTcEdge === 'in' || focusTcEdge === 'out') {
+            suppressMarkerRowHoverSeek(300);
+            if (typeof focusMarkerTcInput === 'function') {
+                focusMarkerTcInput(m.id, focusTcEdge);
+            }
+            const input =
+                markerTableBody &&
+                markerTableBody.querySelector(
+                    '.marker-table__tc-input[data-marker-for="' +
+                        m.id +
+                        '"][data-marker-tc-edge="' +
+                        focusTcEdge +
+                        '"]',
+                );
+            const row = input && input.closest('tr');
+            if (row && row.scrollIntoView) {
+                row.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
         }
     }
 
@@ -1155,16 +1220,45 @@
     function jumpToAdjacentMarker(dir, opt) {
         const n = currentMarkers.length;
         if (n === 0) return false;
-        const forComment = !!(opt && opt.focusComment);
-        let idx = forComment ? markerNavIndexForCommentNav() : markerNavIndexForCurrent();
-        if (idx < 0) idx = 0;
-        idx = (idx + dir + n) % n;
+        let navColumn = (opt && opt.column) || null;
+        if (!navColumn && opt && opt.focusComment) navColumn = 'comment';
+        if (!navColumn) navColumn = markerListNavColumnFromFocus();
+        if (!navColumn) navColumn = 'comment';
+
+        let idx;
+        if (navColumn === 'comment') {
+            idx = markerNavIndexForCommentNav();
+        } else if (navColumn === 'in') {
+            idx = markerNavIndexForTcNav('in');
+        } else if (navColumn === 'out') {
+            idx = markerNavIndexForOutNav();
+        } else {
+            idx = markerNavIndexForCurrent();
+        }
+
+        if (navColumn === 'out') {
+            const nextIdx = findAdjacentMarkerIndexWithValidOut(idx, dir);
+            if (nextIdx < 0) return false;
+            idx = nextIdx;
+        } else {
+            if (idx < 0) idx = 0;
+            idx = (idx + dir + n) % n;
+        }
+
         const m = currentMarkers[idx];
-        seekToMarker(m, {
-            focusComment: forComment,
+        const seekOpt = {
             resumeAfterSeek: !!(opt && opt.resumeAfterSeek),
-            seekEnd: false,
-        });
+            seekEnd: navColumn === 'out',
+        };
+        if (navColumn === 'comment') {
+            seekOpt.focusComment = true;
+            seekOpt.seekEnd = false;
+        } else if (navColumn === 'in') {
+            seekOpt.focusTcEdge = 'in';
+        } else if (navColumn === 'out') {
+            seekOpt.focusTcEdge = 'out';
+        }
+        seekToMarker(m, seekOpt);
         return true;
     }
 
@@ -1198,7 +1292,7 @@
         return true;
     }
 
-    /** Alt+↑↓: Feedback 行ナビ（テキスト入力中も有効） */
+    /** Alt+↑↓: 一覧行ナビ（Comment / In / Out 列。テキスト入力中も有効） */
     function isMarkerFeedbackRowNavKeydown(e) {
         if (!e || e.ctrlKey || e.metaKey || !e.altKey || e.shiftKey) return false;
         return (
@@ -1223,13 +1317,14 @@
                 e.shiftKey ||
                 (!inMarkerPanel && markerTimelineReady()));
 
-        // Alt+↑↓: 一覧内の Feedback 移動（↑=上の行、↓=下の行）
+        // Alt+↑↓: 一覧内の行移動（↑=上の行、↓=下の行）。列はフォーカス先に追従
         if (e.altKey && !e.shiftKey) {
             if (currentMarkers.length === 0) return false;
             const dir = isUp ? -1 : 1;
             e.preventDefault();
             suppressMarkerRowHoverSeek(300);
-            jumpToAdjacentMarker(dir, { focusComment: true });
+            const column = markerListNavColumnFromFocus();
+            jumpToAdjacentMarker(dir, column ? { column: column } : { focusComment: true });
             return true;
         }
 
