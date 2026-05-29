@@ -1,0 +1,247 @@
+/* Shared theme for guide.html / shortcuts.html — aligned with css/main.css */
+:root {
+    --accent: #c41e3a;
+    --accent-mid: #9a1730;
+    --accent-deep: #5c0f1f;
+    --accent-ink: #e83858;
+    --accent-soft: #d43d5c;
+    --accent-glow: rgba(196, 30, 58, 0.5);
+    --accent-glow-weak: rgba(196, 30, 58, 0.14);
+    --accent-border: rgba(230, 100, 120, 0.45);
+    --accent-bg-strong: rgba(196, 30, 58, 0.35);
+    --accent-bg-soft: rgba(196, 30, 58, 0.22);
+    --accent-track-1: #2a090e;
+    --accent-track-2: #451018;
+    --accent-track-3: #641824;
+    --panel-bg: linear-gradient(90deg, #32323c 0%, #26262f 55%, #1f1f26 100%);
+    --panel-border: rgba(255, 255, 255, 0.06);
+    --panel-shadow:
+        0 14px 36px rgba(0, 0, 0, 0.42),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --docs-heading-text: #eef2f8;
+    --docs-heading-border: rgba(92, 15, 31, 0.72);
+    --docs-accent-bar: linear-gradient(90deg, var(--accent-mid) 0%, var(--accent-deep) 100%);
+    --docs-heading-gradient: linear-gradient(90deg, var(--accent-mid) 0%, var(--accent-deep) 100%);
+    --docs-heading-gradient-sub: linear-gradient(90deg, var(--accent-track-3) 0%, var(--accent-track-1) 100%);
+    --docs-note-gradient: linear-gradient(90deg, var(--accent-mid) 0%, var(--accent-track-1) 100%);
+    --docs-btn-gradient: linear-gradient(90deg, var(--accent-mid) 0%, var(--accent-deep) 100%);
+    --surface-base: #141418;
+    --surface-elevated: #26262f;
+    --surface-chip: rgba(0, 0, 0, 0.22);
+    --app-doc-text: #d4dbe6;
+    --app-text: #f0f0f5;
+    --app-text-muted: #9aa3b0;
+    --app-label: #8e96a8;
+    --app-heading: #eef2f8;
+    --app-accent: var(--accent-ink);
+    --app-shortcut-text: #b4bcc8;
+    --app-shortcut-heading: #c8d0dc;
+    --app-shortcut-col1: #d0d8e4;
+    --font-mono: 'Consolas', 'Monaco', 'Cascadia Mono', 'Courier New', monospace;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+::selection {
+    background: rgba(196, 30, 58, 0.45);
+    color: #fff;
+}
+
+body.docs-page {
+    margin: 0;
+    min-height: 100vh;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    background: var(--surface-base);
+    color: var(--app-doc-text);
+    line-height: 1.65;
+    font-size: 0.92rem;
+}
+
+.docs-page__header {
+    position: relative;
+    padding: 28px 24px 20px;
+    text-align: center;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.docs-page__title {
+    margin: 0 0 8px;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--app-heading);
+    line-height: 1.15;
+}
+
+.docs-page__title-accent {
+    color: var(--app-accent);
+}
+
+.docs-page__subtitle {
+    margin: 0 auto;
+    max-width: 42rem;
+    font-size: 0.88rem;
+    color: var(--app-text-muted);
+    line-height: 1.55;
+}
+
+.docs-page__actions {
+    margin-top: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+}
+
+.docs-back-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 14px;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--docs-heading-text);
+    text-decoration: none;
+    background: var(--docs-btn-gradient);
+    border: 1px solid var(--docs-heading-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.docs-back-link:hover {
+    filter: brightness(1.06);
+    transform: translateY(-1px);
+}
+
+.docs-back-link:active {
+    transform: translateY(0);
+    filter: brightness(0.96);
+}
+
+.docs-back-link--ghost {
+    color: var(--app-doc-text);
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.docs-back-link--ghost:hover {
+    color: var(--app-accent);
+    border-color: var(--accent-border);
+    background: var(--accent-bg-soft);
+    filter: none;
+    box-shadow: 0 2px 12px var(--accent-glow-weak);
+}
+
+.docs-panel {
+    position: relative;
+    overflow: hidden;
+    border-radius: 14px;
+    border: 1px solid var(--panel-border);
+    background: var(--panel-bg);
+    box-shadow: var(--panel-shadow);
+}
+
+.docs-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--docs-accent-bar);
+    opacity: 0.95;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.docs-panel--muted::before {
+    background: #4a4a54;
+    opacity: 0.75;
+}
+
+.docs-kbd,
+.docs-page kbd {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--accent-border);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06);
+    white-space: nowrap;
+    color: var(--app-shortcut-col1);
+}
+
+.docs-page code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.32);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--app-shortcut-heading);
+}
+
+.docs-page__footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 8px 24px 32px;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--app-label);
+}
+
+.docs-page__footer p {
+    margin: 0;
+    font-size: 0.82rem;
+    color: #9aa4b8;
+    font-weight: 600;
+}
+
+.docs-page__footer a {
+    color: var(--app-accent);
+    text-decoration: none;
+}
+
+.docs-heading-box {
+    color: var(--docs-heading-text);
+    background: var(--docs-heading-gradient);
+    border: 1px solid var(--docs-heading-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.docs-heading-box--sub {
+    color: var(--docs-heading-text);
+    background: var(--docs-heading-gradient-sub);
+    border: 1px solid var(--docs-heading-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.docs-note-box {
+    color: var(--docs-heading-text);
+    background: var(--docs-note-gradient);
+    border: 1px solid var(--docs-heading-border);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.docs-note-box strong {
+    color: var(--docs-heading-text);
+}
+
+.docs-page__footer a:hover {
+    text-decoration: underline;
+}

@@ -7,11 +7,9 @@
     <title>使い方 — MGA CineAudio Reviewer</title>
     <link rel="stylesheet" href="css/guide.css">
 </head>
-<body class="guide-page">
+<body class="guide-page docs-page">
     <header class="guide-page__header">
-        <h1 class="guide-page__title">MGA CineAudio Reviewer — 使い方</h1>
-        <p class="guide-page__subtitle">MA・劇伴・音楽など、タイムラインとマーカーで行う映像／音声レビュー用の Web アプリ</p>
-        <a class="guide-page__back" href="index.html">← アプリを開く</a>
+        <h1 class="guide-page__title">使い方</h1>
     </header>
 
     <div class="guide-page__layout">
@@ -47,7 +45,7 @@
                     本ページはアプリ画面の<strong>上から下</strong>の並びに沿って説明します。トランスポート行の <strong>How To</strong> リンクからいつでも開けます。スクリーンショットは使わず、各エリアの位置と操作を文章で記しています。
                 </p>
                 <p>
-                    以降の章は、<strong>ユーザー体験の順番</strong>（読み込み → 再生 → 調整 → コメント → 保存／共有）と、<strong>UI の並び順</strong>（画面の上から下）をそろえて構成しています。初めて使う場合は、目次の上から順に読むと実際の操作順と一致します。
+                    以降の章は、<strong>ユーザー体験の順番</strong>（読み込み → 再生 → 調整 → コメント → 保存/共有）と、<strong>UI の並び順</strong>（画面の上から下）をそろえて構成しています。初めて使う場合は、目次の上から順に読むと実際の操作順と一致します。
                 </p>
             </section>
 
@@ -58,7 +56,7 @@
                 <p>
                     MGA CineAudio Reviewer は、<strong>MA</strong>・<strong>劇伴</strong>・<strong>音楽</strong>など、映像と音声をタイムライン上で並べ、もしくは聴き比べながら、<strong>マーカーや範囲マーカーとそれに付随するコメント</strong>で修正指示を共有する用途に特化しています。双方が同じ OS/DAW でなくても、ブラウザだけでレビューの共有が行えます。
                 </p>
-                <p>レビュー内容の受け渡し方法は、状況に応じて次の 2 通りを使い分けられます。</p>
+                <p>レビュー内容の受け渡し方法は、状況に応じて次の2通りを使い分けられます。</p>
                 <ul>
                     <li>
                         <strong>マーカーのみ（軽量）</strong> — 相手が<strong>同じ動画・同じ追加音声を既に持っている</strong>とき。マーカー表（タイムコードとコメント）だけを <strong>Slack</strong> や Teams 等に貼り付け、チャット上でタイムラインに対するフィードバックを返す運用に適しています。
@@ -71,9 +69,9 @@
 
                 <h3>このアプリでできること</h3>
                 <ul>
-                    <li>動画と、DAW 等から書き出した<strong>追加音声</strong>（最大 3 本）を同時に読み込み、タイムライン上で同期して聴き比べる。</li>
+                    <li>動画と、DAW 等から書き出した<strong>追加音声</strong>（最大3本）を同時に読み込み、タイムライン上で同期して聴き比べる。</li>
                     <li>波形上で位置を合わせ、Solo / Mute / フェーダーでミックスを調整する。</li>
-                    <li>気になる箇所に<strong>マーカー</strong>（点または範囲）と Feedback コメントを付け、Slack 等へコピーして返す。</li>
+                    <li>気になる箇所に<strong>マーカー</strong>（点または範囲）とコメントを付け、Slack 等へコピーして返す。</li>
                     <li>ミックス後の音を<strong>スペクトラム</strong>と<strong>レベルメーター</strong>で確認する。</li>
                     <li>必要に応じて <strong>.mgacr</strong> にメディア込みで保存し、相手のブラウザで Import して同じレビュー状態を再現する。</li>
                 </ul>
@@ -81,80 +79,80 @@
 
             <section class="guide-section" id="overview">
                 <h2>画面の構成</h2>
-                <p>画面は縦に 5 つの大きなブロックに分かれています。上から順に触ると、読み込みから再生・マーカー・保存まで自然に進められます。</p>
+                <p>画面は縦に5つの大きなブロックに分かれています。上から順に触ると、読み込みから再生・マーカー・保存まで自然に進められます。</p>
 
                 <div class="guide-layout-map" role="doc-example">
                     <p class="guide-layout-map__title">画面上部 → 下部（左から右の配置も記載）</p>
                     <ol class="guide-layout-map__zones">
                         <li>
-                            <strong>① タイトル行</strong> — 画面上端。アプリ名とバージョン表示。その直下にプライバシーに関する注意（赤文字）があります。
+                            <strong>タイトル行</strong> — 画面上端。アプリ名とバージョン表示。その直下にプライバシーに関する注意（赤文字）があります。
                         </li>
                         <li>
-                            <strong>② 映像とマーカー</strong> — 横並びの 2 列。
+                            <strong>映像とマーカー</strong> — 横並びの2列。
                             <ul>
                                 <li><strong>左（広い）</strong>：Video パネル — 映像プレビュー、タイムコードオーバーレイ、ファイル名・メタ情報。</li>
-                                <li><strong>右（狭い）</strong>：Markers パネル — マーカー一覧表（# / In / Out / Length / Feedback）。</li>
+                                <li><strong>右（狭い）</strong>：Markers パネル — マーカー一覧表（# / In / Out / Length / Comment）と下段の <strong>Additional Comments</strong>（セッション全体の追加メモ）。</li>
                             </ul>
                         </li>
                         <li>
-                            <strong>③ 音声波形エリア</strong> — 左サイドバーと右の波形タイムラインの 2 列構成。動画・追加音声の読み込みはここ（波形枠）へのドロップでも行えます。
+                            <strong>音声波形エリア</strong> — 左サイドバーと右の波形タイムラインの2列構成。動画・追加音声の読み込みはここ（波形枠）へのドロップでも行えます。
                             <ul>
-                                <li><strong>左サイドバー</strong>：各レーンの名前、S（Solo）/ M（Mute）/ ×（クリア）、レベルメーター、音量フェーダー、+ Add Track。</li>
-                                <li><strong>右（広い）</strong>：Video Audio と Ex 1〜3 の波形、再生ヘッド（赤い縦線）、マーカー表示、範囲ループのハイライト。</li>
+                                <li><strong>左サイドバー</strong>：各レーンの名前、S（Solo）/ M（Mute）/ ×（クリア）、レベルメーター、音量フェーダー、+ Add Track。Audio Track には ▲/▼（表示順の入れ替え）もあります。</li>
+                                <li><strong>右（広い）</strong>：Video Audio と Audio Track 1〜3 の波形、再生ヘッド（赤い縦線）、マーカー表示、範囲ループのハイライト。</li>
                             </ul>
                         </li>
                         <li>
-                            <strong>④ 再生・トランスポート操作</strong> — 2 か所に分かれます。<strong>② 映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>③ 波形直下</strong>のオプションバー（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol）。
+                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol）。
                         </li>
                         <li>
-                            <strong>⑤ スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
+                            <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
                         </li>
                         <li>
-                            <strong>⑥ ログ</strong> — 画面最下部。読み込み・エクスポート・エラーなどのメッセージ。
+                            <strong>ログ</strong> — 画面最下部。読み込み・エクスポート・エラーなどのメッセージ。
                         </li>
                     </ol>
                 </div>
 
-                <p>狭い画面幅では、② の映像とマーカーは縦に積み重なることがあります。それ以外のブロックの上下順序は変わりません。</p>
+                <p>狭い画面幅では、映像とマーカーは縦に積み重なることがあります。それ以外のブロックの上下順序は変わりません。</p>
             </section>
 
             <section class="guide-section" id="flow">
                 <h2>操作の流れ</h2>
                 <p>初めて使うときは、画面の上から次の順で進めると迷いにくいです。</p>
                 <ol class="guide-flow">
-                    <li><strong>② 映像エリア</strong>または<strong>③ 波形エリア</strong>へ<strong>動画</strong>をドロップして読み込む。必要なら<strong>追加音声</strong>も同時または後から読み込む。</li>
-                    <li><strong>② 映像</strong>を確認し、<strong>④ トランスポート</strong>の <strong>Play</strong> または <span class="guide-kbd">Space</span> で再生・停止する。</li>
-                    <li>気になる箇所に<strong>マーカー</strong>（点または範囲）と Feedback を付ける（② 右の Markers パネルと③ 波形上の表示が連動）。</li>
-                    <li><strong>③ 波形</strong>上で位置を合わせ、左サイドバーの <strong>Solo / Mute / フェーダー</strong> でミックスを聴き比べる。Ex 音源の開始位置はリージョンのドラッグで調整する。</li>
-                    <li><strong>⑤ スペクトラム・メーター</strong>で全体のバランスを確認する。表示下限は④ で変更。</li>
+                    <li><strong>映像エリア</strong>または<strong>波形エリア</strong>へ<strong>動画</strong>をドロップして読み込む。必要なら<strong>追加音声</strong>も同時または後から読み込む。</li>
+                    <li><strong>映像</strong>を確認し、<strong>トランスポート</strong>の <strong>Play</strong> または <span class="guide-kbd">Space</span> で再生・停止する。</li>
+                    <li>気になる箇所に<strong>マーカー</strong>（点または範囲）とコメントを付ける（右の Markers パネルと波形上の表示が連動）。</li>
+                    <li><strong>波形</strong>上で位置を合わせ、左サイドバーの <strong>Solo / Mute / フェーダー</strong> でミックスを聴き比べる。追加音声の開始位置はリージョンのドラッグで調整する。</li>
+                    <li><strong>スペクトラム・メーター</strong>で全体のバランスを確認する。表示下限はオプションバーで変更。</li>
                     <li>共有方法を選ぶ — 相手が同じ素材を持っていれば <strong>Copy</strong> で Slack 等へ、DAW 環境のない相手や一式渡しには <strong>Export Review</strong>（.mgacr）。</li>
                 </ol>
             </section>
 
             <section class="guide-section" id="load">
                 <h2>ファイルの読み込み</h2>
-                <p>読み込みは<strong>② 映像エリア</strong>（Video パネル）と<strong>③ 音声波形エリア</strong>（波形表示枠）へのドラッグ＆ドロップで行います。ファイルはブラウザ内だけで処理され、外部へ送信されません。未読み込み時は各エリアに控えめな案内文が表示されます。</p>
+                <p>読み込みは<strong>映像エリア</strong>（Video パネル）と<strong>音声波形エリア</strong>（波形表示枠）へのドラッグ＆ドロップで行います。ファイルはブラウザ内だけで処理され、外部へ送信されません。未読み込み時は各エリアに控えめな案内文が表示されます。</p>
 
                 <h3>まとめて読み込む</h3>
                 <ul>
-                    <li><strong>② 映像エリア</strong>または<strong>③ 波形エリア</strong>へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
-                    <li>種類ごとに自動判別され、動画は<strong>② 左の Video パネル</strong>へ、音声は空いている <strong>Ex レーン</strong>へ順に割り当てられます（波形エリアへのまとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て）。</li>
+                    <li><strong>映像エリア</strong>または<strong>波形エリア</strong>へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
+                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（波形エリアへのまとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て）。</li>
                     <li>映像フレームが空のときは、フレームを<strong>クリック</strong>してファイル選択ダイアログを開けます。</li>
                 </ul>
 
                 <h3>個別に読み込む</h3>
                 <ul>
-                    <li><strong>動画</strong> → <strong>② 左の映像エリア</strong>（Video パネル全体）へドロップ。</li>
-                    <li><strong>追加音声</strong> → <strong>③ 音声波形エリア</strong>（波形表示枠）へドロップ。空いている Ex レーンに入ります。</li>
-                    <li>すでに Ex レーンが表示されているときは、<strong>読み込み済みレーンの上</strong>にドロップすると、次の空き Ex レーンが開いてそこへ読み込まれます。</li>
+                    <li><strong>動画</strong> → <strong>左の映像エリア</strong>（Video パネル全体）へドロップ。</li>
+                    <li><strong>追加音声</strong> → <strong>音声波形エリア</strong>（波形表示枠）へドロップ。空いている Audio Track に入ります。</li>
+                    <li>読み込み済みの <strong>Audio Track レーン上</strong>へドロップすると、<strong>同じトラックに別クリップとして追加</strong>されます（1トラックあたり複数ファイル可）。空いている Audio Track へは、レーン外の波形エリアなどへドロップすると割り当てられます。</li>
                 </ul>
 
                 <h3>トラックの増やし方（+ Add Track）</h3>
                 <ul>
-                    <li>Ex レーンは最初は非表示です。音声を読み込むと自動で表示されます。</li>
-                    <li>手動で次の Ex 枠を出すときは、各レーン左サイドバー下の <strong>+ Add Track</strong> を押します（Video Audio レーンにも同ボタンがあり、次の Ex を表示します）。</li>
-                    <li>追加音声（Ex）は<strong>3トラック程度まで</strong>の利用を推奨しています。現状の実装では <strong>最大 16 トラック</strong>まで追加可能です（空きが無いと新しい追加音声は読み込まれません）。</li>
-                    <li>動画に音声トラックがない場合、<strong>Video Audio レーンは自動で非表示</strong>になります（Ex のラベル位置は揃います）。</li>
+                    <li>Audio Track は最初は非表示です。音声を読み込むと自動で表示されます。</li>
+                    <li>手動で次の Audio Track 枠を出すときは、各レーン左サイドバー下の <strong>+ Add Track</strong> を押します（Video Audio レーンにも同ボタンがあり、次の Audio Track を表示します）。<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">N</span> でも同じ操作ができます。</li>
+                    <li>追加音声（Audio Track）は<strong>3トラック程度まで</strong>の利用を推奨しています。現状の実装では<strong>最大16トラック</strong>まで追加可能です（空きが無いと新しい追加音声は読み込まれません）。</li>
+                    <li>動画に音声トラックがない場合、<strong>Video Audio レーンは自動で非表示</strong>になります（Audio Track のラベル位置は揃います）。</li>
                 </ul>
 
                 <h3>対応形式</h3>
@@ -164,26 +162,29 @@
                 </ul>
 
                 <h3>読み込み中の表示</h3>
-                <p>動画のデコード中は画面中央にローディング表示が出ます。完了まで他の操作は待つか、ログ（⑥）で進捗を確認してください。</p>
+                <ul>
+                    <li>動画のデコード中は画面中央にローディング表示が出ます。完了まで他の操作は待つか、ログで進捗を確認してください。</li>
+                    <li>追加音声のデコード中は、該当レーン上に <em>- Now Loading -</em> と表示されます。</li>
+                </ul>
             </section>
 
             <section class="guide-section" id="video">
                 <h2>映像パネル（Video）</h2>
-                <p><strong>② 左列</strong>が映像パネルです。パネル上端に <strong>Video</strong> ラベルと <strong>Clear</strong> ボタン、その下にファイル名（未読み込み時は <em>Not Loaded</em>）、さらに下が映像フレームです。未読み込み時はフレーム内に <em>Drop a video, or video and extra audio together</em> と表示されます。</p>
+                <p><strong>左列</strong>が映像パネルです。パネル上端に <strong>Video</strong> ラベルと <strong>Clear</strong> ボタン、その下にファイル名（未読み込み時は <em>Not Loaded</em>）、さらに下が映像フレームです。未読み込み時はフレーム内に <em>Drop a video, or video and extra audio together</em> と表示されます。</p>
 
                 <h3>再生とタイムコード</h3>
                 <ul>
                     <li>読み込み後、映像の上に <strong>HH:MM:SS:FF</strong> 形式のタイムコードが重なって表示されます。</li>
                     <li>オーバーレイは<strong>ドラッグで移動</strong>、端をドラッグして<strong>サイズ変更</strong>できます。フレーム中央付近ではスナップします。位置はブラウザに保存され、次回も復元されます。</li>
                     <li>パネル直下にはファイル名・メタ情報（FPS など）が表示されます。</li>
-                    <li>マーカーの Feedback を入力していると、再生中に映像上へコメントが短時間オーバーレイ表示されます（ポイント用と範囲用で別表示）。</li>
+                    <li>コメント欄に入力していると、再生中に映像上へコメントが短時間オーバーレイ表示されます（ポイント用と範囲用で別表示）。</li>
                 </ul>
 
                 <h3>同期の考え方</h3>
                 <ul>
-                    <li>再生位置の基準は<strong>音声（マスター）</strong>です。波形上の赤い再生ヘッドと、④ トランスポートの現在時刻が一致します。映像は通常は自然再生に任せ、大きくズレたときだけ補正します（カクつき防止）。</li>
-                    <li>④ トランスポート上段の <strong>Playback Drift</strong> で映像と音声のズレ（フレーム数）を確認できます。色は安全（通常）／注意（オレンジ）／危険（赤）で変わります。動画読み込み後に表示されます。</li>
-                    <li>Ex 音源のタイミングずれは、③ 波形上のリージョン移動で合わせます（通常のレビュー作業）。</li>
+                    <li>再生位置の基準は<strong>音声（マスター）</strong>です。波形上の赤い再生ヘッドと、トランスポートの現在時刻が一致します。映像は通常は自然再生に任せ、大きくズレたときだけ補正します（カクつき防止）。</li>
+                    <li>トランスポート上段の <strong>Playback Drift</strong> で映像と音声のズレ（フレーム数）を確認できます。色は安全（通常）/注意（オレンジ）/危険（赤）で変わります。動画読み込み後に表示されます。</li>
+                    <li>追加音声のタイミングずれは、波形上のリージョン移動で合わせます（通常のレビュー作業）。</li>
                 </ul>
 
                 <h3>Clear</h3>
@@ -192,39 +193,43 @@
 
             <section class="guide-section" id="markers">
                 <h2>マーカー（Markers）</h2>
-                <p><strong>② 右列</strong>が Markers パネルです。動画または追加音声を読み込んだあと、レビュー用の印とコメントを付けられます。同じマーカーは<strong>③ 波形タイムライン</strong>上にも縦線・範囲・ラベルとして表示されます。</p>
+                <p><strong>右列</strong>が Markers パネルです。動画または追加音声を読み込んだあと、レビュー用の印とコメントを付けられます。同じマーカーは<strong>波形タイムライン</strong>上にも縦線・範囲・ラベルとして表示されます。</p>
 
                 <h3>パネル上部のボタン</h3>
                 <ul>
-                    <li><strong>Hide / View</strong> — 波形上のマーカー表示を隠す／戻す（<span class="guide-kbd">V</span> と同じ）。マーカーが 1 件以上あるときだけ有効。</li>
+                    <li><strong>Hide / View</strong> — 波形上のマーカー表示を隠す/戻す（<span class="guide-kbd">V</span> と同じ）。マーカーが 1件以上あるときだけ有効。</li>
                     <li>
-                        <strong>Copy</strong> — マーカー一覧をタブ区切りテキストでクリップボードにコピーします（Length 列は含めません）。<strong>Slack</strong>・Teams・メールなどへの貼り付けを想定しており、相手が同じ動画・音声を手元で再生できる前提で、<strong>タイムライン上のどの位置にどんな Feedback か</strong>を返すやり取りに適しています。表の列は # / In / Out / Feedback です。In / Out の時刻は <strong>00:00:00.000</strong> 形式（時・分・秒・ミリ秒。ミリ秒は常に 3 桁）で出力します。画面上のマーカー表はフレーム表記ですが、Copy では<strong>一般的な DAW のタイムラインで使われる秒表示</strong>（時:分:秒.ミリ秒）に合わせています。DAW 側の位置と照らし合わせやすくするためです。すべてのマーカーで「時」が 00 のときは、コピー時に先頭の <code>00:</code> を省略します（例: <code>01:23.456</code>）。スプレッドシートへ貼る用途にも使えます。
+                        <strong>Copy</strong> — マーカー一覧をタブ区切りテキストでクリップボードにコピーします（Length 列は含めません）。<strong>Slack</strong>・Teams・メールなどへの貼り付けを想定しており、相手が同じ動画・音声を手元で再生できる前提で、<strong>タイムライン上のどの位置にどんなコメントか</strong>を返すやり取りに適しています。表の列は # / In / Out / Comment です。In/Out の時刻は <strong>00:00:00.000</strong> 形式（時・分・秒・ミリ秒。ミリ秒は常に3桁）で出力します。画面上のマーカー表はフレーム表記ですが、Copy では<strong>一般的な DAW のタイムラインで使われる秒表示</strong>（時:分:秒.ミリ秒）に合わせています。DAW 側の位置と照らし合わせやすくするためです。すべてのマーカーで「時」が 00 のときは、コピー時に先頭の <code>00:</code> を省略します（例: <code>01:23.456</code>）。<strong>Additional Comments</strong> に入力があるときは、表の末尾に <code>Additional Comments: …</code> 行を付けてコピーします。スプレッドシートへ貼る用途にも使えます。
                     </li>
                     <li>
-                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Feedback のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In / Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒 3 桁）を読み取ります。アプリ内部はフレーム精度で扱うため、タイムライン上の位置へは<strong>ミリ秒を現在の FPS に合わせてフレームに変換</strong>してから配置します。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。動画または追加音声を読み込んだあとで利用できます。
+                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Comment のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In/Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒3桁）を読み取ります。アプリ内部はフレーム精度で扱うため、タイムライン上の位置へは<strong>ミリ秒を現在の FPS に合わせてフレームに変換</strong>してから配置します。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。<strong>Additional Comments</strong> は表末尾の <code>Additional Comments: …</code> 行、または <code>---MEMO---</code> 区切り以降のテキストから復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。クリップボードが空、またはブラウザから読み取れない場合は、テキストを直接貼れる<strong>貼り付けダイアログ</strong>が開きます（<span class="guide-kbd">Esc</span> でキャンセル）。動画または追加音声を読み込んだあとで利用できます。
                     </li>
                     <li><strong>Clear</strong> — すべてのマーカーを削除。</li>
                 </ul>
 
-                <h3>ポイントマーカー（1 時刻）</h3>
+                <h3>ポイントマーカー（1時刻）</h3>
                 <ul>
-                    <li>再生位置で <span class="guide-kbd">Ins</span> を短く押して離すと、押した時点の位置にポイントが追加されます（押下から離すまで 0.2 秒未満）。</li>
-                    <li>一覧の <strong>Feedback</strong> 列をクリックしてコメントを入力します。再生中は映像上にコメントが短時間表示されます。</li>
+                    <li>再生位置で <span class="guide-kbd">Ins</span> を短く押して離すと、押した時点の位置にポイントが追加されます（押下から離すまで 0.2秒未満）。</li>
+                    <li>一覧の <strong>Comment</strong> 列をクリックしてコメントを入力します。再生中は映像上にコメントが短時間表示されます。</li>
                 </ul>
 
                 <h3>範囲マーカー（In 〜 Out）</h3>
                 <ul>
-                    <li><span class="guide-kbd">Ins</span> を 0.2 秒以上押したまま離すと、押した位置から離した位置までの範囲マーカーになります。長押し中は In 待ちのプレビューが表示されます。</li>
-                    <li><span class="guide-kbd">[</span> で In（開始）を設定し、続けて <span class="guide-kbd">]</span> で Out（終了）を設定します。In 設定中はパネルにヒントが出ます。</li>
+                    <li><span class="guide-kbd">Ins</span> を 0.2秒以上押したまま離すと、押した位置から離した位置までの範囲マーカーになります。長押し中は In 待ちのプレビューが表示されます。</li>
+                    <li><span class="guide-kbd">[</span> で In（開始）を設定し、続けて <span class="guide-kbd">]</span> で Out（終了）を設定します。In 設定後〜Out 確定前は、パネル上部に <em>Range: press ] for Out</em> とヒントが出ます。</li>
                     <li>波形上のマーカー区間の端（ハンドル）をドラッグして In / Out を調整できます。帯の中央付近をドラッグすると In / Out を同時に移動します（クリックのみのときはその位置へシーク）。</li>
-                    <li>③ の Ex リージョンで <span class="guide-kbd">Alt</span>+ホイールによる音量補正を行うと、そのリージョン幅の範囲マーカーと Feedback（<code>3.0dB 上げる</code> / <code>-3.0 dB 下げる</code> など）が自動で連動します。補正が <code>0.0 dB</code> に戻ったときは、同じ In／Out の自動付与マーカーを削除します（手動で付けた範囲マーカーと In／Out が一致している場合も同じ行を更新／削除します）。</li>
-                    <li>表の In / Out 列をクリックするとタイムコードを直接編集できます（<span class="guide-kbd">+</span> / <span class="guide-kbd">−</span> でフレーム単位の微調整も可能）。</li>
+                    <li>Audio Track 上のリージョンで <span class="guide-kbd">Alt</span>+ホイールによる音量補正を行うと、そのリージョン幅の範囲マーカーとコメント列（<code>3.0dB 上げる</code>/<code>-3.0dB 下げる</code> など）が自動で連動します。補正が <code>0.0dB</code> に戻ったときは、同じ In/Out の自動付与マーカーを削除します（手動で付けた範囲マーカーと In/Out が一致している場合も同じ行を更新/削除します）。</li>
+                    <li>表の In / Out 列をクリックするとタイムコードを直接編集できます。<span class="guide-kbd">+</span> / <span class="guide-kbd">−</span> で ±1フレーム、<span class="guide-kbd">Shift</span>+<span class="guide-kbd">+</span> / <span class="guide-kbd">−</span> で ±1秒の微調整ができます（Out が空のときは In を起点に Out を設定）。Out 列を編集中に <span class="guide-kbd">Del</span> で Out をクリアすると範囲マーカーが点マーカーになります。<span class="guide-kbd">Enter</span> で確定、<span class="guide-kbd">Esc</span> で編集取消です。</li>
                 </ul>
+
+                <h3>Additional Comments（セッション追加メモ）</h3>
+                <p>Markers パネル<strong>下段</strong>の <strong>Additional Comments</strong> 欄に、セッション全体向けの自由記述メモを入力できます。動画または追加音声を読み込むと有効になります。マーカー表とは独立して保存され、<strong>Copy</strong>/<strong>Paste</strong> および <strong>.mgacr</strong> の Export/Import に含まれます。入力中は <span class="guide-kbd">Esc</span> でフォーカスを外せます。</p>
 
                 <h3>一覧の操作</h3>
                 <ul>
+                    <li><strong>Length</strong> 列 — 範囲マーカーの長さ（秒/フレーム）。ポイントマーカーは <code>—</code>。<strong>Copy</strong> には含まれません（画面上の参考表示のみ）。</li>
                     <li>行をクリックするとその位置へシークします（<strong>再生中はジャンプしません</strong> — 停止してから操作してください）。</li>
-                    <li>Markers パネルでは <span class="guide-kbd">Shift</span> + <span class="guide-kbd">↑</span> / <span class="guide-kbd">↓</span> でマーカー間を移動、<span class="guide-kbd">Alt</span> + <span class="guide-kbd">↑</span> / <span class="guide-kbd">↓</span> で Feedback 行を移動します。</li>
+                    <li>Markers パネル<strong>外</strong>では <span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> でタイムライン上の停止点（マーカー＞小節/拍/フレーズ＞リージョンの優先順）へ移動します。パネル<strong>内</strong>では <span class="guide-kbd">Shift</span>+<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> で同様に移動します（<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> 単体は無効）。<span class="guide-kbd">Alt</span>+<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> でコメント行を移動します（コメント欄編集中も有効）。</li>
                     <li>選択中のマーカーは <span class="guide-kbd">Del</span> で削除できます（行末の削除ボタンからも可能）。</li>
                 </ul>
                 <p>波形上のマーカー表示が重なる場合は、縦に段を下げてラベルを並べます。</p>
@@ -232,17 +237,18 @@
 
             <section class="guide-section" id="audio">
                 <h2>音声波形・ミックス</h2>
-                <p><strong>③ 音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Video Audio、Ex 1、Ex 2、Ex 3 の順でレーンが並びます（表示されているレーンのみ）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio here</em> と控えめに表示されます（背景色なし）。</p>
+                <p><strong>音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Video Audio、Audio Track 1、Audio Track 2、Audio Track 3 の順でレーンが並びます（表示されているレーンのみ）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio here</em> と控えめに表示されます（背景色なし）。</p>
 
                 <h3>左サイドバー（各レーン）</h3>
                 <ul>
-                    <li>上段：トラック名（Video Audio / Ex 1 Track など）。</li>
+                    <li>上段：トラック名（Video Audio / Audio Track 1 など）。</li>
                     <li><strong>S</strong>（Solo）— そのトラックだけを聴く。他トラックはミュート相当。</li>
                     <li><strong>M</strong>（Mute）— そのトラックを消音。</li>
-                    <li><strong>×</strong> — Ex レーンは非表示＋クリア。Video Audio は非表示にできません（動画内音声がある場合）。</li>
+                    <li><strong>×</strong> — Audio Track は非表示＋クリア。Video Audio は非表示にできません（動画内音声がある場合）。</li>
                     <li>縦長のレベルメーターと dB 表示 — そのトラック単体のレベル。</li>
-                    <li>音量フェーダー — 0 dB 付近を中心に ±24 dB 程度まで調整。横の数値が現在の dB。</li>
-                    <li><strong>+ Add Track</strong> — 次の Ex レーン枠を表示（詳細は「ファイルの読み込み」参照）。</li>
+                    <li>音量フェーダー — 0dB付近を中心に ±24dB程度まで調整。横の数値が現在のdB。</li>
+                    <li><strong>+ Add Track</strong> — 次の Audio Track 枠を表示（詳細は「ファイルの読み込み」参照）。</li>
+                    <li><strong>▲</strong> / <strong>▼</strong> — <strong>Audio Track のみ</strong>。直上/直下の表示中レーンと、読み込み内容・ミックス設定・波形表示をまとめて入れ替えます（画面上の並びが1段上/下へ移動）。一番上/下のレーンでは該当ボタンは無効です。<strong>Video Audio</strong> レーンにはありません。順序はセッション保存および <strong>.mgacr</strong> に含まれます。</li>
                 </ul>
 
                 <h3>右側の波形タイムライン</h3>
@@ -250,20 +256,25 @@
                     <li>各トラックの波形が横方向に並びます。時間軸は動画の尺に合わせて共有されます。</li>
                     <li><strong>赤い縦線</strong>が再生ヘッドです。再生中は通過軌跡が残る表示があります。</li>
                     <li>マウスを乗せると、再生ヘッドとは別の薄い縦線（ホバー位置）が表示されます。</li>
-                    <li><strong>クリック</strong>でその位置へシークします。</li>
+                    <li><strong>クリック</strong>でその位置へシークします。空のレーン部分を<strong>ドラッグ</strong>すると、押している間その位置で再生しながらシーク（スクラブ）できます。</li>
                     <li>ホイールでズーム・横スクロール（<span class="guide-kbd">Ctrl</span> や <span class="guide-kbd">Shift</span> 併用で高速化）。<span class="guide-kbd">+</span> / <span class="guide-kbd">−</span> や <span class="guide-kbd">Z</span>（全体表示）も使えます（詳細はショートカット表）。</li>
-                    <li><span class="guide-kbd">↑</span> / <span class="guide-kbd">↓</span> は、表示中要素の優先順で次／前へ移動します（マーカー表示中 ＞ 小節／拍／フレーズ表示中 ＞ リージョンのみ）。時間が進む方向が <span class="guide-kbd">↑</span> で、再生中はシーク後に再生を再開します。</li>
+                    <li><span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> は、Markers パネル外で表示中要素の優先順に従い次/前へ移動します（マーカー表示中＞小節/拍/フレーズ表示中＞リージョンのみ）。時間が進む方向が <span class="guide-kbd">↑</span> で、再生中はシーク後に再生を再開します。パネル内では <span class="guide-kbd">Shift</span>+<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span>（詳細は「マーカー」参照）。</li>
                 </ul>
 
-                <h3>Ex レーンの再生リージョン</h3>
+                <h3>Audio Track の再生リージョン</h3>
                 <p>追加音声を読み込むと、波形上に半透明の<strong>リージョン</strong>（クリップ範囲）が表示されます。</p>
                 <ul>
                     <li>リージョンの<strong>上をクリック</strong>するとその位置へシークします。</li>
-                    <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。スナップ先も表示中要素の優先順（マーカー ＞ 小節／拍／フレーズ ＞ リージョン）で動作します。</li>
-                    <li>リージョン上で <span class="guide-kbd">Alt</span>+ホイールすると ±1 dB 刻みでそのリージョンの音量補正（中央に赤い dB 表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの <strong>Feedback</strong> に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0 dB 下げる</code>）が入ります。<strong>0.0 dB</strong> に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In／Out と Feedback を更新します。</li>
-                    <li>リージョン情報は <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">C</span> でコピーし、<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">V</span> で同じ Ex レーンの末尾にペーストできます。</li>
-                    <li><strong>スプリット</strong>（<span class="guide-kbd">X</span>）— リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Ex）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。</li>
+                    <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。他リージョン・動画終端・マーカーへスナップします。リージョン同士が重なると、重なり区間は等パワー・クロスフェードで再生されます。</li>
+                    <li>リージョン端の<strong>ハンドル</strong>（ソース In/Out）をドラッグすると、クリップ内の再生範囲を調整できます。隣接リージョンがあるときは境界が1本のスプリットハンドルとして動き、離すと各リージョンに In/Out ハンドルが現れます。</li>
+                    <li>リージョン上で <span class="guide-kbd">Alt</span>+ホイールすると ±1dB刻みでそのリージョンの音量補正（中央に赤いdB表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの<strong>Comment</strong>列に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0dB 下げる</code>）が入ります。<strong>0.0dB</strong>に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In/Out とコメント列を更新します。</li>
+                    <li>リージョン情報（ソース In/Out・音量補正 dB など）は <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">C</span> でコピーし、<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">V</span> で同じ Audio Track の末尾にペーストできます。</li>
+                    <li><strong>スプリット</strong>（<span class="guide-kbd">X</span>）— リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Audio Track）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。</li>
                     <li><strong>結合</strong>（<span class="guide-kbd">B</span>）— 隣接リージョンの境界上にポインタを置いてから実行。</li>
+                    <li><strong>削除</strong> — リージョン上にポインタがあるとき <span class="guide-kbd">Del</span> で削除（最後の1つを消すとリージョン表示を解除）。</li>
+                    <li><strong>元に戻す/やり直し</strong> — スプリット・削除・範囲変更などは <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Z</span> / <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Z</span> で履歴をさかのぼれます（回数無制限）。</li>
+                    <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン選択を解除します。</li>
+                    <li>各レーン右端付近には、読み込み済みクリップの<strong>インテグレーテッド LKFS</strong>（ITU-R BS.1770 系）が表示されます（デコード完了後に計測）。</li>
                 </ul>
 
                 <h3>範囲ループ（波形上）</h3>
@@ -273,59 +284,62 @@
                 </ul>
 
                 <h3>波形上からのミックス操作</h3>
-                <p>ポインタを置いたレーン（Video / Ex）では <span class="guide-kbd">S</span>（ソロ）・<span class="guide-kbd">M</span>（ミュート）・<span class="guide-kbd">PgUp</span> / <span class="guide-kbd">PgDn</span>（±1 dB）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。</p>
-                <p>表示されているレーンの数に合わせて波形パネルの高さが変わります。空の Ex 枠は非表示にできます。</p>
+                <p>ポインタを置いたレーン（Video Audio/Audio Track）では <span class="guide-kbd">S</span>（ソロ）・<span class="guide-kbd">M</span>（ミュート）・<span class="guide-kbd">PgUp</span>/<span class="guide-kbd">PgDn</span>（±1dB）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。<span class="guide-kbd">Alt</span>+<span class="guide-kbd">S</span> は対象トラックだけをソロにし他トラックのソロを解除、<span class="guide-kbd">Alt</span>+<span class="guide-kbd">M</span> は読み込み済み全トラックのミュートを解除します。</p>
+                <p>波形レーンは <span class="guide-kbd">Tab</span> でフォーカスできます。フォーカス中は <span class="guide-kbd">Home</span>/<span class="guide-kbd">End</span> で先頭/末尾へ、<span class="guide-kbd">←</span>/<span class="guide-kbd">→</span> で1フレームシークできます。次の Audio Track 枠を出すショートカット <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">N</span> も使えます（<strong>+ Add Track</strong> ボタンと同じ）。</p>
+                <p>表示されているレーンの数に合わせて波形パネルの高さが変わります。空の Audio Track 枠は非表示にできます。</p>
             </section>
 
             <section class="guide-section" id="transport">
                 <h2>トランスポート（再生コントロール）</h2>
-                <p><strong>④ 再生・トランスポート操作</strong>は、現在の UI では次の 2 ブロックに分かれています。</p>
+                <p><strong>再生・トランスポート操作</strong>は、現在の UI では次の2ブロックに分かれています。</p>
                 <ul>
-                    <li><strong>② 映像パネル直下の再生バー</strong> — Loop / How To / Shortcut / All Clear / Play。</li>
-                    <li><strong>③ 波形直下のオプションバー</strong> — Musical Grid、Center lock、Analyze、レビュー入出力、Master Vol など。</li>
+                    <li><strong>映像パネル直下の再生バー</strong> — Loop / How To / Shortcut / All Clear / Play。</li>
+                    <li><strong>波形直下のオプションバー</strong> — Musical Grid、Center lock、Analyze、レビュー入出力、Master Vol など。</li>
                 </ul>
-                <p>また、<strong>現在時刻・総尺・Playback Drift</strong> は再生バーではなく、<strong>② 映像パネル内のステータス行</strong>に表示されます。</p>
+                <p>また、<strong>現在時刻・総尺・Playback Drift</strong> は再生バーではなく、<strong>映像パネル内のステータス行</strong>に表示されます。</p>
 
-                <h3>② 映像パネル直下（再生バー）</h3>
+                <h3>映像パネル直下（再生バー）</h3>
                 <ul>
-                    <li><strong>Loop</strong> — 全体のループ再生のオン／オフ（<span class="guide-kbd">L</span>）。設定は次回起動時に復元されます。</li>
-                    <li><strong>How To</strong> / <strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
+                    <li><strong>Loop</strong> — 全体のループ再生のオン/オフ（<span class="guide-kbd">L</span>）。設定は次回起動時に復元されます。</li>
+                    <li><strong>How To</strong>/<strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
                     <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<span class="guide-kbd">Alt</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Del</span>、Mac では <span class="guide-kbd">Cmd</span> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
-                    <li><strong>Play</strong> — 再生／停止（<span class="guide-kbd">Space</span>）。右端。初回再生時は Video / Markers 行が見える位置へ自動スクロールします。</li>
+                    <li><strong>Play</strong> — 再生/停止（<span class="guide-kbd">Space</span>）。<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Space</span> はシークバー位置の1秒前から<strong>プリロール再生</strong>（1秒未満の場合は現在位置から）。<span class="guide-kbd">Alt</span>+<span class="guide-kbd">Enter</span> は直近の再生開始位置から再生し直します（一度も再生していない場合は無効）。右端。初回再生時は Video/Markers 行が見える位置へ自動スクロールします。</li>
+                    <li><span class="guide-kbd">F</span> — Video パネルと Markers パネルをまとめて隠す/表示（再生バーは残る。リロード時は常に表示）。</li>
                 </ul>
-                <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、② 映像パネル内の表示を参照してください。</p>
+                <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、映像パネル内の表示を参照してください。</p>
 
-                <h3>③ 波形直下（オプションバー上段）</h3>
+                <h3>波形直下（オプションバー上段）</h3>
                 <ul>
                     <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
-                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<span class="guide-kbd">T</span>）とメーター入力。</li>
-                    <li><strong>Phrase</strong> — フレーズ着色表示（<span class="guide-kbd">P</span>）とグループ入力。</li>
+                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<span class="guide-kbd">T</span>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> で BPM ±1、<span class="guide-kbd">Shift</span>+<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span> で ±10。<span class="guide-kbd">Enter</span> で確定、<span class="guide-kbd">Esc</span> で取消。</li>
+                    <li><strong>Phrase</strong> — フレーズ着色表示（<span class="guide-kbd">P</span>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時も <span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span>（±1）と <span class="guide-kbd">Shift</span>+<span class="guide-kbd">↑</span>/<span class="guide-kbd">↓</span>（±10）で調整できます。</li>
+                    <li><span class="guide-kbd">O</span> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
                 </ul>
 
-                <h3>③ 波形直下（オプションバー中段）</h3>
+                <h3>波形直下（オプションバー中段）</h3>
                 <ul>
                     <li><strong>Center lock</strong> — 再生ヘッドを波形ビュー中央に固定（<span class="guide-kbd">C</span>）。</li>
-                    <li><strong>Analyze</strong> — スペクトラム／メーター表示のオン／オフ（<span class="guide-kbd">A</span>）。オフでも CLIP PROTECT は動作します。</li>
-                    <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（Ex 1〜3 の全トラック）を一括で切り替えます。</li>
-                    <li><strong>Import Review</strong> / <strong>Export Review</strong> — .mgacr の読み込み・保存。</li>
+                    <li><strong>Analyze</strong> — スペクトラム/メーター表示のオン/オフ（<span class="guide-kbd">A</span>）。オフでも CLIP PROTECT は動作します。</li>
+                    <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（Audio Track 1〜3 の全トラック）を一括で切り替えます。</li>
+                    <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み・保存。</li>
                     <li><strong>Export WebM</strong> — タイムコードとマーカーコメントを焼き込んだ WebM を実時間で書き出し。</li>
                 </ul>
 
-                <h3>③ 波形直下（オプションバー下段）</h3>
+                <h3>波形直下（オプションバー下段）</h3>
                 <ul>
                     <li>
-                        <strong>Master Vol</strong> — ミックス後のマスター音量（% と dB 表示）。⑤ のレベルメーターで<strong>クリップ（0 dB 超え）を検知すると、CLIP PROTECT としてマスター音量が自動で下がります</strong>（スライダーと表示も連動）。⑥ ログに <code>CLIP PROTECT</code> と減衰量が出ることがあります。<strong>基本的には触らなくて構いません</strong> — 通常のレビューでは 100％（0 dB）のまま使い、過大なレベルは各トラックのフェーダーで調整する想定です。意図的に戻すときは <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">V</span> またはスライダー二重クリックで 100％（0 dB）にリセットできます（Mac では <span class="guide-kbd">Cmd</span> も可）。自動減衰後の値はブラウザに保存され、次回も復元されます。
+                        <strong>Master Vol</strong> — ミックス後のマスター音量（%とdB表示）。横の表示には再生開始からの<strong>インテグレーテッド LKFS</strong>も併記されます（停止後も最後の値を保持、再再生で計測し直し）。スペクトラム・メーターのレベルメーターで<strong>クリップ（0dB超え）を検知すると、CLIP PROTECT としてマスター音量が自動で下がります</strong>（スライダーと表示も連動）。ログに <code>CLIP PROTECT</code> と減衰量が出ることがあります。<strong>基本的には触らなくて構いません</strong> — 通常のレビューでは100%（0dB）のまま使い、過大なレベルは各トラックのフェーダーで調整する想定です。意図的に戻すときは <span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Shift</span>+<span class="guide-kbd">V</span> またはスライダー二重クリックで100%（0dB）にリセットできます（Mac では <span class="guide-kbd">Cmd</span> も可）。自動減衰後の値はブラウザに保存され、次回も復元されます。
                     </li>
-                    <li><strong>Spectrum floor</strong> / <strong>Level meter floor</strong> — ⑤ のスペクトラムとレベルメーターの表示下限（dB）。</li>
+                    <li><strong>Spectrum floor</strong>/<strong>Level meter floor</strong> — スペクトラムとレベルメーターの表示下限（dB）。</li>
                 </ul>
 
                 <h3>シーク・ジャンプ（動画読み込み後）</h3>
                 <ul>
-                    <li>矢印キー：1 フレーム（再生中の ±1 フレームは一度停止してから）</li>
-                    <li><span class="guide-kbd">Shift</span> + 矢印：1 秒</li>
-                    <li><span class="guide-kbd">Ctrl</span> + 矢印：5 秒</li>
-                    <li><span class="guide-kbd">Ctrl</span> + <span class="guide-kbd">Shift</span> + 矢印：10 秒</li>
-                    <li>テンキー <span class="guide-kbd">0</span>〜<span class="guide-kbd">9</span>：尺の 0〜90 % へジャンプ</li>
+                    <li>矢印キー：1フレーム（再生中の ±1フレームは一度停止してから）</li>
+                    <li><span class="guide-kbd">Shift</span> + 矢印：1秒</li>
+                    <li><span class="guide-kbd">Ctrl</span> + 矢印：5秒</li>
+                    <li><span class="guide-kbd">Ctrl</span> + <span class="guide-kbd">Shift</span> + 矢印：10秒</li>
+                    <li>テンキー <span class="guide-kbd">0</span>〜<span class="guide-kbd">9</span>：尺の0〜90% へジャンプ（Musical Grid フレーズ表示 <span class="guide-kbd">P</span> が ON でフレーズ番号があるときは、該当番号のフレーズ先頭へ）</li>
                 </ul>
                 <p>シーク時には画面中央付近に大きなタイムコード表示（シークフラッシュ）が一瞬出ることがあります。</p>
             </section>
@@ -333,25 +347,25 @@
             <section class="guide-section" id="export">
                 <h2>レビューの保存・共有（.mgacr）</h2>
                 <p>
-                    ④ トランスポート<strong>中段</strong>の <strong>Import Review</strong> / <strong>Export Review</strong> で、レビュー状態を 1 ファイルにまとめます。マーカーの <strong>Copy</strong> が「同じ素材を既に持つ相手へコメントだけ渡す」方法なら、<strong>.mgacr</strong> は「動画・追加音声ごと渡して、相手の環境を問わず同じ聴き比べとマーカーを再現する」方法です。
+                    トランスポート<strong>中段</strong>の <strong>Import Review</strong>/<strong>Export Review</strong> で、レビュー状態を1ファイルにまとめます。マーカーの <strong>Copy</strong> が「同じ素材を既に持つ相手へコメントだけ渡す」方法なら、<strong>.mgacr</strong> は「動画・追加音声ごと渡して、相手の環境を問わず同じ聴き比べとマーカーを再現する」方法です。
                 </p>
                 <p>
                     <strong>Include in export</strong> 設定に基づいてメディアを同梱するため、受け取り側に Nuendo / Pro Tools など<strong>同じ DAW がなくても</strong>、ブラウザと本アプリだけで映像・音声付きのフィードバックが可能です。作曲家・監督・クライアントなど、制作パイプラインの外側のメンバーへ渡すときに有効です。
                 </p>
-                <p>ショートカットは <span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Alt</span>+<span class="guide-kbd">I</span>（インポート）／<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Alt</span>+<span class="guide-kbd">E</span>（エクスポート）です（Mac では <span class="guide-kbd">Cmd</span> を <span class="guide-kbd">Ctrl</span> の代わりに使えます）。</p>
+                <p>ショートカットは <span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Alt</span>+<span class="guide-kbd">I</span>（インポート）/<span class="guide-kbd">Shift</span>+<span class="guide-kbd">Ctrl</span>+<span class="guide-kbd">Alt</span>+<span class="guide-kbd">E</span>（エクスポート）です（Mac では <span class="guide-kbd">Cmd</span> を <span class="guide-kbd">Ctrl</span> の代わりに使えます）。</p>
 
                 <h3>Export Review</h3>
                 <ul>
                     <li><strong>Include in export</strong> の <strong>Video</strong> がオンなら、動画は <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
-                    <li><strong>Audio</strong> がオンなら、追加音声（Ex 1〜3）の<strong>読み込み済みトラックをすべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
-                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In / Out / Feedback）、各トラックのミックス（Solo / Mute / 音量）、Ex リージョンの位置、再生位置、表示設定など。</li>
+                    <li><strong>Audio</strong> がオンなら、追加音声（Audio Track 1〜3）の<strong>読み込み済みトラックをすべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
+                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 
                 <h3>Export WebM</h3>
                 <ul>
                     <li><strong>Export WebM</strong> は、現在のレビュー内容を確認しやすいように、<strong>タイムコードとマーカーコメントを映像へ焼き込んだ WebM</strong> を書き出します。</li>
-                    <li><strong>Audio</strong> がオンなら、追加音声（Ex 1〜3）の読み込み済みトラックをすべてミックス対象に含めます（Mute / Solo 状態は影響しません）。</li>
+                    <li><strong>Audio</strong> がオンなら、追加音声（Audio Track 1〜3）の読み込み済みトラックをすべてミックス対象に含めます（Mute / Solo 状態は影響しません）。</li>
                     <li>書き出し中は操作ロック用オーバーレイが表示され、<span class="guide-kbd">Esc</span> でキャンセルできます。</li>
                     <li>実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。</li>
                 </ul>
@@ -359,25 +373,25 @@
                 <h3>Import Review</h3>
                 <ul>
                     <li>受け取った .mgacr を選ぶと、エクスポート時に含めた<strong>動画・追加音声</strong>と、マーカー・ミックス設定がまとめて復元されます。相手側で同じ素材を別途用意する必要はありません（パッケージにメディアが含まれている場合）。</li>
-                    <li>大きなファイルは読み込みに時間がかかることがあります。⑥ ログ欄に進捗や結果が表示されます。</li>
+                    <li>大きなファイルは読み込みに時間がかかることがあります。ログ欄に進捗や結果が表示されます。</li>
                 </ul>
                 <p>素材を既に共有済みのチーム内では、マーカー <strong>Copy</strong> だけで足りることも多く、初回提出や DAW を持たない相手への渡しには <strong>.mgacr</strong> が向いています。</p>
             </section>
 
             <section class="guide-section" id="monitor">
                 <h2>スペクトラム・レベルメーター</h2>
-                <p><strong>⑤ スペクトラムとメーター</strong>はトランスポートの下、横並びのモニター領域です。</p>
+                <p><strong>スペクトラムとメーター</strong>はトランスポートの下、横並びのモニター領域です。</p>
                 <ul>
-                    <li><strong>左（広い）</strong>：<strong>スペクトラム</strong> — 周波数成分の時間変化。表示下限は④ の Spectrum floor で変更。</li>
-                    <li><strong>右（4 本の縦メーター）</strong>：<strong>レベルメーター</strong> — 左から RMS（L）、ピーク L、ピーク R、RMS（R）。各メーター上のランプがクリップを示します。表示下限は Level meter floor で変更。</li>
-                    <li>いずれも<strong>マスター出力のミックス後</strong>を表示します。特定の 1 トラックだけを計測する用途ではありません（トラック別には③ 各レーン左のメーターを参照）。</li>
-                    <li>クリップランプが点灯したら、まず各トラックのフェーダーを下げてください。マスター側は <strong>CLIP PROTECT</strong> により Master Vol が自動で下がることがあります（④ 下段参照）。Master Vol は基本的に手動では触らなくて構いません。</li>
+                    <li><strong>左（広い）</strong>：<strong>スペクトラム</strong> — 周波数成分の時間変化。表示下限は Spectrum floor で変更。</li>
+                    <li><strong>右（4本の縦メーター）</strong>：<strong>レベルメーター</strong> — 左から RMS（L）、ピーク L、ピーク R、RMS（R）。各メーター上のランプがクリップを示します。表示下限は Level meter floor で変更。</li>
+                    <li>いずれも<strong>マスター出力のミックス後</strong>を表示します。特定の1トラックだけを計測する用途ではありません（トラック別には各レーン左のメーターを参照）。</li>
+                    <li>クリップランプが点灯したら、まず各トラックのフェーダーを下げてください。マスター側は <strong>CLIP PROTECT</strong> により Master Vol が自動で下がることがあります（下段参照）。Master Vol は基本的に手動では触らなくて構いません。</li>
                 </ul>
             </section>
 
             <section class="guide-section" id="log">
                 <h2>ログ</h2>
-                <p><strong>⑥ ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。うまくいかないときは、まずここを確認してください。</p>
+                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<span class="guide-kbd">O</span> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -386,8 +400,8 @@
                 <p class="guide-link-row">
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
-                <p>④ トランスポート上段の <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<span class="guide-kbd">O</span>（トランスポート下段のオプションとログの表示切替）、<span class="guide-kbd">T</span>（Musical Grid 表示切替）、<span class="guide-kbd">P</span>（Musical Grid フレーズ表示切替）があります。</p>
+                <p>トランスポート上段の <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
+                <p>最近追加した主なキーとして、<span class="guide-kbd">O</span>（トランスポート下段のオプションとログの表示切替）、<span class="guide-kbd">F</span>（Video/Markers 枠の表示切替）、<span class="guide-kbd">T</span>（Musical Grid 表示切替）、<span class="guide-kbd">P</span>（Musical Grid フレーズ表示切替）があります。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>
@@ -395,8 +409,8 @@
             <section class="guide-section" id="storage">
                 <h2>データの保存と復元</h2>
                 <ul>
-                    <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。</li>
-                    <li>Loop のオン／オフ、タイムコードオーバーレイ位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
+                    <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカーと <strong>Additional Comments</strong> もセッションに含まれます。</li>
+                    <li>Loop のオン/オフ、タイムコードオーバーレイ位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>
                 </ul>
@@ -405,12 +419,12 @@
             <section class="guide-section" id="tips">
                 <h2>ヒント・注意</h2>
                 <ul>
-                    <li>⑥ ログに読み込み・エクスポート・同期のメッセージが出ます。トラブル時の第一確認場所です。</li>
+                    <li>ログに読み込み・エクスポート・同期のメッセージが出ます。トラブル時の第一確認場所です。</li>
                     <li>長時間・大容量ファイルではメモリ使用量が増え、操作が重くなることがあります。</li>
                     <li>タブをバックグラウンドにすると、メーターや表示の更新が遅れることがあります（ブラウザの仕様）。正確に見たいときはタブを前面にしてください。</li>
                     <li>マーカー一覧の行をクリックしてシークするとき、<strong>再生中はジャンプしません</strong>。停止してから操作してください。</li>
-                    <li><strong>Master Vol</strong> はクリップ時に自動で下がります。普段は 100％のまま、音量調整は各トラックのフェーダーで行うのがおすすめです。</li>
-                    <li>映像と音声のズレの確認は <strong>Playback Drift</strong> が主です。Ex 音源の合わせ込みは波形上のリージョン移動を使います。</li>
+                    <li><strong>Master Vol</strong> はクリップ時に自動で下がります。普段は 100%のまま、音量調整は各トラックのフェーダーで行うのがおすすめです。</li>
+                    <li>映像と音声のズレの確認は <strong>Playback Drift</strong> が主です。追加音声の合わせ込みは波形上のリージョン移動を使います。</li>
                 </ul>
             </section>
         </main>
