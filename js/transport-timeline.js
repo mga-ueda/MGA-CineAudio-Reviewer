@@ -800,7 +800,14 @@
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof updateLaneContentEndMarkers === 'function') updateLaneContentEndMarkers();
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
-        if (typeof updateAllPlaybackRegionOverlays === 'function') updateAllPlaybackRegionOverlays();
+        const restoreBusy =
+            (typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()) ||
+            (typeof isSessionRestoreTeardownPending === 'function' &&
+                isSessionRestoreTeardownPending());
+        if (!restoreBusy && typeof updateAllPlaybackRegionOverlays === 'function') {
+            updateAllPlaybackRegionOverlays();
+        }
         if (typeof flushPendingSessionMarkersRestore === 'function') {
             flushPendingSessionMarkersRestore();
         }

@@ -5107,46 +5107,25 @@
             clipRef.buffer = buffer;
             clipRef.file = file;
         }
-        if (opt && opt.fromSessionRestore && typeof setTrackSegments === 'function') {
+        if (opt && opt.fromSessionRestore) {
             const track = { type: 'extra', slot };
-            if (Array.isArray(opt.regionSegments) && opt.regionSegments.length) {
-                setTrackSegments(track, opt.regionSegments, { silent: true });
-                if (
-                    Number.isFinite(opt.regionHeadPadSec) ||
-                    Number.isFinite(opt.regionTimelineInSec) ||
-                    Number.isFinite(opt.regionLeadPadSec)
-                ) {
-                    const trRestored = extraTrackBySlot(slot);
-                    if (trRestored && trRestored.playbackRegions) {
-                        if (Number.isFinite(opt.regionHeadPadSec)) {
-                            trRestored.playbackRegions.headPadSec = Math.max(
-                                0,
-                                opt.regionHeadPadSec,
-                            );
-                        }
-                        if (Number.isFinite(opt.regionTimelineInSec)) {
-                            trRestored.playbackRegions.regionTimelineInSec = Math.max(
-                                0,
-                                opt.regionTimelineInSec,
-                            );
-                        }
-                        if (Number.isFinite(opt.regionLeadPadSec)) {
-                            trRestored.playbackRegions.regionLeadPadSec = Math.max(
-                                0,
-                                opt.regionLeadPadSec,
-                            );
-                        }
-                    }
-                    if (typeof updateTrackRegionOverlay === 'function') {
-                        updateTrackRegionOverlay({ type: 'extra', slot });
-                    }
-                    drawExtraTrackWaveform(slot);
-                }
+            if (
+                Array.isArray(opt.regionSegments) &&
+                opt.regionSegments.length &&
+                typeof applyPlaybackRegionSegmentsRaw === 'function'
+            ) {
+                applyPlaybackRegionSegmentsRaw(track, opt.regionSegments, {
+                    skipOverlay: true,
+                    regionHeadPadSec: opt.regionHeadPadSec,
+                    regionTimelineInSec: opt.regionTimelineInSec,
+                    regionLeadPadSec: opt.regionLeadPadSec,
+                });
             } else if (
                 Number.isFinite(opt.regionSourceInSec) &&
-                Number.isFinite(opt.regionSourceOutSec)
+                Number.isFinite(opt.regionSourceOutSec) &&
+                typeof applyPlaybackRegionSegmentsRaw === 'function'
             ) {
-                setTrackSegments(
+                applyPlaybackRegionSegmentsRaw(
                     track,
                     [
                         {
@@ -5154,7 +5133,12 @@
                             sourceOutSec: opt.regionSourceOutSec,
                         },
                     ],
-                    { silent: true },
+                    {
+                        skipOverlay: true,
+                        regionHeadPadSec: opt.regionHeadPadSec,
+                        regionTimelineInSec: opt.regionTimelineInSec,
+                        regionLeadPadSec: opt.regionLeadPadSec,
+                    },
                 );
             }
         }
@@ -5213,6 +5197,12 @@
             setExtraTrackLoaded(slot, true, { skipLayoutRefresh: true });
             refreshExtraTrackUi(slot);
             if (opt && opt.fromSessionRestore) {
+                if (
+                    !opt.deferRegionFinalize &&
+                    typeof finalizePlaybackRegionsForExtraSlot === 'function'
+                ) {
+                    finalizePlaybackRegionsForExtraSlot(slot);
+                }
                 applyExtraSlotMixFromSessionRestore(slot);
             } else {
                 removeExtraSlotFromSessionMixRestore(slot);

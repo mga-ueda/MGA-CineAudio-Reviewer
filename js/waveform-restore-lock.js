@@ -54,6 +54,11 @@
             if (typeof clearStaleExtraTrackDecodingStatus === 'function') {
                 clearStaleExtraTrackDecodingStatus();
             }
+            if (typeof finalizeAllPlaybackRegionsAfterSessionRestore === 'function') {
+                try {
+                    finalizeAllPlaybackRegionsAfterSessionRestore();
+                } catch (_) {}
+            }
             if (typeof refreshExtraTrackRegionOverlaysAfterSessionRestore === 'function') {
                 try {
                     refreshExtraTrackRegionOverlaysAfterSessionRestore();

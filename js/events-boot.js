@@ -901,7 +901,39 @@
                             (err && err.message ? err.message : String(err))
                     )
                 );
+            return;
         }
+        if (document.visibilityState !== 'visible') return;
+        void (async () => {
+            try {
+                if (typeof whenSessionRestoreIdle === 'function') {
+                    await whenSessionRestoreIdle();
+                }
+            } catch (_) {}
+            if (typeof finalizeAllPlaybackRegionsAfterSessionRestore === 'function') {
+                try {
+                    finalizeAllPlaybackRegionsAfterSessionRestore();
+                } catch (_) {}
+            } else if (typeof applyPendingPlaybackRegionRestore === 'function') {
+                applyPendingPlaybackRegionRestore();
+            }
+            if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+                invalidateWaveformViewportHiresSpec();
+            }
+            if (typeof flushWaveformVisualRefresh === 'function') {
+                flushWaveformVisualRefresh();
+            } else {
+                if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                    redrawAllExtraTrackWaveforms();
+                }
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+            }
+            if (typeof updateAllPlaybackRegionOverlays === 'function') {
+                updateAllPlaybackRegionOverlays();
+            }
+        })();
     });
     window.addEventListener('pagehide', persistOnPageExit);
     window.addEventListener('beforeunload', persistOnPageExit);

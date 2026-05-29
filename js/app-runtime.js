@@ -51,9 +51,9 @@
         }
     }
 
-    /** タブ非表示・pagehide 前: 再生のみ停止（永続化は呼び出し側） */
+    /** タブ非表示・pagehide 前: 再生のみ停止（ループ／リージョンは維持。永続化は呼び出し側） */
     function haltTransportOnPageExit() {
-        haltTransportForSessionMutation({ silent: true });
+        haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
     }
 
     window.getExtraTrackCount = getExtraTrackCount;

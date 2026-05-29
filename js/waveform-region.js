@@ -203,6 +203,15 @@
         return !!(track && track.type === 'extra' && Number.isFinite(track.slot));
     }
 
+    function isSessionRestoreBusy() {
+        return (
+            (typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()) ||
+            (typeof isSessionRestoreTeardownPending === 'function' &&
+                isSessionRestoreTeardownPending())
+        );
+    }
+
     function normalizeSegment(sourceInSec, sourceOutSec, fullDur) {
         let inS = Number(sourceInSec);
         let outS = Number(sourceOutSec);
@@ -863,7 +872,12 @@
             const d = getExtraTrackClipDurationSec(track.slot, clipId);
             if (d > 0) return d;
         }
-        return getTrackSourceDurationSec(track);
+        const trackDur = getTrackSourceDurationSec(track);
+        if (trackDur > 0) return trackDur;
+        const inS = Number(seg && seg.sourceInSec);
+        const outS = Number(seg && seg.sourceOutSec);
+        if (Number.isFinite(outS) && outS > inS + 1e-6) return outS;
+        return 0;
     }
 
     function getSegmentClipId(track, segmentIndex) {
@@ -1810,7 +1824,10 @@
     function getTrackSegments(track) {
         const state = getPlaybackRegionsState(track);
         if (!state) return [];
-        if (!state.active || !state.segments || !state.segments.length) {
+        if (
+            !isSessionRestoreBusy() &&
+            (!state.active || !state.segments || !state.segments.length)
+        ) {
             ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true });
         }
         if (!state.active || !state.segments || !state.segments.length) {
@@ -1820,7 +1837,7 @@
         for (let i = 0; i < state.segments.length; i++) {
             const raw = state.segments[i];
             const fullDur = getSegmentSourceDurationSec(track, raw);
-            if (!fullDur) return [];
+            if (!fullDur) continue;
             normalized.push(normalizeSegmentEntry(raw, track, fullDur));
         }
         return normalized;
@@ -2779,8 +2796,14 @@
         const track = { type: 'extra', slot };
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
-        const vp = tr ? tr.viewportPeaks : null;
+        let vp = tr ? tr.viewportPeaks : null;
         const t0 = getTrackTimelineStartSec(track);
+        const state = getPlaybackRegionsState(track);
+        const hasConfiguredRegions =
+            state &&
+            state.active &&
+            Array.isArray(state.segments) &&
+            state.segments.length > 0;
         const segments = getTrackSegments(track);
         const mid = hCss * 0.5;
         const master =
@@ -2796,6 +2819,19 @@
         ctx.fillRect(0, 0, wCss, hCss);
 
         if (!segments.length) {
+            if (hasConfiguredRegions) {
+                if (tr) {
+                    tr.viewportPeaks = null;
+                    vp = null;
+                }
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, mid);
+                ctx.lineTo(wCss, mid);
+                ctx.stroke();
+                return;
+            }
             const fullDur = getTrackSourceDurationSec(track);
             const peaks = tr ? tr.peaks : null;
             if (!peaks || !peaks.length || !fullDur) {
@@ -2924,8 +2960,13 @@
         if (!isExtraTrackRef(track)) return false;
         const normalized = [];
         for (const seg of segments) {
-            const fullDur = getSegmentSourceDurationSec(track, seg);
-            if (!fullDur) return false;
+            let fullDur = getSegmentSourceDurationSec(track, seg);
+            if (!fullDur) {
+                const inS = Number(seg && seg.sourceInSec) || 0;
+                const outS = Number(seg && seg.sourceOutSec);
+                if (Number.isFinite(outS) && outS > inS + 1e-6) fullDur = outS;
+            }
+            if (!fullDur) continue;
             normalized.push(normalizeSegmentEntry(seg, track, fullDur));
         }
         if (!normalized.length) return false;
@@ -4335,8 +4376,19 @@
                 : null;
         if (restoreHover) setHoveredPlaybackRegion(null);
         container.replaceChildren();
+        const state = getPlaybackRegionsState(track);
+        const hasConfiguredRegions =
+            state &&
+            state.active &&
+            Array.isArray(state.segments) &&
+            state.segments.length > 0;
         let segments = getTrackSegments(track);
-        if (!segments.length && ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true })) {
+        if (
+            !segments.length &&
+            !hasConfiguredRegions &&
+            !isSessionRestoreBusy() &&
+            ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true })
+        ) {
             segments = getTrackSegments(track);
         }
         if (!segments.length) {
@@ -5473,6 +5525,77 @@
         return false;
     }
 
+    /** 復元デコード直後: クリップ未揃いでも永続化セグメントを state に載せる（正規化は後） */
+    function applyPlaybackRegionSegmentsRaw(track, segments, opt) {
+        if (!isExtraTrackRef(track) || !Array.isArray(segments) || !segments.length) {
+            return false;
+        }
+        const state = getPlaybackRegionsState(track);
+        if (!state) return false;
+        state.segments = segments.map((seg) => {
+            const copy =
+                seg && typeof seg === 'object' ? Object.assign({}, seg) : { sourceInSec: 0 };
+            if (!copy.id) copy.id = newRegionId();
+            return copy;
+        });
+        state.active = true;
+        if (Number.isFinite(opt && opt.regionHeadPadSec)) {
+            state.headPadSec = Math.max(0, opt.regionHeadPadSec);
+        }
+        if (Number.isFinite(opt && opt.regionTimelineInSec)) {
+            state.regionTimelineInSec = Math.max(0, opt.regionTimelineInSec);
+        } else {
+            delete state.regionTimelineInSec;
+        }
+        if (Number.isFinite(opt && opt.regionLeadPadSec) && opt.regionLeadPadSec > 0) {
+            state.regionLeadPadSec = Math.max(0, opt.regionLeadPadSec);
+        } else {
+            delete state.regionLeadPadSec;
+        }
+        if (!(opt && opt.skipOverlay) && typeof updateTrackRegionOverlays === 'function') {
+            updateTrackRegionOverlays(track);
+        }
+        return true;
+    }
+
+    /** Ex 1 本のデコード完了後: 生セグメントを正規化して波形へ反映 */
+    function finalizePlaybackRegionsForExtraSlot(slot) {
+        if (!(slot >= 0) || !isExtraTrackRef({ type: 'extra', slot })) return false;
+        const track = { type: 'extra', slot };
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.active || !state.segments || !state.segments.length) {
+            return false;
+        }
+        const raw = state.segments.map((s) => Object.assign({}, s));
+        const ok = setTrackSegments(track, raw, {
+            silent: true,
+            skipUndo: true,
+            keepPendingRestore: true,
+        });
+        if (!ok && raw.length) {
+            state.segments = raw;
+            state.active = true;
+        }
+        updateTrackRegionOverlays(track);
+        redrawAfterRegionChange(slot, { invalidatePeakCache: true });
+        return !!(getTrackSegments(track).length || raw.length);
+    }
+
+    function finalizeAllPlaybackRegionsAfterSessionRestore() {
+        const n = getExtraTrackCount();
+        let any = false;
+        for (let i = 0; i < n; i++) {
+            if (typeof isExtraTrackLoaded === 'function' && !isExtraTrackLoaded(i)) {
+                continue;
+            }
+            if (finalizePlaybackRegionsForExtraSlot(i)) any = true;
+        }
+        if (typeof applyPendingPlaybackRegionRestore === 'function') {
+            applyPendingPlaybackRegionRestore();
+        }
+        return any;
+    }
+
     function getPlaybackRegionPersistSnapshot() {
         const extras = [];
         const n =
@@ -5752,6 +5875,10 @@
     window.updateTrackRegionOverlay = updateTrackRegionOverlays;
     window.setPendingPlaybackRegionRestore = setPendingPlaybackRegionRestore;
     window.applyPendingPlaybackRegionRestore = applyPendingPlaybackRegionRestore;
+    window.applyPlaybackRegionSegmentsRaw = applyPlaybackRegionSegmentsRaw;
+    window.finalizePlaybackRegionsForExtraSlot = finalizePlaybackRegionsForExtraSlot;
+    window.finalizeAllPlaybackRegionsAfterSessionRestore =
+        finalizeAllPlaybackRegionsAfterSessionRestore;
     window.resolveTargetExtraSlot = resolveTargetExtraSlot;
     window.resolveRegionSegmentFromPointer = resolveRegionSegmentFromPointer;
     window.getSegmentTimelineStartForAltDrag = function (slot, segmentIndex) {

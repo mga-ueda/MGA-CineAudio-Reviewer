@@ -924,8 +924,11 @@
                         (Array.isArray(restoreRegionSegments) ? restoreRegionSegments.length : 0),
                 );
                 writeLog('Extra audio ' + (entry.slot + 1) + ': restore decode start');
+                const hasMultipleClips =
+                    Array.isArray(entry.clips) && entry.clips.length > 1;
                 await loadExtraTrackFile(entry.slot, af, {
                     fromSessionRestore: true,
+                    deferRegionFinalize: hasMultipleClips,
                     timelineStartSec: entry.timelineStartSec,
                     regionSegments: restoreRegionSegments,
                     regionHeadPadSec: restoreRegionHeadPadSec,
@@ -977,14 +980,17 @@
                     }
                     if (
                         Array.isArray(restoreRegionSegments) &&
-                        restoreRegionSegments.length &&
-                        typeof setTrackSegments === 'function'
+                        restoreRegionSegments.length
                     ) {
-                        setTrackSegments(
-                            { type: 'extra', slot: entry.slot },
-                            restoreRegionSegments,
-                            { silent: true },
-                        );
+                        if (typeof finalizePlaybackRegionsForExtraSlot === 'function') {
+                            finalizePlaybackRegionsForExtraSlot(entry.slot);
+                        } else if (typeof setTrackSegments === 'function') {
+                            setTrackSegments(
+                                { type: 'extra', slot: entry.slot },
+                                restoreRegionSegments,
+                                { silent: true, keepPendingRestore: true },
+                            );
+                        }
                     }
                 }
                 if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(entry.slot)) {
