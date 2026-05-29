@@ -1685,6 +1685,12 @@
             return true;
         }
 
+        if (matchUserShortcut(e, 'waveformTimelineZoomMax')) {
+            e.preventDefault();
+            setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
+            return true;
+        }
+
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
 
         if (matchUserShortcut(e, 'waveformTimelineFit')) {

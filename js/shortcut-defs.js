@@ -109,6 +109,14 @@
             ctrl: false,
             meta: false,
             alt: false,
+            shift: true,
+        },
+        waveformTimelineZoomMax: {
+            code: 'KeyZ',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
             shift: false,
         },
         waveformTimelineScrollBack: { code: 'PageUp' },
@@ -318,6 +326,7 @@
             zoomIn: shortcutKeyLabel(s.waveformTimelineZoomIn),
             zoomOut: shortcutKeyLabel(s.waveformTimelineZoomOut),
             zoomFit: formatShortcutDef(s.waveformTimelineFit),
+            zoomMax: formatShortcutDef(s.waveformTimelineZoomMax),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
@@ -371,7 +380,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomIn}/${h.zoomOut} でズーム、${h.zoomFit} で全体表示、Ctrl+ホイールで高速ズーム（3倍）、Shift+ホイールで横スクロール、Shift+Ctrl+ホイールで高速スクロール（3倍）。`,
+            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomIn}/${h.zoomOut} でズーム、${h.zoomFit} で全体表示、${h.zoomMax} で最大倍率（32×）、Ctrl+ホイールで高速ズーム（3倍）、Shift+ホイールで横スクロール、Shift+Ctrl+ホイールで高速スクロール（3倍）。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
