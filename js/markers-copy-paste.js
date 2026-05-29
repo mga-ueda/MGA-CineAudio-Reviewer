@@ -269,17 +269,60 @@
         return cells && cells.length >= 2 && isMarkerPasteTcString(cells[1]);
     }
 
-    function parseMarkerMemoFromTableRow(cols) {
+    function markerMemoTableRowFeedbackText(cols) {
+        return String(cols[3] ?? '')
+            .replace(/^\uFEFF/, '')
+            .trim();
+    }
+
+    function markerMemoTableRowLabelPrefixRe() {
+        return new RegExp('^' + MARKER_MEMO_TABLE_ROW_LABEL + '\\s*:\\s*', 'i');
+    }
+
+    /** 表末尾メモ行: # / In / Out がすべて空で Feedback のみ */
+    function isBareMarkerMemoTableRow(cols) {
+        const num = String(cols[0] ?? '').trim();
+        const inTc = String(cols[1] ?? '').trim();
+        const outTc = String(cols[2] ?? '').trim();
+        if (num || inTc || outTc) return false;
+        return !!markerMemoTableRowFeedbackText(cols);
+    }
+
+    /** 従来形式: Additional Comments: …（In/Out 空） */
+    function isLabeledMarkerMemoTableRow(cols) {
+        const inTc = String(cols[1] ?? '').trim();
+        const outTc = String(cols[2] ?? '').trim();
+        if (inTc || outTc) return false;
+        return markerMemoTableRowLabelPrefixRe().test(markerMemoTableRowFeedbackText(cols));
+    }
+
+    /** 末尾に連続するメモ行ブロックの先頭行インデックス（なければ lines.length） */
+    function findTrailingMarkerMemoTableStartRow(lines, dataStartRow) {
+        let start = lines.length;
+        for (let row = lines.length - 1; row >= dataStartRow; row--) {
+            const cols = splitMarkersPasteLine(lines[row]);
+            if (cols.length < 4) break;
+            if (isBareMarkerMemoTableRow(cols) || isLabeledMarkerMemoTableRow(cols)) {
+                start = row;
+            } else {
+                break;
+            }
+        }
+        return start;
+    }
+
+    function parseMarkerMemoFromTableRow(cols, opt) {
         const inTc = String(cols[1] ?? '').trim();
         const outTc = String(cols[2] ?? '').trim();
         if (inTc || outTc) return null;
-        const feedback = String(cols[3] ?? '')
-            .replace(/^\uFEFF/, '')
-            .trim();
+        const feedback = markerMemoTableRowFeedbackText(cols);
         if (!feedback) return null;
-        const re = new RegExp('^' + MARKER_MEMO_TABLE_ROW_LABEL + '\\s*:\\s*', 'i');
-        if (re.test(feedback)) return feedback.replace(re, '').trim();
-        return feedback;
+        const labelRe = markerMemoTableRowLabelPrefixRe();
+        if (labelRe.test(feedback)) return feedback.replace(labelRe, '').trim();
+        if (opt && opt.allowBareMemoRow && isBareMarkerMemoTableRow(cols)) {
+            return feedback;
+        }
+        return null;
     }
 
     /** Copy と同じ TSV（# / In / Out / Feedback、Length なし）を解析 */
@@ -333,6 +376,7 @@
         }
         const markers = [];
         const memoRows = [];
+        const memoTableStartRow = findTrailingMarkerMemoTableStartRow(lines, dataStartRow);
         for (let row = dataStartRow; row < lines.length; row++) {
             const lineTrim = String(lines[row] ?? '')
                 .replace(/^\uFEFF/, '')
@@ -350,7 +394,9 @@
                         ' の列数が不足しています（# / In / Out / Feedback の 4 列、タブ区切り推奨）。',
                 };
             }
-            const memoFromTableRow = parseMarkerMemoFromTableRow(cols);
+            const memoFromTableRow = parseMarkerMemoFromTableRow(cols, {
+                allowBareMemoRow: row >= memoTableStartRow,
+            });
             if (memoFromTableRow != null) {
                 if (memoFromTableRow) memoRows.push(memoFromTableRow);
                 continue;
