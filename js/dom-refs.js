@@ -50,4 +50,4 @@
     const audioWaveformPlayhead = document.getElementById('audioWaveformPlayhead');
     const audioWaveformHoverPlayhead = document.getElementById('audioWaveformHoverPlayhead');
     const audioWaveformStatus = document.getElementById('audioWaveformStatus');
-const musicalGridPlayheadPos = document.getElementById('musicalGridPlayheadPos');
+    const musicalGridPlayheadPos = document.getElementById('musicalGridPlayheadPos');

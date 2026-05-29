@@ -3,16 +3,9 @@
     const EXPORT_FORMAT = 'mgacr-session-v1';
     const EXPORT_FILE_EXT = '.mgacr';
 
-    function reviewFileExtLower(name) {
-        const s = String(name || '').toLowerCase();
-        const dot = s.lastIndexOf('.');
-        if (dot < 0) return '';
-        return s.slice(dot);
-    }
-
     function isMgacrReviewFile(file) {
         if (!file || !file.name) return false;
-        return reviewFileExtLower(file.name) === EXPORT_FILE_EXT;
+        return fileExtLower(file.name) === EXPORT_FILE_EXT;
     }
 
     function assertMgacrReviewFile(file) {
@@ -25,15 +18,6 @@
                 'Import Review は .mgacr ファイルのみ読み込めます（選択: "' + name + '"）',
             );
         }
-    }
-
-    function formatByteSize(bytes) {
-        const n = Number(bytes);
-        if (!Number.isFinite(n) || n < 1) return '0 B';
-        if (n < 1024) return Math.round(n) + ' B';
-        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-        if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(2) + ' MB';
-        return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
     }
 
     function countMarkers(markers) {
@@ -1268,13 +1252,7 @@
     function handleSessionIoShortcutKeydown(e) {
         if (!e || e.repeat) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-
-        if (matches(e, shortcuts.sessionAllClear)) {
+        if (matchUserShortcut(e, 'sessionAllClear')) {
             e.preventDefault();
             const duringRestoreLock =
                 typeof isWaveformRestoreLockActive === 'function' &&
@@ -1283,12 +1261,12 @@
             return true;
         }
 
-        if (matches(e, shortcuts.sessionImport)) {
+        if (matchUserShortcut(e, 'sessionImport')) {
             e.preventDefault();
             triggerImportReview();
             return true;
         }
-        if (matches(e, shortcuts.sessionExport)) {
+        if (matchUserShortcut(e, 'sessionExport')) {
             e.preventDefault();
             triggerExportReview();
             return true;

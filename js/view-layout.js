@@ -32,12 +32,7 @@
     }
 
     function handleVideoMarkersPanelsToggleKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.videoMarkersPanelsToggle)) return false;
+        if (!matchUserShortcut(e, 'videoMarkersPanelsToggle')) return false;
         e.preventDefault();
         toggleVideoMarkersPanelsHidden();
         return true;

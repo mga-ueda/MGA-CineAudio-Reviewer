@@ -21,6 +21,5 @@
         } else if (logEl) {
             logEl.innerText = readyLine;
         }
-        window.__appStartupLogComplete = true;
         writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');
     })();

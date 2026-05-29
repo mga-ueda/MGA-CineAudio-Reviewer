@@ -523,7 +523,6 @@
     }
 
     window.syncAudioOnlyMarkersUi = syncAudioOnlyMarkersUi;
-    window.refreshMarkersAfterAudioTimelineReady = syncAudioOnlyMarkersUi;
 
     function sortMarkersInPlace() {
         currentMarkers.sort((a, b) => {
@@ -1757,12 +1756,7 @@
                 finish(null);
             };
             const onKey = (e) => {
-                const shortcuts = window.SHORTCUTS || {};
-                const matches =
-                    typeof window.matchesShortcut === 'function'
-                        ? window.matchesShortcut
-                        : () => false;
-                if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     onCancel();
                 }
@@ -2600,25 +2594,15 @@
 
     /** Shift+Equal は US 配列で「+」文字のための Shift。±1秒ではなく ±1f として扱う */
     function markerTcNudgeBySeconds(ev, plus) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
         if (!markerTcNudgeShiftHeld(ev)) return false;
-        if (plus && matches(ev, shortcuts.markerPanelTcNudgePlusShiftUsLayout, { allowRepeat: true })) return false;
+        if (plus && matchUserShortcut(ev, 'markerPanelTcNudgePlusShiftUsLayout', { allowRepeat: true })) return false;
         return true;
     }
 
     function handleMarkerPanelTcNudgeKeydown(ev) {
         if (ev.ctrlKey || ev.altKey || ev.metaKey) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        const plus = matches(ev, shortcuts.markerPanelTcNudgePlus, { allowRepeat: true });
-        const minus = matches(ev, shortcuts.markerPanelTcNudgeMinus, { allowRepeat: true });
+        const plus = matchUserShortcut(ev, 'markerPanelTcNudgePlus', { allowRepeat: true });
+        const minus = matchUserShortcut(ev, 'markerPanelTcNudgeMinus', { allowRepeat: true });
         if (!plus && !minus) return false;
         if (!markerTimelineReady()) return false;
 
@@ -2746,15 +2730,10 @@
             renderSeekBarMarkers();
         };
         input.addEventListener('keydown', (ev) => {
-            const shortcuts = window.SHORTCUTS || {};
-            const matches =
-                typeof window.matchesShortcut === 'function'
-                    ? window.matchesShortcut
-                    : () => false;
             if (handleMarkerTcInputNudgeKey(ev, input, m, edge)) return;
             if (
                 edge === 'out' &&
-                matches(ev, shortcuts.markerPanelTcDeleteOut, { allowRepeat: true })
+                matchUserShortcut(ev, 'markerPanelTcDeleteOut', { allowRepeat: true })
             ) {
                 if (clearMarkerOutTc(m.id)) {
                     ev.preventDefault();
@@ -2767,13 +2746,13 @@
                 }
                 return;
             }
-            if (matches(ev, shortcuts.submitEditing, { allowRepeat: true })) {
+            if (matchUserShortcut(ev, 'submitEditing', { allowRepeat: true })) {
                 ev.preventDefault();
                 ev.stopPropagation();
                 tcEditRevert = null;
                 input.blur();
                 focusWaveformDrawingArea();
-            } else if (matches(ev, shortcuts.cancelEditing, { allowRepeat: true })) {
+            } else if (matchUserShortcut(ev, 'cancelEditing', { allowRepeat: true })) {
                 ev.preventDefault();
                 ev.stopPropagation();
                 applyTcEditRevert();
@@ -4065,26 +4044,16 @@
     /** Alt+↑↓: Feedback 行ナビ（テキスト入力中も有効） */
     function isMarkerFeedbackRowNavKeydown(e) {
         if (!e || e.ctrlKey || e.metaKey || !e.altKey || e.shiftKey) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
         return (
-            matches(e, shortcuts.markerNavigateUp, { allowRepeat: true }) ||
-            matches(e, shortcuts.markerNavigateDown, { allowRepeat: true })
+            matchUserShortcut(e, 'markerNavigateUp', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'markerNavigateDown', { allowRepeat: true })
         );
     }
 
     function handleMarkerNavigationKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
         if (!markerTimelineReady()) return false;
-        const isUp = matches(e, shortcuts.markerNavigateUp, { allowRepeat: true });
-        const isDown = matches(e, shortcuts.markerNavigateDown, { allowRepeat: true });
+        const isUp = matchUserShortcut(e, 'markerNavigateUp', { allowRepeat: true });
+        const isDown = matchUserShortcut(e, 'markerNavigateDown', { allowRepeat: true });
         if (!isUp && !isDown) return false;
         if (e.ctrlKey || e.metaKey) return false;
 
@@ -4866,12 +4835,7 @@
                 fitMarkerCommentHeight(comment);
             });
             comment.addEventListener('keydown', (ev) => {
-                const shortcuts = window.SHORTCUTS || {};
-                const matches =
-                    typeof window.matchesShortcut === 'function'
-                        ? window.matchesShortcut
-                        : () => false;
-                if (!matches(ev, shortcuts.cancelEditing, { allowRepeat: true })) return;
+                if (!matchUserShortcut(ev, 'cancelEditing', { allowRepeat: true })) return;
                 ev.preventDefault();
                 ev.stopPropagation();
                 if (!clearActiveMarkerTarget()) {
@@ -4937,12 +4901,7 @@
     }
 
     function handleMarkerKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.markerInsert)) return false;
+        if (!matchUserShortcut(e, 'markerInsert')) return false;
         if (isTypingTarget(e.target)) return false;
         if (!markerTimelineReady()) return false;
         e.preventDefault();
@@ -4959,12 +4918,7 @@
     }
 
     function handleMarkerKeyup(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.markerInsert, { allowRepeat: true })) return false;
+        if (!matchUserShortcut(e, 'markerInsert', { allowRepeat: true })) return false;
         if (insertMarkerPressAtMs == null) return false;
 
         const pressAt = insertMarkerPressAtMs;
@@ -4996,12 +4950,7 @@
 
     function handleMarkerHideViewKeydown(e) {
         if (e.ctrlKey || e.metaKey || e.altKey) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.markerHideToggle)) return false;
+        if (!matchUserShortcut(e, 'markerHideToggle')) return false;
         if (isTypingTarget(e.target)) return false;
         if (!markerTimelineReady()) return false;
         if (currentMarkers.length === 0) return false;
@@ -5013,21 +4962,16 @@
     window.handleMarkerHideViewKeydown = handleMarkerHideViewKeydown;
 
     function handleMarkerBracketKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
         if (e.repeat) return false;
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
         if (isTypingTarget(e.target)) return false;
         if (!markerTimelineReady()) return false;
-        if (matches(e, shortcuts.markerRangeStart, { allowRepeat: true })) {
+        if (matchUserShortcut(e, 'markerRangeStart', { allowRepeat: true })) {
             e.preventDefault();
             beginPendingRangeAtCurrentTime();
             return true;
         }
-        if (matches(e, shortcuts.markerRangeEnd, { allowRepeat: true })) {
+        if (matchUserShortcut(e, 'markerRangeEnd', { allowRepeat: true })) {
             if (pendingRangeStartSec == null) return false;
             e.preventDefault();
             completePendingRangeAtCurrentTime();
@@ -5144,12 +5088,7 @@
                 }
             });
             markerMemoTextarea.addEventListener('keydown', (e) => {
-                const shortcuts = window.SHORTCUTS || {};
-                const matches =
-                    typeof window.matchesShortcut === 'function'
-                        ? window.matchesShortcut
-                        : () => false;
-                if (!matches(e, shortcuts.cancelEditing, { allowRepeat: true })) return;
+                if (!matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) return;
                 e.preventDefault();
                 e.stopPropagation();
                 markerMemoTextarea.blur();

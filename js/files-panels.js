@@ -3,13 +3,6 @@
         '.ts', '.mts', '.m2ts', '.mpg', '.mpeg', '.m1v', '.m2v', '.3gp', '.3g2', '.asf', '.f4v',
     ]);
 
-    function fileExtLower(name) {
-        const s = String(name || '').toLowerCase();
-        const dot = s.lastIndexOf('.');
-        if (dot < 0) return '';
-        return s.slice(dot);
-    }
-
     function mimeTypeHintForVideoFileName(name) {
         const ext = fileExtLower(name);
         const map = {

@@ -413,10 +413,22 @@
         );
     }
 
+    function matchUserShortcut(event, shortcutName, opt) {
+        const def = SHORTCUTS[shortcutName];
+        if (!def) return false;
+        return matchesShortcut(event, def, opt);
+    }
+
+    function getUserShortcut(shortcutName) {
+        return SHORTCUTS[shortcutName] || null;
+    }
+
     window.SHORTCUTS = SHORTCUTS;
     window.SHORTCUT_HINTS = SHORTCUT_HINTS;
     window.formatShortcutDef = formatShortcutDef;
     window.matchesShortcut = matchesShortcut;
+    window.matchUserShortcut = matchUserShortcut;
+    window.getUserShortcut = getUserShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;
     window.applyShortcutTooltips = applyShortcutTooltips;

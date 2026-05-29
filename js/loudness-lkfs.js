@@ -321,10 +321,6 @@
         setWaveformTrackLkfsDisplay(trackEl, null);
     }
 
-    function yieldToBrowser() {
-        return new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
     async function scheduleWaveformTrackLkfsMeasure(trackEl, buffer, opt) {
         if (!trackEl || !buffer) return;
         const gen = (measureGenByTrack.get(trackEl) || 0) + 1;

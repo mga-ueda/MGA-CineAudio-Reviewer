@@ -353,11 +353,6 @@
     );
 
     window.addEventListener('keydown', (e) => {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
         const isCodeInGroup =
             typeof window.isShortcutCodeInGroup === 'function'
                 ? window.isShortcutCodeInGroup
@@ -370,7 +365,7 @@
             if (
                 typeof isWebmExportActive === 'function' &&
                 isWebmExportActive() &&
-                matches(e, shortcuts.regionEscape)
+                matchUserShortcut(e, 'regionEscape')
             ) {
                 e.preventDefault();
                 if (typeof tryCancelWebmExportFromEsc === 'function') {
@@ -387,7 +382,7 @@
         // （例: Musical Grid の meter/phrase 入力で Del/Backspace や O/T/P が横取りされないようにする）
         if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
 
-        if (matches(e, shortcuts.transportOptionsToggle)) {
+        if (matchUserShortcut(e, 'transportOptionsToggle')) {
             const transportOptionsSection = document.getElementById('transportOptionsSection');
             if (!transportOptionsSection) return;
             e.preventDefault();
@@ -515,7 +510,7 @@
         }
 
         if (
-            matches(e, shortcuts.musicalGridToggle) &&
+            matchUserShortcut(e, 'musicalGridToggle') &&
             typeof toggleMusicalGridVisible === 'function'
         ) {
             e.preventDefault();
@@ -524,7 +519,7 @@
         }
 
         if (
-            matches(e, shortcuts.musicalGridPhraseToggle) &&
+            matchUserShortcut(e, 'musicalGridPhraseToggle') &&
             typeof toggleMusicalGridPhraseFillVisible === 'function'
         ) {
             e.preventDefault();
@@ -533,7 +528,7 @@
         }
 
         if (
-            matches(e, shortcuts.playheadCenterLockToggle) &&
+            matchUserShortcut(e, 'playheadCenterLockToggle') &&
             typeof togglePlayheadCenterLock === 'function'
         ) {
             if (
@@ -587,11 +582,11 @@
         }
 
         const isArrowKey =
-            matches(e, shortcuts.transportSeekArrowLeft, { allowRepeat: true }) ||
-            matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true });
+            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true });
         if (e.repeat && !isArrowKey) return;
 
-        if (matches(e, shortcuts.loopToggle)) {
+        if (matchUserShortcut(e, 'loopToggle')) {
             if (!loopPlaybackCheckbox) return;
             e.preventDefault();
             loopPlaybackCheckbox.checked = !loopPlaybackCheckbox.checked;
@@ -666,7 +661,7 @@
             return;
         }
 
-        if (matches(e, shortcuts.replayFromPlaybackStart)) {
+        if (matchUserShortcut(e, 'replayFromPlaybackStart')) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -686,7 +681,7 @@
             return;
         }
 
-        if (matches(e, shortcuts.prerollPlay)) {
+        if (matchUserShortcut(e, 'prerollPlay')) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -719,7 +714,7 @@
             return;
         }
 
-        if (matches(e, shortcuts.transportToggle)) {
+        if (matchUserShortcut(e, 'transportToggle')) {
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -733,8 +728,8 @@
         }
 
         if (
-            matches(e, shortcuts.transportSeekArrowLeft, { allowRepeat: true }) ||
-            matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true })
+            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
         ) {
             if (
                 typeof transportControlsReady !== 'function' ||
@@ -751,7 +746,7 @@
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
-            const dir = matches(e, shortcuts.transportSeekArrowRight, { allowRepeat: true }) ? 1 : -1;
+            const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
             let stepSec;
             if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
                 stepSec = 10;
@@ -787,7 +782,7 @@
                     stepLabel = 'Frame ±1f';
                 }
                 const arrow =
-                    dir > 0 ? shortcuts.transportSeekArrowRight.code : shortcuts.transportSeekArrowLeft.code;
+                    dir > 0 ? (getUserShortcut('transportSeekArrowRight') || {}).code : (getUserShortcut('transportSeekArrowLeft') || {}).code;
                 const line =
                     'Seek keyboard: ' +
                     arrow +
@@ -820,7 +815,7 @@
     document.addEventListener(
         'keydown',
         (e) => {
-            if (matches(e, shortcuts.altSnapModifier, { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
+            if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(true);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
                     window.refreshPlaybackRegionHoverCursorLine();
@@ -832,7 +827,7 @@
     document.addEventListener(
         'keyup',
         (e) => {
-            if (matches(e, shortcuts.altSnapModifier, { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
+            if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(false);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
                     window.refreshPlaybackRegionHoverCursorLine();
@@ -852,7 +847,7 @@
             return;
         }
 
-        if (!matches(e, shortcuts.releaseExtraTrackUnityHold, { allowRepeat: true })) return;
+        if (!matchUserShortcut(e, 'releaseExtraTrackUnityHold', { allowRepeat: true })) return;
         if (typeof window.clearExtraTrackVolumeUnityHold === 'function') {
             window.clearExtraTrackVolumeUnityHold();
         }
@@ -973,7 +968,6 @@
     );
 
     (async function boot() {
-        window.__sessionRestoreBootComplete = false;
         if (typeof initPrefsFromStorage === 'function') {
             initPrefsFromStorage();
         }
@@ -996,9 +990,7 @@
                     new Promise((resolve) => setTimeout(resolve, 120000)),
                 ]);
             }
-        } finally {
-            window.__sessionRestoreBootComplete = true;
-        }
+        } catch (_) {}
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }

@@ -1677,14 +1677,8 @@
             return false;
         }
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-
-        const zoomIn = matches(e, shortcuts.waveformTimelineZoomIn, { allowRepeat: true });
-        const zoomOut = matches(e, shortcuts.waveformTimelineZoomOut, { allowRepeat: true });
+        const zoomIn = matchUserShortcut(e, 'waveformTimelineZoomIn', { allowRepeat: true });
+        const zoomOut = matchUserShortcut(e, 'waveformTimelineZoomOut', { allowRepeat: true });
         if (zoomIn || zoomOut) {
             if (e.altKey) return false;
             e.preventDefault();
@@ -1695,18 +1689,18 @@
 
         if (e.ctrlKey || e.altKey || e.metaKey) return false;
 
-        if (matches(e, shortcuts.waveformTimelineFit)) {
+        if (matchUserShortcut(e, 'waveformTimelineFit')) {
             e.preventDefault();
             resetWaveformTimelineZoom();
             return true;
         }
 
         if (
-            matches(e, shortcuts.waveformTimelineScrollBack, { allowRepeat: true }) ||
-            matches(e, shortcuts.waveformTimelineScrollForward, { allowRepeat: true })
+            matchUserShortcut(e, 'waveformTimelineScrollBack', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'waveformTimelineScrollForward', { allowRepeat: true })
         ) {
             e.preventDefault();
-            const dir = matches(e, shortcuts.waveformTimelineScrollForward, { allowRepeat: true })
+            const dir = matchUserShortcut(e, 'waveformTimelineScrollForward', { allowRepeat: true })
                 ? 1
                 : -1;
             scrollWaveformTimeline(dir, e.shiftKey);

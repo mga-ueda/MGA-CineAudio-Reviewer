@@ -44,10 +44,6 @@
     const WAVEFORM_DECODE_TIMEOUT_MS = 90000;
     const WAVEFORM_BG_BUILD_DELAY_MS = 3500;
 
-    function yieldToBrowser() {
-        return new Promise((resolve) => setTimeout(resolve, 0));
-    }
-
     function notifyVideoAudioLoadSettled() {
         if (typeof notifyVideoLoadLockAudioReady === 'function') {
             notifyVideoLoadLockAudioReady();
@@ -2006,11 +2002,6 @@
         }
 
         lanes.addEventListener('keydown', (ev) => {
-            const shortcuts = window.SHORTCUTS || {};
-            const matches =
-                typeof window.matchesShortcut === 'function'
-                    ? window.matchesShortcut
-                    : () => false;
             if (
                 (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                     handlePlaybackRegionSplitKeydown(ev)) ||
@@ -2029,11 +2020,11 @@
             let ratio = transportRatioFromMasterSec(
                 typeof getTransportSec === 'function' ? getTransportSec() : 0,
             );
-            if (matches(ev, shortcuts.waveformLaneSeekHome, { allowRepeat: true })) ratio = 0;
-            else if (matches(ev, shortcuts.waveformLaneSeekEnd, { allowRepeat: true })) ratio = 1;
-            else if (matches(ev, shortcuts.waveformLaneSeekPrev, { allowRepeat: true }))
+            if (matchUserShortcut(ev, 'waveformLaneSeekHome', { allowRepeat: true })) ratio = 0;
+            else if (matchUserShortcut(ev, 'waveformLaneSeekEnd', { allowRepeat: true })) ratio = 1;
+            else if (matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }))
                 ratio = Math.max(0, ratio - masterFrameSec / master);
-            else if (matches(ev, shortcuts.waveformLaneSeekNext, { allowRepeat: true }))
+            else if (matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true }))
                 ratio = Math.min(1, ratio + masterFrameSec / master);
             else return;
             ev.preventDefault();

@@ -63,10 +63,6 @@
     window.canPersistRegionShrink = canPersistRegionShrink;
     window.getRegionPersistEpoch = getRegionPersistEpoch;
 
-    function deepCloneJson(value) {
-        return JSON.parse(JSON.stringify(value));
-    }
-
     function emptyPlaybackRegionsState() {
         return { active: false, segments: [], headPadSec: 0 };
     }
@@ -4893,15 +4889,10 @@
     }
 
     function handlePlaybackRegionMixKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        const isSolo = matches(e, shortcuts.mixLaneSoloToggle);
-        const isSoloExclusive = matches(e, shortcuts.mixLaneSoloExclusive);
-        const isMute = matches(e, shortcuts.mixLaneMuteToggle);
-        const isMuteClearAll = matches(e, shortcuts.mixLaneMuteClearAll);
+        const isSolo = matchUserShortcut(e, 'mixLaneSoloToggle');
+        const isSoloExclusive = matchUserShortcut(e, 'mixLaneSoloExclusive');
+        const isMute = matchUserShortcut(e, 'mixLaneMuteToggle');
+        const isMuteClearAll = matchUserShortcut(e, 'mixLaneMuteClearAll');
         const isSoloMute = isSolo || isSoloExclusive || isMute || isMuteClearAll;
         if (!isSoloMute) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
@@ -5381,12 +5372,7 @@
     }
 
     function handlePlaybackRegionJoinKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionJoin)) return false;
+        if (!matchUserShortcut(e, 'regionJoin')) return false;
         if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         joinPlaybackRegionAtPointer();
@@ -5412,12 +5398,7 @@
     }
 
     function isPlaybackRegionSplitKeyEvent(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        return matches(e, shortcuts.regionSplit);
+        return matchUserShortcut(e, 'regionSplit');
     }
 
     function handlePlaybackRegionSlashKeydown(e) {
@@ -5425,12 +5406,7 @@
     }
 
     function handlePlaybackRegionUndoKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionUndo)) return false;
+        if (!matchUserShortcut(e, 'regionUndo')) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -5441,12 +5417,7 @@
     }
 
     function handlePlaybackRegionRedoKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionRedo)) return false;
+        if (!matchUserShortcut(e, 'regionRedo')) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -5457,12 +5428,7 @@
     }
 
     function handlePlaybackRegionDeleteKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionDelete)) return false;
+        if (!matchUserShortcut(e, 'regionDelete')) return false;
         if (e.shiftKey) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
@@ -5475,12 +5441,7 @@
 
     function handlePlaybackRegionCopyKeydown(e) {
         if (!e.ctrlKey && !e.metaKey) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionCopy)) return false;
+        if (!matchUserShortcut(e, 'regionCopy')) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -5493,12 +5454,7 @@
 
     function handlePlaybackRegionPasteKeydown(e) {
         if (!e.ctrlKey && !e.metaKey) return false;
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionPaste)) return false;
+        if (!matchUserShortcut(e, 'regionPaste')) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
@@ -5510,12 +5466,7 @@
     }
 
     function handlePlaybackRegionEscapeKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.regionEscape)) return false;
+        if (!matchUserShortcut(e, 'regionEscape')) return false;
         if (regionHandleDragActive) {
             endRegionHandleDrag({ cancelled: true });
             return true;
@@ -5852,7 +5803,6 @@
     };
     window.splitPlaybackRegionAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.joinPlaybackRegionAtPointer = joinPlaybackRegionAtPointer;
-    window.cutPlaybackRegionTailAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.getPlaybackRegionPersistSnapshot = getPlaybackRegionPersistSnapshot;
     window.restorePlaybackRegionFromPersist = restorePlaybackRegionFromPersist;
     window.handlePlaybackRegionSplitKeydown = handlePlaybackRegionSplitKeydown;

@@ -47,3 +47,5 @@
         }
         return el.isContentEditable === true;
     }
+
+    window.isTypingTarget = isTypingTarget;

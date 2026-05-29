@@ -1982,13 +1982,8 @@
     }
 
     function handleActiveMixLaneVolumeKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        const isUp = matches(e, shortcuts.mixLaneVolumeUp, { allowRepeat: true });
-        const isDown = matches(e, shortcuts.mixLaneVolumeDown, { allowRepeat: true });
+        const isUp = matchUserShortcut(e, 'mixLaneVolumeUp', { allowRepeat: true });
+        const isDown = matchUserShortcut(e, 'mixLaneVolumeDown', { allowRepeat: true });
         if (!isUp && !isDown) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
@@ -4214,12 +4209,7 @@
     }
 
     function handleExtraTrackAddShortcutKeydown(e) {
-        const shortcuts = window.SHORTCUTS || {};
-        const matches =
-            typeof window.matchesShortcut === 'function'
-                ? window.matchesShortcut
-                : () => false;
-        if (!matches(e, shortcuts.addExtraTrack)) {
+        if (!matchUserShortcut(e, 'addExtraTrack')) {
             return false;
         }
         e.preventDefault();

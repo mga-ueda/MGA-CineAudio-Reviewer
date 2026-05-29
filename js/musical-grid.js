@@ -1662,30 +1662,25 @@
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', persistMusicalGridAndRedraw);
             musicalGridMeterInput.addEventListener('keydown', (e) => {
-                const shortcuts = window.SHORTCUTS || {};
-                const matches =
-                    typeof window.matchesShortcut === 'function'
-                        ? window.matchesShortcut
-                        : () => false;
                 if (
-                    matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ||
-                    matches(e, shortcuts.musicalGridInputArrowDown, { allowRepeat: true })
+                    matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
+                    matchUserShortcut(e, 'musicalGridInputArrowDown', { allowRepeat: true })
                 ) {
                     e.preventDefault();
-                    const dir = matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ? 1 : -1;
+                    const dir = matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ? 1 : -1;
                     const bpmStep = (e.shiftKey ? 10 : 1) * dir;
                     const sigStep = dir;
                     bumpMeterFieldBy(bpmStep, sigStep);
                     return;
                 }
-                if (matches(e, shortcuts.submitEditing, { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridMeterInput.blur();
                     focusWaveformTrackFromInput();
                     return;
                 }
-                if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridMeterInput.blur();
                     focusWaveformTrackFromInput();
@@ -1696,32 +1691,27 @@
             musicalGridPhraseInput.addEventListener('input', onInput);
             musicalGridPhraseInput.addEventListener('change', persistMusicalGridAndRedraw);
             musicalGridPhraseInput.addEventListener('keydown', (e) => {
-                const shortcuts = window.SHORTCUTS || {};
-                const matches =
-                    typeof window.matchesShortcut === 'function'
-                        ? window.matchesShortcut
-                        : () => false;
                 if (
-                    matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true }) ||
-                    matches(e, shortcuts.musicalGridInputArrowDown, { allowRepeat: true })
+                    matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
+                    matchUserShortcut(e, 'musicalGridInputArrowDown', { allowRepeat: true })
                 ) {
                     e.preventDefault();
                     const step = e.shiftKey ? 10 : 1;
                     bumpPhraseSizeBy(
-                        matches(e, shortcuts.musicalGridInputArrowUp, { allowRepeat: true })
+                        matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true })
                             ? step
                             : -step,
                     );
                     return;
                 }
-                if (matches(e, shortcuts.submitEditing, { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridPhraseInput.blur();
                     focusWaveformTrackFromInput();
                     return;
                 }
-                if (matches(e, shortcuts.cancelEditing, { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridPhraseInput.blur();
                     focusWaveformTrackFromInput();
