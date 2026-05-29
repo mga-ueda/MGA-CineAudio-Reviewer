@@ -170,6 +170,9 @@
         drawAudioWaveformCanvas();
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
         notifyVideoAudioLoadSettled();
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
     }
 
     function setAudioWaveformStatus(text) {
@@ -517,7 +520,32 @@
                 renderAudioWaveformMarkers();
             }
             refreshAudioWaveformCompositeLoadedState();
+            if (typeof syncAllTrackWaveformLoading === 'function') {
+                syncAllTrackWaveformLoading();
+            }
         });
+    }
+
+    const VIDEO_WAVEFORM_LAYOUT_MIN_CSS = 32;
+
+    function isVideoWaveformPlacementReady() {
+        if (!urlMain) return true;
+        if (containerHasAudio.main === false) return true;
+        const status = audioWaveformStatus ? audioWaveformStatus.textContent || '' : '';
+        if (status === 'No audio track' || status === 'Waveform unavailable') return true;
+        if (/too large/i.test(status)) return true;
+        if (waveformDecodeInFlight) return false;
+        if (!waveformPeaks || waveformPeaks.length < 1) return false;
+        const laneW =
+            typeof waveformTimelineViewportWidthCss === 'function'
+                ? waveformTimelineViewportWidthCss()
+                : typeof rawMasterTimelineWidthCss === 'function'
+                  ? rawMasterTimelineWidthCss()
+                  : 0;
+        if (laneW < VIDEO_WAVEFORM_LAYOUT_MIN_CSS) return false;
+        if (!audioWaveformCanvas) return false;
+        const styleW = parseFloat(audioWaveformCanvas.style.width) || 0;
+        return styleW >= VIDEO_WAVEFORM_LAYOUT_MIN_CSS;
     }
 
     window.showVideoAudioLane = showVideoAudioLane;
@@ -1029,6 +1057,9 @@
         endAudioWaveformScrub({ force: true });
         setAudioWaveformLoaded(false);
         setAudioWaveformStatus('Not Loaded');
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
         hideHoverPlayhead();
         if (audioWaveformMarkers) {
@@ -1447,6 +1478,9 @@
             return;
         }
         waveformDecodeInFlight = true;
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
         if (containerHasAudio.main === false) {
             waveformDecodeInFlight = false;
             waveformPeaks = null;
@@ -1457,6 +1491,9 @@
             if (typeof renderAudioWaveformMarkers === 'function') renderAudioWaveformMarkers();
             showExtraLaneForNoVideoAudio();
             notifyVideoAudioLoadSettled();
+            if (typeof syncVideoTrackWaveformLoading === 'function') {
+                syncVideoTrackWaveformLoading();
+            }
             return;
         }
 
@@ -1520,6 +1557,9 @@
             setAudioWaveformStatus('Waveform unavailable');
             drawAudioWaveformCanvas();
             notifyVideoAudioLoadSettled();
+            if (typeof syncVideoTrackWaveformLoading === 'function') {
+                syncVideoTrackWaveformLoading();
+            }
             return;
         } finally {
             waveformDecodeInFlight = false;
@@ -1558,6 +1598,9 @@
         }
         notifyVideoAudioLoadSettled();
         stopMainVideoWaveformPresenceWatch();
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
     }
 
     function onContainerMetaReadyForWaveform() {
@@ -1576,6 +1619,9 @@
                 notifyMasterTransportDurationChanged();
             }
             showExtraLaneForNoVideoAudio();
+            if (typeof syncVideoTrackWaveformLoading === 'function') {
+                syncVideoTrackWaveformLoading();
+            }
             return;
         }
         refreshVideoAudioLaneVisibility();
@@ -1692,6 +1738,9 @@
         setAudioWaveformLoaded(true);
         setAudioWaveformStatus('Loading waveform…');
         drawAudioWaveformCanvas();
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
         const run = () => {
             waveformBuildTimer = 0;
             startWaveformBuildWhenReady();
@@ -1771,6 +1820,9 @@
         setAudioWaveformStatus('Loading waveform…');
         drawAudioWaveformCanvas();
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
+        if (typeof syncVideoTrackWaveformLoading === 'function') {
+            syncVideoTrackWaveformLoading();
+        }
         if (!opt || !opt.skipScheduleBuild) {
             scheduleBackgroundWaveformBuild(WAVEFORM_BG_BUILD_DELAY_MS);
         }
@@ -1978,6 +2030,7 @@
     }
 
     window.isMainVideoWaveformBuildPending = isMainVideoWaveformBuildPending;
+    window.isVideoWaveformPlacementReady = isVideoWaveformPlacementReady;
     window.ensureMainVideoWaveformBuildForLoad = ensureMainVideoWaveformBuildForLoad;
     window.kickMainVideoWaveformBuild = kickMainVideoWaveformBuild;
     window.kickMainVideoWaveformAfterLoadLock = kickMainVideoWaveformAfterLoadLock;

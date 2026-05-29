@@ -3169,6 +3169,9 @@
         }
         refreshExtraTrackUi(slot);
         scheduleExtraTrackWaveformRedraw(slot);
+        if (typeof syncExtraTrackWaveformLoading === 'function') {
+            syncExtraTrackWaveformLoading(slot);
+        }
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
@@ -3776,6 +3779,20 @@
         return styleW >= EXTRA_WAVEFORM_LAYOUT_MIN_CSS;
     }
 
+    function isExtraTrackWaveformPlacementReady(slot) {
+        if (!isExtraTrackLoaded(slot) && !hasExtraTrackWaveformPeaks(slot)) return true;
+        if (!isExtraTrackLaneShown(slot) && !isExtraTrackLoaded(slot)) return true;
+        if (extraTrackStatusIndicatesDecoding(slot)) return false;
+        const ui = getExtraUi(slot);
+        const status = ui && ui.status ? ui.status.textContent || '' : '';
+        if (/restoring/i.test(status) && !extraTrackWaveformDrawReady(slot)) return false;
+        if (isExtraTrackLoaded(slot) && !extraTrackWaveformDrawReady(slot)) return false;
+        if (hasExtraTrackWaveformPeaks(slot) && !extraTrackWaveformDrawReady(slot)) return false;
+        return true;
+    }
+
+    window.isExtraTrackWaveformPlacementReady = isExtraTrackWaveformPlacementReady;
+
     /** レイアウト未確定時は rAF で再試行し、peaks 欠落時は再生成する。 */
     function extraTrackStatusIndicatesDecoding(slot) {
         const ui = getExtraUi(slot);
@@ -3841,6 +3858,11 @@
                         paintSlot(slot);
                     }
                 }
+                if (typeof syncExtraTrackWaveformLoading === 'function') {
+                    for (let j = 0; j < list.length; j++) {
+                        syncExtraTrackWaveformLoading(list[j]);
+                    }
+                }
                 if (pending && frame < maxFrames) {
                     requestAnimationFrame(step);
                     return;
@@ -3850,6 +3872,11 @@
                 }
                 if (opt && opt.notifyMaster && typeof notifyMasterTransportDurationChanged === 'function') {
                     notifyMasterTransportDurationChanged();
+                }
+                if (typeof syncExtraTrackWaveformLoading === 'function') {
+                    for (let j = 0; j < list.length; j++) {
+                        syncExtraTrackWaveformLoading(list[j]);
+                    }
                 }
                 resolve();
             };
@@ -3901,6 +3928,11 @@
                     paintSlot(slot);
                 }
             }
+            if (typeof syncExtraTrackWaveformLoading === 'function') {
+                for (let j = 0; j < list.length; j++) {
+                    syncExtraTrackWaveformLoading(list[j]);
+                }
+            }
             if (pending && frame < maxFrames) {
                 requestAnimationFrame(step);
                 return;
@@ -3911,6 +3943,11 @@
             }
             if (opt && opt.notifyMaster && typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
+            }
+            if (typeof syncExtraTrackWaveformLoading === 'function') {
+                for (let j = 0; j < list.length; j++) {
+                    syncExtraTrackWaveformLoading(list[j]);
+                }
             }
         };
 
@@ -4771,6 +4808,9 @@
         setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
         setExtraTrackStatus(slot, 'Not Loaded');
         refreshExtraTrackUi(slot);
+        if (typeof syncExtraTrackWaveformLoading === 'function') {
+            syncExtraTrackWaveformLoading(slot);
+        }
         return hadContent;
     }
 
@@ -4940,6 +4980,9 @@
         }
         const addClipEarly = !!(opt && opt.addClip) && isExtraTrackLoaded(slot);
         setExtraTrackStatus(slot, 'Decoding…');
+        if (typeof syncExtraTrackWaveformLoading === 'function') {
+            syncExtraTrackWaveformLoading(slot);
+        }
         let buffer = null;
         try {
             const ab = await file.arrayBuffer();
@@ -5003,6 +5046,9 @@
             setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
             setExtraTrackStatus(slot, 'Decode failed');
             refreshExtraTrackUi(slot);
+            if (typeof syncExtraTrackWaveformLoading === 'function') {
+                syncExtraTrackWaveformLoading(slot);
+            }
             if (typeof refreshWaveformCompositeLaneLayout === 'function') {
                 refreshWaveformCompositeLaneLayout();
             }
@@ -5191,6 +5237,9 @@
                 schedulePersistSession();
             }
             scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
+            if (typeof syncExtraTrackWaveformLoading === 'function') {
+                syncExtraTrackWaveformLoading(slot);
+            }
             if (typeof refreshExportMediaOptionsUi === 'function') {
                 refreshExportMediaOptionsUi();
             }
@@ -5207,6 +5256,9 @@
             );
             refreshExtraTrackUi(slot);
             scheduleExtraTrackWaveformRedraw(slot);
+            if (typeof syncExtraTrackWaveformLoading === 'function') {
+                syncExtraTrackWaveformLoading(slot);
+            }
             if (typeof updateControlsEnabled === 'function') {
                 updateControlsEnabled();
             }
