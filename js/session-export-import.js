@@ -789,7 +789,7 @@
     async function clearLoadedVideoForImport(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (typeof haltTransportForSessionMutation === 'function') {
-            haltTransportForSessionMutation({ silent: true });
+            haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
         }
         if (typeof videoPanelHasVideo === 'function' && videoPanelHasVideo()) {
             if (typeof revokeVideoOnly === 'function') {

@@ -367,7 +367,7 @@
         }
         const name = fileMain && fileMain.name ? fileMain.name : 'video';
         if (typeof haltTransportForSessionMutation === 'function') {
-            haltTransportForSessionMutation({ silent: true });
+            haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
         }
         revokeVideoOnly();
         if (typeof syncSeekMax === 'function') syncSeekMax();
