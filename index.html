@@ -329,6 +329,17 @@
         </div>
         <div class="transport-bar__row transport-bar__row--export">
             <div
+                class="session-save-indicator-chip"
+                id="sessionSaveIndicator"
+                title="データ保存中はランプが明るく光ります"
+            >
+                <span class="session-save-indicator__housing" aria-hidden="true">
+                    <span class="session-save-indicator__lamp session-save-indicator__lamp--idle"></span>
+                    <span class="session-save-indicator__lamp session-save-indicator__lamp--active"></span>
+                    <span class="session-save-indicator__text">SAVED</span>
+                </span>
+            </div>
+            <div
                 class="playhead-center-lock-options transport-opt-chip"
                 title="ズームや横スクロール時、波形ビュー内のシークバー（再生位置）を常に中央に固定（C で切替）"
             >
@@ -541,6 +552,7 @@
     <script src="js/drop-files.js"></script>
     <script src="js/view-panels.js"></script>
     <script src="js/transport-prefs.js"></script>
+    <script src="js/session-save-indicator.js"></script>
     <script src="js/indexeddb.js"></script>
     <script src="js/waveform-restore-lock.js"></script>
     <script src="js/video-export-review.js"></script>

@@ -606,7 +606,6 @@
             applyTransportAtSec(target, { resumeAfter: resumeAfter });
         }
         syncRegionNavSeekTransportUi(target);
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
         const edgeLabel = stop.edge === 'out' ? ' Out' : ' In';
         const hintTc =
             typeof formatTimecodeForTransport === 'function'

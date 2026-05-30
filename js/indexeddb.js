@@ -39,6 +39,43 @@
         delete obj[maxSlot];
     }
 
+    function swapSlotKeyedPersistMetadata(obj, aSlot, bSlot) {
+        if (!obj || typeof obj !== 'object' || aSlot === bSlot) return;
+        const tmp = obj[aSlot];
+        if (Object.prototype.hasOwnProperty.call(obj, bSlot)) {
+            obj[aSlot] = obj[bSlot];
+        } else {
+            delete obj[aSlot];
+        }
+        if (tmp !== undefined) {
+            obj[bSlot] = tmp;
+        } else {
+            delete obj[bSlot];
+        }
+    }
+
+    /** Ex レーン入れ替え後: スロット番号に紐づくリージョン永続化メタデータを追従させる */
+    function swapRegionPersistMetadataBetweenExtraTrackSlots(aSlot, bSlot) {
+        if (aSlot === bSlot) return;
+        swapSlotKeyedPersistMetadata(regionPersistFloorBySlot, aSlot, bSlot);
+        swapSlotKeyedPersistMetadata(regionPersistFloorPayloadBySlot, aSlot, bSlot);
+        swapSlotKeyedPersistMetadata(regionPersistEpochSavedBySlot, aSlot, bSlot);
+        if (lastSessionRowSnapshot && lastSessionRowSnapshot.__regionPinnedBySlot) {
+            delete lastSessionRowSnapshot.__regionPinnedBySlot[String(aSlot)];
+            delete lastSessionRowSnapshot.__regionPinnedBySlot[String(bSlot)];
+        }
+        if (typeof swapRegionPersistEpochBetweenSlots === 'function') {
+            swapRegionPersistEpochBetweenSlots(aSlot, bSlot);
+        }
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(aSlot);
+            bumpRegionPersistEpoch(bSlot);
+        }
+    }
+
+    window.swapRegionPersistMetadataBetweenExtraTrackSlots =
+        swapRegionPersistMetadataBetweenExtraTrackSlots;
+
     /** Ex レーン詰め替え後: スロット番号に紐づくリージョン永続化メタデータを追従させる */
     function remapRegionPersistMetadataAfterExtraTrackCompaction(clearedSlot) {
         const maxExtra = getExtraTrackCount();
@@ -223,6 +260,7 @@
             const nextCount = regionSegmentsCountFromEntry(next);
             const prevCount = regionSegmentsCountFromEntry(prev);
             if (nextCount === prevCount) continue;
+            if (prevCount < nextCount) continue;
             const prevSegments = Array.isArray(prev.regionSegments)
                 ? deepCloneForPersist(prev.regionSegments)
                 : null;
@@ -253,6 +291,15 @@
         }
     }
 
+    function extraTrackPersistEntriesMatch(a, b) {
+        if (!a || !b) return false;
+        return (
+            a.name === b.name &&
+            Number(a.byteLength || a.blob?.size || 0) ===
+                Number(b.byteLength || b.blob?.size || 0)
+        );
+    }
+
     function enforceRegionPersistFloor(row) {
         if (!row || !Array.isArray(row.extraTracks)) return;
         for (let i = 0; i < row.extraTracks.length; i++) {
@@ -276,6 +323,14 @@
             }
             const floorPayload = regionPersistFloorPayloadBySlot[slot];
             if (floorPayload && floorPayload.entry) {
+                if (!extraTrackPersistEntriesMatch(floorPayload.entry, next)) {
+                    regionPersistFloorBySlot[slot] = nextCount;
+                    regionPersistFloorPayloadBySlot[slot] = {
+                        entry: deepCloneForPersist(next),
+                        playback: deepCloneForPersist(getPlaybackRegionExtraBySlot(row, slot)),
+                    };
+                    continue;
+                }
                 row.extraTracks[i] = deepCloneForPersist(floorPayload.entry);
                 if (floorPayload.playback) {
                     upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(floorPayload.playback));
@@ -383,8 +438,14 @@
     function schedulePersistSession() {
         if (sessionRestoreInProgress) return;
         clearTimeout(persistSessionTimer);
+        if (typeof setSessionSaveDebounceActive === 'function') {
+            setSessionSaveDebounceActive('session', true);
+        }
         persistSessionTimer = setTimeout(() => {
             persistSessionTimer = null;
+            if (typeof setSessionSaveDebounceActive === 'function') {
+                setSessionSaveDebounceActive('session', false);
+            }
             persistSessionToStorage().catch((e) => {
                 writeLog('Session save failed: ' + (e && e.message ? e.message : String(e)));
             });
@@ -394,8 +455,15 @@
     async function flushPersistSessionNow() {
         clearTimeout(persistSessionTimer);
         persistSessionTimer = null;
+        if (typeof setSessionSaveDebounceActive === 'function') {
+            setSessionSaveDebounceActive('session', false);
+        }
+        if (typeof flushPendingExtraTrackLayoutPersist === 'function') {
+            await flushPendingExtraTrackLayoutPersist();
+        }
         await whenSessionRestoreIdle();
         await persistSessionToStorage();
+        await whenSessionStorageWriteIdle();
     }
 
     /** 起動復元・Import Review などセッション復元を直列化 */
@@ -491,6 +559,221 @@
     };
 
     const extraTrackPersistReqSeqBySlot = {};
+    let sessionStorageWriteQueue = Promise.resolve();
+
+    function enqueueSessionStorageWrite(task) {
+        if (typeof noteSessionSaveWriteStart === 'function') {
+            noteSessionSaveWriteStart();
+        }
+        const run = async () => {
+            try {
+                return await task();
+            } finally {
+                if (typeof noteSessionSaveWriteEnd === 'function') {
+                    noteSessionSaveWriteEnd();
+                }
+            }
+        };
+        sessionStorageWriteQueue = sessionStorageWriteQueue.then(run, run);
+        return sessionStorageWriteQueue;
+    }
+
+    function whenSessionStorageWriteIdle() {
+        return sessionStorageWriteQueue;
+    }
+
+    window.whenSessionStorageWriteIdle = whenSessionStorageWriteIdle;
+
+    async function readSessionRowForWrite() {
+        let row;
+        try {
+            row = await idbGet(IDB_KEY_LAST);
+        } catch (_) {
+            row = null;
+        }
+        if ((!row || typeof row !== 'object') && lastSessionRowSnapshot) {
+            row = deepCloneForPersist(lastSessionRowSnapshot);
+        }
+        return row;
+    }
+
+    function attachLiveSessionFieldsToRowForExtraPersist(row) {
+        if (typeof getMarkersSnapshot === 'function') {
+            const mem = getMarkersSnapshot();
+            if (mem && mem.length) {
+                row.markers = mem;
+            } else if (!sessionRowHasMarkers(row)) {
+                delete row.markers;
+            }
+        }
+        if (typeof getMarkerMemoSnapshot === 'function') {
+            const memo = getMarkerMemoSnapshot();
+            if (String(memo || '').trim()) {
+                row.markerMemo = memo;
+            } else if (!sessionRowHasMarkerMemo(row)) {
+                delete row.markerMemo;
+            }
+        }
+        if (typeof getMixPersistSnapshot === 'function') {
+            row.mix = getMixPersistSnapshot();
+        }
+        if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
+            row.laneUi = getWaveformLaneUiPersistSnapshot();
+        }
+        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            const playbackRegion = getPlaybackRegionPersistSnapshot();
+            if (playbackRegion) row.playbackRegion = playbackRegion;
+            else delete row.playbackRegion;
+        }
+    }
+
+    function normalizeExtraTracksEntriesBySlot(entries) {
+        if (!Array.isArray(entries)) return [];
+        const bySlot = new Map();
+        for (let i = 0; i < entries.length; i++) {
+            const e = entries[i];
+            if (!e || !(e.slot >= 0)) continue;
+            const prev = bySlot.get(e.slot);
+            if (!prev) {
+                bySlot.set(e.slot, e);
+                continue;
+            }
+            const prevBytes = Number(prev.byteLength || prev.blob?.size || 0);
+            const nextBytes = Number(e.byteLength || e.blob?.size || 0);
+            const prevRegions = regionSegmentsCountFromEntry(prev);
+            const nextRegions = regionSegmentsCountFromEntry(e);
+            if (
+                nextBytes > prevBytes ||
+                (nextBytes === prevBytes && nextRegions >= prevRegions)
+            ) {
+                bySlot.set(e.slot, e);
+            }
+        }
+        return Array.from(bySlot.values()).sort((a, b) => a.slot - b.slot);
+    }
+
+    function buildPlaybackRegionFromExtraTrackEntries(entries) {
+        if (!Array.isArray(entries) || !entries.length) return null;
+        const extras = [];
+        for (let i = 0; i < entries.length; i++) {
+            const entry = entries[i];
+            if (!entry || !(entry.slot >= 0)) continue;
+            const segs = Array.isArray(entry.regionSegments) ? entry.regionSegments : [];
+            if (!segs.length) continue;
+            const out = {
+                slot: entry.slot,
+                segments: segs.map((seg) =>
+                    seg && typeof seg === 'object' ? { ...seg } : seg,
+                ),
+            };
+            if (Number.isFinite(entry.regionHeadPadSec) && entry.regionHeadPadSec > 0) {
+                out.headPadSec = entry.regionHeadPadSec;
+            }
+            if (Number.isFinite(entry.regionTimelineInSec)) {
+                out.regionTimelineInSec = entry.regionTimelineInSec;
+            }
+            if (Number.isFinite(entry.regionLeadPadSec) && entry.regionLeadPadSec > 0) {
+                out.regionLeadPadSec = entry.regionLeadPadSec;
+            }
+            extras.push(out);
+        }
+        return extras.length ? { extra: extras } : null;
+    }
+
+    function dedupeExtraTrackEntriesForRestore(entries) {
+        return normalizeExtraTracksEntriesBySlot(entries);
+    }
+
+    function finalizeExtraTrackRowAfterPersist(row) {
+        cacheLastSessionRow(row);
+        updateRegionPersistFloorFromRow(row);
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const e = row.extraTracks[i];
+                if (!e || !(e.slot >= 0)) continue;
+                regionPersistEpochSavedBySlot[e.slot] =
+                    typeof getRegionPersistEpoch === 'function'
+                        ? getRegionPersistEpoch(e.slot)
+                        : regionPersistEpochSavedBySlot[e.slot] || 0;
+            }
+        }
+    }
+
+    /** Ex 全スロットを一括置換（入れ替え・詰め替え後の原子的保存） */
+    async function persistAllExtraTracksToSessionImpl() {
+        if (!window.indexedDB || sessionRestoreInProgress) return;
+        const snapshot =
+            typeof getExtraTracksPersistSnapshot === 'function'
+                ? getExtraTracksPersistSnapshot()
+                : null;
+        if (!snapshot || !snapshot.length) {
+            writeLog('Session: extra layout save skipped (no loaded tracks)');
+            return;
+        }
+        let row = await readSessionRowForWrite();
+        if (!row || typeof row !== 'object') {
+            row = { v: 4, audioOnlySession: true, extraTracks: [] };
+        }
+        const nextStamp = sessionSaveStampSeq + 1;
+        row.__saveStamp = nextStamp;
+        row.v = typeof row.v === 'number' ? row.v : 4;
+        if (!row.mBlob) row.audioOnlySession = true;
+        if (typeof getMarkersSnapshot === 'function') {
+            const mem = getMarkersSnapshot();
+            if (mem && mem.length) {
+                row.markers = mem;
+            } else if (!sessionRowHasMarkers(row)) {
+                delete row.markers;
+            }
+        }
+        if (typeof getMarkerMemoSnapshot === 'function') {
+            const memo = getMarkerMemoSnapshot();
+            if (String(memo || '').trim()) {
+                row.markerMemo = memo;
+            } else if (!sessionRowHasMarkerMemo(row)) {
+                delete row.markerMemo;
+            }
+        }
+        if (typeof getMixPersistSnapshot === 'function') {
+            row.mix = getMixPersistSnapshot();
+        }
+        if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
+            row.laneUi = getWaveformLaneUiPersistSnapshot();
+        }
+        row.extraTracks = normalizeExtraTracksEntriesBySlot(
+            snapshot.map((e) => deepCloneForPersist(e)),
+        );
+        const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
+        if (playbackRegion) row.playbackRegion = playbackRegion;
+        else delete row.playbackRegion;
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const e = row.extraTracks[i];
+                if (!e || !(e.slot >= 0)) continue;
+                rememberRegionPersistFloorFromEntry(
+                    e.slot,
+                    e,
+                    getPlaybackRegionExtraBySlot(row, e.slot),
+                );
+            }
+        }
+        if (!sessionRowHasRestorableContent(row)) return;
+        await idbPut(IDB_KEY_LAST, row);
+        finalizeExtraTrackRowAfterPersist(row);
+        writeLog(
+            'Session: extra tracks layout saved (' +
+                snapshot.length +
+                ' track(s), ' +
+                formatRegionCountsForLog(row) +
+                ')',
+        );
+    }
+
+    async function persistAllExtraTracksToSession() {
+        return enqueueSessionStorageWrite(() => persistAllExtraTracksToSessionImpl());
+    }
+
+    window.persistAllExtraTracksToSession = persistAllExtraTracksToSession;
 
     /** Ex トラック1本を即時マージ保存（リロード直前の欠落防止） */
     async function persistExtraTrackEntryToSession(entry) {
@@ -502,6 +785,19 @@
         if (typeof getExtraTrackPersistEntry === 'function') {
             const fresh = getExtraTrackPersistEntry(slot);
             if (fresh) entry = fresh;
+        }
+        if (!entry || !entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
+        return enqueueSessionStorageWrite(() =>
+            mergeExtraTrackEntryIntoSessionRow(entry, slot, reqSeq),
+        );
+    }
+
+    async function mergeExtraTrackEntryIntoSessionRow(entry, slot, reqSeq) {
+        if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
+        if (typeof getExtraTrackPersistEntry === 'function') {
+            const fresh = getExtraTrackPersistEntry(slot);
+            if (fresh) entry = fresh;
+            else return;
         }
         if (!entry || !entry.blob || (entry.byteLength || entry.blob.size || 0) < 1) return;
         let row;
@@ -680,24 +976,26 @@
     async function removeExtraTrackFromSession(slot) {
         const maxExtra = getExtraTrackCount();
         if (!window.indexedDB || slot < 0 || slot >= maxExtra) return;
-        let row;
-        try {
-            row = await idbGet(IDB_KEY_LAST);
-        } catch (_) {
-            return;
-        }
-        if (!row || !Array.isArray(row.extraTracks)) return;
-        row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== slot);
-        if (row.playbackRegion && Array.isArray(row.playbackRegion.extra)) {
-            row.playbackRegion.extra = row.playbackRegion.extra.filter(
-                (e) => !e || e.slot !== slot,
-            );
-        }
-        if (row.__regionPinnedBySlot && typeof row.__regionPinnedBySlot === 'object') {
-            delete row.__regionPinnedBySlot[String(slot)];
-        }
-        await idbPut(IDB_KEY_LAST, row);
-        cacheLastSessionRow(row);
+        return enqueueSessionStorageWrite(async () => {
+            let row;
+            try {
+                row = await idbGet(IDB_KEY_LAST);
+            } catch (_) {
+                return;
+            }
+            if (!row || !Array.isArray(row.extraTracks)) return;
+            row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== slot);
+            if (row.playbackRegion && Array.isArray(row.playbackRegion.extra)) {
+                row.playbackRegion.extra = row.playbackRegion.extra.filter(
+                    (e) => !e || e.slot !== slot,
+                );
+            }
+            if (row.__regionPinnedBySlot && typeof row.__regionPinnedBySlot === 'object') {
+                delete row.__regionPinnedBySlot[String(slot)];
+            }
+            await idbPut(IDB_KEY_LAST, row);
+            cacheLastSessionRow(row);
+        });
     }
 
     window.persistExtraTrackEntryToSession = persistExtraTrackEntryToSession;
@@ -847,6 +1145,9 @@
     async function deleteStoredSession() {
         clearTimeout(persistSessionTimer);
         persistSessionTimer = null;
+        if (typeof setSessionSaveDebounceActive === 'function') {
+            setSessionSaveDebounceActive('session', false);
+        }
         if (!window.indexedDB) return;
         try {
             const db = await openIdb();
@@ -862,6 +1163,10 @@
     window.deleteStoredSession = deleteStoredSession;
 
     async function persistSessionToStorage() {
+        return enqueueSessionStorageWrite(() => persistSessionToStorageImpl());
+    }
+
+    async function persistSessionToStorageImpl() {
         if (!window.indexedDB) return;
         const row = await buildSessionPersistRow();
         const nextStamp = sessionSaveStampSeq + 1;
@@ -966,6 +1271,15 @@
             return;
         }
         writeLog('Restoring ' + row.extraTracks.length + ' extra audio track(s)...');
+        const restoreEntries = dedupeExtraTrackEntriesForRestore(row.extraTracks);
+        if (restoreEntries.length !== row.extraTracks.length) {
+            writeLog(
+                'Extra audio restore: deduped stored entries ' +
+                    row.extraTracks.length +
+                    ' -> ' +
+                    restoreEntries.length,
+            );
+        }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -973,7 +1287,7 @@
             ensureExtraTrackWaveformsDrawn({ maxFrames: 8 });
         }
         let restoredCount = 0;
-        for (const entry of row.extraTracks) {
+        for (const entry of restoreEntries) {
             if (restoreAborted()) return;
             const maxExtraRestore = getExtraTrackCount();
             if (!entry || entry.slot < 0 || entry.slot >= maxExtraRestore) {

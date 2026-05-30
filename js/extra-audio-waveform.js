@@ -284,6 +284,9 @@
         const tmpOpen = extraLaneUiOpen[aSlot];
         extraLaneUiOpen[aSlot] = extraLaneUiOpen[bSlot];
         extraLaneUiOpen[bSlot] = tmpOpen;
+        if (typeof swapRegionPersistMetadataBetweenExtraTrackSlots === 'function') {
+            swapRegionPersistMetadataBetweenExtraTrackSlots(aSlot, bSlot);
+        }
         applyExtraTrackLaneVisibility(aSlot);
         applyExtraTrackLaneVisibility(bSlot);
         refreshExtraTrackUi(aSlot);
@@ -300,9 +303,8 @@
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
-        if (typeof schedulePersistExtraTrackSlot === 'function') {
-            schedulePersistExtraTrackSlot(aSlot);
-            schedulePersistExtraTrackSlot(bSlot);
+        if (typeof schedulePersistExtraTrackLayout === 'function') {
+            schedulePersistExtraTrackLayout();
         } else if (typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
@@ -812,7 +814,9 @@
             if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            if (typeof schedulePersistSession === 'function') {
+            if (typeof schedulePersistExtraTrackLayout === 'function') {
+                schedulePersistExtraTrackLayout();
+            } else if (typeof schedulePersistSession === 'function') {
                 schedulePersistSession();
             }
         } else {

@@ -897,7 +897,6 @@
         }
         isSeeking = false;
         updateSeekUiFromVideo();
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
     function onWaveformLanesPointerDownCapture(ev) {
@@ -1956,7 +1955,6 @@
                 }
                 isSeeking = false;
                 if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
-                if (typeof schedulePersistSession === 'function') schedulePersistSession();
             };
             seekBar.addEventListener('pointerdown', (ev) => {
                 ev.stopPropagation();

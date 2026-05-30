@@ -12,7 +12,7 @@
 
     function logAndPersistLoopPlayback() {
         const on = getLoopPlaybackEnabled();
-        schedulePersistSession();
+        writePrefs();
         writeLog('Loop playback: ' + (on ? 'ON' : 'OFF'));
         flashSeekHint('Loop', on ? 'ON' : 'OFF', 'notice');
         flashTransportOptBox('playback');

@@ -318,6 +318,9 @@
 
                 <h3 class="docs-heading-box--sub">波形直下（オプションバー中段）</h3>
                 <ul>
+                    <li>
+                        <strong>保存インジケーター（SAVED / SAVING）</strong> — オプションバー左端の赤い LED 表示です。作業内容がブラウザ内（IndexedDB）へ<strong>自動保存</strong>されているかを示します（押すボタンではありません）。<strong>SAVED</strong> は保存完了、<strong>SAVING</strong> は保存中です。マーカー・リージョン・トラック順などを編集したあと、<strong>リロードやタブを閉じる前に SAVED になるのを待つ</strong>と安全です。<strong>SAVING の最中にリロード</strong>すると、保存の途中だった変更は失われ、<strong>前回までに保存が完了した状態</strong>に戻ることがあります。編集直後でまだ LED が光っていないときも、書き込み前の変更は残らないことがあります。
+                    </li>
                     <li><strong>Center lock</strong> — 再生ヘッドを波形ビュー中央に固定（<kbd>C</kbd>）。</li>
                     <li><strong>Analyze</strong> — スペクトラム/メーター表示のオン/オフ（<kbd>A</kbd>）。オフでも CLIP PROTECT は動作します。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（Audio Track 1〜3 の全トラック）を一括で切り替えます。</li>
@@ -409,7 +412,8 @@
             <section class="guide-section" id="storage">
                 <h2 class="docs-heading-box">データの保存と復元</h2>
                 <ul>
-                    <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカーと <strong>Additional Comments</strong> もセッションに含まれます。</li>
+                    <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
+                    <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。トランスポートの <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
                     <li>Loop のオン/オフ、タイムコードオーバーレイ位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>

@@ -295,7 +295,6 @@
                 } else {
                     applyTimeToVideo(target);
                 }
-                schedulePersistSession();
                 writeLog(
                     'Seek keyboard: Numpad ' +
                         d +
@@ -347,7 +346,6 @@
                 } else if (typeof applyTimeToVideo === 'function') {
                     applyTimeToVideo(target);
                 }
-                schedulePersistSession();
                 writeLog(
                     'Keyboard: Ctrl+Space -> preroll play from ' +
                         formatTimecodeForTransport(target)
@@ -417,7 +415,6 @@
                     currentTimeEl.textContent = formatTimecodeForTransport(t);
                     updateTimecodeOverlay();
                 }
-                schedulePersistSession();
                 let stepLabel;
                 if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
                     stepLabel = 'Ctrl+Shift ±10s';

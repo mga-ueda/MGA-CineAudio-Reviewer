@@ -66,6 +66,8 @@
     window.applyExtraTrackPeaksPreview = applyExtraTrackPeaksPreview;
     window.getExtraTracksPersistSnapshot = getExtraTracksPersistSnapshot;
     window.schedulePersistExtraTrackSlot = schedulePersistExtraTrackSlot;
+    window.schedulePersistExtraTrackLayout = schedulePersistExtraTrackLayout;
+    window.flushPendingExtraTrackLayoutPersist = flushPendingExtraTrackLayoutPersist;
     window.finalizeReviewMixAfterSessionRestore = finalizeReviewMixAfterSessionRestore;
     window.prepareReviewMixForNewVideoLoad = prepareReviewMixForNewVideoLoad;
     window.ensureExtraTrackWaveformsDrawn = ensureExtraTrackWaveformsDrawn;

@@ -435,7 +435,6 @@
         if (typeof drawMusicalGridOverlay === 'function') drawMusicalGridOverlay();
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
-            if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }
         if (!o.silent) {
             if (typeof writeLog === 'function') {
@@ -503,7 +502,6 @@
         setMusicalGridPhraseFillVisible(false, { silent: !!o.silent, persist: false });
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
-            if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }
     }
 
@@ -520,7 +518,6 @@
         }
         clearMusicalGridPositionCache();
         if (typeof writePrefs === 'function') writePrefs();
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
         scheduleMusicalGridRedraw();
     }
 
@@ -736,7 +733,6 @@
             readMusicalGridFromInputs();
             clearMusicalGridPositionCache();
             if (typeof writePrefs === 'function') writePrefs();
-            if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }, 400);
     }
 
@@ -897,7 +893,6 @@
         if (typeof updateAllWaveformPlayheads === 'function') {
             updateAllWaveformPlayheads();
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
         const hintTc =
             typeof formatTimecodeForTransport === 'function'
                 ? formatTimecodeForTransport(target)
@@ -1253,7 +1248,6 @@
         if (typeof updateAllWaveformPlayheads === 'function') {
             updateAllWaveformPlayheads();
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
         const hintTc =
             typeof formatTimecodeForTransport === 'function'
                 ? formatTimecodeForTransport(target)
@@ -1404,7 +1398,6 @@
         }
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
-            if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }
     }
 
@@ -1538,7 +1531,6 @@
             endPhraseBoundaryDrag();
             if (finalCounts && finalCounts.length) {
                 if (typeof writePrefs === 'function') writePrefs();
-                if (typeof schedulePersistSession === 'function') schedulePersistSession();
                 scheduleMusicalGridRedraw();
                 if (typeof writeLog === 'function') {
                     const left = phraseGroupLogLabelForIndex(boundaryIdx);

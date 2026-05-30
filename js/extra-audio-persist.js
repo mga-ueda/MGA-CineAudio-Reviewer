@@ -73,6 +73,47 @@
         }
     }
 
+    let extraTrackLayoutPersistTimer = null;
+
+    /** 入れ替え・詰め替え後: 全 Ex スロットを原子的に保存（連続操作はデバウンス） */
+    function schedulePersistExtraTrackLayout() {
+        if (typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) {
+            return;
+        }
+        clearTimeout(extraTrackLayoutPersistTimer);
+        if (typeof setSessionSaveDebounceActive === 'function') {
+            setSessionSaveDebounceActive('layout', true);
+        }
+        extraTrackLayoutPersistTimer = setTimeout(() => {
+            extraTrackLayoutPersistTimer = null;
+            if (typeof setSessionSaveDebounceActive === 'function') {
+                setSessionSaveDebounceActive('layout', false);
+            }
+            if (typeof persistAllExtraTracksToSession === 'function') {
+                void persistAllExtraTracksToSession().catch((e) => {
+                    writeLog(
+                        'Session: extra layout save failed — ' +
+                            (e && e.message ? e.message : String(e)),
+                    );
+                });
+            } else if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        }, 400);
+    }
+
+    async function flushPendingExtraTrackLayoutPersist() {
+        if (!extraTrackLayoutPersistTimer) return;
+        clearTimeout(extraTrackLayoutPersistTimer);
+        extraTrackLayoutPersistTimer = null;
+        if (typeof setSessionSaveDebounceActive === 'function') {
+            setSessionSaveDebounceActive('layout', false);
+        }
+        if (typeof persistAllExtraTracksToSession === 'function') {
+            await persistAllExtraTracksToSession();
+        }
+    }
+
     function canBindReviewMixVideoMediaSource() {
         return !!(
             videoMain &&

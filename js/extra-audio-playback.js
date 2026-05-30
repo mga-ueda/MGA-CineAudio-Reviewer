@@ -812,6 +812,64 @@
         return clip.persistBlob;
     }
 
+    /** getPlaybackRegionPersistSnapshot と同じ経路でリージョンを収集（0/1 不一致防止） */
+    function appendRegionFieldsToExtraTrackPersistEntry(entry, slot) {
+        if (!entry || !(slot >= 0)) return;
+        const track = { type: 'extra', slot };
+        if (typeof getTrackSegments !== 'function') return;
+        const segments = getTrackSegments(track);
+        if (!segments.length) return;
+        entry.regionSegments = segments.map((seg, segIndex) => {
+            const raw =
+                typeof getRawSegmentEntry === 'function'
+                    ? getRawSegmentEntry(track, segIndex)
+                    : null;
+            const out = {
+                id: seg.id,
+                clipId: seg.clipId,
+                sourceInSec: seg.sourceInSec,
+                sourceOutSec: seg.sourceOutSec,
+            };
+            if (raw && Number.isFinite(raw.timelineStartSec)) {
+                out.timelineStartSec = raw.timelineStartSec;
+            }
+            if (raw && Number.isFinite(raw.regionTimelineInSec)) {
+                out.regionTimelineInSec = raw.regionTimelineInSec;
+            }
+            if (raw && Number.isFinite(raw.regionLeadPadSec)) {
+                out.regionLeadPadSec = raw.regionLeadPadSec;
+            }
+            if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
+                out.gainDb = raw.gainDb;
+            }
+            if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
+                out.fadeInSec = raw.fadeInSec;
+            }
+            if (raw && Number.isFinite(raw.fadeOutSec) && raw.fadeOutSec > 0.0005) {
+                out.fadeOutSec = raw.fadeOutSec;
+            }
+            return out;
+        });
+        if (typeof getPlaybackRegionsState !== 'function') return;
+        const state = getPlaybackRegionsState(track);
+        if (!state) return;
+        if (Number.isFinite(state.headPadSec) && state.headPadSec > 0) {
+            entry.regionHeadPadSec = state.headPadSec;
+        } else {
+            delete entry.regionHeadPadSec;
+        }
+        if (Number.isFinite(state.regionTimelineInSec)) {
+            entry.regionTimelineInSec = state.regionTimelineInSec;
+        } else {
+            delete entry.regionTimelineInSec;
+        }
+        if (Number.isFinite(state.regionLeadPadSec) && state.regionLeadPadSec > 0) {
+            entry.regionLeadPadSec = state.regionLeadPadSec;
+        } else {
+            delete entry.regionLeadPadSec;
+        }
+    }
+
     function getExtraTrackPersistEntry(slot) {
         const tr = extraTrackBySlot(slot);
         if (!tr || !tr.file || !tr.buffer || !tr.persistBlob || tr.persistBlob.size < 1) {
@@ -829,21 +887,7 @@
             peaks,
             timelineStartSec: timelineStart > 0 ? timelineStart : 0,
         };
-        const reg = tr.playbackRegions;
-        if (reg && reg.active && Array.isArray(reg.segments) && reg.segments.length) {
-            entry.regionSegments = reg.segments.map((seg) =>
-                seg && typeof seg === 'object' ? { ...seg } : seg,
-            );
-            if (Number.isFinite(reg.headPadSec) && reg.headPadSec > 0) {
-                entry.regionHeadPadSec = reg.headPadSec;
-            }
-            if (Number.isFinite(reg.regionTimelineInSec)) {
-                entry.regionTimelineInSec = reg.regionTimelineInSec;
-            }
-            if (Number.isFinite(reg.regionLeadPadSec) && reg.regionLeadPadSec > 0) {
-                entry.regionLeadPadSec = reg.regionLeadPadSec;
-            }
-        }
+        appendRegionFieldsToExtraTrackPersistEntry(entry, slot);
         const clips = ensureExtraTrackClips(tr);
         if (clips.length > 1) {
             entry.clips = clips

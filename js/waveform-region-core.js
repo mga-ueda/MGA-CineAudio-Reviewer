@@ -50,8 +50,20 @@
         return Number(regionPersistEpochBySlot[slot] || 0);
     }
 
+    function swapRegionPersistEpochBetweenSlots(aSlot, bSlot) {
+        if (!(aSlot >= 0) || !(bSlot >= 0) || aSlot === bSlot) return;
+        const tmp = regionPersistEpochBySlot[aSlot] || 0;
+        regionPersistEpochBySlot[aSlot] = regionPersistEpochBySlot[bSlot] || 0;
+        regionPersistEpochBySlot[bSlot] = tmp;
+        const tmpShrink = regionShrinkPersistIntentUntilBySlot[aSlot] || 0;
+        regionShrinkPersistIntentUntilBySlot[aSlot] =
+            regionShrinkPersistIntentUntilBySlot[bSlot] || 0;
+        regionShrinkPersistIntentUntilBySlot[bSlot] = tmpShrink;
+    }
+
     window.canPersistRegionShrink = canPersistRegionShrink;
     window.getRegionPersistEpoch = getRegionPersistEpoch;
+    window.swapRegionPersistEpochBetweenSlots = swapRegionPersistEpochBetweenSlots;
 
     function emptyPlaybackRegionsState() {
         return { active: false, segments: [], headPadSec: 0 };

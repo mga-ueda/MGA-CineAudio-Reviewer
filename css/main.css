@@ -3171,6 +3171,125 @@
         .transport-bar .playhead-center-lock-options {
             gap: 6px 10px;
         }
+        .transport-bar .session-save-indicator-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 58px;
+            width: 58px;
+            min-width: 58px;
+            max-width: 58px;
+            padding: 0;
+            margin: 0;
+            border: none;
+            background: none;
+            box-shadow: none;
+            box-sizing: border-box;
+        }
+        .transport-bar .session-save-indicator__housing {
+            flex-shrink: 0;
+            display: block;
+            width: 58px;
+            min-width: 58px;
+            max-width: 58px;
+            height: 18px;
+            padding: 1px;
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            background: #101010;
+            border: 1px solid rgba(0, 0, 0, 0.85);
+            box-shadow:
+                inset 0 1px 2px rgba(0, 0, 0, 0.88),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+        }
+        .transport-bar .session-save-indicator__lamp {
+            position: absolute;
+            inset: 1px;
+            border-radius: 1px;
+        }
+        .transport-bar .session-save-indicator__lamp--idle {
+            background: radial-gradient(
+                ellipse 85% 95% at 50% 46%,
+                #421612 0%,
+                #301008 42%,
+                #1a0806 72%,
+                #0e0403 100%
+            );
+            box-shadow:
+                inset 0 0 6px rgba(255, 80, 60, 0.04),
+                inset 0 2px 6px rgba(0, 0, 0, 0.72),
+                inset 0 -2px 6px rgba(0, 0, 0, 0.68),
+                inset 2px 0 5px rgba(0, 0, 0, 0.55),
+                inset -2px 0 5px rgba(0, 0, 0, 0.55);
+        }
+        .transport-bar .session-save-indicator__lamp--active {
+            opacity: 0;
+            background: radial-gradient(
+                ellipse 85% 95% at 50% 46%,
+                #ff5848 0%,
+                #e02818 38%,
+                #b01810 68%,
+                #6a0c08 100%
+            );
+            box-shadow:
+                inset 0 0 10px rgba(255, 112, 88, 0.62),
+                inset 0 2px 7px rgba(0, 0, 0, 0.48),
+                inset 0 -2px 7px rgba(0, 0, 0, 0.42),
+                inset 2px 0 6px rgba(0, 0, 0, 0.38),
+                inset -2px 0 6px rgba(0, 0, 0, 0.38),
+                0 0 6px rgba(255, 72, 52, 0.28),
+                0 0 12px rgba(255, 56, 40, 0.14);
+            transition: opacity 0s;
+        }
+        .transport-bar .session-save-indicator__text {
+            position: absolute;
+            inset: 1px;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: calc(100% - 2px);
+            font-family: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', monospace;
+            font-size: 7px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            line-height: 1;
+            color: #fff;
+            pointer-events: none;
+            white-space: nowrap;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+        }
+        .transport-bar .session-save-indicator-chip--pending .session-save-indicator__lamp--idle {
+            filter: brightness(1.12);
+        }
+        .transport-bar .session-save-indicator-chip--busy .session-save-indicator__housing {
+            box-shadow:
+                inset 0 1px 2px rgba(0, 0, 0, 0.88),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.03),
+                inset 0 0 8px rgba(255, 56, 40, 0.2),
+                0 0 8px rgba(255, 48, 36, 0.18);
+        }
+        .transport-bar .session-save-indicator-chip--busy .session-save-indicator__lamp--active {
+            opacity: 1;
+            transition: opacity 0s;
+        }
+        .transport-bar .session-save-indicator-chip--busy .session-save-indicator__text {
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
+        }
+        .transport-bar .session-save-indicator-chip--fade-out .session-save-indicator__lamp--active {
+            opacity: 1;
+            animation: session-save-lamp-fade-out 1s ease forwards;
+        }
+        @keyframes session-save-lamp-fade-out {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
         .transport-bar .playhead-center-lock-options__title {
             flex-shrink: 0;
         }

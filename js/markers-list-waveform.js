@@ -913,7 +913,6 @@
         activeMarkerId = m.id;
         updateMarkerListRowClasses();
         renderSeekBarMarkers();
-        schedulePersistSession();
         const hintTc = tcLabelForSec(t);
         const hintSuffix =
             m.type === 'range' && !(opt && Number.isFinite(opt.targetSec))

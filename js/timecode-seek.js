@@ -206,7 +206,6 @@
             applyTimeToVideo(target);
             if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
         writeLog(
             'Keyboard: Alt+Enter -> replay from ' + formatTimecodeForTransport(target)
         );
@@ -1034,7 +1033,6 @@
         setTransportSec(0);
         updateSeekUiFromVideo();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
-        schedulePersistSession();
     }
 
     window.stopPlaybackReturnTransportToHead = stopPlaybackReturnTransportToHead;
@@ -1083,7 +1081,6 @@
                         await startVideoPlayback({ force: true });
                     }
                 }
-                schedulePersistSession();
                 return true;
             }
             if (typeof getLoopPlaybackEnabled === 'function' && getLoopPlaybackEnabled()) {
@@ -1102,7 +1099,6 @@
                         await startVideoPlayback({ force: true });
                     }
                 }
-                schedulePersistSession();
                 return true;
             }
             stopPlaybackReturnTransportToHead();

@@ -247,7 +247,6 @@
             if (typeof syncExtraAudioToTransport === 'function') {
                 syncExtraAudioToTransport();
             }
-            schedulePersistSession();
             return;
         }
         if (typeof requestScrollToPlayerStageOnNextPlay === 'function') {

@@ -283,9 +283,6 @@
             if (!(opt && opt.fromSessionRestore)) {
                 schedulePersistExtraTrackSlot(slot);
             }
-            if (!(opt && opt.fromSessionRestore) && typeof schedulePersistSession === 'function') {
-                schedulePersistSession();
-            }
             scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
             if (typeof syncExtraTrackWaveformLoading === 'function') {
                 syncExtraTrackWaveformLoading(slot);

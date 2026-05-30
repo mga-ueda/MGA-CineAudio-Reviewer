@@ -908,7 +908,6 @@
                 if (typeof updateAllWaveformPlayheads === 'function') {
                     updateAllWaveformPlayheads();
                 }
-                if (typeof schedulePersistSession === 'function') schedulePersistSession();
                 endRegionHandleDrag({ cancelled: true });
                 regionHandleDragStartClientX = NaN;
                 return;
