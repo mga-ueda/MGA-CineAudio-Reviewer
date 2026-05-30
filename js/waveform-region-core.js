@@ -43,6 +43,8 @@
         regionPersistEpochBySlot[slot] = (regionPersistEpochBySlot[slot] || 0) + 1;
     }
 
+    window.bumpRegionPersistEpoch = bumpRegionPersistEpoch;
+
     function getRegionPersistEpoch(slot) {
         if (!(slot >= 0)) return 0;
         return Number(regionPersistEpochBySlot[slot] || 0);

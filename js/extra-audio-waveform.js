@@ -615,7 +615,7 @@
         }
     }
 
-    function transferExtraTrackSlotContent(fromSlot, toSlot) {
+    function transferExtraTrackSlotContent(fromSlot, toSlot, opt) {
         if (fromSlot === toSlot) return;
         const src = extraTrackBySlot(fromSlot);
         const dst = extraTrackBySlot(toSlot);
@@ -658,6 +658,22 @@
             setExtraTrackStatus(toSlot, 'Not Loaded');
         }
         refreshExtraTrackUi(toSlot);
+        const uiDest = getExtraUi(toSlot);
+        if (
+            loaded &&
+            dst.buffer &&
+            typeof scheduleWaveformTrackLkfsMeasure === 'function' &&
+            uiDest &&
+            uiDest.track
+        ) {
+            void scheduleWaveformTrackLkfsMeasure(uiDest.track, dst.buffer);
+        }
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(toSlot);
+        }
+        if (opt && opt.wipeSource) {
+            wipeExtraTrackSlotContent(fromSlot, { keepMix: true });
+        }
     }
 
     function wipeExtraTrackSlotContent(slot, opt) {
@@ -741,7 +757,7 @@
             if (!isExtraTrackLaneShown(src)) continue;
             if (dest !== src) {
                 if (extraTrackSlotHasContent(src)) {
-                    transferExtraTrackSlotContent(src, dest);
+                    transferExtraTrackSlotContent(src, dest, { wipeSource: true });
                 }
                 extraLaneUiOpen[dest] = extraLaneUiOpen[src];
             }
@@ -757,6 +773,16 @@
         }
         if (typeof clearExtraTrackVolumeUnityHold === 'function') {
             clearExtraTrackVolumeUnityHold();
+        }
+        if (typeof remapRegionPersistMetadataAfterExtraTrackCompaction === 'function') {
+            remapRegionPersistMetadataAfterExtraTrackCompaction(clearedSlot);
+        }
+        for (let i = clearedSlot; i < dest; i++) {
+            if (!extraTrackSlotHasContent(i)) continue;
+            if (typeof updateTrackRegionOverlay === 'function') {
+                updateTrackRegionOverlay({ type: 'extra', slot: i });
+            }
+            drawExtraTrackWaveform(i);
         }
     }
 
@@ -785,15 +811,6 @@
             }
             if (hadContent && typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
-            }
-            for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
-                if (extraTrackSlotHasContent(i)) {
-                    if (typeof schedulePersistExtraTrackSlot === 'function') {
-                        schedulePersistExtraTrackSlot(i);
-                    }
-                } else if (typeof removeExtraTrackFromSession === 'function') {
-                    void removeExtraTrackFromSession(i);
-                }
             }
             if (typeof schedulePersistSession === 'function') {
                 schedulePersistSession();

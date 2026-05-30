@@ -26,6 +26,42 @@
     const regionPersistFloorPayloadBySlot = {};
     const regionPersistEpochSavedBySlot = {};
 
+    function shiftSlotKeyedPersistMetadata(obj, clearedSlot, maxSlot) {
+        if (!obj || typeof obj !== 'object' || !(clearedSlot >= 0)) return;
+        for (let slot = clearedSlot; slot < maxSlot; slot++) {
+            const src = slot + 1;
+            if (Object.prototype.hasOwnProperty.call(obj, src)) {
+                obj[slot] = obj[src];
+            } else {
+                delete obj[slot];
+            }
+        }
+        delete obj[maxSlot];
+    }
+
+    /** Ex レーン詰め替え後: スロット番号に紐づくリージョン永続化メタデータを追従させる */
+    function remapRegionPersistMetadataAfterExtraTrackCompaction(clearedSlot) {
+        const maxExtra = getExtraTrackCount();
+        if (!(clearedSlot >= 0) || clearedSlot >= maxExtra) return;
+        const lastSlot = maxExtra - 1;
+        shiftSlotKeyedPersistMetadata(regionPersistFloorBySlot, clearedSlot, lastSlot);
+        shiftSlotKeyedPersistMetadata(regionPersistFloorPayloadBySlot, clearedSlot, lastSlot);
+        shiftSlotKeyedPersistMetadata(regionPersistEpochSavedBySlot, clearedSlot, lastSlot);
+        if (lastSessionRowSnapshot && lastSessionRowSnapshot.__regionPinnedBySlot) {
+            for (let slot = clearedSlot; slot < maxExtra; slot++) {
+                delete lastSessionRowSnapshot.__regionPinnedBySlot[String(slot)];
+            }
+        }
+        for (let slot = clearedSlot; slot < maxExtra; slot++) {
+            if (typeof bumpRegionPersistEpoch === 'function') {
+                bumpRegionPersistEpoch(slot);
+            }
+        }
+    }
+
+    window.remapRegionPersistMetadataAfterExtraTrackCompaction =
+        remapRegionPersistMetadataAfterExtraTrackCompaction;
+
     function cacheLastSessionRow(row) {
         if (!row || typeof row !== 'object') return;
         lastSessionRowSnapshot = deepCloneForPersist(row);
@@ -126,6 +162,12 @@
             const nextIdx = row.extraTracks.findIndex((e) => e && e.slot === slot);
             if (nextIdx < 0) continue;
             const next = row.extraTracks[nextIdx];
+            const prevMatchesTrack =
+                next &&
+                prev.name === next.name &&
+                Number(prev.byteLength || prev.blob?.size || 0) ===
+                    Number(next.byteLength || next.blob?.size || 0);
+            if (!prevMatchesTrack) continue;
             const prevCount = regionSegmentsCountFromEntry(prev);
             const nextCount = regionSegmentsCountFromEntry(next);
             const floorCount = Number(regionPersistFloorBySlot[slot] || 0);
@@ -173,6 +215,11 @@
             const savedEpoch = Number(regionPersistEpochSavedBySlot[slot] || 0);
             const hasNewRegionEdit = curEpoch > savedEpoch;
             if (hasNewRegionEdit) continue;
+            const prevMatchesTrack =
+                prev.name === next.name &&
+                Number(prev.byteLength || prev.blob?.size || 0) ===
+                    Number(next.byteLength || next.blob?.size || 0);
+            if (!prevMatchesTrack) continue;
             const nextCount = regionSegmentsCountFromEntry(next);
             const prevCount = regionSegmentsCountFromEntry(prev);
             if (nextCount === prevCount) continue;
@@ -552,10 +599,22 @@
                 ? prevEntry.regionSegments.length
                 : 0;
         }
+        const regionEpochSaved = Number(regionPersistEpochSavedBySlot[slot] || 0);
+        const regionEpochCurrent =
+            typeof getRegionPersistEpoch === 'function' ? getRegionPersistEpoch(slot) : 0;
+        const hasFreshRegionEdit = regionEpochCurrent > regionEpochSaved;
+        const prevEntryMatchesTrack =
+            prevEntry &&
+            entry &&
+            prevEntry.name === entry.name &&
+            Number(prevEntry.byteLength || prevEntry.blob?.size || 0) ===
+                Number(entry.byteLength || entry.blob?.size || 0);
         if (
+            prevEntryMatchesTrack &&
             prevRegionSegments > entryRegionSegments &&
             typeof canPersistRegionShrink === 'function' &&
-            !canPersistRegionShrink(slot)
+            !canPersistRegionShrink(slot) &&
+            !hasFreshRegionEdit
         ) {
             entry = prevEntry || entry;
         }
@@ -629,7 +688,16 @@
         }
         if (!row || !Array.isArray(row.extraTracks)) return;
         row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== slot);
+        if (row.playbackRegion && Array.isArray(row.playbackRegion.extra)) {
+            row.playbackRegion.extra = row.playbackRegion.extra.filter(
+                (e) => !e || e.slot !== slot,
+            );
+        }
+        if (row.__regionPinnedBySlot && typeof row.__regionPinnedBySlot === 'object') {
+            delete row.__regionPinnedBySlot[String(slot)];
+        }
         await idbPut(IDB_KEY_LAST, row);
+        cacheLastSessionRow(row);
     }
 
     window.persistExtraTrackEntryToSession = persistExtraTrackEntryToSession;
