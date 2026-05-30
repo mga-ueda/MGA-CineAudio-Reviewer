@@ -314,8 +314,8 @@
             } else if (typeof prev.musicalGridPhraseFillVisible === 'boolean') {
                 payload.musicalGridPhraseFillVisible = prev.musicalGridPhraseFillVisible;
             }
-            if (typeof isTimecodeOverlayUserHidden === 'function') {
-                payload.timecodeOverlayHidden = isTimecodeOverlayUserHidden();
+            if (typeof window.isTimecodeOverlayUserHidden === 'function') {
+                payload.timecodeOverlayHidden = window.isTimecodeOverlayUserHidden();
             } else if (typeof prev.timecodeOverlayHidden === 'boolean') {
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }

@@ -295,11 +295,17 @@
             scale: 1,
             _pendingDefaultSeed: true,
         };
+        tcOverlayUserHidden = false;
+        let hiddenLoadedFromStorage = false;
         try {
             const raw = localStorage.getItem(LS_TC_OVERLAY_POS_KEY);
-            if (!raw) return;
+            if (!raw) return hiddenLoadedFromStorage;
             const p = JSON.parse(raw);
-            if (!p || typeof p !== 'object') return;
+            if (!p || typeof p !== 'object') return hiddenLoadedFromStorage;
+            if (typeof p.hidden === 'boolean') {
+                tcOverlayUserHidden = p.hidden;
+                hiddenLoadedFromStorage = true;
+            }
             const xRatio = Number(p.xRatio);
             const bottomRatio = Number(p.bottomRatio);
             if (Number.isFinite(xRatio) && Number.isFinite(bottomRatio)) {
@@ -313,6 +319,7 @@
                 }
             }
         } catch (_) {}
+        return hiddenLoadedFromStorage;
     }
 
     function saveTcOverlayPosition() {
@@ -325,6 +332,7 @@
                     snapX: tcOverlaySharedPos.snapX,
                     snapY: tcOverlaySharedPos.snapY,
                     scale: getTcOverlayUserScale(),
+                    hidden: !!tcOverlayUserHidden,
                 })
             );
         } catch (_) {}
@@ -367,7 +375,10 @@
         tcOverlayUserHidden = next;
         if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
         updateVideoTcHideViewButton();
-        if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
+        if (o.persist !== false) {
+            saveTcOverlayPosition();
+            if (typeof writePrefs === 'function') writePrefs();
+        }
         if (o.log !== false && typeof writeLog === 'function') {
             writeLog(
                 tcOverlayUserHidden
@@ -745,10 +756,10 @@
     window.getTcOverlayBurnInDrawMetrics = getTcOverlayBurnInDrawMetrics;
 
     function initTimecodeOverlay() {
-        if (typeof readPrefs === 'function') {
+        const hiddenLoadedFromStorage = loadTcOverlayPosition();
+        if (!hiddenLoadedFromStorage && typeof readPrefs === 'function') {
             applyTimecodeOverlayUserHiddenFromPrefs(readPrefs());
         }
-        loadTcOverlayPosition();
         if (frameMain) ensureTcCenterGuides(frameMain);
         setupTcOverlayInteraction();
         captureTcOverlayBaseMetrics();
