@@ -725,6 +725,9 @@
             markerPasteBtn.disabled = !timelineReady;
         }
         updateMarkerHideViewButton();
+        if (typeof refreshExportMediaOptionsUi === 'function') {
+            refreshExportMediaOptionsUi();
+        }
     }
 
     /** タブ区切りコピー用: セル内のタブ・改行を正規化 */

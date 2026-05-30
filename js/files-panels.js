@@ -241,6 +241,32 @@
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }
 
+    /** Export Review: 動画・波形（Ex）・マーカーのいずれかがあるときのみ有効 */
+    function sessionHasExportableReviewContent() {
+        if (typeof fileMain !== 'undefined' && !!fileMain) {
+            return true;
+        }
+        if (
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline()
+        ) {
+            return true;
+        }
+        if (
+            typeof window.hasMarkerContentToClear === 'function' &&
+            window.hasMarkerContentToClear()
+        ) {
+            return true;
+        }
+        if (
+            typeof window.hasSessionMarkersPendingRestore === 'function' &&
+            window.hasSessionMarkersPendingRestore()
+        ) {
+            return true;
+        }
+        return false;
+    }
+
     function sessionHasClearableContent() {
         if (
             typeof window.hasSessionMarkersPendingRestore === 'function' &&
@@ -667,6 +693,7 @@
     }
 
     window.hasPlayableWaveformTimeline = hasPlayableWaveformTimeline;
+    window.sessionHasExportableReviewContent = sessionHasExportableReviewContent;
     window.transportControlsReady = transportControlsReady;
     window.parseTimecodeStringToClipFrameIndex = parseTimecodeStringToClipFrameIndex;
     window.formatTimecodeForSide = formatTimecodeForSide;
