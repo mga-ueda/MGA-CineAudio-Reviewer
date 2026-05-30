@@ -721,9 +721,6 @@
                 ? transportControlsReady()
                 : typeof videoReady === 'function' && videoReady();
         if (!ready) return false;
-        if (typeof requestScrollToPlayerStageOnNextPlay === 'function') {
-            requestScrollToPlayerStageOnNextPlay();
-        }
         if (typeof endAudioWaveformScrub === 'function') {
             endAudioWaveformScrub({ force: true });
         }
@@ -969,9 +966,6 @@
         }
         if (playing && !wasPlaying) {
             if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
-            if (typeof scrollToPlayerStageOnPlaybackStart === 'function') {
-                scrollToPlayerStageOnPlaybackStart();
-            }
         }
         if (!playing) {
             if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();

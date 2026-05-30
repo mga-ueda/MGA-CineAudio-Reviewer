@@ -60,22 +60,6 @@
         }, 900);
     }
 
-    let playbackScrollPlayerStageRequested = false;
-
-    function requestScrollToPlayerStageOnNextPlay() {
-        playbackScrollPlayerStageRequested = true;
-    }
-
-    /** Space 等で再生開始するとき、Video + Markers（#playerStage）をビューポート上端へ。 */
-    function scrollToPlayerStageOnPlaybackStart() {
-        if (!playbackScrollPlayerStageRequested) return;
-        playbackScrollPlayerStageRequested = false;
-        if (!playerStage) return;
-        requestAnimationFrame(() => {
-            playerStage.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
-        });
-    }
-
     function flashTransportOptBox(which) {
         const sel =
             TRANSPORT_OPT_BOX_SELECTOR[which] || TRANSPORT_OPT_BOX_SELECTOR.playback;

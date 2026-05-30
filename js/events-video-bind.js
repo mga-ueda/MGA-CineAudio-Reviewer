@@ -246,9 +246,6 @@
             }
             return;
         }
-        if (typeof requestScrollToPlayerStageOnNextPlay === 'function') {
-            requestScrollToPlayerStageOnNextPlay();
-        }
         if (typeof endAudioWaveformScrub === 'function') {
             endAudioWaveformScrub({ force: true });
         }

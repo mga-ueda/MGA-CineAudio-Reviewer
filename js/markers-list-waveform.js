@@ -177,10 +177,28 @@
     function scrollMarkerListRowIntoView(markerId) {
         if (!markerTableBody || !markerTableWrap || markerTableWrap.hidden) return false;
         const row = markerTableBody.querySelector('tr[data-marker-id="' + markerId + '"]');
-        if (!row || !row.scrollIntoView) return false;
+        if (!row) return false;
         if (isMarkerListRowVisibleInWrap(markerId)) return false;
-        row.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-        return true;
+
+        const wrap = markerTableWrap;
+        const thead = wrap.querySelector('.marker-table thead');
+        const headH = thead ? thead.getBoundingClientRect().height : 0;
+        const margin = 2;
+        const wrapRect = wrap.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const visibleTop = wrapRect.top + headH + margin;
+        const visibleBottom = wrapRect.bottom - margin;
+        let delta = 0;
+        if (rowRect.top < visibleTop) {
+            delta = rowRect.top - visibleTop;
+        } else if (rowRect.bottom > visibleBottom) {
+            delta = rowRect.bottom - visibleBottom;
+        } else {
+            return false;
+        }
+        const prev = wrap.scrollTop;
+        wrap.scrollTop = Math.max(0, prev + delta);
+        return wrap.scrollTop !== prev;
     }
 
     function followMarkerListHighlightScroll(highlightId) {
