@@ -36,6 +36,9 @@
     let waveformPointerGestureDocMove = null;
     let waveformPointerGestureDocUp = null;
     const WAVEFORM_POINTER_GESTURE_DRAG_PX = 5;
+    const WAVEFORM_LANES_DBLCLICK_MS = 450;
+    const WAVEFORM_LANES_DBLCLICK_SLOP_PX = 12;
+    let waveformLanesClickState = null;
     let waveformLanesLastPointerX = null;
     let waveformLanesLastPointerY = null;
     let waveformTargetExtraSlot = -1;
@@ -800,6 +803,30 @@
         waveformPointerGestureDidMove = false;
     }
 
+    function noteWaveformLanesPointerDownForDoubleClick(clientX, clientY) {
+        const now = performance.now();
+        const prev = waveformLanesClickState;
+        const isDouble =
+            !!prev &&
+            now - prev.at <= WAVEFORM_LANES_DBLCLICK_MS &&
+            Math.abs(clientX - prev.x) <= WAVEFORM_LANES_DBLCLICK_SLOP_PX &&
+            Math.abs(clientY - prev.y) <= WAVEFORM_LANES_DBLCLICK_SLOP_PX;
+        if (isDouble) {
+            waveformLanesClickState = null;
+            const sec =
+                typeof transportSecFromClientX === 'function'
+                    ? transportSecFromClientX(clientX)
+                    : NaN;
+            if (!Number.isFinite(sec)) return false;
+            if (typeof handleWaveformTimelineDoubleClickZoom === 'function') {
+                handleWaveformTimelineDoubleClickZoom({ sec });
+            }
+            return true;
+        }
+        waveformLanesClickState = { at: now, x: clientX, y: clientY };
+        return false;
+    }
+
     /** Ex トラック先頭オフセット位置（ビューポート X）。ピクセル基準で空白判定に使う */
     function extraTrackTimelineStartClientX(slot) {
         if (!Number.isFinite(slot) || slot < 0) return null;
@@ -937,6 +964,13 @@
         }
 
         if (shouldSkipWaveformPointerGesture(ev)) return;
+
+        if (noteWaveformLanesPointerDownForDoubleClick(ev.clientX, ev.clientY)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cancelWaveformPointerGesture();
+            return;
+        }
 
         cancelWaveformPointerGesture();
         isSeeking = true;
@@ -2077,6 +2111,10 @@
             };
             seekBar.addEventListener('pointerdown', (ev) => {
                 ev.stopPropagation();
+                if (ev.button !== 0) return;
+                if (noteWaveformLanesPointerDownForDoubleClick(ev.clientX, ev.clientY)) {
+                    ev.preventDefault();
+                }
             });
             seekBar.addEventListener('input', onSeekBarInput);
             seekBar.addEventListener('change', onSeekBarChange);

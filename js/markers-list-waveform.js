@@ -976,6 +976,54 @@
     }
 
     let markerDragState = null;
+    const MARKER_WAVEFORM_DBLCLICK_MS = 450;
+    const MARKER_WAVEFORM_DBLCLICK_SLOP_PX = 12;
+    let markerWaveformClickState = null;
+    let markerWaveformClickSeekTimer = 0;
+
+    function cancelMarkerWaveformClickSeek() {
+        if (!markerWaveformClickSeekTimer) return;
+        clearTimeout(markerWaveformClickSeekTimer);
+        markerWaveformClickSeekTimer = 0;
+    }
+
+    function tryMarkerWaveformDoubleClick(m, clientX, clientY) {
+        const now = performance.now();
+        const prev = markerWaveformClickState;
+        const isDouble =
+            !!prev &&
+            prev.id === m.id &&
+            now - prev.at <= MARKER_WAVEFORM_DBLCLICK_MS &&
+            Math.abs(clientX - prev.x) <= MARKER_WAVEFORM_DBLCLICK_SLOP_PX &&
+            Math.abs(clientY - prev.y) <= MARKER_WAVEFORM_DBLCLICK_SLOP_PX;
+        markerWaveformClickState = isDouble
+            ? null
+            : { id: m.id, at: now, x: clientX, y: clientY };
+        return isDouble;
+    }
+
+    function zoomWaveformToMarker(m) {
+        if (!m) return;
+        activeMarkerId = m.id;
+        updateMarkerListRowClasses();
+        if (typeof handleWaveformTimelineDoubleClickZoom !== 'function') return;
+        if (m.type === 'range' && markerHasOutTc(m)) {
+            handleWaveformTimelineDoubleClickZoom({
+                rangeStartSec: m.startSec,
+                rangeEndSec: m.endSec,
+            });
+        } else if (m.type === 'point') {
+            handleWaveformTimelineDoubleClickZoom({ sec: m.timeSec });
+        }
+    }
+
+    function scheduleMarkerWaveformClickSeek(m, edge, clientX, bandEl) {
+        cancelMarkerWaveformClickSeek();
+        markerWaveformClickSeekTimer = setTimeout(() => {
+            markerWaveformClickSeekTimer = 0;
+            seekToMarkerOnClick(m, edge, clientX, bandEl);
+        }, MARKER_WAVEFORM_DBLCLICK_MS);
+    }
 
     function setMarkerDragLanesActive(active, opt) {
         const lanes =
@@ -1141,6 +1189,7 @@
             if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
                 syncSnapSuppressionFromPointerEvent(ev);
             }
+            cancelMarkerWaveformClickSeek();
             ev.preventDefault();
             ev.stopPropagation();
             if (typeof endAudioWaveformScrub === 'function') {
@@ -1198,7 +1247,14 @@
                 markerDragState = null;
                 setMarkerDragLanesActive(false, { edge: st.edge });
                 if (!st.moved) {
-                    seekToMarkerOnClick(m, edge, e.clientX, bandEl);
+                    if (tryMarkerWaveformDoubleClick(m, e.clientX, e.clientY)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        cancelMarkerWaveformClickSeek();
+                        zoomWaveformToMarker(m);
+                        return;
+                    }
+                    scheduleMarkerWaveformClickSeek(m, edge, e.clientX, bandEl);
                     return;
                 }
                 if (st.edge !== 'move') {

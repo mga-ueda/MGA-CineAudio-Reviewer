@@ -1095,6 +1095,10 @@
         return Math.abs(waveformTimelineZoom - WAVEFORM_TIMELINE_ZOOM_FIT) < 0.001;
     }
 
+    function isWaveformTimelineAtMaxZoom() {
+        return Math.abs(waveformTimelineZoom - WAVEFORM_TIMELINE_ZOOM_MAX) < 0.001;
+    }
+
     function getWaveformTimelineZoom() {
         return waveformTimelineZoom;
     }
@@ -1416,6 +1420,7 @@
     window.flushWaveformVisualRefresh = flushWaveformVisualRefresh;
     window.invalidateWaveformViewportHiresSpec = invalidateWaveformViewportHiresSpec;
     window.isWaveformTimelineAtFitZoom = isWaveformTimelineAtFitZoom;
+    window.isWaveformTimelineAtMaxZoom = isWaveformTimelineAtMaxZoom;
     window.getWaveformViewportHiresSpec = getWaveformViewportHiresSpec;
 
     function drawWaveformVisualLayers() {
@@ -1472,28 +1477,64 @@
         return transportPlaybackSec;
     }
 
-    /** 拡縮後にシークバー（プレイヘッド）がビューポート中央へ来る scrollLeft */
-    function scrollLeftToCenterTransportSec(scrubW, viewportW) {
-        const ratio = transportRatioFromMasterSec(transportSecForWaveformZoomCenter());
+    function clampWaveformTimelineScrollLeft(scrollLeft, scrubW, viewportW) {
         const maxScroll = Math.max(0, scrubW - viewportW);
-        const scrollLeft = ratio * scrubW - viewportW * 0.5;
         return Math.max(0, Math.min(maxScroll, scrollLeft));
     }
 
-    function setWaveformTimelineZoom(nextZoom, centerSeekBar) {
+    /** 指定時刻がビューポート中央へ来る scrollLeft */
+    function scrollLeftToCenterMasterSec(sec, scrubW, viewportW) {
+        const ratio = transportRatioFromMasterSec(sec);
+        return clampWaveformTimelineScrollLeft(
+            ratio * scrubW - viewportW * 0.5,
+            scrubW,
+            viewportW,
+        );
+    }
+
+    /** 拡縮後にシークバー（プレイヘッド）がビューポート中央へ来る scrollLeft */
+    function scrollLeftToCenterTransportSec(scrubW, viewportW) {
+        return scrollLeftToCenterMasterSec(
+            transportSecForWaveformZoomCenter(),
+            scrubW,
+            viewportW,
+        );
+    }
+
+    function applyWaveformTimelineZoomScroll(lanes, scrollLeft) {
+        if (!lanes) return;
+        if (Math.abs((lanes.scrollLeft || 0) - scrollLeft) <= 0.5) return;
+        lanes.scrollLeft = scrollLeft;
+        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        refreshWaveformTimelineAfterZoomChange();
+        applyPlayheadCenterLockIfActive();
+    }
+
+    function setWaveformTimelineZoom(nextZoom, centerSeekBar, scrollOpt) {
         const lanes = waveformScrubTargetEl();
         const vw = waveformTimelineViewportWidthCss();
         const oldZoom = waveformTimelineZoom;
         const z = clampWaveformTimelineZoom(nextZoom);
-        if (Math.abs(z - oldZoom) < 0.001) return;
-
         const newContentW = Math.max(1, Math.round(vw * z));
         let scrollLeft = lanes ? lanes.scrollLeft || 0 : 0;
 
-        if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
+        if (scrollOpt && Number.isFinite(scrollOpt.scrollLeft)) {
+            scrollLeft = clampWaveformTimelineScrollLeft(
+                scrollOpt.scrollLeft,
+                newContentW,
+                vw,
+            );
+        } else if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
             scrollLeft = scrollLeftToCenterTransportSec(newContentW, vw);
         } else if (z <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
             scrollLeft = 0;
+        }
+
+        if (Math.abs(z - oldZoom) < 0.001) {
+            if (scrollOpt && Number.isFinite(scrollOpt.scrollLeft)) {
+                applyWaveformTimelineZoomScroll(lanes, scrollLeft);
+            }
+            return;
         }
 
         waveformTimelineZoom = z;
@@ -1502,6 +1543,57 @@
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         refreshWaveformTimelineAfterZoomChange();
         applyPlayheadCenterLockIfActive();
+    }
+
+    /** 点マーカー位置を最大倍率（32×）で中央表示 */
+    function zoomWaveformTimelineToMarkerPointSec(sec) {
+        if (!Number.isFinite(sec)) return;
+        markerTcEditWaveformZoomActive = false;
+        const vw = waveformTimelineViewportWidthCss();
+        const z = WAVEFORM_TIMELINE_ZOOM_MAX;
+        const scrubW = Math.max(1, Math.round(vw * z));
+        setWaveformTimelineZoom(z, false, {
+            scrollLeft: scrollLeftToCenterMasterSec(sec, scrubW, vw),
+        });
+    }
+
+    /** 範囲マーカーを画面幅にほぼ合わせて拡大（フィット倍率から1段階だけ縮小、再生位置は範囲中央） */
+    function zoomWaveformTimelineToMarkerRangeSec(startSec, endSec) {
+        const master = getMasterTransportDurationSec();
+        if (!(master > 0)) return;
+        const lo = Math.min(startSec, endSec);
+        const hi = Math.max(startSec, endSec);
+        const span = Math.max(hi - lo, master * 1e-6, 1e-6);
+        const centerSec = lo + span * 0.5;
+        markerTcEditWaveformZoomActive = false;
+        applyTransportAtSec(centerSec, { markers: true });
+        const vw = waveformTimelineViewportWidthCss();
+        const zFit = master / span;
+        const z = clampWaveformTimelineZoom(
+            zFit / WAVEFORM_TIMELINE_ZOOM_WHEEL_FACTOR,
+        );
+        const scrubW = Math.max(1, Math.round(vw * z));
+        setWaveformTimelineZoom(z, false, {
+            scrollLeft: scrollLeftToCenterMasterSec(centerSec, scrubW, vw),
+        });
+    }
+
+    /** ダブルクリック時: 最大倍率なら全体表示へ、それ以外は対象に合わせて拡大 */
+    function handleWaveformTimelineDoubleClickZoom(opt) {
+        if (isWaveformTimelineAtMaxZoom()) {
+            resetWaveformTimelineZoom();
+            return true;
+        }
+        const o = opt || {};
+        if (Number.isFinite(o.rangeStartSec) && Number.isFinite(o.rangeEndSec)) {
+            zoomWaveformTimelineToMarkerRangeSec(o.rangeStartSec, o.rangeEndSec);
+            return true;
+        }
+        if (Number.isFinite(o.sec)) {
+            zoomWaveformTimelineToMarkerPointSec(o.sec);
+            return true;
+        }
+        return false;
     }
 
     function isWaveformTimelineInteractionReady() {
@@ -1792,6 +1884,9 @@
 
     window.getWaveformTimelineZoom = getWaveformTimelineZoom;
     window.setWaveformTimelineZoom = setWaveformTimelineZoom;
+    window.zoomWaveformTimelineToMarkerPointSec = zoomWaveformTimelineToMarkerPointSec;
+    window.zoomWaveformTimelineToMarkerRangeSec = zoomWaveformTimelineToMarkerRangeSec;
+    window.handleWaveformTimelineDoubleClickZoom = handleWaveformTimelineDoubleClickZoom;
     window.applyWaveformTimelineZoomLayout = applyWaveformTimelineZoomLayout;
     window.syncWaveformLanesViewportWidthCss = syncWaveformLanesViewportWidthCss;
 
