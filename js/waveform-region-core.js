@@ -2481,13 +2481,16 @@
     }
 
     function getSegmentPeaksForDraw(slot, clipId) {
-        if (typeof getExtraTrackClipPeaks === 'function') {
-            const cp = getExtraTrackClipPeaks(slot, clipId);
-            if (cp && cp.length) return cp;
-        }
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
-        return tr && tr.peaks ? tr.peaks : null;
+        const tp = tr && tr.peaks ? tr.peaks : null;
+        if (typeof getExtraTrackClipPeaks === 'function') {
+            const cp = getExtraTrackClipPeaks(slot, clipId);
+            if (cp && cp.length) {
+                if (!tp || cp.length >= tp.length) return cp;
+            }
+        }
+        return tp;
     }
 
     function viewportPeaksCoverMasterTime(vp, masterSec) {

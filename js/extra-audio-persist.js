@@ -191,6 +191,15 @@
         return 0;
     }
 
+    function syncExtraTrackClipPeaksFromTrackOverview(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr || !tr.peaks || !tr.clips || !tr.clips.length) return;
+        for (let i = 0; i < tr.clips.length; i++) {
+            const c = tr.clips[i];
+            if (c && c.buffer === tr.buffer) c.peaks = tr.peaks;
+        }
+    }
+
     function rebuildExtraTrackPeaksIfNeeded(slot) {
         const tr = extraTrackBySlot(slot);
         const ui = getExtraUi(slot);
@@ -212,6 +221,7 @@
                 tr.peaks = peaksFromBuffer(tr.buffer, Math.min(512, sized.barCount));
             }
         }
+        syncExtraTrackClipPeaksFromTrackOverview(slot);
         return !!(tr.peaks && tr.peaks.length > 0);
     }
 
@@ -228,6 +238,7 @@
                 const overview = peaksOverviewFromPyramid(tr.peakPyramid, barCount);
                 if (overview && overview.length) tr.peaks = overview;
             }
+            syncExtraTrackClipPeaksFromTrackOverview(slot);
             drawExtraTrackWaveform(slot);
             if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
                 scheduleWaveformHiresRedrawAfterZoom({ slots: [slot] });

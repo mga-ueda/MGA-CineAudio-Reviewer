@@ -632,6 +632,12 @@
         dst.peakPyramidGen = src.peakPyramidGen || 0;
         // Force viewport peaks rebuild for the moved slot to avoid stale view slices.
         dst.viewportPeaks = null;
+        if (dst.clips) {
+            for (let ci = 0; ci < dst.clips.length; ci++) {
+                const clip = dst.clips[ci];
+                if (clip) clip.peaks = null;
+            }
+        }
         dst.persistBlob = src.persistBlob;
         dst.restoreDurationHint = src.restoreDurationHint;
         dst.timelineStartSec = src.timelineStartSec;
@@ -693,6 +699,39 @@
             syncExtraTrackWaveformLoading(slot);
         }
         return hadContent;
+    }
+
+    /** レーン詰め替え後: 概要ピーク・高解像度 viewport ピークを再構築する */
+    function refreshExtraTrackWaveformsAfterLaneCompaction() {
+        const slots = [];
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (!extraTrackSlotHasContent(i)) continue;
+            slots.push(i);
+            if (typeof rebuildExtraTrackPeaksIfNeeded === 'function') {
+                rebuildExtraTrackPeaksIfNeeded(i);
+            }
+        }
+        if (!slots.length) return;
+        if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+            invalidateWaveformViewportHiresSpec();
+        }
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const opt = { slots };
+                if (typeof applyWaveformViewportPeaksImmediate === 'function') {
+                    applyWaveformViewportPeaksImmediate(opt);
+                }
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+                for (let j = 0; j < slots.length; j++) {
+                    drawExtraTrackWaveform(slots[j]);
+                }
+                if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+                    scheduleWaveformHiresRedrawAfterZoom(opt);
+                }
+            });
+        });
     }
 
     function compactExtraTracksAfterClear(clearedSlot) {
@@ -782,6 +821,9 @@
         refreshExtraTrackAddLaneButtons();
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
+        }
+        if (shouldCompact || hadContent) {
+            refreshExtraTrackWaveformsAfterLaneCompaction();
         }
     }
 

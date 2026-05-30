@@ -1289,6 +1289,36 @@
         return [];
     }
 
+    function extraTrackNeedsViewportPeaksRebuild(slot) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tr.buffer) return false;
+        const vp = tr.viewportPeaks;
+        if (!vp) return true;
+        if (vp.segments && vp.segments.length) {
+            for (let i = 0; i < vp.segments.length; i++) {
+                const s = vp.segments[i];
+                if (
+                    s.peaks &&
+                    s.peaks.length &&
+                    s.masterEndSec > s.masterStartSec + 1e-9
+                ) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        return !(vp.peaks && vp.peaks.length);
+    }
+
+    function anyExtraTracksNeedViewportPeaksRebuild(opt) {
+        const slots = extraSlotsForViewportPeaks(opt);
+        for (let j = 0; j < slots.length; j++) {
+            if (extraTrackNeedsViewportPeaksRebuild(slots[j])) return true;
+        }
+        return false;
+    }
+
     function rebuildWaveformViewportPeaksFromSpec(spec, opt) {
         if (!spec) return false;
         if (typeof rebuildMainWaveformViewportPeaks === 'function') {
@@ -1308,7 +1338,9 @@
     function applyWaveformViewportPeaksImmediate(opt) {
         const spec = getWaveformViewportHiresSpec();
         if (!spec) return false;
+        const peaksMissing = anyExtraTracksNeedViewportPeaksRebuild(opt);
         if (
+            !peaksMissing &&
             lastWaveformViewportHiresSpec &&
             waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, spec)
         ) {
@@ -1334,7 +1366,9 @@
                 }
                 return;
             }
+            const peaksMissing = anyExtraTracksNeedViewportPeaksRebuild(opt);
             if (
+                !peaksMissing &&
                 lastWaveformViewportHiresSpec &&
                 waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, live)
             ) {
