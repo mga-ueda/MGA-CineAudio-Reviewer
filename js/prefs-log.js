@@ -314,6 +314,11 @@
             } else if (typeof prev.musicalGridPhraseFillVisible === 'boolean') {
                 payload.musicalGridPhraseFillVisible = prev.musicalGridPhraseFillVisible;
             }
+            if (typeof isTimecodeOverlayUserHidden === 'function') {
+                payload.timecodeOverlayHidden = isTimecodeOverlayUserHidden();
+            } else if (typeof prev.timecodeOverlayHidden === 'boolean') {
+                payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
+            }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
             if (typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
                 try {

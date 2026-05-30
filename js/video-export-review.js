@@ -171,8 +171,11 @@
                 ctx.drawImage(video, 0, 0, w, h);
             } catch (_) {}
         }
-        const tc = exportBurnInTimecodeText(transportSec);
-        drawTcBurnIn(ctx, w, h, tc);
+        const tc =
+            typeof isTimecodeOverlayUserHidden === 'function' && isTimecodeOverlayUserHidden()
+                ? null
+                : exportBurnInTimecodeText(transportSec);
+        if (tc) drawTcBurnIn(ctx, w, h, tc);
         if (typeof getVideoExportMarkerBurnIns === 'function') {
             const burn = getVideoExportMarkerBurnIns(transportSec);
             if (burn.point) drawMarkerBurnIn(ctx, w, h, burn.point);

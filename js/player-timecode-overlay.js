@@ -12,6 +12,7 @@
 
     /** @type {{ xRatio: number|null, bottomRatio: number|null, snapX: boolean, snapY: boolean, scale: number }} */
     let tcOverlaySharedPos = { xRatio: null, bottomRatio: null, snapX: false, snapY: false, scale: 1 };
+    let tcOverlayUserHidden = false;
     let tcOverlayDragState = null;
     let tcOverlayResizeState = null;
     let tcOverlayBaseMetrics = null;
@@ -335,10 +336,62 @@
         );
     }
 
+    function isTimecodeOverlayUserHidden() {
+        return !!tcOverlayUserHidden;
+    }
+
+    function updateVideoTcHideViewButton() {
+        const btn =
+            typeof videoTcHideViewBtn !== 'undefined' && videoTcHideViewBtn
+                ? videoTcHideViewBtn
+                : document.getElementById('videoTcHideViewBtn');
+        if (!btn) return;
+        const ready = tcOverlayTimelineReady();
+        btn.textContent = tcOverlayUserHidden ? 'TC View' : 'TC Hide';
+        btn.title = ready
+            ? tcOverlayUserHidden
+                ? '映像上のタイムコードを表示'
+                : '映像上のタイムコードを非表示'
+            : '動画または追加音声を読み込むと TC Hide / TC View が使えます';
+        btn.setAttribute('aria-pressed', tcOverlayUserHidden ? 'true' : 'false');
+        btn.disabled = !ready;
+    }
+
+    function setTimecodeOverlayUserHidden(hidden, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const next = !!hidden;
+        if (tcOverlayUserHidden === next) {
+            updateVideoTcHideViewButton();
+            return;
+        }
+        tcOverlayUserHidden = next;
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        updateVideoTcHideViewButton();
+        if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
+        if (o.log !== false && typeof writeLog === 'function') {
+            writeLog(
+                tcOverlayUserHidden
+                    ? 'Timecode overlay: hidden on video'
+                    : 'Timecode overlay: shown on video',
+            );
+        }
+    }
+
+    function toggleTimecodeOverlayUserHidden() {
+        if (!tcOverlayTimelineReady()) return;
+        setTimecodeOverlayUserHidden(!tcOverlayUserHidden);
+    }
+
+    function applyTimecodeOverlayUserHiddenFromPrefs(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        if (typeof p.timecodeOverlayHidden !== 'boolean') return;
+        setTimecodeOverlayUserHidden(p.timecodeOverlayHidden, { persist: false, log: false });
+    }
+
     function refreshTimecodeOverlayInteractive() {
         const el = getTcOverlayElement();
         if (!el) return;
-        const show = tcOverlayTimelineReady();
+        const show = tcOverlayTimelineReady() && !tcOverlayUserHidden;
         el.classList.toggle('video-timecode--hidden', !show);
         el.classList.toggle('video-timecode--draggable', show);
         if (!show) {
@@ -506,6 +559,7 @@
             snapX: !!tcOverlaySharedPos.snapX,
             snapY: !!tcOverlaySharedPos.snapY,
             scale: getTcOverlayUserScale(),
+            hidden: !!tcOverlayUserHidden,
         };
     }
 
@@ -522,12 +576,16 @@
         if (Number.isFinite(Number(snap.scale))) {
             tcOverlaySharedPos.scale = clampTcOverlayScale(snap.scale);
         }
+        if (typeof snap.hidden === 'boolean') {
+            setTimecodeOverlayUserHidden(snap.hidden, { persist: false, log: false });
+        }
         saveTcOverlayPosition();
         invalidateTcOverlayBaseMetrics();
         captureTcOverlayBaseMetrics();
         applyTcOverlayAppearance();
         applyTcOverlayPosition();
         refreshTimecodeOverlayInteractive();
+        if (typeof writePrefs === 'function') writePrefs();
     }
 
     function getDisplayedVideoHeightInFrame(frame, video) {
@@ -679,10 +737,17 @@
 
     window.getTimecodeOverlayPersistSnapshot = getTimecodeOverlayPersistSnapshot;
     window.applyTimecodeOverlayPersistSnapshot = applyTimecodeOverlayPersistSnapshot;
+    window.isTimecodeOverlayUserHidden = isTimecodeOverlayUserHidden;
+    window.setTimecodeOverlayUserHidden = setTimecodeOverlayUserHidden;
+    window.updateVideoTcHideViewButton = updateVideoTcHideViewButton;
+    window.applyTimecodeOverlayUserHiddenFromPrefs = applyTimecodeOverlayUserHiddenFromPrefs;
     window.getVideoExportLayoutScale = getVideoExportLayoutScale;
     window.getTcOverlayBurnInDrawMetrics = getTcOverlayBurnInDrawMetrics;
 
     function initTimecodeOverlay() {
+        if (typeof readPrefs === 'function') {
+            applyTimecodeOverlayUserHiddenFromPrefs(readPrefs());
+        }
         loadTcOverlayPosition();
         if (frameMain) ensureTcCenterGuides(frameMain);
         setupTcOverlayInteraction();
@@ -690,6 +755,17 @@
         applyTcOverlayAppearance();
         applyTcOverlayPosition();
         refreshTimecodeOverlayInteractive();
+        updateVideoTcHideViewButton();
+        const tcHideBtn =
+            typeof videoTcHideViewBtn !== 'undefined' && videoTcHideViewBtn
+                ? videoTcHideViewBtn
+                : document.getElementById('videoTcHideViewBtn');
+        if (tcHideBtn) {
+            tcHideBtn.addEventListener('click', () => {
+                if (tcHideBtn.disabled) return;
+                toggleTimecodeOverlayUserHidden();
+            });
+        }
         window.addEventListener('resize', () => {
             invalidateTcOverlayBaseMetrics();
             captureTcOverlayBaseMetrics();

@@ -170,11 +170,12 @@
 
             <section class="guide-section" id="video">
                 <h2 class="docs-heading-box">映像パネル（Video）</h2>
-                <p><strong>左列</strong>が映像パネルです。パネル上端に <strong>Video</strong> ラベルと <strong>Clear</strong> ボタン、その下にファイル名（未読み込み時は <em>Not Loaded</em>）、さらに下が映像フレームです。未読み込み時はフレーム内に <em>Drop a video, or video and extra audio together</em> と表示されます。</p>
+                <p><strong>左列</strong>が映像パネルです。パネル上端に <strong>Video</strong> ラベル、<strong>TC Hide / TC View</strong>（映像上タイムコードの表示切替）、<strong>Clear</strong> ボタン、その下にファイル名（未読み込み時は <em>Not Loaded</em>）、さらに下が映像フレームです。未読み込み時はフレーム内に <em>Drop a video, or video and extra audio together</em> と表示されます。</p>
 
                 <h3 class="docs-heading-box--sub">再生とタイムコード</h3>
                 <ul>
                     <li>読み込み後、映像の上に <strong>HH:MM:SS:FF</strong> 形式のタイムコードが重なって表示されます。</li>
+                    <li>パネル右上の <strong>TC Hide / TC View</strong> で、映像上のタイムコードオーバーレイの表示・非表示を切り替えられます。Markers パネルの Hide ボタンと同じ色です。非表示にしてもトランスポートの現在時刻表示は残ります。設定は <strong>localStorage</strong> に保存され、<strong>Export Review</strong> / <strong>Import Review</strong>（.mgacr）にも含まれます。<strong>Export WebM</strong> でも非表示のときはタイムコードを焼き込みません。</li>
                     <li>オーバーレイは<strong>ドラッグで移動</strong>、端をドラッグして<strong>サイズ変更</strong>できます。フレーム中央付近ではスナップします。位置はブラウザに保存され、次回も復元されます。</li>
                     <li>パネル直下にはファイル名・メタ情報（FPS など）が表示されます。</li>
                     <li>コメント欄に入力していると、再生中に映像上へコメントが短時間オーバーレイ表示されます（ポイント用と範囲用で別表示）。</li>
@@ -188,7 +189,7 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub">Clear</h3>
-                <p>Video パネル右上の <strong>Clear</strong> で動画だけをアンロードします（追加音声やマーカーは残る場合があります。全体リセットは <strong>All Clear</strong>）。</p>
+                <p>Video パネル右上の <strong>Clear</strong> で動画だけをアンロードします（追加音声やマーカーは残る場合があります。全体リセットは <strong>All Clear</strong>）。その左隣の <strong>TC Hide / TC View</strong> は映像上タイムコード専用で、動画の有無にかかわらず追加音声のみ読み込み中でも利用できます。</p>
             </section>
 
             <section class="guide-section" id="markers">
@@ -420,7 +421,7 @@
                 <ul>
                     <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
                     <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。トランスポートの <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
-                    <li>Loop のオン/オフ、タイムコードオーバーレイ位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
+                    <li>Loop のオン/オフ、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>
                 </ul>

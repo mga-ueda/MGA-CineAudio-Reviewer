@@ -1139,6 +1139,7 @@
             if (typeof refreshReviewMixUi === 'function') refreshReviewMixUi();
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
+        if (typeof updateVideoTcHideViewButton === 'function') updateVideoTcHideViewButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }
 
@@ -1247,5 +1248,6 @@
             refreshExportMediaOptionsUi();
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
+        if (typeof updateVideoTcHideViewButton === 'function') updateVideoTcHideViewButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
     }

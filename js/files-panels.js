@@ -711,7 +711,9 @@
     function updateTimecodeOverlay() {
         if (!timecodeOverlayMain) return;
         const textEl = timecodeOverlayMain.querySelector('.video-timecode__text');
-        const show = transportControlsReady();
+        const userHidden =
+            typeof isTimecodeOverlayUserHidden === 'function' && isTimecodeOverlayUserHidden();
+        const show = transportControlsReady() && !userHidden;
         if (!show) {
             timecodeOverlayMain.classList.add('video-timecode--idle');
             timecodeOverlayMain.style.visibility = 'hidden';

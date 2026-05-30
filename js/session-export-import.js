@@ -194,7 +194,9 @@
                     ', bottom=' +
                     (o.bottomRatio != null ? Number(o.bottomRatio).toFixed(3) : '—') +
                     ', scale=' +
-                    (o.scale != null ? Number(o.scale).toFixed(2) : '1'),
+                    (o.scale != null ? Number(o.scale).toFixed(2) : '1') +
+                    ', hidden=' +
+                    (o.hidden ? 'yes' : 'no'),
             );
         }
     }
@@ -217,7 +219,11 @@
         writeLog('Import Review: ' + describeLaneUi(manifest.prefs && manifest.prefs.laneUi));
         writeLog('Import Review: ' + describeMonitorPrefs(manifest.monitorPrefs));
         if (manifest.timecodeOverlay) {
-            writeLog('Import Review: timecode overlay position restored');
+            const o = manifest.timecodeOverlay;
+            writeLog(
+                'Import Review: timecode overlay restored' +
+                    (typeof o.hidden === 'boolean' ? ' (hidden=' + (o.hidden ? 'yes' : 'no') + ')' : ''),
+            );
         }
     }
 

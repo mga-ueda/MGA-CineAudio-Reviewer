@@ -391,12 +391,19 @@
             opacity: 0.4;
             cursor: not-allowed;
         }
-        /* VIDEO 枠など、head-actions なしで単独配置の Clear（Markers 側ボタンと同幅） */
-        .video-panel__head-row > .marker-panel__clear-btn {
+        .video-panel__head-actions {
             position: absolute;
             right: 0;
             top: 50%;
             transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+        .video-panel__head-actions .marker-panel__hide-view-btn {
+            min-width: 3.75rem;
+            width: auto;
         }
         .marker-panel__range-hint {
             margin: 8px 0 0;

@@ -87,7 +87,10 @@
             <div class="video-panel file-drop-target file-drop-target--both" id="panelMain" data-side="main" title="動画・追加音声ファイルをドロップして読み込み">
                 <div class="video-panel__head-row">
                     <p class="video-panel-label">Video</p>
-                    <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="動画をアンロード">Clear</button>
+                    <div class="video-panel__head-actions">
+                        <button type="button" id="videoTcHideViewBtn" class="marker-panel__hide-view-btn" disabled title="動画または追加音声を読み込むと TC Hide / TC View が使えます">TC Hide</button>
+                        <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="動画をアンロード">Clear</button>
+                    </div>
                 </div>
                 <span class="file-name" id="nameMain">Not Loaded</span>
                 <p class="panel-info-line panel-info-line--stacked" id="infoMain" hidden>

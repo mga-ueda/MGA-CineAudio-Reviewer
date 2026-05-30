@@ -49,6 +49,7 @@
     const markerClearAllBtn = document.getElementById('markerClearAllBtn');
     const markerMemoTextarea = document.getElementById('markerMemoTextarea');
     const videoClearBtn = document.getElementById('videoClearBtn');
+    const videoTcHideViewBtn = document.getElementById('videoTcHideViewBtn');
     const audioWaveformPanel = document.getElementById('audioWaveformPanel');
     const audioWaveformCanvas = document.getElementById('audioWaveformCanvas');
     const audioWaveformMarkers = document.getElementById('audioWaveformMarkers');
