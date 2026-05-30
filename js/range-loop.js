@@ -30,7 +30,6 @@
     function shouldSuppressRangeLoopContextMenuDismiss() {
         return performance.now() < suppressRangeLoopContextMenuUntil;
     }
-    let pendingRangeLoopRestore = null;
 
     function isRangeLoopPlaybackActive() {
         return (
@@ -110,7 +109,6 @@
 
     function clearRangeLoopPlayback(opt) {
         const was = isRangeLoopPlaybackActive();
-        pendingRangeLoopRestore = null;
         loopRangeActive = false;
         loopRangeInSec = 0;
         loopRangeOutSec = 0;
@@ -121,72 +119,6 @@
             writeLog('Range loop: off');
             flashSeekHint('Range loop', 'Off', 'notice');
         }
-        if (was && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
-        }
-    }
-
-    function getRangeLoopPersistSnapshot() {
-        if (!isRangeLoopPlaybackActive()) return null;
-        return {
-            inSec: loopRangeInSec,
-            outSec: loopRangeOutSec,
-        };
-    }
-
-    function setPendingRangeLoopRestore(data) {
-        pendingRangeLoopRestore =
-            data &&
-            Number.isFinite(data.inSec) &&
-            Number.isFinite(data.outSec) &&
-            data.outSec > data.inSec
-                ? { inSec: data.inSec, outSec: data.outSec }
-                : null;
-    }
-
-    function restoreRangeLoopFromPersist(data, opt) {
-        if (!data) return false;
-        const bounds = normalizeRangeLoopBounds(data.inSec, data.outSec);
-        if (!bounds) return false;
-        loopRangeInSec = bounds.inSec;
-        loopRangeOutSec = bounds.outSec;
-        loopRangeActive = true;
-        updateRangeLoopOverlay();
-        if (!(opt && opt.skipJump)) {
-            void jumpToRangeLoopInSec({ resumeAfter: false });
-        }
-        if (!(opt && opt.silent)) {
-            writeLog(
-                'Range loop: ' +
-                    formatTimecodeForTransport(loopRangeInSec) +
-                    ' – ' +
-                    formatTimecodeForTransport(loopRangeOutSec),
-            );
-            flashSeekHint(
-                'Range loop',
-                formatTimecodeForTransport(loopRangeInSec) +
-                    ' – ' +
-                    formatTimecodeForTransport(loopRangeOutSec),
-                'notice',
-            );
-        }
-        return true;
-    }
-
-    function applyPendingRangeLoopRestore() {
-        if (!pendingRangeLoopRestore) return false;
-        const data = pendingRangeLoopRestore;
-        pendingRangeLoopRestore = null;
-        const ok = restoreRangeLoopFromPersist(data, { silent: true, skipJump: true });
-        if (ok) {
-            writeLog(
-                'Range loop: restored ' +
-                    formatTimecodeForTransport(loopRangeInSec) +
-                    ' – ' +
-                    formatTimecodeForTransport(loopRangeOutSec),
-            );
-        }
-        return ok;
     }
 
     /** Escape / 右クリック contextmenu と同じ解除 */
@@ -295,9 +227,6 @@
                 formatTimecodeForTransport(loopRangeOutSec),
             'notice',
         );
-        if (typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
-        }
         return true;
     }
 

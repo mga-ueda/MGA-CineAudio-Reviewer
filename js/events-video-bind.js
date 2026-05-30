@@ -55,9 +55,6 @@
         }
         syncSeekMax();
         updateControlsEnabled();
-        if (typeof applyPendingRangeLoopRestore === 'function') {
-            applyPendingRangeLoopRestore();
-        }
         if (
             typeof applyPendingPlaybackRegionRestore === 'function' &&
             !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress())

@@ -237,6 +237,31 @@
             setAnalyzeOn(false, { silent: true });
         }
 
+        if (
+            typeof isRangeLoopPlaybackActive === 'function' &&
+            isRangeLoopPlaybackActive() &&
+            typeof clearRangeLoopPlayback === 'function'
+        ) {
+            const rangeInSec =
+                typeof getRangeLoopInSec === 'function' ? getRangeLoopInSec() : NaN;
+            const rangeOutSec =
+                typeof getRangeLoopOutSec === 'function' ? getRangeLoopOutSec() : NaN;
+            clearRangeLoopPlayback({ silent: true });
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Export WebM: range loop off (' +
+                        (typeof formatTimecodeForTransport === 'function' &&
+                        Number.isFinite(rangeInSec) &&
+                        Number.isFinite(rangeOutSec)
+                            ? formatTimecodeForTransport(rangeInSec) +
+                              ' – ' +
+                              formatTimecodeForTransport(rangeOutSec)
+                            : 'active') +
+                        ')',
+                );
+            }
+        }
+
         if (typeof haltTransportForSessionMutation === 'function') {
             haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
         } else if (videoMain && !videoMain.paused) {

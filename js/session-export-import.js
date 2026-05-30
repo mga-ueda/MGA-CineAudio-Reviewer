@@ -162,16 +162,6 @@
                 mc.total +
                 (mc.total ? ' (' + mc.point + ' point, ' + mc.range + ' range)' : ''),
         );
-        if (sess && sess.rangeLoop && Number.isFinite(sess.rangeLoop.inSec)) {
-            writeLog(
-                'Export Review: range loop ' +
-                    formatTcForLog(sess.rangeLoop.inSec) +
-                    ' – ' +
-                    formatTcForLog(sess.rangeLoop.outSec),
-            );
-        } else {
-            writeLog('Export Review: range loop off');
-        }
         if (sess && sess.playbackRegion) {
             const pr = sess.playbackRegion;
             if (Array.isArray(pr.extra) && pr.extra.length) {
@@ -289,14 +279,6 @@
         );
         if (row.markerMemo && String(row.markerMemo).trim()) {
             writeLog('Import Review: session memo restored');
-        }
-        if (row.rangeLoop && Number.isFinite(row.rangeLoop.inSec)) {
-            writeLog(
-                'Import Review: range loop ' +
-                    formatTcForLog(row.rangeLoop.inSec) +
-                    ' – ' +
-                    formatTcForLog(row.rangeLoop.outSec),
-            );
         }
         if (row.playbackRegion) {
             const pr = row.playbackRegion;
@@ -538,7 +520,6 @@
             mLastModified: row.mLastModified,
             markers: row.markers,
             markerMemo: row.markerMemo,
-            rangeLoop: row.rangeLoop,
             playbackRegion: row.playbackRegion,
             mix: row.mix,
             extraTracks: [],
@@ -725,7 +706,6 @@
             mLastModified: sess.mLastModified,
             markers: sess.markers,
             markerMemo: sess.markerMemo,
-            rangeLoop: sess.rangeLoop,
             playbackRegion: sess.playbackRegion,
             mix: sess.mix,
             extraTracks: [],

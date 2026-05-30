@@ -620,6 +620,7 @@
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
         }
+        delete row.rangeLoop;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion) row.playbackRegion = playbackRegion;
@@ -743,6 +744,7 @@
         row.extraTracks = normalizeExtraTracksEntriesBySlot(
             snapshot.map((e) => deepCloneForPersist(e)),
         );
+        delete row.rangeLoop;
         const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
         if (playbackRegion) row.playbackRegion = playbackRegion;
         else delete row.playbackRegion;
@@ -818,6 +820,7 @@
         }
         const nextStamp = sessionSaveStampSeq + 1;
         row.__saveStamp = nextStamp;
+        delete row.rangeLoop;
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
             if (mem && mem.length) {
@@ -1081,10 +1084,7 @@
         }
         await mergePrevMarkersDuringRestore(row);
         await mergePrevMarkerMemoDuringRestore(row);
-        if (typeof getRangeLoopPersistSnapshot === 'function') {
-            const rangeLoop = getRangeLoopPersistSnapshot();
-            if (rangeLoop) row.rangeLoop = rangeLoop;
-        }
+        delete row.rangeLoop;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion) row.playbackRegion = playbackRegion;
@@ -1494,17 +1494,6 @@
         }
     }
 
-    function applyRangeLoopRestoreFromRow(row) {
-        if (
-            row.rangeLoop &&
-            Number.isFinite(row.rangeLoop.inSec) &&
-            Number.isFinite(row.rangeLoop.outSec) &&
-            typeof setPendingRangeLoopRestore === 'function'
-        ) {
-            setPendingRangeLoopRestore(row.rangeLoop);
-        }
-    }
-
     function applyPlaybackRegionRestoreFromRow(row) {
         if (row.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(row.playbackRegion);
@@ -1554,9 +1543,6 @@
         } else if (typeof applySessionTransportAtHead === 'function') {
             applySessionTransportAtHead();
         }
-        if (typeof applyPendingRangeLoopRestore === 'function') {
-            applyPendingRangeLoopRestore();
-        }
         if (typeof applyPendingPlaybackRegionRestore === 'function') {
             applyPendingPlaybackRegionRestore();
         }
@@ -1598,7 +1584,6 @@
         );
 
         prepareLaneUiRestoreFromRow(row);
-        applyRangeLoopRestoreFromRow(row);
         if (typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(null);
         }
@@ -1674,7 +1659,6 @@
         );
 
         prepareLaneUiRestoreFromRow(row);
-        applyRangeLoopRestoreFromRow(row);
         applyPlaybackRegionRestoreFromRow(row);
 
         const restoreTransportSec =
@@ -1693,12 +1677,6 @@
             skipPersist: true,
             markers: Array.isArray(row.markers) ? row.markers : undefined,
             markerMemo: typeof row.markerMemo === 'string' ? row.markerMemo : undefined,
-            rangeLoop:
-                row.rangeLoop &&
-                Number.isFinite(row.rangeLoop.inSec) &&
-                Number.isFinite(row.rangeLoop.outSec)
-                    ? row.rangeLoop
-                    : undefined,
             playbackRegion: row.playbackRegion || undefined,
         });
         writeLog(

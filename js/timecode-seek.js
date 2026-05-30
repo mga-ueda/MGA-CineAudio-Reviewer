@@ -1168,9 +1168,6 @@
             revokeAll();
         }
         firstFramePrimedForUrl = '';
-        if (opt && opt.rangeLoop && typeof setPendingRangeLoopRestore === 'function') {
-            setPendingRangeLoopRestore(opt.rangeLoop);
-        }
         if (opt && opt.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(opt.playbackRegion);
         }
