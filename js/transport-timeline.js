@@ -1163,11 +1163,20 @@
             : null;
     }
 
+    /** ローディング帯の幅用（inner の content 幅が未確定でも見えている幅を使う） */
+    function syncWaveformLanesViewportWidthCss() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return 0;
+        const viewportW = Math.max(0, waveformTimelineViewportWidthCss());
+        lanes.style.setProperty('--wave-lanes-viewport-w', viewportW + 'px');
+        return viewportW;
+    }
+
     function applyWaveformTimelineZoomLayout() {
         waveformTimelineZoom = clampWaveformTimelineZoom(waveformTimelineZoom);
         const lanes = waveformScrubTargetEl();
         if (!lanes) return;
-        const viewportW = waveformTimelineViewportWidthCss();
+        const viewportW = syncWaveformLanesViewportWidthCss();
         const contentW = masterTimelineWidthCss();
         lanes.style.setProperty('--wave-timeline-content-w', contentW + 'px');
         const zoomed = !isWaveformTimelineAtFitZoom();
@@ -1750,6 +1759,7 @@
     window.getWaveformTimelineZoom = getWaveformTimelineZoom;
     window.setWaveformTimelineZoom = setWaveformTimelineZoom;
     window.applyWaveformTimelineZoomLayout = applyWaveformTimelineZoomLayout;
+    window.syncWaveformLanesViewportWidthCss = syncWaveformLanesViewportWidthCss;
 
     function transportSecFromClientX(clientX) {
         return transportRatioFromClientX(clientX) * getMasterTransportDurationSec();

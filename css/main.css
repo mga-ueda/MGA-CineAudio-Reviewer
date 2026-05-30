@@ -1549,9 +1549,26 @@
             align-items: center;
             justify-content: center;
             align-self: stretch;
+            grid-column: 1;
+            justify-self: start;
+            width: var(--wave-lanes-viewport-w, 100%);
+            min-width: var(--wave-lanes-viewport-w, 100%);
             min-height: 0;
             pointer-events: none;
             background: rgba(57, 82, 162, 0.25);
+            box-sizing: border-box;
+        }
+        /* overlay 移行前の一瞬もレーン全面を覆う */
+        .audio-waveform-lane > .audio-waveform-lane__loading {
+            position: absolute;
+            inset: 0;
+            z-index: 14;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            background: rgba(57, 82, 162, 0.25);
+            box-sizing: border-box;
         }
         /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex レーンを上から連番（JS でも再割当） */
         .audio-waveform-composite--no-video-audio .audio-waveform-lane-meta--video,
@@ -2085,6 +2102,7 @@
             letter-spacing: 0.06em;
             line-height: 1.2;
             text-align: center;
+            white-space: nowrap;
         }
         .audio-waveform-lane__lkfs {
             position: absolute;

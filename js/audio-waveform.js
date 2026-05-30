@@ -434,6 +434,12 @@
             const lane = document.getElementById('extraAudioLane' + slot);
             assignRow(meta, lane, !!(meta && !meta.hidden));
         }
+        if (typeof syncWaveformLanesViewportWidthCss === 'function') {
+            syncWaveformLanesViewportWidthCss();
+        }
+        if (typeof syncAllLoadingOverlayPlacement === 'function') {
+            syncAllLoadingOverlayPlacement();
+        }
     }
 
     /** マーカー・プレイヘッド等を全レーン上に重ねる（レーンのみ grid-row 指定時の押し出し防止） */
@@ -459,6 +465,9 @@
     /** 表示中のレーン数に合わせてグリッド高さとコメントラベル帯位置を更新 */
     function refreshWaveformCompositeLaneLayout() {
         if (!audioWaveformComposite) return;
+        if (typeof syncWaveformLanesViewportWidthCss === 'function') {
+            syncWaveformLanesViewportWidthCss();
+        }
         ensureLaneScrubHitLayers();
         const metas = [audioWaveformPanel];
         for (let i = 0; i < extraTrackSlotCount(); i++) {
