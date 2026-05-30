@@ -109,6 +109,7 @@
 
     function clearRangeLoopPlayback(opt) {
         const was = isRangeLoopPlaybackActive();
+        rangeLoopSnapInFlight = null;
         loopRangeActive = false;
         loopRangeInSec = 0;
         loopRangeOutSec = 0;
@@ -160,8 +161,19 @@
         dismissRangeLoopLikeEscape();
     }
 
+    function primeRangeLoopSnapTransportAtIn(inSec) {
+        if (typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)) {
+            transportPlaybackSec = inSec;
+            transportPlaybackLastTs = performance.now();
+        }
+        if (typeof setTransportSec === 'function') {
+            setTransportSec(inSec);
+        }
+    }
+
     function jumpToRangeLoopInSec(opt) {
         if (!isRangeLoopPlaybackActive()) return Promise.resolve(false);
+        if (rangeLoopSnapInFlight) return rangeLoopSnapInFlight;
         const inSec = loopRangeInSec;
         const resume =
             !(opt && opt.resumeAfter === false) &&
@@ -170,17 +182,28 @@
                 (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
                 (typeof isTransportUiClockActive === 'function' &&
                     isTransportUiClockActive()));
-        if (typeof seekTransportToAndWait === 'function') {
-            return seekTransportToAndWait(inSec, { resumeAfter: resume }).then(() => true);
-        }
-        if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(inSec, { markers: true, resumeAfter: resume });
-            return Promise.resolve(true);
-        }
-        return Promise.resolve(false);
+        primeRangeLoopSnapTransportAtIn(inSec);
+        rangeLoopSnapInFlight = (async () => {
+            try {
+                if (typeof seekTransportToAndWait === 'function') {
+                    await seekTransportToAndWait(inSec, { resumeAfter: resume });
+                    return true;
+                }
+                if (typeof applyTransportAtSec === 'function') {
+                    applyTransportAtSec(inSec, { markers: true, resumeAfter: resume });
+                    return true;
+                }
+                return false;
+            } finally {
+                rangeLoopSnapInFlight = null;
+            }
+        })();
+        return rangeLoopSnapInFlight;
     }
 
     let suppressLoopSnapUntil = 0;
+    /** Out 到達時の頭戻しシークが重複しないよう直列化する */
+    let rangeLoopSnapInFlight = null;
 
     /** マーカー等の明示シーク直後はループへ戻すスナップを抑止する */
     function suppressRangeLoopSnapForExplicitSeek(ms) {
@@ -193,6 +216,7 @@
         }
         if (performance.now() < suppressLoopSnapUntil) return false;
         if (!isRangeLoopPlaybackActive()) return false;
+        if (rangeLoopSnapInFlight) return false;
         const t =
             typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)
                 ? transportPlaybackSec
@@ -276,7 +300,10 @@
         if (typeof transportPlaybackSec !== 'number' || !Number.isFinite(transportPlaybackSec)) {
             return false;
         }
-        if (typeof videoMain !== 'undefined' && videoMain && videoMain.seeking) {
+        if (
+            rangeLoopSnapInFlight ||
+            (typeof videoMain !== 'undefined' && videoMain && videoMain.seeking)
+        ) {
             transportPlaybackSec = loopRangeInSec;
             transportPlaybackLastTs = performance.now();
             return true;
