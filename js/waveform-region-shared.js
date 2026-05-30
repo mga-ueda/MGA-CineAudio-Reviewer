@@ -18,5 +18,10 @@
     var regionOutDragExtentSec = NaN;
 
     var hoveredPlaybackRegionEl = null;
+    /** @type {HTMLElement[]} */
+    var hoveredPlaybackRegionEls = [];
     var lastRegionHoverClientX = null;
     var lastRegionHoverClientY = null;
+
+    /** @type {{ slot: number, segmentIndex: number }[]} */
+    var regionSelectionEntries = [];

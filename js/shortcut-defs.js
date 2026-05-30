@@ -82,6 +82,14 @@
         // ---------- リージョン編集 ----------
         regionSplit: { code: 'KeyX' },
         regionJoin: { code: 'KeyB' },
+        regionGroup: {
+            code: 'KeyG',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
         regionUndo: { code: 'KeyZ', primary: true, shift: false, alt: false },
         regionRedo: { code: 'KeyZ', primary: true, shift: true, alt: false },
         regionDelete: { codes: ['Delete', 'Backspace'] },

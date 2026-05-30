@@ -129,6 +129,13 @@
         }
 
         if (
+            typeof handlePlaybackRegionGroupKeydown === 'function' &&
+            handlePlaybackRegionGroupKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handleSessionIoShortcutKeydown === 'function' &&
             handleSessionIoShortcutKeydown(e)
         ) {

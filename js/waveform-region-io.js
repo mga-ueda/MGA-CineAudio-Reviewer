@@ -93,7 +93,34 @@
             endRegionHandleDrag({ cancelled: true });
             return true;
         }
+        if (getRegionSelectionCount() > 0) {
+            clearRegionSelection();
+            e.preventDefault();
+            return true;
+        }
         return false;
+    }
+
+    function handlePlaybackRegionGroupKeydown(e) {
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (regionHandleDragActive) return false;
+        if (!matchUserShortcut(e, 'regionGroup')) return false;
+        if (!toggleRegionGroupFromSelection()) return false;
+        e.preventDefault();
+        return true;
+    }
+
+    function handleRegionSelectionPointerDown(ev, regionHit) {
+        if (!ev || !regionHit || !(regionHit.slot >= 0) || !(regionHit.segmentIndex >= 0)) {
+            return false;
+        }
+        if (!(ev.ctrlKey || ev.metaKey)) return false;
+        ev.preventDefault();
+        ev.stopPropagation();
+        toggleRegionSelection(regionHit.slot, regionHit.segmentIndex);
+        return true;
     }
 
     /** 復元デコード直後: クリップ未揃いでも永続化セグメントを state に載せる（正規化は後） */
@@ -215,6 +242,9 @@
                     }
                     if (raw && Number.isFinite(raw.fadeOutSec) && raw.fadeOutSec > 0.0005) {
                         entry.fadeOutSec = raw.fadeOutSec;
+                    }
+                    if (raw && raw.regionGroupId) {
+                        entry.regionGroupId = raw.regionGroupId;
                     }
                     return entry;
                 }),
@@ -367,6 +397,19 @@
             const track = parseTrackKey(key);
             if (!track) return;
             container.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== 0) return;
+                if (ev.ctrlKey || ev.metaKey) {
+                    const regionEl = ev.target.closest('.audio-waveform-lane__playback-region');
+                    if (regionEl) {
+                        const segmentIndex = Number(regionEl.dataset.segmentIndex);
+                        if (Number.isFinite(segmentIndex) && segmentIndex >= 0) {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            toggleRegionSelection(track.slot, segmentIndex);
+                            return;
+                        }
+                    }
+                }
                 const splitHandle = ev.target.closest(
                     '.audio-waveform-lane__playback-region__handle--split',
                 );
@@ -442,6 +485,13 @@
     window.commitRegionUndoGesture = commitRegionUndoGesture;
     window.clearRegionUndoStack = clearRegionUndoStack;
     window.handlePlaybackRegionEscapeKeydown = handlePlaybackRegionEscapeKeydown;
+    window.handlePlaybackRegionGroupKeydown = handlePlaybackRegionGroupKeydown;
+    window.handleRegionSelectionPointerDown = handleRegionSelectionPointerDown;
+    window.toggleRegionSelection = toggleRegionSelection;
+    window.clearRegionSelection = clearRegionSelection;
+    window.collectRegionGroupMembers = collectRegionGroupMembers;
+    window.flashRegionGroupMembers = flashRegionGroupMembers;
+    window.collectRegionGroupMemberIndices = collectRegionGroupMemberIndices;
     window.handlePlaybackRegionMixKeydown = handlePlaybackRegionMixKeydown;
     window.resolveMixTargetFromActiveRegion = resolveMixTargetFromActiveRegion;
     window.updateAllPlaybackRegionOverlays = updateAllPlaybackRegionOverlays;
@@ -467,6 +517,8 @@
         return getSegmentRegionInPadSec(track, segmentIndex);
     };
     window.setSegmentTimelineStartSec = setSegmentTimelineStartSec;
+    window.clampRegionGroupMoveDelta = clampRegionGroupMoveDelta;
+    window.applyRegionGroupMoveDelta = applyRegionGroupMoveDelta;
     window.applyRegionTrackTimelineStart = function (slot, sec, opt) {
         const track = { type: 'extra', slot };
         if (!isTrackRegionActive(track) || getSegmentCount(track) < 1) {

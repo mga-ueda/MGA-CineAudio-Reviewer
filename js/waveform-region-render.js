@@ -632,6 +632,12 @@
     function buildRegionOverlayEl(track, segmentIndex, seg) {
         const el = document.createElement('div');
         el.className = 'audio-waveform-lane__playback-region';
+        if (getSegmentRegionGroupId(track, segmentIndex)) {
+            el.classList.add('audio-waveform-lane__playback-region--grouped');
+        }
+        if (isRegionEntrySelected(track.slot, segmentIndex)) {
+            el.classList.add('audio-waveform-lane__playback-region--selected');
+        }
         el.dataset.segmentIndex = String(segmentIndex);
         if (shouldShowSegmentInHandle(track, segmentIndex)) {
             const handleIn = document.createElement('div');
@@ -888,6 +894,7 @@
     }
 
     function deleteRegionSegmentAt(track, segmentIndex) {
+        if (typeof clearRegionSelection === 'function') clearRegionSelection();
         if (!regionUndoPaused) requestRegionUndoCapture();
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return false;
@@ -1366,17 +1373,82 @@
         }
     }
 
+    function getPlaybackRegionOverlayEl(slot, segmentIndex) {
+        const container = getPlaybackRegionsContainerEl({ type: 'extra', slot });
+        if (!container) return null;
+        return container.querySelector(
+            '.audio-waveform-lane__playback-region[data-segment-index="' +
+                segmentIndex +
+                '"]',
+        );
+    }
+
+    const REGION_GROUP_FLASH_CLASS =
+        'audio-waveform-lane__playback-region--group-flash';
+
+    /** グループ化完了時: メンバー全リージョンの枠を一度発光 */
+    function flashRegionGroupMembers(members) {
+        if (!members || !members.length) return;
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            const el = getPlaybackRegionOverlayEl(m.slot, m.segmentIndex);
+            if (!el) continue;
+            el.classList.remove(REGION_GROUP_FLASH_CLASS);
+            const onEnd = (e) => {
+                if (e && e.animationName && e.animationName !== 'regionGroupGlowPulse') {
+                    return;
+                }
+                el.classList.remove(REGION_GROUP_FLASH_CLASS);
+                el.removeEventListener('animationend', onEnd);
+            };
+            el.addEventListener('animationend', onEnd);
+            requestAnimationFrame(() => {
+                el.classList.add(REGION_GROUP_FLASH_CLASS);
+            });
+        }
+    }
+
+    function collectRegionGroupHoverElements(regionEl) {
+        if (!regionEl) return [];
+        const lane = regionEl.closest('.audio-waveform-lane--extra');
+        const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+        if (!m) return [regionEl];
+        const slot = parseInt(m[1], 10);
+        const segmentIndex = Number(regionEl.dataset.segmentIndex);
+        if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return [regionEl];
+        const track = { type: 'extra', slot };
+        const gid = getSegmentRegionGroupId(track, segmentIndex);
+        if (!gid) return [regionEl];
+        const members = collectRegionGroupMembers(track, segmentIndex);
+        const out = [];
+        for (let i = 0; i < members.length; i++) {
+            const mem = members[i];
+            const el = getPlaybackRegionOverlayEl(mem.slot, mem.segmentIndex);
+            if (el && !el.hidden) out.push(el);
+        }
+        return out.length ? out : [regionEl];
+    }
+
+    function clearHoveredPlaybackRegionHighlight() {
+        for (let i = 0; i < hoveredPlaybackRegionEls.length; i++) {
+            hoveredPlaybackRegionEls[i].classList.remove(
+                'audio-waveform-lane__playback-region--hover',
+            );
+        }
+        hoveredPlaybackRegionEls.length = 0;
+    }
+
     function setHoveredPlaybackRegion(el) {
         if (hoveredPlaybackRegionEl === el) return;
         if (hoveredPlaybackRegionEl) {
             hideRegionCursorLine(hoveredPlaybackRegionEl);
-            hoveredPlaybackRegionEl.classList.remove(
-                'audio-waveform-lane__playback-region--hover',
-            );
         }
+        clearHoveredPlaybackRegionHighlight();
         hoveredPlaybackRegionEl = el || null;
-        if (hoveredPlaybackRegionEl) {
-            hoveredPlaybackRegionEl.classList.add(
+        if (!hoveredPlaybackRegionEl) return;
+        hoveredPlaybackRegionEls = collectRegionGroupHoverElements(hoveredPlaybackRegionEl);
+        for (let i = 0; i < hoveredPlaybackRegionEls.length; i++) {
+            hoveredPlaybackRegionEls[i].classList.add(
                 'audio-waveform-lane__playback-region--hover',
             );
         }
@@ -1543,6 +1615,7 @@
             container.appendChild(splitEl);
         }
         syncExtraLaneRegionsClassForTrack(track);
+        syncRegionSelectionClasses();
         if (
             restoreHover &&
             Number.isFinite(hoverClientX) &&

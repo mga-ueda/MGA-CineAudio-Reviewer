@@ -269,11 +269,14 @@
                     <li>リージョン端の<strong>ハンドル</strong>（ソース In/Out）をドラッグすると、クリップ内の再生範囲を調整できます。隣接リージョンがあるときは境界が1本のスプリットハンドルとして動き、離すと各リージョンに In/Out ハンドルが現れます。</li>
                     <li>リージョン上で <kbd>Alt</kbd>+ホイールすると ±1dB刻みでそのリージョンの音量補正（中央に赤いdB表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの<strong>Comment</strong>列に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0dB 下げる</code>）が入ります。<strong>0.0dB</strong>に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In/Out とコメント列を更新します。</li>
                     <li>リージョン情報（ソース In/Out・音量補正 dB など）は <kbd>Ctrl</kbd>+<kbd>C</kbd> でコピーし、<kbd>Ctrl</kbd>+<kbd>V</kbd> で同じ Audio Track の末尾にペーストできます。</li>
+                    <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。リージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>のやや太い枠で示されます。</li>
+                    <li><strong>グループ化</strong> — 2つ以上選択した状態で <kbd>G</kbd>。Audio Track をまたいで可。成功するとメンバー全員の枠が一度黄色に発光します。通常時の見た目は通常リージョンと同じで、<strong>ホバー時</strong>にグループの全メンバーが黄色枠になります。グループ内のいずれかを<strong>ドラッグ</strong>すると、メンバー全体が同じ時間差で平行移動します（開始位置が異なる場合でも、いずれかがタイムライン先頭に達したらそこでグループ全体が止まります）。</li>
+                    <li><strong>グループ解除</strong> — グループ内のリージョンを選択して <kbd>G</kbd>（グループ化と同じキー）。</li>
                     <li><strong>スプリット</strong>（<kbd>X</kbd>）— リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Audio Track）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。</li>
                     <li><strong>結合</strong>（<kbd>B</kbd>）— 隣接リージョンの境界上にポインタを置いてから実行。</li>
                     <li><strong>削除</strong> — リージョン上にポインタがあるとき <kbd>Del</kbd> で削除（最後の1つを消すとリージョン表示を解除）。</li>
                     <li><strong>元に戻す/やり直し</strong> — スプリット・削除・範囲変更などは <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> で履歴をさかのぼれます（回数無制限）。</li>
-                    <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン選択を解除します。</li>
+                    <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。<strong>複数選択中</strong>は選択だけ解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン表示を解除します（ショートカット表の Esc 優先順位を参照）。</li>
                     <li>各レーン右端付近には、読み込み済みクリップの<strong>インテグレーテッド LKFS</strong>（ITU-R BS.1770 系）が表示されます（デコード完了後に計測）。</li>
                 </ul>
 
@@ -361,7 +364,7 @@
                 <ul>
                     <li><strong>Include in export</strong> の <strong>Video</strong> がオンなら、動画は <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
                     <li><strong>Audio</strong> がオンなら、追加音声（Audio Track 1〜3）の<strong>読み込み済みトラックをすべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
-                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置、再生位置、表示設定など。</li>
+                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 

@@ -18,6 +18,14 @@
     let waveformOffsetDragStartTimelineSec = 0;
     let waveformOffsetDragPreserveInPadSec = 0;
     let waveformOffsetDragStartAnchorSec = 0;
+    /** @type {{ slot: number, segmentIndex: number }[] | null} */
+    let waveformOffsetDragGroupMembers = null;
+    /** @type {Record<string, number> | null} */
+    let waveformOffsetDragGroupStartTimelineByKey = null;
+    /** @type {Record<string, number> | null} */
+    let waveformOffsetDragGroupStartAnchorByKey = null;
+    /** @type {Record<string, number> | null} */
+    let waveformOffsetDragGroupStartRegionInByKey = null;
     let waveformOffsetDragDocMove = null;
     let waveformOffsetDragDocUp = null;
     let waveformPointerGestureId = null;
@@ -593,6 +601,10 @@
         waveformOffsetDragSlot = -1;
         waveformOffsetDragSegmentIndex = -1;
         waveformOffsetDragPointerId = null;
+        waveformOffsetDragGroupMembers = null;
+        waveformOffsetDragGroupStartTimelineByKey = null;
+        waveformOffsetDragGroupStartAnchorByKey = null;
+        waveformOffsetDragGroupStartRegionInByKey = null;
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
     }
@@ -900,7 +912,6 @@
     }
 
     function onWaveformLanesPointerDownCapture(ev) {
-        if (shouldSkipWaveformPointerGesture(ev)) return;
         const ready =
             (typeof videoReady === 'function' && videoReady()) ||
             (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
@@ -910,6 +921,22 @@
             typeof resolveRegionSegmentFromPointer === 'function'
                 ? resolveRegionSegmentFromPointer(ev.clientX, ev.clientY)
                 : null;
+
+        // Ctrl/Cmd+クリックは shouldSkipWaveformPointerGesture で弾かれるため、先に選択を処理する
+        if (
+            regionHit &&
+            typeof handleRegionSelectionPointerDown === 'function' &&
+            handleRegionSelectionPointerDown(ev, regionHit)
+        ) {
+            cancelWaveformPointerGesture();
+            return;
+        }
+
+        if (typeof clearRegionSelection === 'function') {
+            clearRegionSelection();
+        }
+
+        if (shouldSkipWaveformPointerGesture(ev)) return;
 
         cancelWaveformPointerGesture();
         isSeeking = true;
@@ -1296,6 +1323,82 @@
         }
     }
 
+    function regionGroupDragKey(slot, segmentIndex) {
+        return slot + ':' + segmentIndex;
+    }
+
+    function applyWaveformGroupSegmentTimelineStartFromDrag(slot, primaryNextSec, opt) {
+        const members =
+            waveformOffsetDragGroupMembers && waveformOffsetDragGroupMembers.length
+                ? waveformOffsetDragGroupMembers
+                : waveformOffsetDragSegmentIndex >= 0
+                  ? [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }]
+                  : [];
+        if (!members.length) return;
+
+        if (members.length === 1) {
+            applyWaveformSegmentTimelineStartFromDrag(
+                slot,
+                waveformOffsetDragSegmentIndex,
+                primaryNextSec,
+                opt,
+            );
+            return;
+        }
+
+        const primaryKey = regionGroupDragKey(slot, waveformOffsetDragSegmentIndex);
+        const primaryStart =
+            waveformOffsetDragGroupStartTimelineByKey &&
+            Number.isFinite(waveformOffsetDragGroupStartTimelineByKey[primaryKey])
+                ? waveformOffsetDragGroupStartTimelineByKey[primaryKey]
+                : waveformOffsetDragStartTimelineSec;
+        const primaryTrack = { type: 'extra', slot };
+        const primaryDragRegionIn =
+            waveformOffsetDragGroupStartRegionInByKey &&
+            Number.isFinite(waveformOffsetDragGroupStartRegionInByKey[primaryKey])
+                ? waveformOffsetDragGroupStartRegionInByKey[primaryKey]
+                : primaryStart;
+        const primaryDragAnchor =
+            waveformOffsetDragGroupStartAnchorByKey &&
+            Number.isFinite(waveformOffsetDragGroupStartAnchorByKey[primaryKey])
+                ? waveformOffsetDragGroupStartAnchorByKey[primaryKey]
+                : primaryStart;
+
+        let snappedNext = primaryNextSec;
+        if (typeof snapRegionMoveRegionInSec === 'function') {
+            snappedNext = snapRegionMoveRegionInSec(
+                primaryNextSec,
+                primaryTrack,
+                waveformOffsetDragSegmentIndex,
+                {
+                    dragStartRegionIn: primaryDragRegionIn,
+                    dragStartAnchor: primaryDragAnchor,
+                    exclude: { slot, segmentIndex: waveformOffsetDragSegmentIndex },
+                },
+            );
+        }
+
+        const deltaRaw = snappedNext - primaryStart;
+        const effectiveDelta =
+            typeof clampRegionGroupMoveDelta === 'function'
+                ? clampRegionGroupMoveDelta(
+                      members,
+                      deltaRaw,
+                      waveformOffsetDragGroupStartRegionInByKey,
+                  )
+                : deltaRaw;
+
+        if (typeof applyRegionGroupMoveDelta === 'function') {
+            applyRegionGroupMoveDelta(members, effectiveDelta, {
+                startRegionInByKey: waveformOffsetDragGroupStartRegionInByKey,
+                startAnchorByKey: waveformOffsetDragGroupStartAnchorByKey,
+                skipPersist: !!(opt && opt.skipPersist),
+                forceAudio: true,
+                skipUndo: true,
+            });
+        }
+    }
+
     function onWaveformTrackOffsetPointerDown(ev, slot, segmentIndex) {
         if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
             syncSnapSuppressionFromPointerEvent(ev);
@@ -1310,14 +1413,33 @@
         waveformOffsetDragPointerId = ev.pointerId;
         waveformOffsetDragStartClientX = ev.clientX;
         if (waveformOffsetDragSegmentIndex >= 0) {
+            const track = { type: 'extra', slot };
+            waveformOffsetDragGroupMembers =
+                typeof collectRegionGroupMembers === 'function'
+                    ? collectRegionGroupMembers(track, waveformOffsetDragSegmentIndex)
+                    : [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }];
+            waveformOffsetDragGroupStartTimelineByKey = {};
+            waveformOffsetDragGroupStartAnchorByKey = {};
+            waveformOffsetDragGroupStartRegionInByKey = {};
+            for (let gi = 0; gi < waveformOffsetDragGroupMembers.length; gi++) {
+                const m = waveformOffsetDragGroupMembers[gi];
+                const key = regionGroupDragKey(m.slot, m.segmentIndex);
+                waveformOffsetDragGroupStartTimelineByKey[key] =
+                    typeof getSegmentTimelineStartForAltDrag === 'function'
+                        ? getSegmentTimelineStartForAltDrag(m.slot, m.segmentIndex)
+                        : 0;
+                waveformOffsetDragGroupStartAnchorByKey[key] =
+                    typeof getSegmentAnchorForAltDrag === 'function'
+                        ? getSegmentAnchorForAltDrag(m.slot, m.segmentIndex)
+                        : waveformOffsetDragGroupStartTimelineByKey[key];
+                waveformOffsetDragGroupStartRegionInByKey[key] =
+                    waveformOffsetDragGroupStartTimelineByKey[key];
+            }
+            const primaryKey = regionGroupDragKey(slot, waveformOffsetDragSegmentIndex);
             waveformOffsetDragStartTimelineSec =
-                typeof getSegmentTimelineStartForAltDrag === 'function'
-                    ? getSegmentTimelineStartForAltDrag(slot, waveformOffsetDragSegmentIndex)
-                    : 0;
+                waveformOffsetDragGroupStartTimelineByKey[primaryKey];
             waveformOffsetDragStartAnchorSec =
-                typeof getSegmentAnchorForAltDrag === 'function'
-                    ? getSegmentAnchorForAltDrag(slot, waveformOffsetDragSegmentIndex)
-                    : waveformOffsetDragStartTimelineSec;
+                waveformOffsetDragGroupStartAnchorByKey[primaryKey];
             waveformOffsetDragPreserveInPadSec =
                 typeof getSegmentRegionInPadForAltDrag === 'function'
                     ? getSegmentRegionInPadForAltDrag(slot, waveformOffsetDragSegmentIndex)
@@ -1327,6 +1449,10 @@
                               waveformOffsetDragStartAnchorSec,
                       );
         } else {
+            waveformOffsetDragGroupMembers = null;
+            waveformOffsetDragGroupStartTimelineByKey = null;
+            waveformOffsetDragGroupStartAnchorByKey = null;
+            waveformOffsetDragGroupStartRegionInByKey = null;
             waveformOffsetDragStartTimelineSec =
                 typeof getExtraTrackTimelineStartSec === 'function'
                     ? getExtraTrackTimelineStartSec(slot)
@@ -1358,12 +1484,9 @@
             );
             const next = waveformOffsetDragStartTimelineSec + delta;
             if (waveformOffsetDragSegmentIndex >= 0) {
-                applyWaveformSegmentTimelineStartFromDrag(
-                    slot,
-                    waveformOffsetDragSegmentIndex,
-                    next,
-                    { skipPersist: true },
-                );
+                applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
+                    skipPersist: true,
+                });
             } else {
                 applyWaveformTimelineStartFromDrag(slot, next, { skipPersist: true });
             }
@@ -1376,11 +1499,7 @@
             );
             const next = waveformOffsetDragStartTimelineSec + delta;
             if (waveformOffsetDragSegmentIndex >= 0) {
-                applyWaveformSegmentTimelineStartFromDrag(
-                    slot,
-                    waveformOffsetDragSegmentIndex,
-                    next,
-                );
+                applyWaveformGroupSegmentTimelineStartFromDrag(slot, next);
             } else {
                 applyWaveformTimelineStartFromDrag(slot, next);
             }

@@ -235,6 +235,284 @@
         );
     }
 
+    function newRegionGroupId() {
+        return (
+            'rgrp-' +
+            Date.now().toString(36) +
+            '-' +
+            Math.random().toString(36).slice(2, 7)
+        );
+    }
+
+    function getSegmentRegionGroupId(track, segmentIndex) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (!raw || !raw.regionGroupId) return '';
+        return String(raw.regionGroupId);
+    }
+
+    function regionGroupMemberKey(slot, segmentIndex) {
+        return slot + ':' + segmentIndex;
+    }
+
+    /** 同一 groupId のリージョンを全 Ex トラックから列挙 */
+    function collectRegionGroupMembers(track, segmentIndex) {
+        const gid = getSegmentRegionGroupId(track, segmentIndex);
+        if (!gid) {
+            return [{ slot: track.slot, segmentIndex }];
+        }
+        const members = [];
+        const n = getExtraTrackCount();
+        for (let s = 0; s < n; s++) {
+            const t = { type: 'extra', slot: s };
+            const count = getSegmentCount(t);
+            for (let i = 0; i < count; i++) {
+                if (getSegmentRegionGroupId(t, i) === gid) {
+                    members.push({ slot: s, segmentIndex: i });
+                }
+            }
+        }
+        return members.length
+            ? members
+            : [{ slot: track.slot, segmentIndex }];
+    }
+
+    function collectRegionGroupMemberIndices(track, segmentIndex) {
+        return collectRegionGroupMembers(track, segmentIndex)
+            .filter((m) => m.slot === track.slot)
+            .map((m) => m.segmentIndex);
+    }
+
+    /** グループ平行移動: いずれかが TC0 手前に出ないよう delta を共有クランプ */
+    function clampRegionGroupMoveDelta(members, deltaRaw, startRegionInByKey) {
+        if (!Number.isFinite(deltaRaw)) return 0;
+        if (!members || !members.length) return deltaRaw;
+        let minStart = Infinity;
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            const key = regionGroupMemberKey(m.slot, m.segmentIndex);
+            const rin =
+                startRegionInByKey && Number.isFinite(startRegionInByKey[key])
+                    ? startRegionInByKey[key]
+                    : getSegmentRegionTimelineIn(
+                          { type: 'extra', slot: m.slot },
+                          m.segmentIndex,
+                      );
+            if (Number.isFinite(rin)) minStart = Math.min(minStart, rin);
+        }
+        if (!Number.isFinite(minStart) || minStart === Infinity) return deltaRaw;
+        return Math.max(deltaRaw, -minStart);
+    }
+
+    function isRegionEntrySelected(slot, segmentIndex) {
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            if (e.slot === slot && e.segmentIndex === segmentIndex) return true;
+        }
+        return false;
+    }
+
+    function syncRegionSelectionClasses() {
+        document
+            .querySelectorAll('.audio-waveform-lane__playback-region')
+            .forEach((el) => {
+                const lane = el.closest('.audio-waveform-lane--extra');
+                const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                if (!m) return;
+                const slot = parseInt(m[1], 10);
+                const segmentIndex = Number(el.dataset.segmentIndex);
+                if (!Number.isFinite(segmentIndex)) return;
+                el.classList.toggle(
+                    'audio-waveform-lane__playback-region--selected',
+                    isRegionEntrySelected(slot, segmentIndex),
+                );
+            });
+    }
+
+    function clearRegionSelection() {
+        if (!regionSelectionEntries.length) return;
+        regionSelectionEntries.length = 0;
+        syncRegionSelectionClasses();
+    }
+
+    function removeRegionSelectionEntry(slot, segmentIndex) {
+        const idx = regionSelectionEntries.findIndex(
+            (e) => e.slot === slot && e.segmentIndex === segmentIndex,
+        );
+        if (idx >= 0) regionSelectionEntries.splice(idx, 1);
+    }
+
+    function addRegionSelectionEntry(slot, segmentIndex) {
+        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
+        if (isRegionEntrySelected(slot, segmentIndex)) return;
+        regionSelectionEntries.push({ slot, segmentIndex });
+    }
+
+    function toggleRegionSelection(slot, segmentIndex) {
+        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
+        const track = { type: 'extra', slot };
+        const gid = getSegmentRegionGroupId(track, segmentIndex);
+        if (gid) {
+            const members = collectRegionGroupMembers(track, segmentIndex);
+            const allSelected =
+                members.length > 0 &&
+                members.every((m) => isRegionEntrySelected(m.slot, m.segmentIndex));
+            if (allSelected) {
+                for (let i = 0; i < members.length; i++) {
+                    removeRegionSelectionEntry(
+                        members[i].slot,
+                        members[i].segmentIndex,
+                    );
+                }
+            } else {
+                for (let i = 0; i < members.length; i++) {
+                    addRegionSelectionEntry(
+                        members[i].slot,
+                        members[i].segmentIndex,
+                    );
+                }
+            }
+        } else {
+            const idx = regionSelectionEntries.findIndex(
+                (e) => e.slot === slot && e.segmentIndex === segmentIndex,
+            );
+            if (idx >= 0) regionSelectionEntries.splice(idx, 1);
+            else regionSelectionEntries.push({ slot, segmentIndex });
+        }
+        syncRegionSelectionClasses();
+    }
+
+    function getRegionSelectionCount() {
+        return regionSelectionEntries.length;
+    }
+
+    function selectionHasGroupedRegions() {
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            if (getSegmentRegionGroupId({ type: 'extra', slot: e.slot }, e.segmentIndex)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function toggleRegionGroupFromSelection() {
+        if (!regionSelectionEntries.length) {
+            writeLog(
+                'Playback region: select regions (Ctrl+click), then G to group or ungroup',
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Select region(s)', 'notice');
+            }
+            return false;
+        }
+        if (selectionHasGroupedRegions()) {
+            return ungroupSelectedPlaybackRegions();
+        }
+        return groupSelectedPlaybackRegions();
+    }
+
+    function groupSelectedPlaybackRegions() {
+        if (regionSelectionEntries.length < 2) {
+            writeLog('Playback region: select 2+ regions (Ctrl+click), then press G');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Select 2+ regions', 'notice');
+            }
+            return false;
+        }
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        const gid = newRegionGroupId();
+        const touchedSlots = new Set();
+        const unique = new Map();
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            unique.set(regionGroupMemberKey(e.slot, e.segmentIndex), e);
+        }
+        for (const e of unique.values()) {
+            const track = { type: 'extra', slot: e.slot };
+            const raw = getRawSegmentEntry(track, e.segmentIndex);
+            if (raw) raw.regionGroupId = gid;
+            touchedSlots.add(e.slot);
+        }
+        for (const slot of touchedSlots) {
+            if (typeof updateTrackRegionOverlays === 'function') {
+                updateTrackRegionOverlays({ type: 'extra', slot });
+            }
+        }
+        const groupedMembers = Array.from(unique.values());
+        if (typeof flashRegionGroupMembers === 'function') {
+            flashRegionGroupMembers(groupedMembers);
+        }
+        writeLog(
+            'Regions grouped across ' +
+                unique.size +
+                ' region(s) on ' +
+                touchedSlots.size +
+                ' track(s)',
+        );
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        clearRegionSelection();
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Grouped', 'notice');
+        }
+        return true;
+    }
+
+    function ungroupSelectedPlaybackRegions() {
+        if (!regionSelectionEntries.length) {
+            writeLog('Playback region: select grouped region(s), then G');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Select region(s)', 'notice');
+            }
+            return false;
+        }
+        const gids = new Set();
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            const gid = getSegmentRegionGroupId(
+                { type: 'extra', slot: e.slot },
+                e.segmentIndex,
+            );
+            if (gid) gids.add(gid);
+        }
+        let ungrouped = false;
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        const n = getExtraTrackCount();
+        for (let s = 0; s < n; s++) {
+            const track = { type: 'extra', slot: s };
+            const count = getSegmentCount(track);
+            let cleared = 0;
+            for (let i = 0; i < count; i++) {
+                const raw = getRawSegmentEntry(track, i);
+                if (raw && raw.regionGroupId && gids.has(raw.regionGroupId)) {
+                    delete raw.regionGroupId;
+                    cleared++;
+                }
+            }
+            if (cleared) {
+                ungrouped = true;
+                if (typeof updateTrackRegionOverlays === 'function') {
+                    updateTrackRegionOverlays(track);
+                }
+            }
+        }
+        if (ungrouped) {
+            writeLog('Region group cleared (' + gids.size + ' group(s))');
+        }
+        if (!ungrouped) {
+            writeLog('Playback region: selection is not in a group');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Not grouped', 'notice');
+            }
+            return false;
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        clearRegionSelection();
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Ungrouped', 'notice');
+        }
+        return true;
+    }
+
     function normalizeSegmentEntry(seg, track, fullDur) {
         const base = normalizeSegment(seg.sourceInSec, seg.sourceOutSec, fullDur);
         base.id = seg && seg.id ? seg.id : newRegionId();
@@ -266,6 +544,9 @@
         }
         if (seg && Number.isFinite(seg.fadeOutSec)) {
             base.fadeOutSec = Math.max(0, seg.fadeOutSec);
+        }
+        if (seg && seg.regionGroupId) {
+            base.regionGroupId = String(seg.regionGroupId);
         }
         return base;
     }

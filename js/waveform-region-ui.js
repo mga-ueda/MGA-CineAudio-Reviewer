@@ -338,6 +338,33 @@
         }
     }
 
+    /** グループ: 全メンバーへ同じ delta を適用（個別スナップでずれないよう skipSnap） */
+    function applyRegionGroupMoveDelta(members, delta, opt) {
+        if (!members || !members.length || !Number.isFinite(delta)) return;
+        const startRegionInByKey = (opt && opt.startRegionInByKey) || null;
+        const startAnchorByKey = (opt && opt.startAnchorByKey) || null;
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            const track = { type: 'extra', slot: m.slot };
+            const key = regionGroupMemberKey(m.slot, m.segmentIndex);
+            const dragStartRegionIn =
+                startRegionInByKey && Number.isFinite(startRegionInByKey[key])
+                    ? startRegionInByKey[key]
+                    : getSegmentRegionTimelineIn(track, m.segmentIndex);
+            const dragStartAnchor =
+                startAnchorByKey && Number.isFinite(startAnchorByKey[key])
+                    ? startAnchorByKey[key]
+                    : getSegmentTimelineStart(track, m.segmentIndex);
+            moveSegmentClipByTimelineDelta(track, m.segmentIndex, delta, {
+                dragStartRegionIn,
+                dragStartAnchor,
+                skipPersist: !!(opt && opt.skipPersist),
+                forceAudio: !!(opt && opt.forceAudio),
+                skipUndo: !!(opt && opt.skipUndo),
+            });
+        }
+    }
+
     function setSegmentTimelineStartSec(track, segmentIndex, sec, opt) {
         if (!isExtraTrackRef(track)) return;
         if (!(opt && opt.skipUndo) && !regionUndoPaused) {
@@ -422,18 +449,31 @@
             if (handleHit) return null;
         }
 
-        const hit = document.elementFromPoint(clientX, clientY);
-        if (hit) {
-            if (hit.closest('.audio-waveform-lane__playback-region__handle--split')) {
-                return null;
-            }
-            regionEl = hit.closest('.audio-waveform-lane__playback-region');
+        if (typeof findPlaybackRegionElAtPointer === 'function') {
+            regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
             if (regionEl) {
                 const lane = regionEl.closest('.audio-waveform-lane--extra');
                 const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
                 if (m) {
                     slot = parseInt(m[1], 10);
                     segmentIndex = Number(regionEl.dataset.segmentIndex);
+                }
+            }
+        }
+        if (!regionEl) {
+            const hit = document.elementFromPoint(clientX, clientY);
+            if (hit) {
+                if (hit.closest('.audio-waveform-lane__playback-region__handle--split')) {
+                    return null;
+                }
+                regionEl = hit.closest('.audio-waveform-lane__playback-region');
+                if (regionEl) {
+                    const lane = regionEl.closest('.audio-waveform-lane--extra');
+                    const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                    if (m) {
+                        slot = parseInt(m[1], 10);
+                        segmentIndex = Number(regionEl.dataset.segmentIndex);
+                    }
                 }
             }
         }

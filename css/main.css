@@ -28,6 +28,10 @@
             );
             /** 繧ｷ繝ｼ繧ｯ陦・ 迴ｾ蝨ｨ / 邱丞ｰｺ縺ｮ譫縺ｨ蜀咲函繝懊ち繝ｳ縺ｮ螟門ｯｸ繧呈純縺医ｋ・・utton 縺ｮ UA 菴咏區霎ｼ縺ｿ縺ｧ蟆代＠鬮倥ａ・・*/
             --transport-seek-align-h: 36px;
+            /** 波形シークバー／再生ヘッドと同系のシアン（リージョン選択など） */
+            --waveform-seek-cyan: #00e8ff;
+            --waveform-seek-cyan-border: rgba(0, 232, 255, 0.92);
+            --waveform-seek-cyan-inset: rgba(0, 232, 255, 0.9);
             --font-mono: 'Consolas', 'Monaco', 'Cascadia Mono', 'Courier New', monospace;
             /*
              * 譁・ｭ苓牡縺ｮ蠖ｹ蜑ｲ・・ample.html 縺ｨ蜷後§蛻・球縲ゅし繝ｳ繝励Ν縺ｮ繧ｷ繧｢繝ｳ #7dd8ff 縺ｯ --app-accent 縺ｫ逶ｸ蠖難ｼ・
@@ -2263,6 +2267,66 @@
             .audio-waveform-lane__playback-region__handle::after {
             background: rgba(150, 156, 168, 0.92);
         }
+        /* グループ化: 通常時は通常リージョンと同じ見た目、ホバー時のみ黄色 */
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover {
+            z-index: 9;
+            border-left-width: 0.5px;
+            border-right-width: 0.5px;
+            border-left-color: rgba(255, 214, 64, 0.95) !important;
+            border-right-color: rgba(255, 214, 64, 0.95) !important;
+            box-shadow: inset 0 0 0 0.5px rgba(255, 214, 64, 0.9);
+        }
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover
+            .audio-waveform-lane__playback-region__handle::after {
+            background: rgba(255, 214, 64, 0.92);
+        }
+        /* グループ化直後の一回発光 */
+        .audio-waveform-lane__playback-region--group-flash {
+            z-index: 11;
+            animation: regionGroupGlowPulse 0.7s ease-in-out 1;
+        }
+        @keyframes regionGroupGlowPulse {
+            0%,
+            100% {
+                border-left-color: rgba(255, 214, 64, 0.7) !important;
+                border-right-color: rgba(255, 214, 64, 0.7) !important;
+                box-shadow:
+                    inset 0 0 0 0.5px rgba(255, 214, 64, 0.45),
+                    0 0 4px rgba(255, 214, 64, 0.25);
+            }
+            50% {
+                border-left-color: rgba(255, 240, 140, 1) !important;
+                border-right-color: rgba(255, 240, 140, 1) !important;
+                box-shadow:
+                    inset 0 0 0 1px rgba(255, 230, 100, 0.95),
+                    0 0 14px rgba(255, 214, 64, 0.9),
+                    0 0 26px rgba(255, 190, 40, 0.55);
+            }
+        }
+        .audio-waveform-lane__playback-region--group-flash
+            .audio-waveform-lane__playback-region__handle::after {
+            background: rgba(255, 230, 100, 0.95);
+        }
+        /* 複数選択: シークバー同色・ホバー（黄）より優先・枠をやや太く */
+        .audio-waveform-lane__playback-region--selected,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--hover,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover {
+            z-index: 10;
+            border-left-width: 1px;
+            border-right-width: 1px;
+            border-left-color: var(--waveform-seek-cyan-border) !important;
+            border-right-color: var(--waveform-seek-cyan-border) !important;
+            box-shadow: inset 0 0 0 1px var(--waveform-seek-cyan-inset);
+        }
+        .audio-waveform-lane__playback-region--selected
+            .audio-waveform-lane__playback-region__handle::after,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--hover
+            .audio-waveform-lane__playback-region__handle::after,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover
+            .audio-waveform-lane__playback-region__handle::after {
+            background: var(--waveform-seek-cyan-border);
+        }
         .audio-waveform-lane__playback-region__cursor-line {
             display: none !important;
         }
@@ -2427,7 +2491,12 @@
             left: 50%;
             width: 2px;
             transform: translateX(-50%);
-            background: linear-gradient(180deg, #c8ffff 0%, #00e8ff 50%, #00b8d4 100%);
+            background: linear-gradient(
+                180deg,
+                #c8ffff 0%,
+                var(--waveform-seek-cyan) 50%,
+                #00b8d4 100%
+            );
             box-shadow: 0 0 6px 1px rgba(0, 232, 255, 0.55);
             border-radius: 1px;
             pointer-events: none;
