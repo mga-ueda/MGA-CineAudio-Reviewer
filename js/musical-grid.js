@@ -1109,15 +1109,6 @@
         return counts;
     }
 
-    function mergeConsecutiveEqualGroupBarCounts(counts) {
-        if (!counts || !counts.length) return [];
-        const out = [counts[0]];
-        for (let i = 1; i < counts.length; i++) {
-            if (counts[i] !== out[out.length - 1]) out.push(counts[i]);
-        }
-        return out;
-    }
-
     function groupBarCountsMatchPhraseSizes(counts, sizes) {
         if (!counts || !counts.length || !sizes || !sizes.length) return false;
         for (let i = 0; i < counts.length; i++) {
@@ -1126,11 +1117,36 @@
         return true;
     }
 
+    /** barGroupSizeForIndex の逆算: 指定長の Phrase 候補を counts から構成する。 */
+    function candidatePhraseSizesForLength(counts, len) {
+        if (!counts || !counts.length || len < 1 || len > counts.length) return null;
+        if (len === 1) {
+            if (counts.every((c) => c === counts[0])) return [counts[0]];
+            return null;
+        }
+        if (len === 2) {
+            const tailVal = counts[1];
+            if (counts.slice(1).every((c) => c === tailVal)) return [counts[0], tailVal];
+            return null;
+        }
+        const sizes = counts.slice(0, len - 1);
+        const tailVal = counts[len - 1];
+        for (let i = len - 1; i < counts.length; i++) {
+            if (counts[i] !== tailVal) return null;
+        }
+        sizes.push(tailVal);
+        return sizes;
+    }
+
     /** 展開済みグループ小節数列から、同等の Phrase 指定を最短表現へ圧縮する。 */
     function inferMinimalPhraseSizesFromGroupBarCounts(counts) {
         if (!counts || !counts.length) return [];
-        const merged = mergeConsecutiveEqualGroupBarCounts(counts);
-        if (groupBarCountsMatchPhraseSizes(counts, merged)) return merged;
+        for (let len = 1; len <= counts.length; len++) {
+            const candidate = candidatePhraseSizesForLength(counts, len);
+            if (candidate && groupBarCountsMatchPhraseSizes(counts, candidate)) {
+                return candidate;
+            }
+        }
         return counts.slice();
     }
 
@@ -1416,11 +1432,17 @@
 
     function applyPhraseGroupBarCounts(counts, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const text = formatPhraseTextFromGroupBarCounts(counts, {
+        const overlayText = formatPhraseTextFromGroupBarCounts(counts, {
             optimize: o.optimize !== false && !phraseBoundaryDragActive,
         });
-        musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
-        if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+        // ドラッグ中も入力欄は確定時と同じ最適化表記を表示する（オーバーレイは展開済み counts を使用）。
+        const displayText = phraseBoundaryDragActive
+            ? formatPhraseTextFromGroupBarCounts(counts, { optimize: true })
+            : overlayText;
+        musicalGridPhraseText = normalizeMusicalGridPhraseText(overlayText);
+        if (musicalGridPhraseInput) {
+            musicalGridPhraseInput.value = normalizeMusicalGridPhraseText(displayText);
+        }
         if (phraseBoundaryDragActive) {
             drawMusicalGridOverlay();
             repositionPhraseBoundaryHandlesFromSnapshot();
@@ -1561,9 +1583,7 @@
             const boundaryIdx = phraseBoundaryDragBoundaryIndex;
             endPhraseBoundaryDrag();
             if (finalCounts && finalCounts.length) {
-                const optimizedText = formatPhraseTextFromGroupBarCounts(finalCounts);
-                musicalGridPhraseText = normalizeMusicalGridPhraseText(optimizedText);
-                if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+                applyPhraseGroupBarCounts(finalCounts, { persist: false });
                 persistMusicalGridAndRedraw();
                 if (typeof writeLog === 'function') {
                     const left = phraseGroupLogLabelForIndex(boundaryIdx);
@@ -1574,7 +1594,7 @@
                             '/' +
                             right +
                             ': ' +
-                            optimizedText,
+                            musicalGridPhraseText,
                     );
                 }
             }
