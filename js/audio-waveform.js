@@ -1179,7 +1179,7 @@
 
     function syncAudioWaveformCanvasSize() {
         if (!audioWaveformCanvas || !audioWaveformTrack) return null;
-        const wCss =
+        const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
@@ -1187,17 +1187,63 @@
                   : Math.max(1, audioWaveformTrack.clientWidth | 0);
         const hCss = Math.max(1, audioWaveformTrack.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        audioWaveformCanvas.width = Math.max(1, Math.round(wCss * dpr));
+        const lite =
+            typeof isWaveformLiteDrawRestricted === 'function' &&
+            isWaveformLiteDrawRestricted();
+        let backingW = layoutW;
+        let barCount = Math.min(4096, Math.max(64, layoutW));
+        if (lite) {
+            if (typeof getWaveformLiteDrawWidthCss === 'function') {
+                backingW = getWaveformLiteDrawWidthCss(layoutW);
+            }
+            if (typeof getWaveformLiteOverviewBarCount === 'function') {
+                barCount = getWaveformLiteOverviewBarCount();
+            }
+        }
+        audioWaveformCanvas.width = Math.max(1, Math.round(backingW * dpr));
         audioWaveformCanvas.height = Math.max(1, Math.round(hCss * dpr));
-        audioWaveformCanvas.style.width = wCss + 'px';
+        audioWaveformCanvas.style.width = layoutW + 'px';
         audioWaveformCanvas.style.height = hCss + 'px';
         const ctx = audioWaveformCanvas.getContext('2d');
-        if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, wCss, hCss, barCount: Math.min(4096, Math.max(64, wCss)) };
+        if (ctx) {
+            if (lite && typeof applyWaveformLiteCanvasTransform === 'function') {
+                applyWaveformLiteCanvasTransform(ctx, layoutW, backingW, dpr);
+            } else {
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+        }
+        return { ctx, wCss: layoutW, hCss, barCount, backingW };
     }
 
     function clearMainWaveformViewportPeaks() {
         waveformViewportPeaks = null;
+    }
+
+    /** 現在のタイムライン幅に合わせて overview ピークを再構築（Lite Waveform 切替時など） */
+    function rebuildMainWaveformOverviewPeaksIfNeeded() {
+        if (!waveformAudioBuffer) return false;
+        const sized = syncAudioWaveformCanvasSize();
+        if (!sized) return false;
+        const barCount = sized.barCount;
+        const lite =
+            typeof isWaveformLiteDrawRestricted === 'function' &&
+            isWaveformLiteDrawRestricted();
+        if (lite && waveformPeaks && waveformPeaks.length === barCount) {
+            return true;
+        }
+        if (waveformPeakPyramid && typeof peaksOverviewFromPyramid === 'function') {
+            const overview = peaksOverviewFromPyramid(waveformPeakPyramid, barCount);
+            if (overview && overview.length) waveformPeaks = overview;
+        }
+        if (!waveformPeaks || waveformPeaks.length !== barCount) {
+            if (typeof peaksFromAudioBuffer === 'function') {
+                waveformPeaks = peaksFromAudioBuffer(
+                    waveformAudioBuffer,
+                    Math.min(512, barCount),
+                );
+            }
+        }
+        return !!(waveformPeaks && waveformPeaks.length > 0);
     }
 
     function rebuildMainWaveformViewportPeaks(spec) {
@@ -1277,6 +1323,7 @@
     }
 
     window.clearMainWaveformViewportPeaks = clearMainWaveformViewportPeaks;
+    window.rebuildMainWaveformOverviewPeaksIfNeeded = rebuildMainWaveformOverviewPeaksIfNeeded;
     window.rebuildMainWaveformViewportPeaks = rebuildMainWaveformViewportPeaks;
 
     function drawAudioWaveformCanvas() {

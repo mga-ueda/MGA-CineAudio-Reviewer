@@ -266,6 +266,14 @@
         return !!(tr.peaks && tr.peaks.length > 0);
     }
 
+    function rebuildAllExtraTrackOverviewPeaksIfNeeded() {
+        let any = false;
+        for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
+            if (rebuildExtraTrackPeaksIfNeeded(i)) any = true;
+        }
+        return any;
+    }
+
     function scheduleExtraTrackPeakPyramidBuild(slot, buffer, barCount) {
         const tr = extraTrackBySlot(slot);
         if (!tr || !buffer) return;
@@ -505,7 +513,7 @@
 
     function syncExtraCanvasSize(ui) {
         if (!ui || !ui.canvas || !ui.track) return null;
-        const wCss =
+        const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
@@ -513,12 +521,31 @@
                   : Math.max(1, ui.track.clientWidth | 0);
         const hCss = Math.max(1, ui.track.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        ui.canvas.width = Math.max(1, Math.round(wCss * dpr));
+        const lite =
+            typeof isWaveformLiteDrawRestricted === 'function' &&
+            isWaveformLiteDrawRestricted();
+        let backingW = layoutW;
+        let barCount = Math.min(4096, Math.max(64, layoutW));
+        if (lite) {
+            if (typeof getWaveformLiteDrawWidthCss === 'function') {
+                backingW = getWaveformLiteDrawWidthCss(layoutW);
+            }
+            if (typeof getWaveformLiteOverviewBarCount === 'function') {
+                barCount = getWaveformLiteOverviewBarCount();
+            }
+        }
+        ui.canvas.width = Math.max(1, Math.round(backingW * dpr));
         ui.canvas.height = Math.max(1, Math.round(hCss * dpr));
-        ui.canvas.style.width = wCss + 'px';
+        ui.canvas.style.width = layoutW + 'px';
         ui.canvas.style.height = hCss + 'px';
         const ctx = ui.canvas.getContext('2d');
-        if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, wCss, hCss, barCount: Math.min(4096, Math.max(64, wCss)) };
+        if (ctx) {
+            if (lite && typeof applyWaveformLiteCanvasTransform === 'function') {
+                applyWaveformLiteCanvasTransform(ctx, layoutW, backingW, dpr);
+            } else {
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+        }
+        return { ctx, wCss: layoutW, hCss, barCount, backingW };
     }
 

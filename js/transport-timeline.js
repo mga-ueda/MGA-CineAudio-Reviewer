@@ -1081,6 +1081,37 @@
     let markerTcEditWaveformZoomActive = false;
     /** 再生ヘッド（水色の縦線）をビューポート中央に追従させる（localStorage ユーザー設定）。 */
     let playheadCenterLockActive = false;
+    /** 波形の詳細描画（高解像度ビューポート再計算）を行わない軽量モード（localStorage ユーザー設定）。 */
+    let waveformLiteModeActive = false;
+    const WAVEFORM_LITE_BAR_MAX = 4096;
+    const WAVEFORM_LITE_BAR_MIN = 64;
+    /** Lite 時のキャンバス・overview ピーク解像度上限（ビューポート幅ベース） */
+    const WAVEFORM_LITE_DRAW_CSS_MAX = 4096;
+
+    function getWaveformLiteOverviewBarCount() {
+        const vw = waveformTimelineViewportWidthCss();
+        return Math.min(
+            WAVEFORM_LITE_BAR_MAX,
+            Math.max(WAVEFORM_LITE_BAR_MIN, vw > 0 ? vw | 0 : WAVEFORM_LITE_BAR_MIN),
+        );
+    }
+
+    function getWaveformLiteDrawWidthCss(layoutW) {
+        const lw = Math.max(1, layoutW | 0);
+        const cap = Math.min(
+            WAVEFORM_LITE_DRAW_CSS_MAX,
+            Math.max(WAVEFORM_LITE_BAR_MIN, getWaveformLiteOverviewBarCount()),
+        );
+        return Math.min(lw, cap);
+    }
+
+    function applyWaveformLiteCanvasTransform(ctx, layoutW, backingW, dpr) {
+        if (!ctx) return;
+        const lw = Math.max(1, layoutW | 0);
+        const bw = Math.max(1, backingW | 0);
+        const scaleX = bw < lw ? (dpr * bw) / lw : dpr;
+        ctx.setTransform(scaleX, 0, 0, dpr, 0, 0);
+    }
 
     function clampWaveformTimelineZoom(z) {
         const n = Number(z);
@@ -1339,7 +1370,17 @@
     }
 
     /** ズーム・リサイズ直後: ピラミッドから可視範囲ピークを同期的に更新（粗い波形のチラつき防止） */
+    function isWaveformLiteModeActive() {
+        return waveformLiteModeActive;
+    }
+
+    /** Lite ON でも最大倍率（32×）では内部的に詳細描画を使う */
+    function isWaveformLiteDrawRestricted() {
+        return waveformLiteModeActive && !isWaveformTimelineAtMaxZoom();
+    }
+
     function applyWaveformViewportPeaksImmediate(opt) {
+        if (isWaveformLiteDrawRestricted()) return false;
         const spec = getWaveformViewportHiresSpec();
         if (!spec) return false;
         const peaksMissing = anyExtraTracksNeedViewportPeaksRebuild(opt);
@@ -1355,6 +1396,7 @@
     }
 
     function applyWaveformViewportHiresRedraw(opt) {
+        if (isWaveformLiteDrawRestricted()) return;
         const spec = getWaveformViewportHiresSpec();
         if (!spec) {
             clearAllWaveformViewportPeaks();
@@ -1397,6 +1439,7 @@
     }
 
     function scheduleWaveformHiresRedrawAfterZoom(opt) {
+        if (isWaveformLiteDrawRestricted()) return;
         cancelWaveformHiresRedraw();
         waveformHiresTimer = setTimeout(() => {
             waveformHiresTimer = 0;
@@ -1464,6 +1507,20 @@
     function refreshWaveformTimelineAfterZoomChange() {
         applyWaveformTimelineZoomLayout();
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        if (isWaveformLiteDrawRestricted()) {
+            cancelWaveformHiresRedraw();
+            invalidateWaveformViewportHiresSpec();
+            clearAllWaveformViewportPeaks();
+            if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
+            if (typeof rebuildMainWaveformOverviewPeaksIfNeeded === 'function') {
+                rebuildMainWaveformOverviewPeaksIfNeeded();
+            }
+            if (typeof rebuildAllExtraTrackOverviewPeaksIfNeeded === 'function') {
+                rebuildAllExtraTrackOverviewPeaksIfNeeded();
+            }
+        } else if (waveformLiteModeActive && isWaveformTimelineAtMaxZoom()) {
+            invalidateWaveformViewportHiresSpec();
+        }
         drawWaveformChromeOverlays();
         if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
         scheduleWaveformVisualRefresh();
@@ -1669,6 +1726,8 @@
         if (typeof refreshHoverPlayheadFromLastPointer === 'function') {
             refreshHoverPlayheadFromLastPointer();
         }
+        // Lite（最大倍率以外）: スクロールは DOM 表示位置のみ変わるため波形キャンバスの再描画は不要
+        if (isWaveformLiteDrawRestricted()) return;
         if (isWaveformTimelineAtFitZoom()) return;
         const centerLockPlayback = isTransportPlaying() && playheadCenterLockActive;
         if (isTransportPlaying() && !centerLockPlayback) return;
@@ -1703,7 +1762,13 @@
             lanes.scrollLeft = next;
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
             if (playheadCenterLockActive && isTransportPlaying()) {
-                scheduleWaveformVisualRefresh();
+                if (isWaveformLiteDrawRestricted()) {
+                    if (typeof updateAllWaveformPlayheads === 'function') {
+                        updateAllWaveformPlayheads();
+                    }
+                } else {
+                    scheduleWaveformVisualRefresh();
+                }
             }
         }
     }
@@ -1753,6 +1818,86 @@
 
     function togglePlayheadCenterLock() {
         return setPlayheadCenterLockActive(!playheadCenterLockActive);
+    }
+
+    function syncWaveformLiteModeUi() {
+        const cb = document.getElementById('waveformLiteCheckbox');
+        if (cb) cb.checked = waveformLiteModeActive;
+    }
+
+    function refreshWaveformAfterLiteModeChange() {
+        if (waveformLiteModeActive) {
+            cancelWaveformHiresRedraw();
+            invalidateWaveformViewportHiresSpec();
+            if (isWaveformLiteDrawRestricted()) {
+                clearAllWaveformViewportPeaks();
+                if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
+                if (typeof rebuildMainWaveformOverviewPeaksIfNeeded === 'function') {
+                    rebuildMainWaveformOverviewPeaksIfNeeded();
+                }
+                if (typeof rebuildAllExtraTrackOverviewPeaksIfNeeded === 'function') {
+                    rebuildAllExtraTrackOverviewPeaksIfNeeded();
+                }
+            }
+        }
+        if (typeof scheduleWaveformVisualRefresh === 'function') {
+            scheduleWaveformVisualRefresh({ sync: true });
+        } else {
+            if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
+            if (typeof redrawAllExtraTrackWaveforms === 'function') {
+                redrawAllExtraTrackWaveforms();
+            }
+        }
+        if (!isWaveformLiteDrawRestricted()) scheduleWaveformHiresRedrawAfterZoom();
+    }
+
+    function setWaveformLiteModeActive(enabled, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const next = !!enabled;
+        const prev = waveformLiteModeActive;
+        waveformLiteModeActive = next;
+        syncWaveformLiteModeUi();
+        if (next !== prev) refreshWaveformAfterLiteModeChange();
+        if (!o.silent) {
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Lite Waveform', next ? 'ON' : 'OFF', 'notice');
+            }
+            if (next !== prev && typeof flashTransportOptBox === 'function') {
+                flashTransportOptBox('waveformLite');
+            }
+            if (typeof writeLog === 'function') {
+                writeLog('Lite Waveform: ' + (next ? 'ON' : 'OFF'));
+            }
+        }
+        if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
+        return waveformLiteModeActive;
+    }
+
+    function applySavedWaveformLiteMode(enabled) {
+        setWaveformLiteModeActive(!!enabled, { silent: true, persist: false });
+    }
+
+    function toggleWaveformLiteMode() {
+        return setWaveformLiteModeActive(!waveformLiteModeActive);
+    }
+
+    function bindWaveformLiteCheckbox() {
+        const cb = document.getElementById('waveformLiteCheckbox');
+        if (!cb || cb.dataset.waveformLiteBound === '1') return;
+        cb.dataset.waveformLiteBound = '1';
+        cb.addEventListener('change', () => {
+            setWaveformLiteModeActive(!!cb.checked);
+        });
+    }
+
+    function handleWaveformLiteShortcutKeydown(e) {
+        if (!e || e.repeat) return false;
+        if (typeof matchUserShortcut !== 'function' || !matchUserShortcut(e, 'waveformLiteToggle')) {
+            return false;
+        }
+        e.preventDefault();
+        toggleWaveformLiteMode();
+        return true;
     }
 
     function bindPlayheadCenterLockCheckbox() {
@@ -1859,6 +2004,15 @@
     window.setPlayheadCenterLockActive = setPlayheadCenterLockActive;
     window.applySavedPlayheadCenterLock = applySavedPlayheadCenterLock;
     window.togglePlayheadCenterLock = togglePlayheadCenterLock;
+    window.isWaveformLiteModeActive = isWaveformLiteModeActive;
+    window.isWaveformLiteDrawRestricted = isWaveformLiteDrawRestricted;
+    window.getWaveformLiteOverviewBarCount = getWaveformLiteOverviewBarCount;
+    window.getWaveformLiteDrawWidthCss = getWaveformLiteDrawWidthCss;
+    window.applyWaveformLiteCanvasTransform = applyWaveformLiteCanvasTransform;
+    window.setWaveformLiteModeActive = setWaveformLiteModeActive;
+    window.applySavedWaveformLiteMode = applySavedWaveformLiteMode;
+    window.toggleWaveformLiteMode = toggleWaveformLiteMode;
+    window.handleWaveformLiteShortcutKeydown = handleWaveformLiteShortcutKeydown;
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
@@ -1878,6 +2032,8 @@
         applyWaveformTimelineZoomLayout();
         bindPlayheadCenterLockCheckbox();
         syncPlayheadCenterLockUi();
+        bindWaveformLiteCheckbox();
+        syncWaveformLiteModeUi();
     }
 
     window.initWaveformTimelineZoomUi = initWaveformTimelineZoomUi;

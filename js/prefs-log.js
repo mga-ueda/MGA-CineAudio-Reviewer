@@ -287,6 +287,9 @@
                 playheadCenterLock:
                     typeof isPlayheadCenterLockActive === 'function' &&
                     isPlayheadCenterLockActive(),
+                waveformLiteMode:
+                    typeof isWaveformLiteModeActive === 'function' &&
+                    isWaveformLiteModeActive(),
             };
             if (prev.exportMediaInclude && typeof prev.exportMediaInclude === 'object') {
                 payload.exportMediaInclude = prev.exportMediaInclude;

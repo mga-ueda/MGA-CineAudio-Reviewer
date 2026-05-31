@@ -102,7 +102,7 @@
                             </ul>
                         </li>
                         <li>
-                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol）。
+                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / Center lock / Analyze / レビュー入出力 / Lite Waveform / Master Vol）。
                         </li>
                         <li>
                             <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
@@ -260,7 +260,7 @@
                     <li><strong>赤い縦線</strong>が再生ヘッドです。再生中は通過軌跡が残る表示があります。</li>
                     <li>マウスを乗せると、再生ヘッドとは別の薄い縦線（ホバー位置）が表示されます。</li>
                     <li><strong>クリック</strong>でその位置へシークします。空のレーン部分を<strong>ドラッグ</strong>すると、押している間その位置で再生しながらシーク（スクラブ）できます。</li>
-                    <li>ホイールでズーム・横スクロール（<kbd>Ctrl</kbd> や <kbd>Shift</kbd> 併用で高速化）。<kbd>+</kbd> / <kbd>−</kbd>、<kbd>Z</kbd>（最大倍率）、<kbd>Shift</kbd>+<kbd>Z</kbd>（全体表示）も使えます（詳細はショートカット表）。</li>
+                    <li>ホイールでズーム・横スクロール（<kbd>Ctrl</kbd> や <kbd>Shift</kbd> 併用で高速化）。<kbd>+</kbd> / <kbd>−</kbd>、<kbd>Z</kbd>（最大倍率）、<kbd>Shift</kbd>+<kbd>Z</kbd>（全体表示）も使えます（詳細はショートカット表）。<strong>Lite Waveform</strong> がオンのときは通常ズームでは overview 表示のまま軽量動作しますが、32×では詳細描画に切り替わります（下段参照）。</li>
                     <li><strong>ダブルクリック</strong>でズーム — マーカー以外の波形上ではクリック位置を32×で中央表示します。既に32×のときは全体表示（1×）に戻します。点/範囲マーカー上の動作は「マーカー」を参照してください。</li>
                     <li><kbd>↑</kbd>/<kbd>↓</kbd> は、Markers パネル外で表示中要素の優先順に従い次/前へ移動します（マーカー表示中＞小節/拍/フレーズ表示中＞リージョンのみ）。時間が進む方向が <kbd>↑</kbd> で、再生中はシーク後に再生を再開します。パネル内では <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（詳細は「マーカー」参照）。</li>
                 </ul>
@@ -301,7 +301,7 @@
                 <p><strong>再生・トランスポート操作</strong>は、現在の UI では次の2ブロックに分かれています。</p>
                 <ul>
                     <li><strong>映像パネル直下の再生バー</strong> — Loop / How To / Shortcut / All Clear / Play。</li>
-                    <li><strong>波形直下のオプションバー</strong> — Musical Grid、Center lock、Analyze、レビュー入出力、Master Vol など。</li>
+                    <li><strong>波形直下のオプションバー</strong> — Musical Grid、Center lock、Analyze、レビュー入出力、Lite Waveform、Master Vol など。</li>
                 </ul>
                 <p>また、<strong>現在時刻・総尺・Playback Drift</strong> は再生バーではなく、<strong>映像パネル内のステータス行</strong>に表示されます。</p>
 
@@ -320,7 +320,7 @@
                     <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
                     <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。</li>
                     <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時も <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。</li>
-                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Center lock / Analyze / レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
+                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Center lock / Analyze / レビュー入出力 / Lite Waveform / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub">波形直下（オプションバー中段）</h3>
@@ -337,6 +337,9 @@
 
                 <h3 class="docs-heading-box--sub">波形直下（オプションバー下段）</h3>
                 <ul>
+                    <li>
+                        <strong>Lite Waveform</strong> — 波形の詳細描画（ズーム/スクロール後の高解像度再計算）を抑え、デフォルト解像度の overview 波形で動作させる軽量モード（<kbd>Q</kbd>）。Master Vol の左隣にあります。デフォルトはオフ。オン時はズームしても overview の解像度を維持し、横スクロールでは波形キャンバスを再描画しないため CPU 負荷を抑えられます。ただし<strong>最大倍率（32×）のときだけ</strong>、Lite がオンでも内部的に詳細描画（可視範囲の高解像度再計算）が有効になります。32×から離れると再び overview 表示に戻ります。設定は localStorage に保存され、Import/Export には含まれません。
+                    </li>
                     <li>
                         <strong>Master Vol</strong> — ミックス後のマスター音量（%とdB表示）。横の表示には再生開始からの<strong>インテグレーテッド LKFS</strong>も併記されます（停止後も最後の値を保持、再再生で計測し直し）。スペクトラム・メーターのレベルメーターで<strong>クリップ（0dB超え）を検知すると、CLIP PROTECT としてマスター音量が自動で下がります</strong>（スライダーと表示も連動）。ログに <code>CLIP PROTECT</code> と減衰量が出ることがあります。<strong>基本的には触らなくて構いません</strong> — 通常のレビューでは100%（0dB）のまま使い、過大なレベルは各トラックのフェーダーで調整する想定です。意図的に戻すときは <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> またはスライダー二重クリックで100%（0dB）にリセットできます（Mac では <kbd>Cmd</kbd> も可）。自動減衰後の値はブラウザに保存され、次回も復元されます。
                     </li>

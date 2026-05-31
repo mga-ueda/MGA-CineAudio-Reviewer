@@ -383,6 +383,10 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
+            <div class="waveform-lite-toggle-container transport-opt-chip" id="waveformLiteToggleWrap" title="Lite Waveform — 波形の詳細描画を行わずデフォルト解像度を維持（Q で切替）">
+                <label class="transport-opt-label" for="waveformLiteCheckbox">Lite Waveform</label>
+                <input type="checkbox" id="waveformLiteCheckbox" aria-label="Lite Waveform (Q to toggle)" title="波形の詳細描画を行わずデフォルト解像度を維持（Q で切替）">
+            </div>
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
                 <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="ダブルクリックまたは Ctrl+Shift+V で 100%">

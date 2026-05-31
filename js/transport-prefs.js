@@ -28,6 +28,9 @@
         if (typeof applySavedPlayheadCenterLock === 'function') {
             applySavedPlayheadCenterLock(!!p.playheadCenterLock);
         }
+        if (typeof applySavedWaveformLiteMode === 'function') {
+            applySavedWaveformLiteMode(!!p.waveformLiteMode);
+        }
         if (
             p.monitorPrefs &&
             typeof applyMonitorUiPersistSnapshot === 'function'

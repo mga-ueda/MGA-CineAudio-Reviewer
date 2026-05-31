@@ -164,6 +164,13 @@
         }
 
         if (
+            typeof handleWaveformLiteShortcutKeydown === 'function' &&
+            handleWaveformLiteShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             matchUserShortcut(e, 'musicalGridToggle') &&
             typeof toggleMusicalGridVisible === 'function'
         ) {

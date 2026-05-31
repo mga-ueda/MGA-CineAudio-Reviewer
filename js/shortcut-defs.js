@@ -56,6 +56,14 @@
             shift: false,
         },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
+        waveformLiteToggle: {
+            code: 'KeyQ',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -176,6 +184,7 @@
             'ArrowRight',
             'KeyL',
             'KeyA',
+            'KeyQ',
             'KeyM',
             'KeyS',
             'KeyV',
@@ -319,6 +328,7 @@
             addExtraTrack: formatShortcutDef(s.addExtraTrack),
             markerHide: formatShortcutDef(s.markerHideToggle),
             analyze: formatShortcutDef(s.analyzeToggle),
+            waveformLite: formatShortcutDef(s.waveformLiteToggle),
             centerLock: formatShortcutDef(s.playheadCenterLockToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
             musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
@@ -422,6 +432,12 @@
             document.getElementById('analyzeToggleWrap'),
             `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
         );
+
+        const liteExplain =
+            'ズーム/スクロール後も波形をデフォルト解像度のまま維持し、CPU 負荷を抑える';
+        const liteTitle = `Lite Waveform — ${liteExplain}（${h.waveformLite} で ON/OFF）`;
+        setElementTitle(document.getElementById('waveformLiteCheckbox'), liteTitle);
+        setElementTitle(document.getElementById('waveformLiteToggleWrap'), liteTitle);
 
         setElementTitle(
             document.getElementById('masterVolSlider'),

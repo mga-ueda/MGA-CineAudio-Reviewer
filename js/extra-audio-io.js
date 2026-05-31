@@ -79,6 +79,7 @@
 
     window.clearAllExtraWaveformViewportPeaks = clearAllExtraWaveformViewportPeaks;
     window.rebuildAllExtraWaveformViewportPeaks = rebuildAllExtraWaveformViewportPeaks;
+    window.rebuildAllExtraTrackOverviewPeaksIfNeeded = rebuildAllExtraTrackOverviewPeaksIfNeeded;
     window.reviveOneEmptyExtraLane = reviveOneEmptyExtraLane;
     window.getWaveformLaneUiPersistSnapshot = getWaveformLaneUiPersistSnapshot;
     window.applyWaveformLaneUiPersistSnapshot = applyWaveformLaneUiPersistSnapshot;
