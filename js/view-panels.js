@@ -1,7 +1,13 @@
 /**
- * view-panels.js — 動画パネル／マーカーパネルの表示・非表示（レビュー用レイアウト）。
+ * view-panels.js — 動画パネル／マーカーパネル／マニュアル折りたたみの表示・非表示（レビュー用レイアウト）。
  */
     let videoMarkersPanelsHidden = false;
+
+    function applyManualDocFoldsHidden(hidden) {
+        document.querySelectorAll('details.app-doc-fold').forEach((el) => {
+            el.hidden = !!hidden;
+        });
+    }
 
     function applyVideoMarkersPanelsHidden(hidden) {
         videoMarkersPanelsHidden = !!hidden;
@@ -17,6 +23,7 @@
         if (markerPanel) {
             markerPanel.setAttribute('aria-hidden', videoMarkersPanelsHidden ? 'true' : 'false');
         }
+        applyManualDocFoldsHidden(videoMarkersPanelsHidden);
         if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
             scheduleMarkersUiRefreshAfterLayout();
         }
@@ -27,10 +34,10 @@
         const hidden = applyVideoMarkersPanelsHidden(!videoMarkersPanelsHidden);
         writeLog(
             hidden
-                ? 'Video and Markers panels: hidden (F)'
-                : 'Video and Markers panels: shown (F)',
+                ? 'Video, Markers, and manual doc panels: hidden (F)'
+                : 'Video, Markers, and manual doc panels: shown (F)',
         );
-        flashSeekHint('Video + Markers', hidden ? 'Hidden' : 'Shown', 'notice');
+        flashSeekHint('Video + Markers + Docs', hidden ? 'Hidden' : 'Shown', 'notice');
         return hidden;
     }
 
@@ -40,5 +47,19 @@
         toggleVideoMarkersPanelsHidden();
         return true;
     }
+
+    function revealManualDocFold(fold) {
+        if (!fold) return;
+        fold.hidden = false;
+        if (fold.open) {
+            if (typeof scrollAppDocFoldIntoView === 'function') {
+                scrollAppDocFoldIntoView(fold);
+            }
+        } else {
+            fold.open = true;
+        }
+    }
+
+    window.revealManualDocFold = revealManualDocFold;
 
     window.handleVideoMarkersPanelsToggleKeydown = handleVideoMarkersPanelsToggleKeydown;

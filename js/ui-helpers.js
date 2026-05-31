@@ -293,3 +293,29 @@
     window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
     window.syncSnapSuppressionFromPointerEvent = syncSnapSuppressionFromPointerEvent;
     window.syncTransportSeekUi = syncTransportSeekUi;
+
+    function scrollAppDocFoldIntoView(fold) {
+        if (!fold) return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                fold.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+    }
+
+    window.scrollAppDocFoldIntoView = scrollAppDocFoldIntoView;
+
+    (function bindAppDocFoldAccordion() {
+        const folds = document.querySelectorAll('details.app-doc-fold');
+        if (!folds.length) return;
+
+        folds.forEach((d) => {
+            d.addEventListener('toggle', () => {
+                if (!d.open) return;
+                folds.forEach((other) => {
+                    if (other !== d) other.removeAttribute('open');
+                });
+                scrollAppDocFoldIntoView(d);
+            });
+        });
+    })();

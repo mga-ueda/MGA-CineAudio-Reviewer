@@ -33,8 +33,12 @@
         const root = document.getElementById('appVersionChangelog');
         const details = root && root.closest('details');
         if (!details) return;
-        details.open = true;
-        details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (typeof revealManualDocFold === 'function') {
+            revealManualDocFold(details);
+        } else {
+            details.hidden = false;
+            details.open = true;
+        }
         const summary = details.querySelector('summary');
         if (summary && typeof summary.focus === 'function') {
             summary.focus({ preventScroll: true });
