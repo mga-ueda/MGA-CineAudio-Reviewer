@@ -112,7 +112,7 @@
                 e.preventDefault();
                 e.stopPropagation();
                 markerMemoTextarea.blur();
-                focusWaveformDrawingArea();
+                if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
             });
         }
         updateMarkerHideViewButton();

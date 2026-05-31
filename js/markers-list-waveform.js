@@ -2161,7 +2161,7 @@
                 ev.preventDefault();
                 ev.stopPropagation();
                 if (!clearActiveMarkerTarget()) {
-                    focusWaveformDrawingArea();
+                    if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                 }
             });
             tdComment.appendChild(comment);

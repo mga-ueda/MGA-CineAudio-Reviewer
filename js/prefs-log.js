@@ -39,6 +39,9 @@
             appConfirmResolve(!!result);
             appConfirmResolve = null;
         }
+        if (typeof scheduleWaveformFocusRestore === 'function') {
+            scheduleWaveformFocusRestore();
+        }
     }
 
     function showAppConfirm(title, body, options) {

@@ -1631,17 +1631,6 @@
             scheduleMusicalGridRedraw();
             scheduleMusicalGridAutosave();
         };
-        const focusWaveformTrackFromInput = () => {
-            const waveFocus =
-                typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
-                    ? audioWaveformLanesTracks
-                    : typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack
-                      ? audioWaveformTrack
-                      : null;
-            if (waveFocus && typeof waveFocus.focus === 'function') {
-                waveFocus.focus();
-            }
-        };
         if (musicalGridMeterInput) {
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', persistMusicalGridAndRedraw);
@@ -1661,13 +1650,13 @@
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridMeterInput.blur();
-                    focusWaveformTrackFromInput();
+                    if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                     return;
                 }
                 if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridMeterInput.blur();
-                    focusWaveformTrackFromInput();
+                    if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                 }
             });
         }
@@ -1692,13 +1681,13 @@
                     e.preventDefault();
                     persistMusicalGridAndRedraw();
                     musicalGridPhraseInput.blur();
-                    focusWaveformTrackFromInput();
+                    if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                     return;
                 }
                 if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     musicalGridPhraseInput.blur();
-                    focusWaveformTrackFromInput();
+                    if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                 }
             });
         }

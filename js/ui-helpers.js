@@ -128,6 +128,167 @@
         }
     }
 
+    function focusWaveformDrawingArea() {
+        const waveFocus =
+            typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
+                ? audioWaveformLanesTracks
+                : typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack
+                  ? audioWaveformTrack
+                  : null;
+        if (!waveFocus || typeof waveFocus.focus !== 'function') return;
+        requestAnimationFrame(() => {
+            try {
+                waveFocus.focus({ preventScroll: true });
+            } catch (_) {
+                waveFocus.focus();
+            }
+        });
+    }
+
+    function isModalOverlayOpen() {
+        for (const id of ['appConfirmOverlay', 'markerPasteOverlay', 'exportBlockingOverlay']) {
+            const el = document.getElementById(id);
+            if (el && !el.hidden) return true;
+        }
+        return false;
+    }
+
+    function isElementInsideHiddenModal(el) {
+        if (!el || el.nodeType !== 1 || !el.closest) return false;
+        for (const id of ['appConfirmOverlay', 'markerPasteOverlay', 'exportBlockingOverlay']) {
+            const root = document.getElementById(id);
+            if (root && root.hidden && root.contains(el)) return true;
+        }
+        return false;
+    }
+
+    function isMarkerIntentionalFocusTarget(el) {
+        if (!el || el.nodeType !== 1 || !el.closest) return false;
+        if (isElementInsideHiddenModal(el)) return false;
+        if (el.closest('.marker-table__tc-input')) return true;
+        if (el.closest('.marker-table__comment')) return true;
+        if (el.closest('#markerMemoTextarea')) return true;
+        if (el.id === 'markerPasteTextarea') return true;
+        return false;
+    }
+
+    function isInsideWaveformDrawingArea(el) {
+        return !!(el && el.closest && el.closest('#audioWaveformLanesTracks'));
+    }
+
+    function isMusicalGridEditor(el) {
+        if (!el || el.nodeType !== 1) return false;
+        return el.id === 'musicalGridMeterInput' || el.id === 'musicalGridPhraseInput';
+    }
+
+    function shouldSkipWaveformFocusRestore(opt) {
+        if (isModalOverlayOpen()) return true;
+        const target = opt && opt.target;
+        const related = opt && opt.relatedTarget;
+        const isBlur = opt && opt.event === 'blur';
+        if (isMarkerIntentionalFocusTarget(target)) {
+            if (isBlur) {
+                if (related && isMarkerIntentionalFocusTarget(related)) return true;
+            } else {
+                return true;
+            }
+        }
+        if (related && isMarkerIntentionalFocusTarget(related)) return true;
+        const active = document.activeElement;
+        if (active && isMarkerIntentionalFocusTarget(active)) return true;
+        if (isBlur && related && isMusicalGridEditor(related)) return true;
+        return false;
+    }
+
+    let waveformFocusRestoreRaf = 0;
+
+    function scheduleWaveformFocusRestore(opt) {
+        if (shouldSkipWaveformFocusRestore(opt)) return;
+        if (waveformFocusRestoreRaf) cancelAnimationFrame(waveformFocusRestoreRaf);
+        waveformFocusRestoreRaf = requestAnimationFrame(() => {
+            waveformFocusRestoreRaf = 0;
+            if (shouldSkipWaveformFocusRestore(opt)) return;
+            focusWaveformDrawingArea();
+        });
+    }
+
+    function initWaveformFocusRestore() {
+        document.addEventListener('click', (e) => {
+            const t = e.target;
+            if (!t || t.nodeType !== 1) return;
+            if (isInsideWaveformDrawingArea(t)) return;
+            const btn = t.closest('button');
+            if (btn) {
+                scheduleWaveformFocusRestore({ target: btn });
+                return;
+            }
+            const cb = t.closest('input[type="checkbox"]');
+            if (cb) {
+                scheduleWaveformFocusRestore({ target: cb });
+                return;
+            }
+            const label = t.closest('label');
+            if (label && label.querySelector('input[type="checkbox"]')) {
+                scheduleWaveformFocusRestore({ target: t });
+            }
+        });
+
+        document.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!t || t.nodeType !== 1) return;
+            if (isInsideWaveformDrawingArea(t)) return;
+            const tag = t.nodeName;
+            if (tag === 'SELECT') {
+                scheduleWaveformFocusRestore({ target: t });
+                return;
+            }
+            if (tag === 'INPUT') {
+                const type = (t.type || '').toLowerCase();
+                if (type === 'checkbox' || type === 'range') {
+                    scheduleWaveformFocusRestore({ target: t });
+                }
+            }
+        });
+
+        document.addEventListener(
+            'pointerup',
+            (e) => {
+                const t = e.target;
+                if (!t || t.nodeType !== 1) return;
+                if (t.nodeName !== 'INPUT') return;
+                if ((t.type || '').toLowerCase() !== 'range') return;
+                if (isInsideWaveformDrawingArea(t)) return;
+                scheduleWaveformFocusRestore({ target: t });
+            },
+            true,
+        );
+
+        document.addEventListener(
+            'blur',
+            (e) => {
+                const t = e.target;
+                if (!t || typeof isTypingTarget !== 'function' || !isTypingTarget(t)) return;
+                if (isInsideWaveformDrawingArea(t)) return;
+                const related = e.relatedTarget;
+                if (isMarkerIntentionalFocusTarget(t)) {
+                    if (related && isMarkerIntentionalFocusTarget(related)) return;
+                } else if (related && isMusicalGridEditor(related)) {
+                    return;
+                }
+                scheduleWaveformFocusRestore({
+                    target: t,
+                    relatedTarget: related,
+                    event: 'blur',
+                });
+            },
+            true,
+        );
+    }
+
+    window.focusWaveformDrawingArea = focusWaveformDrawingArea;
+    window.scheduleWaveformFocusRestore = scheduleWaveformFocusRestore;
+    window.initWaveformFocusRestore = initWaveformFocusRestore;
+
     window.isSnapSuppressedByAlt = isSnapSuppressedByAlt;
     window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
     window.syncSnapSuppressionFromPointerEvent = syncSnapSuppressionFromPointerEvent;

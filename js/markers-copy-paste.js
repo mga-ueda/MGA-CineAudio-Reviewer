@@ -561,6 +561,10 @@
                 okBtn.removeEventListener('click', onOk);
                 cancelBtn.removeEventListener('click', onCancel);
                 root.removeEventListener('keydown', onKey);
+                if (textarea === document.activeElement && textarea.blur) textarea.blur();
+                if (typeof scheduleWaveformFocusRestore === 'function') {
+                    scheduleWaveformFocusRestore();
+                }
                 resolve(value);
             };
             const onOk = () => finish(textarea.value);

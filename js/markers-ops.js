@@ -42,23 +42,6 @@
         return true;
     }
 
-    function focusWaveformDrawingArea() {
-        const waveFocus =
-            typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
-                ? audioWaveformLanesTracks
-                : typeof audioWaveformTrack !== 'undefined' && audioWaveformTrack
-                  ? audioWaveformTrack
-                  : null;
-        if (!waveFocus || typeof waveFocus.focus !== 'function') return;
-        requestAnimationFrame(() => {
-            try {
-                waveFocus.focus({ preventScroll: true });
-            } catch (_) {
-                waveFocus.focus();
-            }
-        });
-    }
-
     function clearActiveMarkerTarget() {
         const hadActive = activeMarkerId != null;
         const ae = document.activeElement;
@@ -73,7 +56,7 @@
         if (dismissed) {
             writeLog('Marker: target cleared (Esc)');
             flashSeekHint('Marker', 'None', 'notice');
-            focusWaveformDrawingArea();
+            if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
         }
         return dismissed;
     }
@@ -106,7 +89,7 @@
         if (pendingRangeStartSec == null) return false;
         cancelPendingRange();
         e.preventDefault();
-        focusWaveformDrawingArea();
+        if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
         return true;
     }
 
@@ -871,12 +854,12 @@
                 ev.stopPropagation();
                 tcEditRevert = null;
                 input.blur();
-                focusWaveformDrawingArea();
+                if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
             } else if (matchUserShortcut(ev, 'cancelEditing', { allowRepeat: true })) {
                 ev.preventDefault();
                 ev.stopPropagation();
                 applyTcEditRevert();
-                focusWaveformDrawingArea();
+                if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
             }
         });
         input.addEventListener('mousedown', (ev) => {

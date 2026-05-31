@@ -145,3 +145,7 @@
 
     bindTransportDocPopupLink(transportGuideLink, 'mgaCineAudioGuide', 960, 820);
     bindTransportDocPopupLink(transportShortcutsLink, 'mgaKeyboardShortcuts', 820, 720);
+
+    if (typeof initWaveformFocusRestore === 'function') {
+        initWaveformFocusRestore();
+    }
