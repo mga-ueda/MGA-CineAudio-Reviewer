@@ -1,0 +1,67 @@
+<!--
+  マニュアル HTML の唯一の編集元（特記事項・使い方・改変・再利用・ライセンス）。
+  更新後: py -3 tools/sync-docs.py
+  変更履歴の文言は js/version.js の APP_CHANGELOG を編集してください。
+  バージョン情報の表示はブラウザ起動時に apply-version.js が #appVersionChangelog へ挿入します（index.html ソース内には書き込みません。README の変更履歴だけ sync-docs が version.js から生成します）。
+-->
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-notice-heading">特記事項</summary>
+        <div class="app-doc-fold__body app-manual">
+            <ul>
+                <li>本ページは<strong>無償で提供される実験的なウェブアプリ</strong>です。不具合を常時監視しておらず、ご利用中に問題が生じても原則として把握いたしません。あらかじめご了承のうえご利用ください。</li>
+                <li>動画・音声は<strong>このブラウザ内でのみ</strong>デコード・再生され、サーバーへは<strong>いかなる情報もアップロードされません</strong>。<strong>Google Chrome</strong> の利用を推奨します。ブラウザや形式によってはデコードできないことがあります。</li>
+                <li>このページの <strong>HTML・CSS・JavaScript</strong> は目的を問わず<strong>自由に改変・複製・再利用</strong>して構いません（商用・社内ツールを含みます）。連絡も不要です。独自版を公開・配布する場合、フッターのコピーライト表記とリンクは<strong>削除しても構いません</strong>（未改変の配布では残すことを推奨しますが、フォークや大幅なカスタマイズでは必須ではありません）。</li>
+                <li>本アプリは静的ファイル（<code>index.html</code>・<code>css/</code>・<code>js/</code> など）で構成されています。<strong>ビルドやサーバーは不要</strong>です。フォルダごと保存し、ルートの <code>index.html</code> をブラウザで開いてください（<code>file://</code> で動作します。favicon 等の外部 CDN 参照は環境により取得できない場合があります）。</li>
+                <li>ディスク上の元ファイルを書き出し直した場合でも、本アプリは<strong>自動では再読み込みしません</strong>。更新した動画・音声を反映するには、<strong>映像エリア</strong>または<strong>波形エリア</strong>へ再度ドロップしてください。前回セッションの復元はブラウザ内の保存データ（<code>IndexedDB</code>）に保存されたコピーを参照します（元ファイルのパスは保持しません）。ブラウザのストレージ整理により保存データが消えると、セッションは復元できません。</li>
+                <li>追加音声（Audio Track）は<strong>最大16本</strong>まで読み込めます（<strong>3トラック程度まで</strong>の利用を推奨）。レビュー内容の共有は、相手が同じ素材を持っている場合はマーカー表の <strong>Copy</strong>（Slack 等へ貼り付け）、動画・追加音声ごと渡す場合は <strong>Export Review</strong>（<code>.mgacr</code>）を使い分けられます。タイムコードとマーカーコメントを焼き込んだ <strong>Export WebM</strong> も利用できます。</li>
+            </ul>
+        </div>
+    </details>
+
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-heading">使い方</summary>
+        <div class="app-doc-fold__body app-manual">
+            <ul>
+                <li>操作手順・画面構成・各機能の説明は <a href="guide.html" target="_blank" rel="noopener noreferrer">guide.html</a>（使い方）を参照してください。トランスポート行 <strong>How To</strong> リンクからも同じページを新しいウィンドウで開けます。</li>
+            </ul>
+        </div>
+    </details>
+
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-shortcuts-heading">キーボードショートカット</summary>
+        <div class="app-doc-fold__body app-manual">
+            <ul>
+                <li>一覧は <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">shortcuts.html</a>（ショートカットリスト）を参照してください。トランスポート行 <strong>Shortcut</strong> リンクからも同じページを開けます。</li>
+            </ul>
+        </div>
+    </details>
+
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-source-heading">改変・再利用</summary>
+        <div class="app-doc-fold__body app-manual">
+            <ul>
+                <li>このページの <strong>HTML・CSS・JavaScript</strong> は、目的を問わず<strong>自由に改変・複製・再利用</strong>して構いません（商用・社内ツールを含みます）。事前の連絡も不要です。</li>
+                <li>ソースコードは <a href="https://github.com/mga-ueda/MGA-CineAudio-Reviewer">GitHub リポジトリ（mga-ueda/MGA-CineAudio-Reviewer）</a> で公開しています（<strong>Code</strong> → <strong>Download ZIP</strong> または <strong>git clone</strong> で取得できます）。</li>
+                <li><strong>画面上のフッター</strong>（© 2026 の表記と会社サイトへのリンク）は、独自版では<strong>削除しても構いません</strong>。未改変の配布では残すことを推奨しますが、必須ではありません。</li>
+                <li><strong>ソースを第三者に配布・公開する場合</strong>は、配布物に <a href="LICENSE">LICENSE</a> ファイルを含めてください（MIT License の条件です）。フッターを削除しても、<code>LICENSE</code> の同梱は必要です。</li>
+            </ul>
+        </div>
+    </details>
+
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-license-heading">ライセンス</summary>
+        <div class="app-doc-fold__body app-manual">
+            <ul>
+                <li>本リポジトリのソース（<code>index.html</code>・<code>css/</code>・<code>js/</code> など）は <strong>MIT License</strong> で公開しています。</li>
+                <li><strong>通常の利用</strong>（ブラウザで開いて使うだけ）に、ライセンス表記の対応は不要です。</li>
+                <li><strong>ソースの配布・フォークのとき</strong>は、<a href="LICENSE">LICENSE</a>（英文）を配布物に同梱してください。<code>Copyright (c) 2026 MIYABI GAME AUDIO INC.</code> および利用許諾の条文が含まれています。</li>
+                <li><strong>画面上のフッター</strong>と <code>LICENSE</code> ファイルは別です。フッターは表示上の出典表記であり、削除しても MIT の同梱条件は変わりません。</li>
+                <li>MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は <a href="LICENSE">LICENSE</a> を参照してください。</li>
+            </ul>
+        </div>
+    </details>
+
+    <details class="app-doc-fold">
+        <summary class="app-doc-fold__summary" id="app-manual-version-heading">バージョン情報</summary>
+        <div id="appVersionChangelog" class="app-doc-fold__body app-manual"></div>
+    </details>
