@@ -16,47 +16,52 @@
         return Number(m.timeSec);
     }
 
-    /**
-     * 点・範囲それぞれ独立に後着優先（表示時間が重なる／連続する場合は In が遅い方）。
-     * In が同じときは一覧で後ろのマーカー（後から追加された方）を優先。
-     */
-    function findMarkerCommentHitForOverlayByType(t, type) {
-        if (!markerTimelineReady() || !Number.isFinite(t)) return null;
-        const wantPoint = type === 'point';
+    /** 点マーカー: 表示時間が重なるコメントはすべて返す（In 昇順・同 In は一覧順）。 */
+    function findAllPointMarkerCommentHitsForOverlay(t) {
+        if (!markerTimelineReady() || !Number.isFinite(t)) return [];
         const fadeDur = markerCommentFadeOutDurationSec();
         const holdSec = MARKER_COMMENT_POINT_HOLD_SEC;
-        let best = null;
-        let bestStart = -Infinity;
-        let bestIdx = -1;
+        const hits = [];
         for (let i = 0; i < currentMarkers.length; i++) {
             const m = currentMarkers[i];
-            const isPoint = m.type !== 'range';
-            if (wantPoint !== isPoint) continue;
+            if (m.type === 'range') continue;
             if (!markerCommentHasDisplayText(m.comment)) continue;
-            let windowStart = null;
-            let windowEnd = null;
-            if (isPoint) {
-                const start = Number(m.timeSec);
-                if (!Number.isFinite(start)) continue;
-                windowStart = start;
-                windowEnd = start + holdSec + fadeDur;
-            } else {
-                const start = Number(m.startSec);
-                const end = Number(m.endSec);
-                if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
-                windowStart = start;
-                windowEnd = end + fadeDur;
-            }
-            if (t < windowStart || t >= windowEnd) continue;
-            const sortStart = markerCommentStartSec(m);
-            if (!Number.isFinite(sortStart)) continue;
-            if (sortStart > bestStart || (sortStart === bestStart && i > bestIdx)) {
-                bestStart = sortStart;
-                bestIdx = i;
-                best = { marker: m, text: m.comment };
-            }
+            const start = Number(m.timeSec);
+            if (!Number.isFinite(start)) continue;
+            if (t < start || t >= start + holdSec + fadeDur) continue;
+            hits.push({ marker: m, text: m.comment, listIdx: i });
         }
-        return best;
+        hits.sort((a, b) => {
+            const sa = markerCommentStartSec(a.marker);
+            const sb = markerCommentStartSec(b.marker);
+            if (sa !== sb) return sa - sb;
+            return a.listIdx - b.listIdx;
+        });
+        return hits;
+    }
+
+    /** 範囲マーカー: 表示時間が重なるコメントはすべて返す（In 昇順・同 In は一覧順）。 */
+    function findAllRangeMarkerCommentHitsForOverlay(t) {
+        if (!markerTimelineReady() || !Number.isFinite(t)) return [];
+        const fadeDur = markerCommentFadeOutDurationSec();
+        const hits = [];
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (m.type !== 'range') continue;
+            if (!markerCommentHasDisplayText(m.comment)) continue;
+            const start = Number(m.startSec);
+            const end = Number(m.endSec);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+            if (t < start || t >= end + fadeDur) continue;
+            hits.push({ marker: m, text: m.comment, listIdx: i });
+        }
+        hits.sort((a, b) => {
+            const sa = markerCommentStartSec(a.marker);
+            const sb = markerCommentStartSec(b.marker);
+            if (sa !== sb) return sa - sb;
+            return a.listIdx - b.listIdx;
+        });
+        return hits;
     }
 
     function markerCommentOverlayPhaseForHit(hit, t) {
@@ -78,12 +83,47 @@
         return 'off';
     }
 
-    function getMarkerCommentOverlayState(t, type) {
-        const hit = findMarkerCommentHitForOverlayByType(t, type);
-        if (!hit) return { hit: null, phase: 'off' };
-        const phase = markerCommentOverlayPhaseForHit(hit, t);
-        if (phase === 'off') return { hit: null, phase: 'off' };
-        return { hit: hit, phase: phase };
+    function markerCommentOverlayStatesFromHits(hits, t) {
+        const states = [];
+        for (let i = 0; i < hits.length; i++) {
+            const hit = hits[i];
+            const phase = markerCommentOverlayPhaseForHit(hit, t);
+            if (phase === 'off') continue;
+            states.push({ hit: hit, phase: phase });
+        }
+        return states;
+    }
+
+    function getPointMarkerCommentOverlayStates(t) {
+        return markerCommentOverlayStatesFromHits(
+            findAllPointMarkerCommentHitsForOverlay(t),
+            t,
+        );
+    }
+
+    function getRangeMarkerCommentOverlayStates(t) {
+        return markerCommentOverlayStatesFromHits(
+            findAllRangeMarkerCommentHitsForOverlay(t),
+            t,
+        );
+    }
+
+    /** 点・範囲を In 昇順でまとめた表示状態（配置は共通キューで重なり回避）。 */
+    function getAllMarkerCommentOverlayStates(t) {
+        const merged = getPointMarkerCommentOverlayStates(t).concat(
+            getRangeMarkerCommentOverlayStates(t),
+        );
+        merged.sort((a, b) => {
+            const sa = markerCommentStartSec(a.hit.marker);
+            const sb = markerCommentStartSec(b.hit.marker);
+            if (sa !== sb) return sa - sb;
+            return 0;
+        });
+        return merged;
+    }
+
+    function markerHitIsRange(hit) {
+        return !!(hit && hit.marker && hit.marker.type === 'range');
     }
 
     function markerExportOpacityForOverlayState(state, t) {
@@ -103,10 +143,266 @@
         return Math.max(0, 1 - elapsed / fadeDur);
     }
 
+    function markerCommentOverlayFrameEl() {
+        return typeof frameMain !== 'undefined' ? frameMain : null;
+    }
+
+    function markerRangeCommentStackGapPx() {
+        return 4;
+    }
+
+    function markerRangeCommentStackTopPadPx(frameH) {
+        return Math.max(8, frameH * 0.04);
+    }
+
+    function markerCommentRectsOverlap(bottomPx, heightPx, placedRects, gapPx) {
+        const topPx = bottomPx + heightPx;
+        for (let i = 0; i < placedRects.length; i++) {
+            const r = placedRects[i];
+            if (bottomPx < r.topPx + gapPx && topPx > r.bottomPx - gapPx) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 新規コメント用の下端 px。既に配置済みの矩形は動かさず、重なる場合は上方向の空きへずらす。
+     */
+    function computeMarkerCommentBottomPxForNew(
+        frameH,
+        itemHeightPx,
+        placedRects,
+        defaultBottomPct,
+        minBottomPx,
+    ) {
+        if (!Number.isFinite(frameH) || frameH <= 0 || itemHeightPx <= 0) {
+            return (frameH * defaultBottomPct) / 100;
+        }
+        const gap = markerRangeCommentStackGapPx();
+        const topPad = markerRangeCommentStackTopPadPx(frameH);
+        const maxTopPx = frameH - topPad;
+        const defaultBottomPxVal = (frameH * defaultBottomPct) / 100;
+        const floorBottomPx = Math.max(defaultBottomPxVal, minBottomPx);
+        let bottomPx = defaultBottomPxVal;
+        let guard = 0;
+        while (
+            markerCommentRectsOverlap(bottomPx, itemHeightPx, placedRects, gap) &&
+            guard < 64
+        ) {
+            let nextBottom = bottomPx;
+            const topPx = bottomPx + itemHeightPx;
+            for (let i = 0; i < placedRects.length; i++) {
+                const r = placedRects[i];
+                if (bottomPx < r.topPx + gap && topPx > r.bottomPx - gap) {
+                    nextBottom = Math.max(nextBottom, r.topPx + gap);
+                }
+            }
+            bottomPx = nextBottom;
+            guard += 1;
+        }
+        if (bottomPx + itemHeightPx > maxTopPx) {
+            bottomPx = Math.max(floorBottomPx, maxTopPx - itemHeightPx);
+        }
+        return bottomPx;
+    }
+
+    function collectPlacedCommentRectsFromDom(containerEl, frameH, skipMarkerId, opt) {
+        const rects = [];
+        const holdOnly = !!(opt && opt.holdOnly);
+        const byId = markerCommentOverlayFade.byId;
+        if (!containerEl || frameH <= 0) return rects;
+        const items = containerEl.querySelectorAll('.marker-comment-overlay__item');
+        for (let i = 0; i < items.length; i++) {
+            const itemEl = items[i];
+            const id = itemEl.dataset.markerId;
+            if (!id || id === skipMarkerId) continue;
+            const ent = byId[id];
+            if (!ent || !Number.isFinite(ent.bottomPct)) continue;
+            if (holdOnly && ent.phase !== 'hold') continue;
+            const h = itemEl.offsetHeight;
+            if (h <= 0) continue;
+            const bottomPx = (frameH * ent.bottomPct) / 100;
+            rects.push({ bottomPx: bottomPx, topPx: bottomPx + h, height: h });
+        }
+        return rects;
+    }
+
+    /** フェード中スロットの下端 px（下端が低い順）。hold と重ならないものを新規へ再利用。 */
+    function findFadingSlotBottomPxForReuse(
+        containerEl,
+        frameH,
+        skipMarkerId,
+        itemHeightPx,
+        holdRects,
+        claimedFadingIds,
+    ) {
+        if (!containerEl || frameH <= 0 || itemHeightPx <= 0) return null;
+        const gap = markerRangeCommentStackGapPx();
+        const byId = markerCommentOverlayFade.byId;
+        const candidates = [];
+        const items = containerEl.querySelectorAll('.marker-comment-overlay__item');
+        for (let i = 0; i < items.length; i++) {
+            const itemEl = items[i];
+            const id = itemEl.dataset.markerId;
+            if (!id || id === skipMarkerId) continue;
+            const ent = byId[id];
+            if (!ent || ent.phase !== 'fading' || !Number.isFinite(ent.bottomPct)) continue;
+            if (claimedFadingIds && claimedFadingIds.has(id)) continue;
+            const bottomPx = (frameH * ent.bottomPct) / 100;
+            candidates.push({ markerId: id, bottomPx: bottomPx });
+        }
+        candidates.sort((a, b) => a.bottomPx - b.bottomPx);
+        for (let i = 0; i < candidates.length; i++) {
+            const c = candidates[i];
+            if (
+                markerCommentRectsOverlap(c.bottomPx, itemHeightPx, holdRects, gap)
+            ) {
+                continue;
+            }
+            if (claimedFadingIds) claimedFadingIds.add(c.markerId);
+            return c.bottomPx;
+        }
+        return null;
+    }
+
+    function ensureMarkerCommentOverlayContainerLayout(containerEl) {
+        if (!containerEl) return;
+        containerEl.style.left = '0';
+        containerEl.style.right = '0';
+        containerEl.style.top = '0';
+        containerEl.style.bottom = '0';
+        containerEl.style.width = '100%';
+        containerEl.style.maxWidth = 'none';
+        containerEl.style.transform = 'none';
+    }
+
+    function applyMarkerCommentItemPosition(itemEl, bottomPct) {
+        if (!itemEl || !Number.isFinite(bottomPct)) return;
+        itemEl.style.left = MARKER_VIDEO_COMMENT_CENTER_LEFT_PCT + '%';
+        itemEl.style.bottom = bottomPct + '%';
+        itemEl.style.transform = 'translate(-50%, 0)';
+    }
+
+    function markerCommentItemSortKey(markerId) {
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (m && m.id === markerId) {
+                const sec = markerCommentStartSec(m);
+                return Number.isFinite(sec) ? sec : 0;
+            }
+        }
+        return 0;
+    }
+
+    /** 未配置のコメントのみ座標を決定。配置済みは bottomPct を維持（点・範囲共通キュー）。 */
+    function layoutNewMarkerCommentItems(containerEl) {
+        const frameEl = markerCommentOverlayFrameEl();
+        const frameH = frameEl && frameEl.clientHeight > 0 ? frameEl.clientHeight : 0;
+        if (!containerEl || frameH <= 0) return;
+        const defaultBottomPct = MARKER_VIDEO_COMMENT_DEFAULT_BOTTOM_PCT;
+        const minBottomPx = (frameH * defaultBottomPct) / 100;
+        ensureMarkerCommentOverlayContainerLayout(containerEl);
+        const items = Array.from(containerEl.querySelectorAll('.marker-comment-overlay__item'));
+        const claimedFadingIds = new Set();
+        items.sort((a, b) => {
+            const sa = markerCommentItemSortKey(a.dataset.markerId);
+            const sb = markerCommentItemSortKey(b.dataset.markerId);
+            if (sa !== sb) return sa - sb;
+            return 0;
+        });
+        for (let i = 0; i < items.length; i++) {
+            const itemEl = items[i];
+            const id = itemEl.dataset.markerId;
+            if (!id) continue;
+            const ent = markerCommentFadeEntry(id);
+            if (!ent) continue;
+            if (Number.isFinite(ent.bottomPct)) {
+                applyMarkerCommentItemPosition(itemEl, ent.bottomPct);
+                continue;
+            }
+            const h = itemEl.offsetHeight;
+            if (h <= 0) continue;
+            const holdPlaced = collectPlacedCommentRectsFromDom(containerEl, frameH, id, {
+                holdOnly: true,
+            });
+            let bottomPx = findFadingSlotBottomPxForReuse(
+                containerEl,
+                frameH,
+                id,
+                h,
+                holdPlaced,
+                claimedFadingIds,
+            );
+            if (bottomPx == null) {
+                bottomPx = computeMarkerCommentBottomPxForNew(
+                    frameH,
+                    h,
+                    holdPlaced,
+                    defaultBottomPct,
+                    minBottomPx,
+                );
+            }
+            ent.bottomPct = (bottomPx / frameH) * 100;
+            applyMarkerCommentItemPosition(itemEl, ent.bottomPct);
+        }
+    }
+
+    function markerCommentBurnInBottomPctsForStates(states, exportCanvasH) {
+        if (!states.length || !Number.isFinite(exportCanvasH) || exportCanvasH <= 0) {
+            return [];
+        }
+        const metrics = getMarkerCommentBurnInMetrics(exportCanvasH, false);
+        const lineH = metrics.fontPx * metrics.lineHeightRatio;
+        const defaultBottomPct = MARKER_VIDEO_COMMENT_DEFAULT_BOTTOM_PCT;
+        const minBottomPx = (exportCanvasH * defaultBottomPct) / 100;
+        const holdPlaced = [];
+        const bottomPcts = [];
+        const claimedFadeIdx = new Set();
+        const gap = markerRangeCommentStackGapPx();
+        for (let i = 0; i < states.length; i++) {
+            const isRange = markerHitIsRange(states[i].hit);
+            const text = markerCommentOverlayDisplayText(states[i].hit.text, isRange);
+            const lines = Math.max(1, String(text).split('\n').length);
+            const h = lines * lineH;
+            let bottomPx = null;
+            if (states[i].phase !== 'fade') {
+                for (let j = 0; j < i; j++) {
+                    if (states[j].phase !== 'fade') continue;
+                    if (claimedFadeIdx.has(j)) continue;
+                    const fadeBottomPx = (exportCanvasH * bottomPcts[j]) / 100;
+                    if (
+                        !markerCommentRectsOverlap(fadeBottomPx, h, holdPlaced, gap)
+                    ) {
+                        bottomPx = fadeBottomPx;
+                        claimedFadeIdx.add(j);
+                        break;
+                    }
+                }
+            }
+            if (bottomPx == null) {
+                bottomPx = computeMarkerCommentBottomPxForNew(
+                    exportCanvasH,
+                    h,
+                    holdPlaced,
+                    defaultBottomPct,
+                    minBottomPx,
+                );
+            }
+            bottomPcts.push((bottomPx / exportCanvasH) * 100);
+            if (states[i].phase === 'hold') {
+                holdPlaced.push({
+                    bottomPx: bottomPx,
+                    topPx: bottomPx + h,
+                    height: h,
+                });
+            }
+        }
+        return bottomPcts;
+    }
+
     /** Burn-in data for video export at transportSec (respects markers hidden). */
     function getVideoExportMarkerBurnIns(transportSec) {
         if (markersDisplayHidden || !markerTimelineReady() || !Number.isFinite(transportSec)) {
-            return { point: null, range: null };
+            return { point: [], range: [] };
         }
         const t = transportSec;
         function pack(state, bottomPct, isRange) {
@@ -117,18 +413,22 @@
             if (!text) return null;
             return { text, opacity, bottomPct, isRange };
         }
-        return {
-            point: pack(
-                getMarkerCommentOverlayState(t, 'point'),
-                MARKER_VIDEO_COMMENT_POINT_BOTTOM_PCT,
-                false,
-            ),
-            range: pack(
-                getMarkerCommentOverlayState(t, 'range'),
-                MARKER_VIDEO_COMMENT_RANGE_BOTTOM_PCT,
-                true,
-            ),
-        };
+        const exportH =
+            typeof frameMain !== 'undefined' && frameMain && frameMain.clientHeight > 0
+                ? frameMain.clientHeight
+                : 1080;
+        const allStates = getAllMarkerCommentOverlayStates(t);
+        const allBottoms = markerCommentBurnInBottomPctsForStates(allStates, exportH);
+        const point = [];
+        const range = [];
+        for (let i = 0; i < allStates.length; i++) {
+            const isRange = markerHitIsRange(allStates[i].hit);
+            const item = pack(allStates[i], allBottoms[i], isRange);
+            if (!item) continue;
+            if (isRange) range.push(item);
+            else point.push(item);
+        }
+        return { point: point, range: range };
     }
 
     function markerCommentOverlayDisplayText(text, isRange) {
@@ -139,20 +439,12 @@
     }
 
     const MARKER_VIDEO_COMMENT_CENTER_LEFT_PCT = 50;
-    /** 点マーカーコメント：画面下部中央（固定） */
-    const MARKER_VIDEO_COMMENT_POINT_BOTTOM_PCT = 18;
-    /** 範囲マーカーコメント：点より少し下（固定・表示の有無で位置は変えない） */
-    const MARKER_VIDEO_COMMENT_RANGE_BOTTOM_PCT = 7;
+    /** 点・範囲共通：映像下部からの既定位置（新規コメントの初期下端） */
+    const MARKER_VIDEO_COMMENT_DEFAULT_BOTTOM_PCT = 7;
     const MARKER_COMMENT_FADE_OUT_FRAMES = 30;
     const markerCommentOverlayFade = {
-        point: { timerId: null, activeId: null, phase: 'hidden' },
-        range: { timerId: null, activeId: null, phase: 'hidden' },
+        byId: {},
     };
-
-    function markerCommentOverlaySlotKey(overlayEl) {
-        if (overlayEl === markerCommentOverlayRange) return 'range';
-        return 'point';
-    }
 
     function markerCommentFadeOutDurationSec() {
         const fps =
@@ -162,157 +454,189 @@
         return MARKER_COMMENT_FADE_OUT_FRAMES / Math.max(1, fps);
     }
 
-    function cancelMarkerCommentFade(slotKey) {
-        const st = markerCommentOverlayFade[slotKey];
-        if (!st || st.timerId == null) return;
-        clearTimeout(st.timerId);
-        st.timerId = null;
+    function markerCommentFadeEntry(markerId) {
+        if (!markerId) return null;
+        const byId = markerCommentOverlayFade.byId;
+        if (!byId[markerId]) {
+            byId[markerId] = {
+                timerId: null,
+                phase: 'hidden',
+                bottomPct: NaN,
+            };
+        }
+        return byId[markerId];
     }
 
-    function resetMarkerCommentOverlaySlotState(slotKey) {
-        const st = markerCommentOverlayFade[slotKey];
-        if (!st) return;
-        cancelMarkerCommentFade(slotKey);
-        st.activeId = null;
-        st.phase = 'hidden';
+    function cancelMarkerCommentItemFade(markerId) {
+        const ent = markerCommentFadeEntry(markerId);
+        if (!ent || ent.timerId == null) return;
+        clearTimeout(ent.timerId);
+        ent.timerId = null;
     }
 
-    function finishMarkerCommentOverlayHide(overlayEl, slotKey) {
-        if (!overlayEl) return;
-        const textEl = markerCommentOverlayTextEl(overlayEl);
-        overlayEl.hidden = true;
-        overlayEl.setAttribute('aria-hidden', 'true');
-        overlayEl.style.removeProperty('opacity');
-        overlayEl.style.removeProperty('transition');
-        if (textEl) textEl.textContent = '';
-        overlayEl.style.removeProperty('left');
-        overlayEl.style.removeProperty('bottom');
-        overlayEl.style.removeProperty('transform');
-        if (slotKey) resetMarkerCommentOverlaySlotState(slotKey);
+    function resetMarkerCommentOverlayState() {
+        const byId = markerCommentOverlayFade.byId;
+        for (const id of Object.keys(byId)) {
+            cancelMarkerCommentItemFade(id);
+        }
+        markerCommentOverlayFade.byId = {};
     }
 
-    function showMarkerCommentOverlayImmediate(overlayEl, hit, layout) {
-        if (!overlayEl || !hit || !markerCommentHasDisplayText(hit.text)) return;
-        const textEl = markerCommentOverlayTextEl(overlayEl);
-        const isRange =
-            overlayEl.classList && overlayEl.classList.contains('marker-comment-overlay--range');
-        overlayEl.hidden = false;
-        overlayEl.setAttribute('aria-hidden', 'false');
-        overlayEl.style.removeProperty('transition');
-        overlayEl.style.opacity = '1';
-        if (textEl) textEl.textContent = markerCommentOverlayDisplayText(hit.text, isRange);
-        const leftPct =
-            layout && Number.isFinite(layout.leftPct)
-                ? layout.leftPct
-                : MARKER_VIDEO_COMMENT_CENTER_LEFT_PCT;
-        const defaultBottom =
-            overlayEl === markerCommentOverlayRange
-                ? MARKER_VIDEO_COMMENT_RANGE_BOTTOM_PCT
-                : MARKER_VIDEO_COMMENT_POINT_BOTTOM_PCT;
-        const bottomPct =
-            layout && Number.isFinite(layout.bottomPct) ? layout.bottomPct : defaultBottom;
-        overlayEl.style.left = leftPct + '%';
-        overlayEl.style.bottom = bottomPct + '%';
-        overlayEl.style.transform = 'translate(-50%, 0)';
+    function finishMarkerCommentItemHide(itemEl, markerId) {
+        if (itemEl && itemEl.parentNode) itemEl.parentNode.removeChild(itemEl);
+        if (markerId) delete markerCommentOverlayFade.byId[markerId];
     }
 
-    function startMarkerCommentFadeOut(overlayEl, slotKey) {
-        if (!overlayEl || !slotKey) return;
-        const st = markerCommentOverlayFade[slotKey];
-        if (!st || st.timerId != null) return;
+    function finishMarkerCommentOverlayHide(containerEl) {
+        if (!containerEl) return;
+        containerEl.hidden = true;
+        containerEl.setAttribute('aria-hidden', 'true');
+        containerEl.replaceChildren();
+        containerEl.style.removeProperty('left');
+        containerEl.style.removeProperty('right');
+        containerEl.style.removeProperty('top');
+        containerEl.style.removeProperty('bottom');
+        containerEl.style.removeProperty('width');
+        containerEl.style.removeProperty('max-width');
+        containerEl.style.removeProperty('transform');
+        resetMarkerCommentOverlayState();
+    }
+
+    function ensureMarkerCommentItemEl(containerEl, markerId, isRange) {
+        let itemEl = containerEl.querySelector(
+            '.marker-comment-overlay__item[data-marker-id="' + markerId + '"]',
+        );
+        const kindClass = isRange
+            ? 'marker-comment-overlay__item--range'
+            : 'marker-comment-overlay__item--point';
+        if (itemEl) {
+            itemEl.classList.remove(
+                'marker-comment-overlay__item--point',
+                'marker-comment-overlay__item--range',
+            );
+            itemEl.classList.add(kindClass);
+            return itemEl;
+        }
+        itemEl = document.createElement('div');
+        itemEl.className = 'marker-comment-overlay__item ' + kindClass;
+        itemEl.dataset.markerId = markerId;
+        const textEl = document.createElement('span');
+        textEl.className = 'marker-comment-overlay__text';
+        itemEl.appendChild(textEl);
+        containerEl.appendChild(itemEl);
+        return itemEl;
+    }
+
+    function startMarkerCommentItemFadeOut(containerEl, itemEl, markerId) {
+        if (!itemEl || !markerId) return;
+        const ent = markerCommentFadeEntry(markerId);
+        if (!ent || ent.timerId != null) return;
         const durMs = Math.max(16, Math.round(markerCommentFadeOutDurationSec() * 1000));
-        st.phase = 'fading';
-        overlayEl.hidden = false;
-        overlayEl.setAttribute('aria-hidden', 'true');
-        overlayEl.style.transition = 'opacity ' + durMs + 'ms linear';
-        overlayEl.style.opacity = '1';
-        void overlayEl.offsetWidth;
-        overlayEl.style.opacity = '0';
-        st.timerId = setTimeout(() => {
-            st.timerId = null;
-            finishMarkerCommentOverlayHide(overlayEl, slotKey);
+        ent.phase = 'fading';
+        itemEl.style.transition = 'opacity ' + durMs + 'ms linear';
+        itemEl.style.opacity = '1';
+        void itemEl.offsetWidth;
+        itemEl.style.opacity = '0';
+        ent.timerId = setTimeout(() => {
+            ent.timerId = null;
+            finishMarkerCommentItemHide(itemEl, markerId);
+            if (!containerEl) return;
+            const remaining = containerEl.querySelectorAll('.marker-comment-overlay__item');
+            if (!remaining.length) {
+                finishMarkerCommentOverlayHide(containerEl);
+            }
         }, durMs + 24);
     }
 
-    function hideMarkerCommentOverlaySlot(overlayEl, slotKey, immediate) {
-        if (!overlayEl || !slotKey) return;
-        cancelMarkerCommentFade(slotKey);
-        if (immediate) {
-            finishMarkerCommentOverlayHide(overlayEl, slotKey);
-            return;
-        }
-        const st = markerCommentOverlayFade[slotKey];
-        if (st.phase === 'fading') return;
-        if (st.activeId != null) {
-            startMarkerCommentFadeOut(overlayEl, slotKey);
-            return;
-        }
-        finishMarkerCommentOverlayHide(overlayEl, slotKey);
-    }
-
-    function syncMarkerCommentOverlaySlot(overlayEl, slotKey, overlayState, layout) {
-        if (!overlayEl || !slotKey) return;
-        const st = markerCommentOverlayFade[slotKey];
-        const hit = overlayState.hit;
-        const phase = overlayState.phase;
-        const nextId = hit && hit.marker ? hit.marker.id : null;
-
-        if (!hit || phase === 'off') {
-            if (st.phase === 'fading') return;
-            if (st.activeId != null && st.phase === 'hold') {
-                startMarkerCommentFadeOut(overlayEl, slotKey);
-                return;
+    function syncMarkerCommentVideoOverlay(t) {
+        const containerEl = markerCommentOverlayRange;
+        if (!containerEl) return;
+        const states = getAllMarkerCommentOverlayStates(t);
+        const byId = markerCommentOverlayFade.byId;
+        const activeIds = new Set();
+        for (let i = 0; i < states.length; i++) {
+            if (states[i].hit && states[i].hit.marker) {
+                activeIds.add(states[i].hit.marker.id);
             }
-            if (st.activeId == null && !overlayEl.hidden) {
-                finishMarkerCommentOverlayHide(overlayEl, slotKey);
-            }
+        }
+        for (const id of Object.keys(byId)) {
+            const ent = byId[id];
+            if (ent && ent.phase === 'fading') activeIds.add(id);
+        }
+
+        if (!activeIds.size) {
+            finishMarkerCommentOverlayHide(containerEl);
             return;
         }
 
-        if (nextId !== st.activeId) {
-            cancelMarkerCommentFade(slotKey);
-            showMarkerCommentOverlayImmediate(overlayEl, hit, layout);
-            st.activeId = nextId;
+        containerEl.hidden = false;
+        containerEl.setAttribute('aria-hidden', 'false');
+
+        const seenIds = new Set();
+        for (let i = 0; i < states.length; i++) {
+            const st = states[i];
+            const hit = st.hit;
+            const phase = st.phase;
+            if (!hit || !hit.marker || phase === 'off') continue;
+            const id = hit.marker.id;
+            const isRange = markerHitIsRange(hit);
+            seenIds.add(id);
+            const ent = markerCommentFadeEntry(id);
+            const itemEl = ensureMarkerCommentItemEl(containerEl, id, isRange);
+            const textEl = markerCommentOverlayTextEl(itemEl);
+            if (textEl) {
+                textEl.textContent = markerCommentOverlayDisplayText(hit.text, isRange);
+            }
+            if (phase === 'hold') {
+                if (ent.phase === 'fading') cancelMarkerCommentItemFade(id);
+                itemEl.style.removeProperty('transition');
+                itemEl.style.opacity = '1';
+                ent.phase = 'hold';
+                continue;
+            }
             if (phase === 'fade') {
-                startMarkerCommentFadeOut(overlayEl, slotKey);
+                if (ent.phase === 'hold') {
+                    startMarkerCommentItemFadeOut(containerEl, itemEl, id);
+                } else if (ent.phase === 'hidden') {
+                    itemEl.style.removeProperty('transition');
+                    itemEl.style.opacity = '1';
+                    ent.phase = 'hold';
+                    startMarkerCommentItemFadeOut(containerEl, itemEl, id);
+                }
+            }
+        }
+
+        const existing = containerEl.querySelectorAll('.marker-comment-overlay__item');
+        for (let i = 0; i < existing.length; i++) {
+            const itemEl = existing[i];
+            const id = itemEl.dataset.markerId;
+            if (!id || seenIds.has(id)) continue;
+            const ent = markerCommentFadeEntry(id);
+            if (ent.phase === 'fading') continue;
+            if (ent.phase === 'hold') {
+                startMarkerCommentItemFadeOut(containerEl, itemEl, id);
             } else {
-                st.phase = 'hold';
-            }
-            return;
-        }
-
-        if (phase === 'hold') {
-            if (st.phase === 'fading') cancelMarkerCommentFade(slotKey);
-            showMarkerCommentOverlayImmediate(overlayEl, hit, layout);
-            st.activeId = nextId;
-            st.phase = 'hold';
-            return;
-        }
-
-        if (phase === 'fade') {
-            if (st.phase === 'hold') {
-                startMarkerCommentFadeOut(overlayEl, slotKey);
-            } else if (st.phase === 'hidden') {
-                showMarkerCommentOverlayImmediate(overlayEl, hit, layout);
-                st.activeId = nextId;
-                startMarkerCommentFadeOut(overlayEl, slotKey);
+                finishMarkerCommentItemHide(itemEl, id);
             }
         }
+
+        layoutNewMarkerCommentItems(containerEl);
+        requestAnimationFrame(function () {
+            layoutNewMarkerCommentItems(containerEl);
+        });
     }
 
     function updateMarkerCommentOverlay() {
-        if (!markerCommentOverlayPoint && !markerCommentOverlayRange) return;
+        if (!markerCommentOverlayRange) return;
         if (markersDisplayHidden) {
-            hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
-            hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+            finishMarkerCommentOverlayHide(markerCommentOverlayRange);
             if (!isMarkerListPlaybackActive()) {
                 updateMarkerListRowClasses();
             }
             return;
         }
         if (!markerTimelineReady()) {
-            hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
-            hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+            finishMarkerCommentOverlayHide(markerCommentOverlayRange);
             return;
         }
         const t = currentTransportSec();
@@ -320,24 +644,7 @@
         if (!isMarkerListPlaybackActive()) {
             updateMarkerListRowClasses();
         }
-        syncMarkerCommentOverlaySlot(
-            markerCommentOverlayPoint,
-            'point',
-            getMarkerCommentOverlayState(t, 'point'),
-            {
-                leftPct: MARKER_VIDEO_COMMENT_CENTER_LEFT_PCT,
-                bottomPct: MARKER_VIDEO_COMMENT_POINT_BOTTOM_PCT,
-            },
-        );
-        syncMarkerCommentOverlaySlot(
-            markerCommentOverlayRange,
-            'range',
-            getMarkerCommentOverlayState(t, 'range'),
-            {
-                leftPct: MARKER_VIDEO_COMMENT_CENTER_LEFT_PCT,
-                bottomPct: MARKER_VIDEO_COMMENT_RANGE_BOTTOM_PCT,
-            },
-        );
+        syncMarkerCommentVideoOverlay(t);
     }
 
     function markerVideoSecForTransportSec(transportSec) {
@@ -566,11 +873,8 @@
             labelLayer.replaceChildren();
             labelLayer.hidden = true;
         }
-        if (markerCommentOverlayPoint) {
-            hideMarkerCommentOverlaySlot(markerCommentOverlayPoint, 'point', true);
-        }
         if (markerCommentOverlayRange) {
-            hideMarkerCommentOverlaySlot(markerCommentOverlayRange, 'range', true);
+            finishMarkerCommentOverlayHide(markerCommentOverlayRange);
         }
     }
 
@@ -597,8 +901,18 @@
     window.areMarkersHiddenOnTimeline = areMarkersHiddenOnTimeline;
     window.hasVisibleMarkersOnTimeline = hasVisibleMarkersOnTimeline;
     function getMarkerCommentBurnInMetrics(exportCanvasH, isRange) {
-        const overlay = isRange ? markerCommentOverlayRange : markerCommentOverlayPoint;
-        const textEl = markerCommentOverlayTextEl(overlay);
+        const overlay = markerCommentOverlayRange;
+        let textEl = markerCommentOverlayTextEl(overlay);
+        if (overlay && !textEl) {
+            textEl = overlay.querySelector(
+                '.marker-comment-overlay__item--' +
+                    (isRange ? 'range' : 'point') +
+                    ' .marker-comment-overlay__text',
+            );
+            if (!textEl) {
+                textEl = overlay.querySelector('.marker-comment-overlay__text');
+            }
+        }
         const frame = typeof frameMain !== 'undefined' ? frameMain : null;
         const video = typeof videoMain !== 'undefined' ? videoMain : null;
         let layoutScale = 1;

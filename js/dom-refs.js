@@ -14,7 +14,6 @@
     const videoDriftTransportBox = document.getElementById('videoDriftTransportBox');
     const frameMain = document.getElementById('frameMain');
     const timecodeOverlayMain = document.getElementById('timecodeOverlayMain');
-    const markerCommentOverlayPoint = document.getElementById('markerCommentOverlayPoint');
     const markerCommentOverlayRange = document.getElementById('markerCommentOverlayRange');
     const seekBar = document.getElementById('seekBar');
     const audioWaveformComposite = document.getElementById('audioWaveformComposite');

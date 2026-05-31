@@ -1375,8 +1375,18 @@
             box-sizing: border-box;
             opacity: 1;
         }
-        .marker-comment-overlay--point,
-        .marker-comment-overlay--range {
+        .marker-comment-overlay--video {
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: none;
+            transform: none;
+        }
+        .marker-comment-overlay__item {
+            position: absolute;
+            left: 50%;
             max-width: min(92%, 96%);
             text-align: center;
             transform: translate(-50%, 0);
@@ -1403,10 +1413,10 @@
                 -1px 0 0 #fff,
                 1px 0 0 #fff;
         }
-        .marker-comment-overlay--point .marker-comment-overlay__text {
+        .marker-comment-overlay__item--point .marker-comment-overlay__text {
             color: #e41c24;
         }
-        .marker-comment-overlay--range .marker-comment-overlay__text {
+        .marker-comment-overlay__item--range .marker-comment-overlay__text {
             color: #2a7fd4;
         }
         .video-timecode--idle {

@@ -178,8 +178,22 @@
         if (tc) drawTcBurnIn(ctx, w, h, tc);
         if (typeof getVideoExportMarkerBurnIns === 'function') {
             const burn = getVideoExportMarkerBurnIns(transportSec);
-            if (burn.point) drawMarkerBurnIn(ctx, w, h, burn.point);
-            if (burn.range) drawMarkerBurnIn(ctx, w, h, burn.range);
+            const pointItems = Array.isArray(burn.point)
+                ? burn.point
+                : burn.point
+                  ? [burn.point]
+                  : [];
+            for (let pi = 0; pi < pointItems.length; pi++) {
+                drawMarkerBurnIn(ctx, w, h, pointItems[pi]);
+            }
+            const rangeItems = Array.isArray(burn.range)
+                ? burn.range
+                : burn.range
+                  ? [burn.range]
+                  : [];
+            for (let ri = 0; ri < rangeItems.length; ri++) {
+                drawMarkerBurnIn(ctx, w, h, rangeItems[ri]);
+            }
         }
     }
 
