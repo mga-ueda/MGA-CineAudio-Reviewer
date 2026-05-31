@@ -35,11 +35,11 @@
 
 ## 使い方
 
-- 操作手順・画面構成・各機能の説明は [guide.html](guide.html)（使い方）を参照してください。トランスポート行 **How To** リンクからも同じページを新しいウィンドウで開けます。
+- 操作手順・画面構成・各機能の説明は [guide.html](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/guide.html)（使い方）を参照してください。トランスポート行 **How To** リンクからも同じページを新しいウィンドウで開けます。
 
 ## キーボードショートカット
 
-- 一覧は [shortcuts.html](shortcuts.html)（ショートカットリスト）を参照してください。トランスポート行 **Shortcut** リンクからも同じページを開けます。
+- 一覧は [shortcuts.html](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/shortcuts.html)（ショートカットリスト）を参照してください。トランスポート行 **Shortcut** リンクからも同じページを開けます。
 
 ## 改変・再利用
 

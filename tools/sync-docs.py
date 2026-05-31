@@ -31,6 +31,12 @@ MARKER_END = "<!-- @manual-doc:end -->"
 
 GITHUB_PAGES_URL = "https://mga-ueda.github.io/MGA-CineAudio-Reviewer/"
 
+# README 上では相対リンクが GitHub blob 表示になるため、ドキュメント HTML だけ Pages URL に差し替える
+README_DOC_PAGES = {
+    "guide.html": GITHUB_PAGES_URL + "guide.html",
+    "shortcuts.html": GITHUB_PAGES_URL + "shortcuts.html",
+}
+
 MANUAL_BLOCK_RE = re.compile(
     r"\n\s*<details class=\"app-doc-fold\">"
     r"\s*\n\s*<summary[^>]*id=\"app-manual-notice-heading\".*?"
@@ -103,13 +109,20 @@ def changelog_to_markdown(entries: list[dict]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def inline_html_to_md(text: str) -> str:
+def inline_html_to_md(text: str, *, for_readme: bool = False) -> str:
     text = re.sub(r"<strong>(.*?)</strong>", r"**\1**", text, flags=re.DOTALL)
     text = re.sub(r"<code>(.*?)</code>", r"`\1`", text, flags=re.DOTALL)
     text = re.sub(r"<kbd>(.*?)</kbd>", r"`\1`", text, flags=re.DOTALL)
+
+    def link_repl(m: re.Match[str]) -> str:
+        href = m.group(1)
+        if for_readme:
+            href = README_DOC_PAGES.get(href, href)
+        return f"[{m.group(2)}]({href})"
+
     text = re.sub(
         r'<a\s+href="([^"]+)"[^>]*>(.*?)</a>',
-        r"[\2](\1)",
+        link_repl,
         text,
         flags=re.DOTALL,
     )
@@ -117,7 +130,7 @@ def inline_html_to_md(text: str) -> str:
     return html.unescape(re.sub(r"\s+", " ", text)).strip()
 
 
-def block_html_to_md(block: str) -> list[str]:
+def block_html_to_md(block: str, *, for_readme: bool = False) -> list[str]:
     out: list[str] = []
     pos = 0
     while pos < len(block):
@@ -127,16 +140,16 @@ def block_html_to_md(block: str) -> list[str]:
             re.DOTALL,
         )
         if sec_m:
-            out.append(f"### {inline_html_to_md(sec_m.group(1))}")
+            out.append(f"### {inline_html_to_md(sec_m.group(1), for_readme=for_readme)}")
             out.append("")
-            out.extend(block_html_to_md(sec_m.group(2)))
+            out.extend(block_html_to_md(sec_m.group(2), for_readme=for_readme))
             pos += sec_m.end()
             continue
 
         ul_m = re.match(r"\s*<ul>\s*(.*?)\s*</ul>", block[pos:], re.DOTALL)
         if ul_m:
             for li_m in re.finditer(r"<li>\s*(.*?)\s*</li>", ul_m.group(1), re.DOTALL):
-                out.append(f"- {inline_html_to_md(li_m.group(1))}")
+                out.append(f"- {inline_html_to_md(li_m.group(1), for_readme=for_readme)}")
             out.append("")
             pos += ul_m.end()
             continue
@@ -145,7 +158,7 @@ def block_html_to_md(block: str) -> list[str]:
         if ol_m:
             n = 1
             for li_m in re.finditer(r"<li>\s*(.*?)\s*</li>", ol_m.group(1), re.DOTALL):
-                out.append(f"{n}. {inline_html_to_md(li_m.group(1))}")
+                out.append(f"{n}. {inline_html_to_md(li_m.group(1), for_readme=for_readme)}")
                 n += 1
             out.append("")
             pos += ol_m.end()
@@ -164,7 +177,7 @@ def details_body_html(body: str) -> str:
     return inner_m.group(1).strip() if inner_m else body.strip()
 
 
-def fragment_to_markdown(fragment: str) -> str:
+def fragment_to_markdown(fragment: str, *, for_readme: bool = False) -> str:
     lines: list[str] = []
     for dm in re.finditer(
         r"<details[^>]*>.*?<summary[^>]*>(.*?)</summary>(.*?)</details>",
@@ -174,12 +187,12 @@ def fragment_to_markdown(fragment: str) -> str:
         if "app-manual-version-heading" in dm.group(0):
             continue
 
-        summary = inline_html_to_md(dm.group(1))
+        summary = inline_html_to_md(dm.group(1), for_readme=for_readme)
         body = details_body_html(dm.group(2))
 
         lines.append(f"## {summary}")
         lines.append("")
-        lines.extend(block_html_to_md(body))
+        lines.extend(block_html_to_md(body, for_readme=for_readme))
 
     return "\n".join(lines).rstrip() + "\n"
 
@@ -211,7 +224,7 @@ def build_readme_toc(fragment_md: str) -> str:
 
 
 def build_readme(fragment: str, version_label: str, changelog_md: str) -> str:
-    fragment_md = fragment_to_markdown(fragment)
+    fragment_md = fragment_to_markdown(fragment, for_readme=True)
     toc_md = build_readme_toc(fragment_md)
     return (
         README_INTRO.format(version_label=version_label, pages_url=GITHUB_PAGES_URL)
