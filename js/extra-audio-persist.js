@@ -346,6 +346,14 @@
         if (/restoring/i.test(status) && !extraTrackWaveformDrawReady(slot)) return false;
         if (isExtraTrackLoaded(slot) && !extraTrackWaveformDrawReady(slot)) return false;
         if (hasExtraTrackWaveformPeaks(slot) && !extraTrackWaveformDrawReady(slot)) return false;
+        if (
+            ui &&
+            ui.track &&
+            typeof isWaveformTrackLkfsReady === 'function' &&
+            !isWaveformTrackLkfsReady(ui.track)
+        ) {
+            return false;
+        }
         return true;
     }
 

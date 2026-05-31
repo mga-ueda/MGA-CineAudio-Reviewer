@@ -14,6 +14,7 @@
     const K_HP_A = [1.0, -1.99004745483398, 0.99007225036621];
 
     const measureGenByTrack = new WeakMap();
+    const lkfsPendingByTrack = new WeakMap();
 
     function channelWeights(channelCount) {
         switch (channelCount | 0) {
@@ -314,10 +315,36 @@
         el.hidden = false;
     }
 
+    function setWaveformTrackLkfsPending(trackEl, pending) {
+        if (!trackEl) return;
+        if (pending) lkfsPendingByTrack.set(trackEl, true);
+        else lkfsPendingByTrack.delete(trackEl);
+    }
+
+    function syncLoadingForTrackEl(trackEl) {
+        if (!trackEl || !trackEl.id) return;
+        if (trackEl.id === 'audioWaveformTrack') {
+            if (typeof syncVideoTrackWaveformLoading === 'function') {
+                syncVideoTrackWaveformLoading();
+            }
+            return;
+        }
+        const m = /^extraAudioTrack(\d+)$/.exec(trackEl.id);
+        if (m && typeof syncExtraTrackWaveformLoading === 'function') {
+            syncExtraTrackWaveformLoading(parseInt(m[1], 10));
+        }
+    }
+
+    function isWaveformTrackLkfsReady(trackEl) {
+        if (!trackEl) return true;
+        return !lkfsPendingByTrack.get(trackEl);
+    }
+
     function clearWaveformTrackLkfs(trackEl) {
         if (trackEl) {
             measureGenByTrack.set(trackEl, (measureGenByTrack.get(trackEl) || 0) + 1);
         }
+        setWaveformTrackLkfsPending(trackEl, false);
         setWaveformTrackLkfsDisplay(trackEl, null);
     }
 
@@ -327,6 +354,8 @@
         measureGenByTrack.set(trackEl, gen);
         const lkfsEl = getTrackLkfsEl(trackEl);
         if (!lkfsEl) return;
+        setWaveformTrackLkfsPending(trackEl, true);
+        syncLoadingForTrackEl(trackEl);
         lkfsEl.textContent = '…';
         lkfsEl.hidden = false;
 
@@ -338,6 +367,8 @@
         const lkfs = measureAudioBufferIntegratedLkfs(buffer);
         if (measureGenByTrack.get(trackEl) !== gen) return;
         setWaveformTrackLkfsDisplay(trackEl, lkfs);
+        setWaveformTrackLkfsPending(trackEl, false);
+        syncLoadingForTrackEl(trackEl);
     }
 
     window.measureAudioBufferIntegratedLkfs = measureAudioBufferIntegratedLkfs;
@@ -347,4 +378,5 @@
     window.setWaveformTrackLkfsDisplay = setWaveformTrackLkfsDisplay;
     window.clearWaveformTrackLkfs = clearWaveformTrackLkfs;
     window.scheduleWaveformTrackLkfsMeasure = scheduleWaveformTrackLkfsMeasure;
+    window.isWaveformTrackLkfsReady = isWaveformTrackLkfsReady;
 })();

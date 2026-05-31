@@ -550,7 +550,16 @@
         if (laneW < VIDEO_WAVEFORM_LAYOUT_MIN_CSS) return false;
         if (!audioWaveformCanvas) return false;
         const styleW = parseFloat(audioWaveformCanvas.style.width) || 0;
-        return styleW >= VIDEO_WAVEFORM_LAYOUT_MIN_CSS;
+        if (styleW < VIDEO_WAVEFORM_LAYOUT_MIN_CSS) return false;
+        if (
+            typeof audioWaveformTrack !== 'undefined' &&
+            audioWaveformTrack &&
+            typeof isWaveformTrackLkfsReady === 'function' &&
+            !isWaveformTrackLkfsReady(audioWaveformTrack)
+        ) {
+            return false;
+        }
+        return true;
     }
 
     window.restoreVideoAudioLaneForNewVideo = restoreVideoAudioLaneForNewVideo;
