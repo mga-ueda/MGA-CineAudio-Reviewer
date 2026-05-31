@@ -505,6 +505,11 @@
         }
     }
 
+    function persistMusicalGridToStorage() {
+        if (typeof writePrefs === 'function') writePrefs();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+    }
+
     function persistMusicalGridAndRedraw() {
         readMusicalGridFromInputs();
         // 空欄や不正フォーマットは既定値へフォールバックして保存・復元を安定させる。
@@ -517,7 +522,7 @@
             if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
         }
         clearMusicalGridPositionCache();
-        if (typeof writePrefs === 'function') writePrefs();
+        persistMusicalGridToStorage();
         scheduleMusicalGridRedraw();
     }
 
@@ -695,6 +700,7 @@
         musicalGridMeterText = nextText;
         setMeterInputValuePreserveFieldCaret(input, nextText, entryIndex, field);
         scheduleMusicalGridRedraw();
+        scheduleMusicalGridAutosave();
     }
 
     function bumpPhraseSizeBy(delta) {
@@ -719,6 +725,7 @@
         musicalGridPhraseText = normalizeMusicalGridPhraseText(nextText);
         setMusicalGridInputValuePreserveEntryCaret(input, musicalGridPhraseText, entryIndex);
         scheduleMusicalGridRedraw();
+        scheduleMusicalGridAutosave();
     }
 
     let musicalGridRedrawRaf = 0;
@@ -732,7 +739,7 @@
             musicalGridAutosaveTimer = 0;
             readMusicalGridFromInputs();
             clearMusicalGridPositionCache();
-            if (typeof writePrefs === 'function') writePrefs();
+            persistMusicalGridToStorage();
         }, 400);
     }
 
@@ -1102,16 +1109,38 @@
         return counts;
     }
 
-    function formatPhraseTextFromGroupBarCounts(counts) {
-        if (!counts || !counts.length) return '';
-        if (counts.length === 1) return String(counts[0]);
-        const tail = counts.slice(1);
-        const allTailEqual = tail.every((s) => s === tail[0]);
-        if (allTailEqual) {
-            if (counts[0] === tail[0]) return String(counts[0]);
-            return counts[0] + ',' + tail[0];
+    function mergeConsecutiveEqualGroupBarCounts(counts) {
+        if (!counts || !counts.length) return [];
+        const out = [counts[0]];
+        for (let i = 1; i < counts.length; i++) {
+            if (counts[i] !== out[out.length - 1]) out.push(counts[i]);
         }
-        return counts.join(',');
+        return out;
+    }
+
+    function groupBarCountsMatchPhraseSizes(counts, sizes) {
+        if (!counts || !counts.length || !sizes || !sizes.length) return false;
+        for (let i = 0; i < counts.length; i++) {
+            if (barGroupSizeForIndex(i, sizes) !== counts[i]) return false;
+        }
+        return true;
+    }
+
+    /** 展開済みグループ小節数列から、同等の Phrase 指定を最短表現へ圧縮する。 */
+    function inferMinimalPhraseSizesFromGroupBarCounts(counts) {
+        if (!counts || !counts.length) return [];
+        const merged = mergeConsecutiveEqualGroupBarCounts(counts);
+        if (groupBarCountsMatchPhraseSizes(counts, merged)) return merged;
+        return counts.slice();
+    }
+
+    function formatPhraseTextFromGroupBarCounts(counts, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!counts || !counts.length) return '';
+        const sizes =
+            o.optimize === false ? counts.slice() : inferMinimalPhraseSizesFromGroupBarCounts(counts);
+        if (!sizes.length) return '';
+        return sizes.join(',');
     }
 
     function sumGroupBarCounts(counts, endExclusive) {
@@ -1387,7 +1416,9 @@
 
     function applyPhraseGroupBarCounts(counts, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const text = formatPhraseTextFromGroupBarCounts(counts);
+        const text = formatPhraseTextFromGroupBarCounts(counts, {
+            optimize: o.optimize !== false && !phraseBoundaryDragActive,
+        });
         musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
         if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
         if (phraseBoundaryDragActive) {
@@ -1397,7 +1428,7 @@
             scheduleMusicalGridRedraw();
         }
         if (o.persist !== false) {
-            if (typeof writePrefs === 'function') writePrefs();
+            persistMusicalGridToStorage();
         }
     }
 
@@ -1530,8 +1561,10 @@
             const boundaryIdx = phraseBoundaryDragBoundaryIndex;
             endPhraseBoundaryDrag();
             if (finalCounts && finalCounts.length) {
-                if (typeof writePrefs === 'function') writePrefs();
-                scheduleMusicalGridRedraw();
+                const optimizedText = formatPhraseTextFromGroupBarCounts(finalCounts);
+                musicalGridPhraseText = normalizeMusicalGridPhraseText(optimizedText);
+                if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+                persistMusicalGridAndRedraw();
                 if (typeof writeLog === 'function') {
                     const left = phraseGroupLogLabelForIndex(boundaryIdx);
                     const right = phraseGroupLogLabelForIndex(boundaryIdx + 1);
@@ -1541,7 +1574,7 @@
                             '/' +
                             right +
                             ': ' +
-                            formatPhraseTextFromGroupBarCounts(finalCounts),
+                            optimizedText,
                     );
                 }
             }
