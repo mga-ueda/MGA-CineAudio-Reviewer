@@ -26,7 +26,7 @@
             --transport-opt-box-min-h: calc(
                 2 * var(--transport-bar-chip-pad-y) + var(--transport-opt-control-h) + 2 * var(--transport-frame-border)
             );
-            /** 繧ｷ繝ｼ繧ｯ陦・ 迴ｾ蝨ｨ / 邱丞ｰｺ縺ｮ譫縺ｨ蜀咲函繝懊ち繝ｳ縺ｮ螟門ｯｸ繧呈純縺医ｋ・・utton 縺ｮ UA 菴咏區霎ｼ縺ｿ縺ｧ蟆代＠鬮倥ａ・・*/
+            /** シーク行: 現在 / 総尺の枠と再生ボタンの外寸を揃える（button の UA 余白込みで少し高め） */
             --transport-seek-align-h: 36px;
             /** 波形シークバー／再生ヘッドと同系のシアン（リージョン選択など） */
             --waveform-seek-cyan: #00e8ff;
@@ -34,13 +34,13 @@
             --waveform-seek-cyan-inset: rgba(0, 232, 255, 0.9);
             --font-mono: 'Consolas', 'Monaco', 'Cascadia Mono', 'Courier New', monospace;
             /*
-             * 譁・ｭ苓牡縺ｮ蠖ｹ蜑ｲ・・ample.html 縺ｨ蜷後§蛻・球縲ゅし繝ｳ繝励Ν縺ｮ繧ｷ繧｢繝ｳ #7dd8ff 縺ｯ --app-accent 縺ｫ逶ｸ蠖難ｼ・
-             *   --app-doc-text 窶ｦ 謚倥ｊ縺溘◆縺ｿ譛ｬ譁・・繝槭ル繝･繧｢繝ｫ譛ｬ譁・・邂・擅譖ｸ縺搾ｼ・ample: .app-doc-fold__body #d4dbe6・・
-             *   --app-accent 窶ｦ 繝槭ル繝･繧｢繝ｫ h3/h4縲∵悽譁・・繝ｪ繝ｳ繧ｯ縲√ヵ繝・ち繝ｼ蜀・Μ繝ｳ繧ｯ縲√ヨ繝ｩ繝ｳ繧ｹ繝昴・繝医・譎ょ綾繝ｻ謨ｰ蛟､蠑ｷ隱ｿ縺ｪ縺ｩ
-             *                   ・・ample 縺ｧ縺ｯ隕句・縺励・繝ｪ繝ｳ繧ｯ繝ｻ#playStopBtn 莉倩ｿ代・蛟､陦ｨ遉ｺ縺ｪ縺ｩ縺ｫ蜷御ｸ繝医・繝ｳ #7dd8ff・・
-             *   繧､繝ｳ繝ｩ繧､繝ｳ code 窶ｦ 譛ｬ譁・→蜷瑚牡・・nherit縲Ｔample 縺ｫ code 蟆ら畑濶ｲ縺ｯ縺ｪ縺暦ｼ・
-             *   繧ｷ繝ｧ繝ｼ繝医き繝・ヨ陦ｨ 窶ｦ 繝吶・繧ｹ #b4bcc8 / 陦ｨ隕句・縺・#c8d0dc / 蜈磯ｭ蛻・#d0d8e4・・ample 縺ｨ蜷後§蝗ｺ螳夊牡・・
-             *   繝輔ャ繧ｿ繝ｼ 窶ｦ 螟門捉 #8a92a4 / 繧ｳ繝斐・繝ｩ繧､繝・#9aa4b8 / 繝ｪ繝ｳ繧ｯ縺ｯ --app-accent・・ample 縺ｯ #7dd8ff・・
+             * 文字色の役割…sample.html と同じ分担。サンプルのシアン #7dd8ff は --app-accent に相当。
+             *   --app-doc-text … 折りたたみ本文・マニュアル本文・箇条書き（sample: .app-doc-fold__body #d4dbe6）
+             *   --app-accent … マニュアル h3/h4、本文のリンク、フッター内リンク、トランスポートの時刻・数値強調など
+             *                   （sample では見出し・リンク・#playStopBtn 付近の値表示などに同一トーン #7dd8ff）
+             *   インライン code … 本文と同色（inherit。sample に code 専用色はなし）
+             *   ショートカット表 … ベース #b4bcc8 / 表見出し #c8d0dc / 先頭列 #d0d8e4（sample と同じ固定色）
+             *   フッター … 外周 #8a92a4 / コピーライト #9aa4b8 / リンクは --app-accent（sample は #7dd8ff）
              */
             --app-doc-text: #d4dbe6;
             --app-accent: var(--accent-ink);
@@ -209,7 +209,7 @@
             outline: 2px dashed rgba(196, 30, 58, 0.5);
             outline-offset: -2px;
         }
-        /** 繝悶Λ繧ｦ繧ｶ蟷・↓霑ｽ蠕難ｼ・ayout-narrow 縺ｮ螟悶↓驟咲ｽｮ・・*/
+        /** ブラウザ幅に追加（layout-narrow の外に配置） */
         .player-stage {
             --marker-table-visible-rows: 10;
             --marker-table-row-h: 1.85rem;
@@ -905,7 +905,7 @@
             max-width: none;
             box-sizing: border-box;
         }
-        /** 蜷域・繝薙Η繝ｼ譎ゅ・蟾ｦ蜿ｳ 2 繝代ロ繝ｫ繧貞ｮ悟・縺ｫ髱櫁｡ｨ遉ｺ・亥虚逕ｻ縺ｯ繧ｹ繧ｿ繝・け蛛ｴ縺ｸ遘ｻ蜍墓ｸ医∩・・*/
+        /** 比較ビュー時は左右 2 パネルを完全に非表示（動画はスタック側へ移動済み） */
         .compare-stage--composite .compare-grid,
         .compare-grid[hidden] {
             display: none !important;
@@ -2962,7 +2962,7 @@
             filter: brightness(1.08);
         }
 
-        /** 繧ｭ繝ｼ繝懊・繝・/ 繧ｷ繝ｼ繧ｯ繝舌・謫堺ｽ懊・繝輔ぅ繝ｼ繝峨ヰ繝・け・井ｸｭ螟ｮ繝輔Λ繝・す繝･・・*/
+        /** キーボード / シークバー操作のフィードバック（中央フラッシュ） */
         .seek-flash-overlay {
             position: fixed;
             inset: 0;
