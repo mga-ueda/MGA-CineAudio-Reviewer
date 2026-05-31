@@ -2282,6 +2282,22 @@
             border-left: 0.5px solid rgba(150, 156, 168, 0.88);
             border-right: 0.5px solid rgba(150, 156, 168, 0.88);
         }
+        /* 境界密集時のみ: 実幅が min-width 未満のリージョンは枠をタイムライン幅に合わせる */
+        .audio-waveform-lane__playback-regions--dense-boundaries
+            .audio-waveform-lane__playback-region--narrow {
+            min-width: 0;
+            z-index: 8;
+            overflow: visible;
+        }
+        .audio-waveform-lane__playback-regions--dense-boundaries
+            .audio-waveform-lane__playback-region--narrow
+            .audio-waveform-lane__playback-region__gain-db {
+            display: none;
+        }
+        .audio-waveform-lane__playback-regions--dense-boundaries
+            .audio-waveform-lane__playback-region__handle--dense-boundary-secondary::after {
+            display: none;
+        }
         .audio-waveform-lane__playback-region--hover {
             z-index: 9;
             border-left-width: 0.5px;
@@ -3039,6 +3055,19 @@
         }
         .seek-flash-overlay__secondary[hidden] {
             display: none !important;
+        }
+
+        .seek-flash-overlay.seek-flash--error .seek-flash-overlay__box {
+            background: rgba(196, 42, 48, 0.52);
+            border-color: rgba(255, 120, 120, 0.45);
+            box-shadow: 0 4px 22px rgba(120, 16, 20, 0.14);
+            color: rgba(255, 248, 248, 0.88);
+        }
+        .seek-flash-overlay.seek-flash--error .seek-flash-overlay__primary {
+            color: rgba(255, 255, 255, 0.92);
+        }
+        .seek-flash-overlay.seek-flash--error .seek-flash-overlay__secondary {
+            color: rgba(255, 255, 255, 0.85);
         }
 
         /** 動画読み込み中 — seek-flash と同じ下部フラッシュ（操作ブロックのみ追加） */

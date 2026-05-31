@@ -1244,6 +1244,7 @@
     let waveformHiresTimer = 0;
     let waveformHiresScrollTimer = 0;
     let waveformVisualRefreshRaf = 0;
+    let regionBoundaryPresentationRaf = 0;
     const WAVEFORM_HIRES_DELAY_MS = 500;
     const WAVEFORM_HIRES_SCROLL_DELAY_MS = 320;
     /** 見た目を保ちつつ負荷を抑える（旧 4px） */
@@ -1478,14 +1479,32 @@
         if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
     }
 
-    function flushWaveformVisualRefresh(opt) {
-        if (waveformVisualRefreshRaf) {
-            cancelAnimationFrame(waveformVisualRefreshRaf);
-            waveformVisualRefreshRaf = 0;
+    function cancelPendingRaf(rafId) {
+        if (rafId) cancelAnimationFrame(rafId);
+        return 0;
+    }
+
+    /** 波形描画の直後にリージョン境界 UI を更新。sync 時は同フレーム、通常は次 rAF */
+    function scheduleRegionBoundaryPresentationRefresh(opt) {
+        if (typeof refreshAllRegionBoundaryPresentation !== 'function') return;
+        if (opt && opt.sync) {
+            regionBoundaryPresentationRaf = cancelPendingRaf(regionBoundaryPresentationRaf);
+            refreshAllRegionBoundaryPresentation();
+            return;
         }
+        regionBoundaryPresentationRaf = cancelPendingRaf(regionBoundaryPresentationRaf);
+        regionBoundaryPresentationRaf = requestAnimationFrame(() => {
+            regionBoundaryPresentationRaf = 0;
+            refreshAllRegionBoundaryPresentation();
+        });
+    }
+
+    function flushWaveformVisualRefresh(opt) {
+        waveformVisualRefreshRaf = cancelPendingRaf(waveformVisualRefreshRaf);
         const refreshed = applyWaveformViewportPeaksImmediate(opt);
         drawWaveformVisualLayers();
         drawWaveformChromeOverlays();
+        scheduleRegionBoundaryPresentationRefresh(opt);
         return refreshed;
     }
 
@@ -1496,7 +1515,7 @@
             if (!refreshed) scheduleWaveformHiresRedrawAfterZoom(opt);
             return;
         }
-        if (waveformVisualRefreshRaf) return;
+        waveformVisualRefreshRaf = cancelPendingRaf(waveformVisualRefreshRaf);
         waveformVisualRefreshRaf = requestAnimationFrame(() => {
             waveformVisualRefreshRaf = 0;
             const refreshed = flushWaveformVisualRefresh(opt);
@@ -1506,6 +1525,7 @@
 
     function refreshWaveformTimelineAfterZoomChange() {
         applyWaveformTimelineZoomLayout();
+        invalidateWaveformViewportHiresSpec();
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         if (isWaveformLiteDrawRestricted()) {
             cancelWaveformHiresRedraw();

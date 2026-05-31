@@ -215,6 +215,9 @@
     let seekFlashHideTimer = 0;
     let seekFlashAriaTimer = 0;
 
+    /**
+     * @param {string} [kind] 'notice' = 長め表示, 'error' = 赤トースト, 省略 = 通常（短い・白）
+     */
     function flashSeekHint(primary, secondary, kind) {
         const root = document.getElementById('seekFlashOverlay');
         const pEl = document.getElementById('seekFlashPrimary');
@@ -222,6 +225,13 @@
         if (!root || !pEl || !sEl) return;
         clearTimeout(seekFlashHideTimer);
         clearTimeout(seekFlashAriaTimer);
+
+        root.classList.remove('seek-flash--notice', 'seek-flash--error');
+        if (kind === 'notice') {
+            root.classList.add('seek-flash--notice');
+        } else if (kind === 'error') {
+            root.classList.add('seek-flash--error');
+        }
 
         pEl.textContent = primary != null ? String(primary) : '';
         const sec = secondary != null && secondary !== '' ? String(secondary) : '';
@@ -238,7 +248,8 @@
         }
 
         const isNotice = kind === 'notice';
-        const holdMs = isNotice ? 2100 : 680;
+        const isError = kind === 'error';
+        const holdMs = isNotice ? 2100 : isError ? 2600 : 680;
         const fadeOutMs = 820;
         seekFlashHideTimer = setTimeout(() => {
             root.classList.remove('seek-flash--visible');
@@ -246,14 +257,16 @@
         seekFlashAriaTimer = setTimeout(() => {
             seekFlashAriaTimer = 0;
             root.setAttribute('aria-hidden', 'true');
+            root.classList.remove('seek-flash--notice', 'seek-flash--error');
         }, holdMs + fadeOutMs + 40);
     }
 
+    /** シークバースクラブ用（通常トースト: kind 省略） */
     function flashSeekScrubThrottled(t) {
         const now = performance.now();
         if (now - lastSeekFlashScrubAt < 200) return;
         lastSeekFlashScrubAt = now;
-        flashSeekHint('Scrub', formatTimecodeForTransport(t));
+        flashSeekHint('Scrub', formatTimecodeForTransport(t), undefined);
     }
 
     /** ブラウザ内ユーザー設定（モニター床・Loop 等）。Import/Export・IndexedDB セッションとは別。 */

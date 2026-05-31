@@ -762,47 +762,133 @@
         return Math.max(1e-6, step * 0.5);
     }
 
-    function isTimelineBoundaryAtTransport(track, transportSec) {
+    /** 分割禁止マージン（最短リージョン長と同じ。クランプで無音片ができるのを防ぐ） */
+    function playbackRegionSplitForbiddenMarginSec() {
+        return PLAYBACK_REGION_MIN_SEC;
+    }
+
+    function isNearPlaybackRegionUncuttableTransport(track, transportSec, marginSec) {
         const segments = getTrackSegments(track);
         if (!segments.length) return false;
-        const t = snapRegionTransportSec(transportSec, { sameSlotOnly: track.slot });
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return true;
+        const margin = Math.max(
+            playbackRegionSplitForbiddenMarginSec(),
+            Number(marginSec) || 0,
+        );
         const eps = transportBoundaryEpsilonSec();
         for (let i = 0; i < segments.length; i++) {
             const regionIn = getSegmentRegionTimelineIn(track, i);
             const segEnd = getSegmentTimelineEnd(track, i);
-            if (Math.abs(regionIn - t) <= eps) return true;
-            if (Math.abs(segEnd - t) <= eps) return true;
+            if (Math.abs(regionIn - t) <= margin + eps) return true;
+            if (Math.abs(segEnd - t) <= margin + eps) return true;
+            if (i < segments.length - 1) {
+                const nextAnchor = getSegmentTimelineStart(track, i + 1);
+                if (Math.abs(nextAnchor - t) <= margin + eps) return true;
+            }
+        }
+        const t0 = getTrackTimelineStartSec(track);
+        const trackEnd = getTrackTimelineEndSec(track);
+        if (Math.abs(t0 - t) <= margin + eps) return true;
+        if (Math.abs(trackEnd - t) <= margin + eps) return true;
+        return false;
+    }
+
+    function isSourceSecAtExistingSegmentBoundary(track, sourceSec) {
+        const segments = getTrackSegments(track);
+        if (!segments.length) return false;
+        const s = Number(sourceSec);
+        if (!Number.isFinite(s)) return true;
+        const eps = Math.max(1e-5, PLAYBACK_REGION_MIN_SEC * 0.05);
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            if (Math.abs(seg.sourceInSec - s) <= eps) return true;
+            if (Math.abs(seg.sourceOutSec - s) <= eps) return true;
         }
         return false;
     }
 
-    function splitPlaybackRegionAtTransportSec(track, transportSec, opt) {
-        if (!isExtraTrackRef(track)) return false;
+    function resolvePlaybackRegionSplitPlacement(track, transportSec) {
+        if (!isExtraTrackRef(track)) return null;
         const splitTransport = clampRegionEditTransportSec(track, transportSec);
-        const hit = mapTransportToSegment(track, splitTransport);
-        let segments = getTrackSegments(track);
-        let splitIndex = -1;
-        let sourceSplit = 0;
-        let clipId = 'main';
-
-        if (hit) {
-            sourceSplit = hit.sourceSec;
-            splitIndex = hit.segmentIndex;
-            clipId = hit.clipId || getSegmentClipId(track, splitIndex);
-        } else if (!segments.length) {
-            return false;
-        } else {
-            return false;
+        if (
+            isNearPlaybackRegionUncuttableTransport(
+                track,
+                splitTransport,
+                playbackRegionSplitForbiddenMarginSec(),
+            )
+        ) {
+            return null;
         }
+        const hit = mapTransportToSegment(track, splitTransport);
+        if (!hit) return null;
 
+        const segments = getTrackSegments(track);
+        const splitIndex = hit.segmentIndex;
         const seg = segments[splitIndex];
+        if (!seg) return null;
         const fullDur = getSegmentSourceDurationSec(track, seg);
-        if (!fullDur) return false;
+        if (!fullDur) return null;
+
+        const clipId = hit.clipId || getSegmentClipId(track, splitIndex);
+        const sourceSplit = segmentSourceSecFromTransport(
+            track,
+            splitIndex,
+            splitTransport,
+        );
         const minSplit = seg.sourceInSec + PLAYBACK_REGION_MIN_SEC;
         const maxSplit = seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC;
-        if (!(maxSplit > minSplit)) return false;
-        if (sourceSplit < minSplit) sourceSplit = minSplit;
-        if (sourceSplit > maxSplit) sourceSplit = maxSplit;
+        if (!(maxSplit > minSplit)) return null;
+
+        const eps = transportBoundaryEpsilonSec();
+        if (sourceSplit < minSplit - eps || sourceSplit > maxSplit + eps) {
+            return null;
+        }
+        if (isSourceSecAtExistingSegmentBoundary(track, sourceSplit)) {
+            return null;
+        }
+
+        const margin = playbackRegionSplitForbiddenMarginSec();
+        const regionIn = getSegmentRegionTimelineIn(track, splitIndex);
+        const segEnd = getSegmentTimelineEnd(track, splitIndex);
+        const playStart = getSegmentPlaybackTimelineStart(track, splitIndex);
+        if (splitTransport - regionIn < margin - eps) return null;
+        if (segEnd - splitTransport < margin - eps) return null;
+        if (splitTransport - playStart < margin - eps) return null;
+
+        return {
+            splitTransport,
+            splitIndex,
+            sourceSplit,
+            clipId,
+            seg,
+        };
+    }
+
+    function isPlaybackRegionSplitForbiddenAtTransport(track, transportSec) {
+        return !resolvePlaybackRegionSplitPlacement(track, transportSec);
+    }
+    window.isPlaybackRegionSplitForbiddenAtTransport =
+        isPlaybackRegionSplitForbiddenAtTransport;
+
+    function isTimelineBoundaryAtTransport(track, transportSec) {
+        const segments = getTrackSegments(track);
+        if (!segments.length) return false;
+        const t = snapRegionTransportSec(transportSec, { sameSlotOnly: track.slot });
+        return isNearPlaybackRegionUncuttableTransport(
+            track,
+            t,
+            playbackRegionSplitForbiddenMarginSec(),
+        );
+    }
+
+    function splitPlaybackRegionAtTransportSec(track, transportSec, opt) {
+        if (!isExtraTrackRef(track)) return false;
+        const placement = resolvePlaybackRegionSplitPlacement(track, transportSec);
+        if (!placement) return false;
+
+        const { splitIndex, sourceSplit, clipId, seg } = placement;
+        let segments = getTrackSegments(track);
 
         const leftStart = getSegmentTimelineStart(track, splitIndex);
         const leftDur = sourceSplit - seg.sourceInSec;
