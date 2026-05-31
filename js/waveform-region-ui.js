@@ -144,6 +144,42 @@
         return true;
     }
 
+    function canRejoinVolumeSplitBoundaryAt(track, boundaryIndex) {
+        if (
+            typeof isSegmentSourceContinuousAtBoundary !== 'function' ||
+            !isSegmentSourceContinuousAtBoundary(track, boundaryIndex)
+        ) {
+            return false;
+        }
+        const leftGain = getSegmentGainDb(track, boundaryIndex);
+        const rightGain = getSegmentGainDb(track, boundaryIndex + 1);
+        return Math.abs(leftGain) < 0.0005 && Math.abs(rightGain) < 0.0005;
+    }
+
+    /** 音量リセット後、音量分離で切った結合可能な境界だけをつなぎ直す */
+    function tryRejoinVolumeSplitBoundariesAtSegment(track, segmentIndex, opt) {
+        if (!isExtraTrackRef(track)) return false;
+        let idx = segmentIndex;
+        if (!Number.isFinite(idx) || idx < 0) return false;
+        let joined = false;
+        const joinOpt = {
+            silent: true,
+            skipUndo: !!(opt && opt.skipUndo),
+        };
+        if (canRejoinVolumeSplitBoundaryAt(track, idx)) {
+            if (joinSegmentBoundaryAt(track, idx, joinOpt)) {
+                joined = true;
+            }
+        }
+        const leftBoundary = idx - 1;
+        if (leftBoundary >= 0 && canRejoinVolumeSplitBoundaryAt(track, leftBoundary)) {
+            if (joinSegmentBoundaryAt(track, leftBoundary, joinOpt)) {
+                joined = true;
+            }
+        }
+        return joined;
+    }
+
     function resolveJoinedBoundaryIndexAtPointer(track, clientX, clientY) {
         if (!isExtraTrackRef(track)) return -1;
         const segments = getTrackSegments(track);

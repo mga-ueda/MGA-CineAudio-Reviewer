@@ -751,6 +751,14 @@
         ) {
             syncMarkerForRegionVolumeChange(track, segmentIndex, next, prev);
         }
+        if (
+            Math.abs(next) < 0.0005 &&
+            typeof tryRejoinVolumeSplitBoundariesAtSegment === 'function'
+        ) {
+            tryRejoinVolumeSplitBoundariesAtSegment(track, segmentIndex, {
+                skipUndo: !!(opt && opt.skipUndo),
+            });
+        }
         return true;
     }
 

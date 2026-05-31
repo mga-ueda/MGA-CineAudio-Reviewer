@@ -471,6 +471,8 @@
     };
     window.splitPlaybackRegionAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.joinPlaybackRegionAtPointer = joinPlaybackRegionAtPointer;
+    window.tryRejoinVolumeSplitBoundariesAtSegment =
+        tryRejoinVolumeSplitBoundariesAtSegment;
     window.getPlaybackRegionPersistSnapshot = getPlaybackRegionPersistSnapshot;
     window.restorePlaybackRegionFromPersist = restorePlaybackRegionFromPersist;
     window.handlePlaybackRegionSplitKeydown = handlePlaybackRegionSplitKeydown;
