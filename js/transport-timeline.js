@@ -324,7 +324,28 @@
         const meta = getVideoTransportDurationSec();
         if (videoMain.ended) {
             const end = videoMain.currentTime || 0;
-            if (end > 0) return end;
+            const coalescingKeyboardSeek = transportExplicitSeekFinalizeTimer !== 0;
+            if (coalescingKeyboardSeek) {
+                const barT =
+                    typeof getTransportSec === 'function'
+                        ? getTransportSec()
+                        : typeof transportPlaybackSec === 'number'
+                          ? transportPlaybackSec
+                          : end;
+                let ignoreEndedSnap = false;
+                if (end > 0 && meta > 0 && Number.isFinite(barT)) {
+                    const expected =
+                        typeof videoSecForTransportSec === 'function'
+                            ? videoSecForTransportSec(barT)
+                            : barT;
+                    if (Number.isFinite(expected) && end > expected + 0.12) {
+                        ignoreEndedSnap = true;
+                    }
+                }
+                if (end > 0 && !ignoreEndedSnap) return end;
+            } else if (end > 0) {
+                return end;
+            }
         }
         const cap =
             typeof getPlaybackCapSec === 'function' ? getPlaybackCapSec(videoMain) : 0;
@@ -663,7 +684,10 @@
             return false;
         }
         clearVideoParkedForTail();
-        const target = videoSecForTransportSec(x);
+        let target = videoSecForTransportSec(x);
+        if (typeof clampVideoElementSeekSec === 'function') {
+            target = clampVideoElementSeekSec(videoMain, target);
+        }
         const cur = videoMain.currentTime || 0;
         const drift = Math.abs(cur - target);
         const playing =
@@ -836,21 +860,6 @@
     function advanceTransportTailPlaybackClock(master) {
         const barT =
             typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
-        const ctx =
-            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
-        if (
-            ctx &&
-            typeof getTransportSecFromActiveExtraMix === 'function'
-        ) {
-            const fromMix = getTransportSecFromActiveExtraMix(ctx);
-            if (
-                fromMix != null &&
-                Number.isFinite(fromMix) &&
-                applyTransportPlaybackSecFromExtraMix(fromMix, master)
-            ) {
-                return;
-            }
-        }
         const now = performance.now();
         if (transportPlaybackLastTs > 0) {
             transportPlaybackSec += (now - transportPlaybackLastTs) / 1000;
@@ -858,11 +867,11 @@
             transportPlaybackSec = Math.max(transportPlaybackSec, barT);
         }
         transportPlaybackLastTs = now;
+        const ctx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        nudgeTransportFromExtraMixIfAhead(ctx, master);
         if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
             snapRangeLoopPlaybackIfNeeded();
-        }
-        if (typeof applyReviewMixVideoGain === 'function') {
-            applyReviewMixVideoGain();
         }
         if (transportPlaybackSec >= master - 0.0005) {
             if (typeof handleMasterTransportEndReached === 'function') {
@@ -876,20 +885,14 @@
     }
 
     function applyTransportPlaybackSecFromExtraMix(fromMix, master) {
-        const drift =
-            typeof EXTRA_AUDIO_RESYNC_DRIFT_SEC === 'number'
-                ? EXTRA_AUDIO_RESYNC_DRIFT_SEC
-                : 0.045;
-        if (fromMix + drift < transportPlaybackSec) {
+        if (!Number.isFinite(fromMix)) return false;
+        if (fromMix <= transportPlaybackSec + 0.001) {
             return false;
         }
         transportPlaybackSec = fromMix;
         transportPlaybackLastTs = performance.now();
         if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
             snapRangeLoopPlaybackIfNeeded();
-        }
-        if (typeof applyReviewMixVideoGain === 'function') {
-            applyReviewMixVideoGain();
         }
         if (master > 0 && transportPlaybackSec >= master - 0.0005) {
             if (typeof handleMasterTransportEndReached === 'function') {
@@ -901,6 +904,33 @@
             maybeFinishMasterTransportPlayback();
         }
         return true;
+    }
+
+    function advanceTransportWallClock(master) {
+        const now = performance.now();
+        if (transportPlaybackLastTs > 0) {
+            transportPlaybackSec += (now - transportPlaybackLastTs) / 1000;
+        }
+        transportPlaybackLastTs = now;
+        if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
+            snapRangeLoopPlaybackIfNeeded();
+        }
+        if (master > 0 && transportPlaybackSec >= master - 0.0005) {
+            if (typeof handleMasterTransportEndReached === 'function') {
+                void handleMasterTransportEndReached();
+            }
+            return;
+        }
+        if (typeof maybeFinishMasterTransportPlayback === 'function') {
+            maybeFinishMasterTransportPlayback();
+        }
+    }
+
+    function nudgeTransportFromExtraMixIfAhead(ctx, master) {
+        if (!ctx || typeof getTransportSecFromActiveExtraMix !== 'function') return;
+        const fromMix = getTransportSecFromActiveExtraMix(ctx);
+        if (fromMix == null || !Number.isFinite(fromMix)) return;
+        applyTransportPlaybackSecFromExtraMix(fromMix, master);
     }
 
     function syncReviewMixPlaybackIfNeeded() {
@@ -918,6 +948,7 @@
 
     /** 音声マスター: 再生中は壁時計（またはミックス／テール）で transportPlaybackSec を進める。 */
     function syncTransportPlaybackClockFromAudio() {
+        if (isSeeking) return;
         if (!isTransportUiClockActive()) return;
         const master = getMasterTransportDurationSec();
         const inTail =
@@ -935,39 +966,10 @@
             syncReviewMixPlaybackIfNeeded();
             return;
         }
+        advanceTransportWallClock(master);
         const ctx =
             typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
-        if (
-            ctx &&
-            typeof getTransportSecFromActiveExtraMix === 'function'
-        ) {
-            const fromMix = getTransportSecFromActiveExtraMix(ctx);
-            if (
-                fromMix != null &&
-                Number.isFinite(fromMix) &&
-                applyTransportPlaybackSecFromExtraMix(fromMix, master)
-            ) {
-                syncReviewMixPlaybackIfNeeded();
-                return;
-            }
-        }
-        const now = performance.now();
-        if (transportPlaybackLastTs > 0) {
-            transportPlaybackSec += (now - transportPlaybackLastTs) / 1000;
-        }
-        transportPlaybackLastTs = now;
-        if (typeof snapRangeLoopPlaybackIfNeeded === 'function') {
-            snapRangeLoopPlaybackIfNeeded();
-        }
-        if (transportPlaybackSec >= master - 0.0005) {
-            if (typeof handleMasterTransportEndReached === 'function') {
-                void handleMasterTransportEndReached();
-            }
-            return;
-        }
-        if (typeof maybeFinishMasterTransportPlayback === 'function') {
-            maybeFinishMasterTransportPlayback();
-        }
+        nudgeTransportFromExtraMixIfAhead(ctx, master);
         syncReviewMixPlaybackIfNeeded();
     }
 

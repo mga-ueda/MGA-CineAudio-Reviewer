@@ -171,7 +171,12 @@
             'playing',
             () => {
                 if (typeof applyReviewMixVideoGain === 'function') {
-                    applyReviewMixVideoGain({ forceRecapture: true });
+                    const forceRecapture =
+                        typeof consumeReviewMixVideoMonitorTapStale === 'function' &&
+                        consumeReviewMixVideoMonitorTapStale();
+                    applyReviewMixVideoGain(
+                        forceRecapture ? { forceRecapture: true } : undefined,
+                    );
                 }
             },
             { signal: sig },
@@ -235,6 +240,9 @@
         if (playing) {
             transportPlayGeneration += 1;
             transportPlayInFlight = null;
+            if (typeof cancelTransportExplicitSeekTail === 'function') {
+                cancelTransportExplicitSeekTail();
+            }
             writeLog('Transport: pause (button)');
             if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
             videoMain.pause();

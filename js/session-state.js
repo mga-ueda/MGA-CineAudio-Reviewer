@@ -11,6 +11,15 @@
     let rafId = 0;
     let transportPlayInFlight = null;
     let transportPlayGeneration = 0;
+    /** 連続ジャンプバースト中、最後に再生を再開するか */
+    let transportExplicitSeekResumeIntent = false;
+    /** 最新の明示シーク（古い tail はこれと不一致なら破棄） */
+    let transportExplicitSeekSerial = 0;
+    /** 連続ジャンプの最終シーク先（秒） */
+    let transportExplicitSeekTargetSec = null;
+    let transportExplicitSeekFinalizeTimer = 0;
+    /** @type {Array<(ok: boolean) => void>} */
+    let transportExplicitSeekWaiters = [];
 
     let pendingRestoreTime = null;
     /** 直近の再生開始位置（Alt+Enter でここから再生し直す）。未再生時は null。 */

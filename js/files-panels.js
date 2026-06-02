@@ -668,6 +668,25 @@
         return 0;
     }
 
+    /** video.currentTime 代入前に seekable 範囲へ収める（誤エンドスナップ軽減） */
+    function clampVideoElementSeekSec(v, sec) {
+        let t = Number(sec);
+        if (!Number.isFinite(t)) return 0;
+        t = Math.max(0, t);
+        const cap = getPlaybackCapSec(v);
+        if (cap > 0) t = Math.min(t, Math.max(0, cap - 0.002));
+        try {
+            if (v && v.seekable && v.seekable.length > 0) {
+                const lo = v.seekable.start(0);
+                const hi = v.seekable.end(v.seekable.length - 1);
+                if (Number.isFinite(hi) && hi > lo) {
+                    t = Math.max(lo, Math.min(hi - 0.002, t));
+                }
+            }
+        } catch (_) {}
+        return t;
+    }
+
     function videoReady() {
         return getDuration(videoMain) > 0;
     }
@@ -698,6 +717,7 @@
     window.parseTimecodeStringToClipFrameIndex = parseTimecodeStringToClipFrameIndex;
     window.formatTimecodeForSide = formatTimecodeForSide;
     window.videoReady = videoReady;
+    window.clampVideoElementSeekSec = clampVideoElementSeekSec;
 
     function timecodeOverlayDisplaySec() {
         if (videoReady()) return videoMain.currentTime || 0;

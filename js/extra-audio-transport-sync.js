@@ -239,7 +239,7 @@
                 await ctx.resume();
             } catch (_) {}
         }
-        applyReviewMixVideoGain({ forceRecapture: true });
+        applyReviewMixVideoGain();
         if (ctx) {
             const mode = reviewMixVideoBoostPlayback
                 ? 'capture boost'

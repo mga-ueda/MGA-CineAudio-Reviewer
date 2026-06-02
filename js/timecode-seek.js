@@ -341,7 +341,24 @@
             } catch (_) {}
             return;
         }
-        releaseStuckEnded();
+        if (
+            typeof isVideoTimeNearTransportTarget === 'function' &&
+            isVideoTimeNearTransportTarget(transportT) &&
+            !videoMain.seeking
+        ) {
+            transportPlaybackSec = transportT;
+            transportPlaybackLastTs = performance.now();
+            return;
+        }
+        if (
+            videoMain.ended ||
+            (typeof isVideoSpuriousSeekableEndSnap === 'function' &&
+                isVideoSpuriousSeekableEndSnap(transportT))
+        ) {
+            unstickVideoFromSpuriousEnd(transportT);
+        } else {
+            releaseStuckEnded();
+        }
         if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
         const didSeek = applyTimeToVideoIfNeeded(transportT);
         if (didSeek || videoMain.seeking) {
@@ -522,10 +539,259 @@
         }
         if (typeof setPlayingUi === 'function') setPlayingUi(false);
         if (typeof stopRaf === 'function') stopRaf();
+        if (typeof markReviewMixVideoMonitorTapStale === 'function') {
+            markReviewMixVideoMonitorTapStale();
+        }
+        if (typeof clearSeekPlaybackTrail === 'function') {
+            clearSeekPlaybackTrail();
+        }
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport();
         }
         return active;
+    }
+
+    function cancelTransportExplicitSeekTail() {
+        transportExplicitSeekResumeIntent = false;
+        transportExplicitSeekSerial += 1;
+        transportExplicitSeekTargetSec = null;
+        if (transportExplicitSeekFinalizeTimer) {
+            clearTimeout(transportExplicitSeekFinalizeTimer);
+            transportExplicitSeekFinalizeTimer = 0;
+        }
+        if (transportExplicitSeekWaiters.length) {
+            const stale = transportExplicitSeekWaiters.splice(0);
+            for (const resolve of stale) resolve(false);
+        }
+    }
+
+    window.cancelTransportExplicitSeekTail = cancelTransportExplicitSeekTail;
+
+    const TRANSPORT_EXPLICIT_SEEK_COALESCE_MS = 120;
+
+    function videoSeekSecForExplicitTransport(targetSec) {
+        const x =
+            typeof clampTransportSec === 'function'
+                ? clampTransportSec(targetSec)
+                : Number(targetSec);
+        const mapped =
+            typeof videoSecForTransportSec === 'function'
+                ? videoSecForTransportSec(x)
+                : x;
+        if (typeof clampVideoElementSeekSec === 'function') {
+            return clampVideoElementSeekSec(videoMain, mapped);
+        }
+        return mapped;
+    }
+
+    function isVideoSpuriousSeekableEndSnap(targetSec) {
+        if (!videoMain) return false;
+        const expected = videoSeekSecForExplicitTransport(targetSec);
+        if (!Number.isFinite(expected)) return false;
+        const cur = videoMain.currentTime || 0;
+        if (Math.abs(cur - expected) <= 0.12) return false;
+        const cap =
+            typeof getPlaybackCapSec === 'function' ? getPlaybackCapSec(videoMain) : 0;
+        if (cap > 0 && expected < cap - 0.12 && cur >= cap - 0.06) return true;
+        const meta =
+            typeof getVideoTransportDurationSec === 'function'
+                ? getVideoTransportDurationSec()
+                : typeof getDuration === 'function'
+                  ? getDuration(videoMain)
+                  : 0;
+        if (meta > 0 && expected < meta - 0.12 && cur >= meta - 0.06) return true;
+        return !!(videoMain.ended && expected < (cap > 0 ? cap : meta) - 0.12);
+    }
+
+    function setVideoMainSeekSec(videoT) {
+        if (!videoMain) return;
+        try {
+            videoMain.pause();
+        } catch (_) {}
+        if (typeof videoMain.fastSeek === 'function') {
+            try {
+                videoMain.fastSeek(videoT);
+                return;
+            } catch (_) {}
+        }
+        try {
+            videoMain.currentTime = videoT;
+        } catch (_) {}
+    }
+
+    async function recoverVideoSeekFromSpuriousEnd(targetSec, serial) {
+        if (serial !== transportExplicitSeekSerial) return false;
+        const expected = videoSeekSecForExplicitTransport(targetSec);
+        if (!Number.isFinite(expected)) return false;
+        const hop =
+            expected > 0.5
+                ? typeof clampVideoElementSeekSec === 'function'
+                    ? clampVideoElementSeekSec(
+                          videoMain,
+                          Math.max(0, expected - Math.min(2, expected * 0.08))
+                      )
+                    : Math.max(0, expected - 0.5)
+                : expected;
+        if (Math.abs(hop - expected) > 0.04) {
+            setVideoMainSeekSec(hop);
+            await waitForVideoSeekIdle(800);
+            if (serial !== transportExplicitSeekSerial) return false;
+        }
+        setVideoMainSeekSec(expected);
+        return true;
+    }
+
+    function rejectExplicitSeekWaiters() {
+        if (!transportExplicitSeekWaiters.length) return;
+        const stale = transportExplicitSeekWaiters.splice(0);
+        for (const resolve of stale) resolve(false);
+    }
+
+    function applyTransportUiImmediate(sec, opt) {
+        const x =
+            typeof clampTransportSec === 'function'
+                ? clampTransportSec(sec)
+                : Number.isFinite(Number(sec))
+                  ? Number(sec)
+                  : 0;
+        transportPlaybackSec = x;
+        transportPlaybackLastTs = performance.now();
+        if (!(opt && opt.deferSeekBar) && typeof setTransportSec === 'function') {
+            setTransportSec(x);
+        }
+        if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
+            currentTimeEl.textContent = formatTimecodeForTransport(x);
+        }
+        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+            updateMusicalGridPlayheadDisplay(x);
+        }
+        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+    }
+
+    function unstickVideoFromSpuriousEnd(targetSec) {
+        if (!videoMain) return;
+        if (!isVideoSpuriousSeekableEndSnap(targetSec) && !videoMain.ended) return;
+        const videoT = videoSeekSecForExplicitTransport(targetSec);
+        if (!Number.isFinite(videoT)) return;
+        setVideoMainSeekSec(videoT);
+    }
+
+    function applyExplicitKeyboardSeekTransport(targetSec) {
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(targetSec, { resumeAfter: false });
+            return;
+        }
+        applyTimeToVideo(targetSec);
+    }
+
+    function isVideoTimeNearTransportTarget(targetSec) {
+        if (!videoMain) return true;
+        if (isVideoSpuriousSeekableEndSnap(targetSec)) return false;
+        const expected = videoSeekSecForExplicitTransport(targetSec);
+        if (!Number.isFinite(expected)) return true;
+        const cur = videoMain.currentTime || 0;
+        return Math.abs(cur - expected) <= 0.12;
+    }
+
+    async function waitForVideoSeekNearTarget(targetSec, serial, maxMs) {
+        const deadline = performance.now() + (maxMs > 0 ? maxMs : 3000);
+        while (performance.now() < deadline) {
+            if (serial !== transportExplicitSeekSerial) return false;
+            if (videoMain && videoMain.seeking) {
+                const remain = deadline - performance.now();
+                if (remain <= 0) break;
+                await waitForVideoSeekIdle(Math.min(400, remain));
+                continue;
+            }
+            if (isVideoTimeNearTransportTarget(targetSec)) return true;
+            await new Promise((r) => requestAnimationFrame(r));
+        }
+        return (
+            serial === transportExplicitSeekSerial &&
+            isVideoTimeNearTransportTarget(targetSec)
+        );
+    }
+
+    async function commitExplicitKeyboardSeekVideo(targetSec, serial) {
+        if (serial !== transportExplicitSeekSerial) return false;
+        applyExplicitKeyboardSeekTransport(targetSec);
+        if (typeof setTransportSec === 'function') {
+            const x =
+                typeof clampTransportSec === 'function'
+                    ? clampTransportSec(targetSec)
+                    : targetSec;
+            setTransportSec(x);
+        }
+        if (!(typeof videoReady === 'function' && videoReady())) return true;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            if (serial !== transportExplicitSeekSerial) return false;
+            const ok = await waitForVideoSeekNearTarget(
+                targetSec,
+                serial,
+                attempt === 0 ? 2500 : 1500
+            );
+            if (ok) return true;
+            if (serial !== transportExplicitSeekSerial) return false;
+            if (isVideoSpuriousSeekableEndSnap(targetSec) || videoMain.ended) {
+                unstickVideoFromSpuriousEnd(targetSec);
+                await recoverVideoSeekFromSpuriousEnd(targetSec, serial);
+            } else if (videoMain.seeking) {
+                await waitForVideoSeekIdle(1500);
+            } else {
+                applyExplicitKeyboardSeekTransport(targetSec);
+            }
+        }
+        return (
+            serial === transportExplicitSeekSerial &&
+            isVideoTimeNearTransportTarget(targetSec)
+        );
+    }
+
+    function finalizeExplicitTransportSeek() {
+        const serial = transportExplicitSeekSerial;
+        const target = transportExplicitSeekTargetSec;
+        return new Promise((resolve) => {
+            void (async () => {
+                try {
+                    if (target == null || !Number.isFinite(target)) {
+                        resolve(false);
+                        return;
+                    }
+                    if (serial !== transportExplicitSeekSerial) {
+                        resolve(false);
+                        return;
+                    }
+                    const committed = await commitExplicitKeyboardSeekVideo(target, serial);
+                    if (serial !== transportExplicitSeekSerial) {
+                        resolve(false);
+                        return;
+                    }
+                    if (!committed) {
+                        resolve(false);
+                        return;
+                    }
+                    const shouldResume = transportExplicitSeekResumeIntent;
+                    transportExplicitSeekResumeIntent = false;
+                    if (shouldResume) {
+                        await resumeTransportAfterExplicitSeek(target);
+                        if (
+                            typeof forceTransportRafLoop === 'function' &&
+                            typeof isTransportUiClockActive === 'function' &&
+                            isTransportUiClockActive()
+                        ) {
+                            forceTransportRafLoop();
+                        }
+                    }
+                    resolve(true);
+                } catch (_) {
+                    if (serial === transportExplicitSeekSerial) {
+                        transportExplicitSeekResumeIntent = false;
+                    }
+                    resolve(false);
+                }
+            })();
+        });
     }
 
     async function resumeTransportAfterExplicitSeek(sec) {
@@ -544,27 +810,51 @@
             return;
         }
         if (typeof startVideoPlayback === 'function') {
-            await startVideoPlayback({ force: true });
+            await startVideoPlayback({
+                force: true,
+                playGen: transportPlayGeneration,
+            });
         }
     }
 
     async function seekTransportToAndWait(sec, opt) {
-        const wantResume = !(opt && opt.resumeAfter === false);
-        const wasActive = wantResume ? captureTransportWasActive() : false;
-        if (wasActive || (videoMain && !videoMain.paused)) {
+        const playingBeforeSeek = captureTransportWasActive();
+        if (playingBeforeSeek) {
+            transportExplicitSeekResumeIntent = true;
+        }
+        if (opt && opt.resumeAfter === false && !transportExplicitSeekResumeIntent) {
+            transportExplicitSeekResumeIntent = false;
+        }
+
+        transportExplicitSeekTargetSec = sec;
+        const serial = ++transportExplicitSeekSerial;
+
+        if (playingBeforeSeek || (videoMain && !videoMain.paused)) {
             pauseTransportBeforeSeek();
         }
-        applyTimeToVideo(sec);
-        if (typeof videoReady === 'function' && videoReady()) {
-            await waitForVideoSeekIdle(3000);
+
+        applyTransportUiImmediate(sec);
+
+        if (transportExplicitSeekFinalizeTimer) {
+            clearTimeout(transportExplicitSeekFinalizeTimer);
+            transportExplicitSeekFinalizeTimer = 0;
         }
-        updateSeekUiFromVideo();
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
-        }
-        if (wasActive && wantResume) {
-            await resumeTransportAfterExplicitSeek(sec);
-        }
+        rejectExplicitSeekWaiters();
+
+        return new Promise((resolve) => {
+            transportExplicitSeekWaiters.push(resolve);
+            transportExplicitSeekFinalizeTimer = setTimeout(() => {
+                transportExplicitSeekFinalizeTimer = 0;
+                const waiters = transportExplicitSeekWaiters.splice(0);
+                if (serial !== transportExplicitSeekSerial) {
+                    for (const done of waiters) done(false);
+                    return;
+                }
+                finalizeExplicitTransportSeek().then((ok) => {
+                    for (const done of waiters) done(ok);
+                });
+            }, TRANSPORT_EXPLICIT_SEEK_COALESCE_MS);
+        });
     }
 
     function isAudioOnlyTransportPlayback() {
@@ -583,6 +873,7 @@
             } else if (typeof primeExtraAudioForPlayback === 'function') {
                 await primeExtraAudioForPlayback();
             }
+            if (playGen != null && playGen !== transportPlayGeneration) return false;
             return startMasterTransportTailPlayback(playGen);
         }
         await ensureVideoCanPlayForTransport();
@@ -600,12 +891,19 @@
         } else if (typeof primeExtraAudioForPlayback === 'function') {
             await primeExtraAudioForPlayback();
         }
+        if (playGen != null && playGen !== transportPlayGeneration) return false;
         const startT = getTransportSec();
         rememberTransportPlaybackStartSec(startT);
         transportPlaybackSec = startT;
         transportPlaybackLastTs = performance.now();
         setTransportSec(startT);
-        if (typeof applyVideoTimeForTransportSec === 'function') {
+        if (
+            typeof applyVideoTimeForTransportSec === 'function' &&
+            !(
+                typeof isVideoTimeNearTransportTarget === 'function' &&
+                isVideoTimeNearTransportTarget(startT)
+            )
+        ) {
             applyVideoTimeForTransportSec(startT, { force: true });
         }
         setPlayingUi(true);
@@ -787,12 +1085,13 @@
                           ? isTransportPlaying()
                           : !videoMain.paused;
                 if (transportActive) {
-                    if (typeof syncTransportPlaybackClockFromAudio === 'function') {
-                        syncTransportPlaybackClockFromAudio();
-                    } else if (typeof syncTransportPlaybackClockFromVideo === 'function') {
-                        syncTransportPlaybackClockFromVideo();
-                    }
-                    t = transportPlaybackSec;
+                    t =
+                        typeof transportPlaybackSec === 'number' &&
+                        Number.isFinite(transportPlaybackSec)
+                            ? transportPlaybackSec
+                            : typeof getTransportPlaybackClockSec === 'function'
+                              ? getTransportPlaybackClockSec()
+                              : 0;
                 } else {
                     t = getTransportSec();
                 }

@@ -540,6 +540,25 @@
         return reviewMixVideoWired;
     }
 
+    function stopVideoMonitorStreamTracks() {
+        if (!videoMonitorStream) return;
+        try {
+            for (const track of videoMonitorStream.getTracks()) {
+                track.stop();
+            }
+        } catch (_) {}
+    }
+
+    function markReviewMixVideoMonitorTapStale() {
+        reviewMixVideoMonitorTapStale = true;
+    }
+
+    function consumeReviewMixVideoMonitorTapStale() {
+        const stale = reviewMixVideoMonitorTapStale;
+        reviewMixVideoMonitorTapStale = false;
+        return stale;
+    }
+
     function releaseReviewMixVideoCaptureGraph() {
         reviewMixVideoBoostPlayback = false;
         if (videoMonitorStreamSrc) {
@@ -548,6 +567,7 @@
             } catch (_) {}
             videoMonitorStreamSrc = null;
         }
+        stopVideoMonitorStreamTracks();
         videoMonitorStream = null;
         if (videoMonitorSinkGain) {
             try {
@@ -644,11 +664,13 @@
                     videoMonitorStreamSrc.disconnect();
                 } catch (_) {}
                 videoMonitorStreamSrc = null;
+                stopVideoMonitorStreamTracks();
                 videoMonitorStream = null;
             }
             if (!videoMonitorStreamSrc) {
                 videoMonitorStream = captureFn();
                 if (!videoMonitorStream || !videoMonitorStream.getAudioTracks().length) {
+                    stopVideoMonitorStreamTracks();
                     videoMonitorStream = null;
                     return false;
                 }
@@ -717,11 +739,13 @@
                     videoMonitorStreamSrc.disconnect();
                 } catch (_) {}
                 videoMonitorStreamSrc = null;
+                stopVideoMonitorStreamTracks();
                 videoMonitorStream = null;
             }
             if (!videoMonitorStreamSrc) {
                 videoMonitorStream = captureFn();
                 if (!videoMonitorStream || !videoMonitorStream.getAudioTracks().length) {
+                    stopVideoMonitorStreamTracks();
                     videoMonitorStream = null;
                     return false;
                 }

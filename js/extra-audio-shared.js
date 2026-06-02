@@ -29,6 +29,8 @@
     var videoMonitorStream = null;
     var videoMonitorStreamSrc = null;
     var videoMonitorSinkGain = null;
+    /** 明示シーク後に captureStream タップを一度だけ張り直す */
+    var reviewMixVideoMonitorTapStale = false;
     var nativeVideoMixModeLogged = false;
     var extraMixScheduleCtxTime = 0;
     var videoAudioSoloBtn = null;

@@ -272,7 +272,7 @@
      * ループ区間内の通常再生では動画に追従し、巻き戻しシーク中・テール部のみ同期する。
      */
     function shouldApplyVideoTimeDuringRangeLoopTick(t) {
-        if (!isRangeLoopPlaybackActive()) return true;
+        if (!isRangeLoopPlaybackActive()) return false;
         if (typeof videoMain === 'undefined' || !videoMain) return true;
         if (videoMain.seeking) return false;
         const vd =
