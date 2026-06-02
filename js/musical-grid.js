@@ -17,6 +17,123 @@
     let musicalGridPhraseFillVisible = false;
     let musicalGridPosCache = null;
 
+    const phraseUndoStack = [];
+    const phraseRedoStack = [];
+    let phraseUndoPaused = false;
+    let phraseInputFocusSnapshot = null;
+
+    function capturePhraseUndoSnapshot() {
+        readMusicalGridFromInputs();
+        return normalizeMusicalGridPhraseText(musicalGridPhraseText);
+    }
+
+    function clearPhraseRedoStack() {
+        phraseRedoStack.length = 0;
+    }
+
+    function clearPhraseUndoStack() {
+        phraseUndoStack.length = 0;
+        clearPhraseRedoStack();
+        phraseInputFocusSnapshot = null;
+    }
+
+    function requestPhraseUndoCapture() {
+        if (phraseUndoPaused) return;
+        const snap = capturePhraseUndoSnapshot();
+        const top = phraseUndoStack.length
+            ? phraseUndoStack[phraseUndoStack.length - 1]
+            : null;
+        if (top === snap) return;
+        phraseUndoStack.push(snap);
+        clearPhraseRedoStack();
+    }
+
+    function restorePhraseUndoSnapshot(phrase) {
+        phraseUndoPaused = true;
+        musicalGridPhraseText = normalizeMusicalGridPhraseText(phrase);
+        if (musicalGridPhraseInput) {
+            musicalGridPhraseInput.value = musicalGridPhraseText;
+        }
+        clearMusicalGridPositionCache();
+        if (typeof persistMusicalGridToStorage === 'function') {
+            persistMusicalGridToStorage();
+        }
+        scheduleMusicalGridRedraw();
+        updatePhraseBoundaryOverlay();
+        phraseUndoPaused = false;
+    }
+
+    function undoPhraseDefinition() {
+        if (!phraseUndoStack.length) return false;
+        const current = capturePhraseUndoSnapshot();
+        const prev = phraseUndoStack.pop();
+        phraseRedoStack.push(current);
+        restorePhraseUndoSnapshot(prev);
+        if (typeof writeLog === 'function') {
+            writeLog('Phrase: undo -> ' + musicalGridPhraseText);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Phrase', 'Undo', 'notice');
+        }
+        return true;
+    }
+
+    function redoPhraseDefinition() {
+        if (!phraseRedoStack.length) return false;
+        const current = capturePhraseUndoSnapshot();
+        const next = phraseRedoStack.pop();
+        phraseUndoStack.push(current);
+        restorePhraseUndoSnapshot(next);
+        if (typeof writeLog === 'function') {
+            writeLog('Phrase: redo -> ' + musicalGridPhraseText);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Phrase', 'Redo', 'notice');
+        }
+        return true;
+    }
+
+    function commitPhraseInputUndoIfChanged() {
+        readMusicalGridFromInputs();
+        const after = capturePhraseUndoSnapshot();
+        if (phraseInputFocusSnapshot == null || phraseUndoPaused) {
+            phraseInputFocusSnapshot = null;
+            return;
+        }
+        if (phraseInputFocusSnapshot !== after) {
+            const top = phraseUndoStack.length
+                ? phraseUndoStack[phraseUndoStack.length - 1]
+                : null;
+            if (top !== phraseInputFocusSnapshot) {
+                phraseUndoStack.push(phraseInputFocusSnapshot);
+                clearPhraseRedoStack();
+            }
+        }
+        phraseInputFocusSnapshot = null;
+    }
+
+    function handleMusicalGridPhraseUndoKeydown(e) {
+        if (!matchUserShortcut(e, 'regionUndo')) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (phraseBoundaryDragActive) return false;
+        if (!undoPhraseDefinition()) return false;
+        e.preventDefault();
+        return true;
+    }
+
+    function handleMusicalGridPhraseRedoKeydown(e) {
+        if (!matchUserShortcut(e, 'regionRedo')) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (phraseBoundaryDragActive) return false;
+        if (!redoPhraseDefinition()) return false;
+        e.preventDefault();
+        return true;
+    }
+
     const BAR_GROUP_FILL_A = 'rgba(200, 48, 58, 0.14)';
     const BAR_GROUP_FILL_B = 'rgba(48, 110, 220, 0.14)';
     const MUSICAL_GRID_DEFAULT_METER_TEXT = '120-4/4';
@@ -489,6 +606,7 @@
         clearMusicalGridPositionCache();
         if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
         if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+        clearPhraseUndoStack();
         scheduleMusicalGridRedraw();
     }
 
@@ -708,6 +826,8 @@
         const raw = input ? input.value : musicalGridPhraseText;
         const caret = input ? input.selectionStart : 0;
         const entryIndex = commaListEntryIndexAtCaret(raw, caret);
+        requestPhraseUndoCapture();
+        phraseInputFocusSnapshot = null;
         readMusicalGridFromInputs();
         clearMusicalGridPositionCache();
         let spec = parsePhraseGroupingSpec(musicalGridPhraseText);
@@ -797,12 +917,24 @@
     function getPhraseGroupRangesSnapshot() {
         if (!getMusicalGridPhraseFillVisible()) return [];
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return [];
+        if (!settings) return [];
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
+        if (
+            phraseBoundaryDragActive &&
+            phraseBoundaryDragCounts &&
+            phraseBoundaryDragCounts.length
+        ) {
+            return collectPhraseGroupRangesFromBarCounts(
+                settings.meterSpec,
+                master,
+                phraseBoundaryDragCounts,
+            );
+        }
+        if (!settings.phraseSpec) return [];
         return collectPhraseGroupRanges(
             settings.meterSpec,
             master,
@@ -960,7 +1092,19 @@
     }
 
     function collectPhraseGroupDrawRanges(settings, master) {
-        if (!getMusicalGridPhraseFillVisible() || !settings.phraseSpec) return [];
+        if (!getMusicalGridPhraseFillVisible()) return [];
+        if (
+            phraseBoundaryDragActive &&
+            phraseBoundaryDragCounts &&
+            phraseBoundaryDragCounts.length
+        ) {
+            return collectPhraseGroupRangesFromBarCounts(
+                settings.meterSpec,
+                master,
+                phraseBoundaryDragCounts,
+            );
+        }
+        if (!settings.phraseSpec) return [];
         return collectPhraseGroupRanges(settings.meterSpec, master, settings.phraseSpec);
     }
 
@@ -1159,6 +1303,14 @@
         return sizes.join(',');
     }
 
+    function phraseGroupCountsEqual(a, b) {
+        if (!a || !b || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if ((a[i] | 0) !== (b[i] | 0)) return false;
+        }
+        return true;
+    }
+
     function sumGroupBarCounts(counts, endExclusive) {
         let sum = 0;
         const end = Math.min(endExclusive | 0, counts.length);
@@ -1166,17 +1318,642 @@
         return sum;
     }
 
-    function movePhraseBoundaryToBarIndex(counts, boundaryIndex, boundaryBarIndex) {
+    function countsForPhraseBoundaryAtBarIndex(startCounts, boundaryIndex, targetBarK) {
         const b = boundaryIndex | 0;
-        if (b < 0 || b >= counts.length - 1) return counts;
-        const sumBefore = sumGroupBarCounts(counts, b);
-        const pairTotal = counts[b] + counts[b + 1];
-        const minBar = sumBefore + 1;
-        const maxBar = sumBefore + pairTotal - 1;
-        const k = Math.max(minBar, Math.min(maxBar, boundaryBarIndex | 0));
-        counts[b] = k - sumBefore;
-        counts[b + 1] = pairTotal - counts[b];
-        return counts;
+        if (!startCounts || b < 0 || b >= startCounts.length - 1) {
+            return startCounts ? startCounts.slice() : [];
+        }
+        const sumBefore = sumGroupBarCounts(startCounts, b);
+        const left0 = startCounts[b];
+        const right0 = startCounts[b + 1];
+        const pairEnd = sumBefore + left0 + right0;
+        const minK = sumBefore;
+        const maxK = pairEnd;
+        const k = Math.max(minK, Math.min(maxK, targetBarK | 0));
+
+        if (k <= sumBefore) {
+            const newCounts = startCounts.slice(0, b);
+            newCounts.push(left0 + right0);
+            for (let i = b + 2; i < startCounts.length; i++) {
+                newCounts.push(startCounts[i]);
+            }
+            return newCounts;
+        }
+
+        const barsForLeft = k - sumBefore;
+        const barsForRight = pairEnd - k;
+
+        if (barsForRight <= 0) {
+            const merged = startCounts.slice(0, b);
+            merged.push(left0 + right0);
+            for (let i = b + 2; i < startCounts.length; i++) {
+                merged.push(startCounts[i]);
+            }
+            return merged;
+        }
+
+        const newCounts = startCounts.slice(0, b);
+        newCounts.push(barsForLeft);
+        newCounts.push(barsForRight);
+        for (let i = b + 2; i < startCounts.length; i++) {
+            newCounts.push(startCounts[i]);
+        }
+        return newCounts;
+    }
+
+    function targetBarKForPhraseBoundaryDrag(
+        startBarK,
+        startClientX,
+        clientX,
+        barBoundaries,
+        minK,
+        maxK,
+    ) {
+        const sk = startBarK | 0;
+        const lo = minK | 0;
+        const hi = maxK | 0;
+        if (!barBoundaries || !barBoundaries.length) return sk;
+        const startSec = barBoundaries[sk];
+        if (!Number.isFinite(startSec)) return Math.max(lo, Math.min(hi, sk));
+
+        let deltaSec = 0;
+        if (typeof timelineSecDeltaFromClientXDelta === 'function') {
+            deltaSec = timelineSecDeltaFromClientXDelta(clientX, startClientX);
+        } else if (typeof transportSecFromClientX === 'function') {
+            const curSec = transportSecFromClientX(clientX);
+            const startTransportSec = transportSecFromClientX(startClientX);
+            if (Number.isFinite(curSec) && Number.isFinite(startTransportSec)) {
+                deltaSec = curSec - startTransportSec;
+            }
+        }
+        let targetSec = startSec + deltaSec;
+        const minSec = barBoundaries[lo];
+        const maxSec = barBoundaries[hi];
+        if (Number.isFinite(minSec)) targetSec = Math.max(minSec, targetSec);
+        if (Number.isFinite(maxSec)) targetSec = Math.min(maxSec, targetSec);
+
+        if (getMusicalGridVisible()) {
+            let bestSec = targetSec;
+            let bestDist = Infinity;
+            for (let bar = lo; bar <= hi; bar++) {
+                const sec = barBoundaries[bar];
+                if (!Number.isFinite(sec)) continue;
+                const d = Math.abs(sec - targetSec);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestSec = sec;
+                }
+            }
+            targetSec = bestSec;
+        }
+
+        const bar = barIndexForBoundarySec(targetSec, barBoundaries);
+        return Math.max(lo, Math.min(hi, bar));
+    }
+
+    function applyPhraseBoundaryDragPreview(counts) {
+        const prevLen = phraseBoundaryDragCounts ? phraseBoundaryDragCounts.length : 0;
+        phraseBoundaryDragCounts = counts.slice();
+        drawMusicalGridOverlay();
+        if (prevLen !== counts.length) {
+            updatePhraseBoundaryOverlay();
+        } else {
+            repositionPhraseBoundaryHandlesFromSnapshot();
+        }
+    }
+
+    function applyExplicitPhraseGroupBarCounts(counts, opt) {
+        if (!counts || !counts.length) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!o.skipUndo) requestPhraseUndoCapture();
+        const text = counts.map((c) => String(Math.max(1, c | 0))).join(',');
+        musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
+        if (musicalGridPhraseInput) {
+            musicalGridPhraseInput.value = musicalGridPhraseText;
+        }
+        clearMusicalGridPositionCache();
+    }
+
+    /** 小節 index k（その小節の開始＝小節線）で Phrase グループを 2 分割。境界上は null。 */
+    function splitPhraseGroupAtBarIndex(counts, barIndex) {
+        const k = barIndex | 0;
+        if (!counts || !counts.length || k <= 0) return null;
+        let sum = 0;
+        for (let g = 0; g < counts.length; g++) {
+            const groupBars = counts[g] | 0;
+            const groupStart = sum;
+            const groupEnd = sum + groupBars;
+            if (k > groupStart && k < groupEnd) {
+                const leftBars = k - groupStart;
+                const rightBars = groupEnd - k;
+                if (leftBars < 1 || rightBars < 1) return null;
+                const next = counts.slice(0, g);
+                next.push(leftBars, rightBars);
+                for (let i = g + 1; i < counts.length; i++) {
+                    next.push(counts[i]);
+                }
+                return next;
+            }
+            sum = groupEnd;
+        }
+        return null;
+    }
+
+    function musicalGridBarLineSnapThresholdSec() {
+        if (typeof regionSnapThresholdSec === 'function') {
+            return regionSnapThresholdSec();
+        }
+        return 0.05;
+    }
+
+    /**
+     * transport 秒が小節線（各小節の開始）に近いとき、その bar index で Phrase 分割候補を返す。
+     * @param {object} [opt]
+     * @param {boolean} [opt.nearestBarLine] true なら閾値に関係なく最寄りの小節線（シークバー用）
+     * @returns {{ barIndex: number, barSec: number, counts: number[] }|{ barIndex: number, invalid: true }|null}
+     */
+    function resolveMusicalGridBarLinePhraseSplitAtTransportSec(transportSec, opt) {
+        if (!getMusicalGridVisible()) return null;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+        const boundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const totalBars = Math.max(0, boundaries.length - 1);
+        if (totalBars < 2) return null;
+        const s = Number(transportSec);
+        if (!Number.isFinite(s)) return null;
+        const threshold = musicalGridBarLineSnapThresholdSec();
+
+        let bestK = -1;
+        let bestDist = Infinity;
+        for (let k = 1; k < totalBars; k++) {
+            const lineSec = boundaries[k];
+            if (!Number.isFinite(lineSec)) continue;
+            const d = Math.abs(s - lineSec);
+            if (d < bestDist) {
+                bestDist = d;
+                bestK = k;
+            }
+        }
+        if (bestK < 1) return null;
+        if (!o.nearestBarLine && bestDist > threshold) return null;
+
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (!counts.length) return null;
+        const nextCounts = splitPhraseGroupAtBarIndex(counts, bestK);
+        if (!nextCounts) {
+            return { barIndex: bestK, invalid: true };
+        }
+        return {
+            barIndex: bestK,
+            barSec: boundaries[bestK],
+            counts: nextCounts,
+        };
+    }
+
+    function isWaveformPointerInsideLanes() {
+        return (
+            typeof waveformLanesPointerInside !== 'undefined' && waveformLanesPointerInside === true
+        );
+    }
+
+    function seekbarTransportSec() {
+        if (typeof getTransportSec === 'function') {
+            const sec = getTransportSec();
+            if (Number.isFinite(sec)) return sec;
+        }
+        return null;
+    }
+
+    /** 波形ポインタ優先。トラック外または座標なしはシークバー位置。 */
+    function resolvePhraseEditTransportSec() {
+        const pointerOnWaveform = isWaveformPointerInsideLanes();
+        let transportSec = pointerOnWaveform ? waveformPointerTransportSec() : null;
+        let useSeekbar = !pointerOnWaveform;
+        if (transportSec == null) {
+            transportSec = seekbarTransportSec();
+            useSeekbar = true;
+        }
+        if (transportSec == null) return null;
+        return { transportSec, useSeekbar };
+    }
+
+    /** 波形外はシークバー、波形上はポインタ（join 専用。ポインタ X のフォールバックなし）。 */
+    function resolvePhraseJoinTargetSec() {
+        if (isWaveformPointerInsideLanes()) {
+            const transportSec = waveformPointerTransportSec();
+            if (transportSec == null) return null;
+            return { transportSec, useSeekbar: false };
+        }
+        const transportSec = seekbarTransportSec();
+        if (transportSec == null) return null;
+        return { transportSec, useSeekbar: true };
+    }
+
+    function snapSecToPhraseBoundaryStops(sec, threshold) {
+        const s = Number(sec);
+        if (!Number.isFinite(s)) return sec;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return sec;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return sec;
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (counts.length < 2) return sec;
+        const ranges = collectPhraseGroupRangesFromBarCounts(
+            settings.meterSpec,
+            master,
+            counts,
+        );
+        if (ranges.length < 2) return sec;
+
+        let bestSec = s;
+        let bestDist = Infinity;
+        for (let i = 0; i < ranges.length - 1; i++) {
+            const stopSec = ranges[i].endSec;
+            if (!Number.isFinite(stopSec)) continue;
+            const d = Math.abs(stopSec - s);
+            if (d < bestDist) {
+                bestDist = d;
+                bestSec = stopSec;
+            }
+        }
+        if (bestDist <= threshold) return bestSec;
+        return sec;
+    }
+
+    function waveformPointerTransportSec() {
+        let clientX = null;
+        if (typeof getWaveformLanesPointerClientX === 'function') {
+            clientX = getWaveformLanesPointerClientX();
+        }
+        if (!Number.isFinite(clientX) && typeof getWaveformPointerClientX === 'function') {
+            clientX = getWaveformPointerClientX();
+        }
+        if (!Number.isFinite(clientX) || typeof transportSecFromClientX !== 'function') {
+            return null;
+        }
+        const sec = transportSecFromClientX(clientX);
+        return Number.isFinite(sec) ? sec : null;
+    }
+
+    function splitPhraseAtWaveformPointer() {
+        if (!getMusicalGridVisible()) return false;
+        if (phraseBoundaryDragActive) return false;
+
+        const target = resolvePhraseEditTransportSec();
+        if (!target) return false;
+        const { transportSec, useSeekbar } = target;
+
+        const hit = resolveMusicalGridBarLinePhraseSplitAtTransportSec(transportSec, {
+            nearestBarLine: useSeekbar,
+        });
+        if (!hit) return false;
+
+        const barLabel = String((hit.barIndex | 0) + 1);
+        if (hit.invalid) {
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Phrase: already at boundary (bar ' +
+                        barLabel +
+                        (useSeekbar ? ', seekbar' : '') +
+                        ')',
+                );
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Phrase', "Can't split here", 'error');
+            }
+            return true;
+        }
+
+        applyExplicitPhraseGroupBarCounts(hit.counts);
+        persistMusicalGridAndRedraw({ skipUndo: true });
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Phrase split at bar ' +
+                    barLabel +
+                    (useSeekbar ? ' (seekbar)' : '') +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(
+                'Phrase',
+                'Split at bar ' + barLabel + (useSeekbar ? ' (seekbar)' : ''),
+                'notice',
+            );
+        }
+        return true;
+    }
+
+    function handleMusicalGridPhraseSplitKeydown(e) {
+        if (!matchUserShortcut(e, 'regionSplit')) return false;
+        if (e.repeat) return false;
+        if (!getMusicalGridVisible()) return false;
+        splitPhraseAtWaveformPointer();
+        e.preventDefault();
+        return true;
+    }
+
+    function resolvePhraseGroupIndexAtTransportSec(transportSec) {
+        if (!getMusicalGridVisible()) return null;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (!counts.length) return null;
+        const ranges = collectPhraseGroupRangesFromBarCounts(
+            settings.meterSpec,
+            master,
+            counts,
+        );
+        const s = Number(transportSec);
+        if (!Number.isFinite(s)) return null;
+        for (let i = 0; i < ranges.length; i++) {
+            const r = ranges[i];
+            if (s >= r.startSec - 1e-9 && s < r.endSec + 1e-9) {
+                return i;
+            }
+        }
+        return null;
+    }
+
+    /** Phrase グループ g を隣接グループへ吸収して削除。2 グループ未満は null。 */
+    function deletePhraseGroupAtIndex(counts, groupIndex) {
+        const g = groupIndex | 0;
+        if (!counts || counts.length < 2 || g < 0 || g >= counts.length) return null;
+        const next = counts.slice();
+        if (g > 0) {
+            next[g - 1] += next[g];
+            next.splice(g, 1);
+        } else {
+            next[1] += next[0];
+            next.splice(0, 1);
+        }
+        return next;
+    }
+
+    function deletePhraseAtWaveformPointer() {
+        if (!getMusicalGridVisible()) return false;
+        if (phraseBoundaryDragActive) return false;
+
+        const target = resolvePhraseEditTransportSec();
+        if (!target) return false;
+        const { transportSec, useSeekbar } = target;
+
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return false;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return false;
+
+        const groupIndex = resolvePhraseGroupIndexAtTransportSec(transportSec);
+        if (groupIndex == null) return false;
+
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (counts.length < 2) {
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Phrase: cannot delete the only phrase' + (useSeekbar ? ' (seekbar)' : ''),
+                );
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Phrase', "Can't delete here", 'error');
+            }
+            return true;
+        }
+
+        const nextCounts = deletePhraseGroupAtIndex(counts, groupIndex);
+        if (!nextCounts) return false;
+
+        const label = phraseGroupLogLabelForIndex(groupIndex);
+        applyExplicitPhraseGroupBarCounts(nextCounts);
+        persistMusicalGridAndRedraw({ skipUndo: true });
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Phrase ' +
+                    label +
+                    ' deleted' +
+                    (useSeekbar ? ' (seekbar)' : '') +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(
+                'Phrase',
+                'Deleted ' + label + (useSeekbar ? ' (seekbar)' : ''),
+                'notice',
+            );
+        }
+        return true;
+    }
+
+    function handleMusicalGridPhraseDeleteKeydown(e) {
+        if (!matchUserShortcut(e, 'regionDelete')) return false;
+        if (e.shiftKey) return false;
+        if (e.repeat) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (!deletePhraseAtWaveformPointer()) return false;
+        e.preventDefault();
+        return true;
+    }
+
+    /** 境界 index b の右隣フレーズを b に連結。 */
+    function mergePhraseGroupsAtBoundaryIndex(counts, boundaryIndex) {
+        const b = boundaryIndex | 0;
+        if (!counts || counts.length < 2 || b < 0 || b >= counts.length - 1) return null;
+        const next = counts.slice(0, b);
+        next.push(counts[b] + counts[b + 1]);
+        for (let i = b + 2; i < counts.length; i++) {
+            next.push(counts[i]);
+        }
+        return next;
+    }
+
+    /**
+     * transport 秒がフレーズ境界に近いとき、その境界で連結候補を返す。
+     * 連結は常にスナップ閾値内の境界のみ。
+     */
+    function resolvePhraseBoundaryJoinAtTransportSec(transportSec) {
+        if (!getMusicalGridVisible()) return null;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (counts.length < 2) return null;
+        const ranges = collectPhraseGroupRangesFromBarCounts(
+            settings.meterSpec,
+            master,
+            counts,
+        );
+        if (ranges.length < 2) return null;
+        const s = Number(transportSec);
+        if (!Number.isFinite(s)) return null;
+        const threshold = musicalGridBarLineSnapThresholdSec();
+
+        let bestB = -1;
+        let bestDist = Infinity;
+        for (let i = 0; i < ranges.length - 1; i++) {
+            const sec = ranges[i].endSec;
+            if (!Number.isFinite(sec)) continue;
+            const d = Math.abs(s - sec);
+            if (d < bestDist) {
+                bestDist = d;
+                bestB = i;
+            }
+        }
+        if (bestB < 0 || bestDist > threshold) return null;
+
+        const nextCounts = mergePhraseGroupsAtBoundaryIndex(counts, bestB);
+        if (!nextCounts) return null;
+        return {
+            boundaryIndex: bestB,
+            boundarySec: ranges[bestB].endSec,
+            counts: nextCounts,
+        };
+    }
+
+    function joinPhraseAtTarget() {
+        if (!getMusicalGridVisible()) return false;
+        if (phraseBoundaryDragActive) return false;
+
+        const target = resolvePhraseJoinTargetSec();
+        if (!target) return false;
+        let { transportSec, useSeekbar } = target;
+        const threshold = musicalGridBarLineSnapThresholdSec();
+        if (useSeekbar) {
+            transportSec = snapSecToPhraseBoundaryStops(transportSec, threshold);
+        }
+
+        const hit = resolvePhraseBoundaryJoinAtTransportSec(transportSec);
+        if (!hit) return false;
+
+        const left = phraseGroupLogLabelForIndex(hit.boundaryIndex);
+        const right = phraseGroupLogLabelForIndex(hit.boundaryIndex + 1);
+        applyExplicitPhraseGroupBarCounts(hit.counts);
+        persistMusicalGridAndRedraw({ skipUndo: true });
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Phrase ' +
+                    left +
+                    '/' +
+                    right +
+                    ' joined' +
+                    (useSeekbar ? ' (seekbar)' : '') +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(
+                'Phrase',
+                'Joined ' + left + '/' + right + (useSeekbar ? ' (seekbar)' : ''),
+                'notice',
+            );
+        }
+        return true;
+    }
+
+    function handleMusicalGridPhraseJoinKeydown(e) {
+        if (!matchUserShortcut(e, 'regionJoin')) return false;
+        if (e.repeat) return false;
+        if (!getMusicalGridVisible()) return false;
+        joinPhraseAtTarget();
+        e.preventDefault();
+        return true;
+    }
+
+    function wasLeftPhraseAbsorbedIntoRight(startCounts, finalCounts, boundaryIndex) {
+        const b = boundaryIndex | 0;
+        if (!startCounts || !finalCounts || finalCounts.length !== startCounts.length - 1) {
+            return false;
+        }
+        if (b < 0 || b >= startCounts.length - 1) return false;
+        for (let i = 0; i < b; i++) {
+            if (finalCounts[i] !== startCounts[i]) return false;
+        }
+        if (finalCounts[b] !== startCounts[b] + startCounts[b + 1]) return false;
+        for (let i = b + 1; i < finalCounts.length; i++) {
+            if (finalCounts[i] !== startCounts[i + 1]) return false;
+        }
+        return true;
+    }
+
+    /** 展開済みグループ小節数列から Phrase 着色範囲を求める（境界ドラッグ中のスナップショット用）。 */
+    function collectPhraseGroupRangesFromBarCounts(meterSpec, durationSec, counts) {
+        const ranges = [];
+        if (!(durationSec > 0) || !meterSpec || !counts || !counts.length) return ranges;
+        const barBoundaries = collectBarBoundarySecs(meterSpec, durationSec);
+        const totalBars = Math.max(0, barBoundaries.length - 1);
+        let barIndex = 0;
+        for (let gi = 0; gi < counts.length && barIndex < totalBars; gi++) {
+            const groupBars = Math.max(0, counts[gi] | 0);
+            if (groupBars <= 0) continue;
+            const startSec = barBoundaries[barIndex];
+            const endBarIndex = Math.min(totalBars, barIndex + groupBars);
+            const endSec =
+                endBarIndex < totalBars ? barBoundaries[endBarIndex] : durationSec;
+            if (endSec > startSec + 1e-9) {
+                ranges.push({
+                    startSec,
+                    endSec,
+                    paletteIndex: gi,
+                });
+            }
+            barIndex = endBarIndex;
+        }
+        if (barIndex < totalBars) {
+            const startSec = barBoundaries[barIndex];
+            if (durationSec > startSec + 1e-9) {
+                ranges.push({
+                    startSec,
+                    endSec: durationSec,
+                    paletteIndex: counts.length,
+                });
+            }
+        }
+        return ranges;
     }
 
     function barIndexForBoundarySec(sec, barBoundaries) {
@@ -1359,58 +2136,35 @@
         boundaryIndex,
         counts,
     ) {
-        const sumBefore = sumGroupBarCounts(counts, boundaryIndex);
-        const pairTotal = counts[boundaryIndex] + counts[boundaryIndex + 1];
-        const minBar = sumBefore + 1;
-        const maxBar = sumBefore + pairTotal - 1;
+        const b = boundaryIndex | 0;
+        const sumBefore = sumGroupBarCounts(counts, b);
+        if (b < 0 || b >= counts.length - 1) {
+            return sumBefore + 1;
+        }
+        const pairEnd = sumBefore + counts[b] + counts[b + 1];
+        const minK = sumBefore;
+        const maxK = pairEnd;
         const s = Number(transportSec);
-        if (!Number.isFinite(s)) return minBar;
-
-        const snapSecs = [];
-        if (getMusicalGridVisible()) {
-            for (let bar = minBar; bar <= maxBar; bar++) {
-                const sec = barBoundaries[bar];
-                if (Number.isFinite(sec)) snapSecs.push(sec);
-            }
-        }
-        if (getMusicalGridPhraseFillVisible()) {
-            const ranges = getPhraseGroupRangesSnapshot();
-            for (let i = 0; i < ranges.length - 1; i++) {
-                const sec = ranges[i].endSec;
-                if (!Number.isFinite(sec)) continue;
-                const bar = barIndexForBoundarySec(sec, barBoundaries);
-                if (bar >= minBar && bar <= maxBar) snapSecs.push(sec);
-            }
-        }
+        if (!Number.isFinite(s)) return sumBefore + counts[b];
 
         let targetSec = s;
-        if (snapSecs.length) {
-            let bestSec = snapSecs[0];
+        if (getMusicalGridVisible()) {
+            let bestSec = null;
             let bestDist = Infinity;
-            for (let i = 0; i < snapSecs.length; i++) {
-                const d = Math.abs(snapSecs[i] - s);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestSec = snapSecs[i];
-                }
-            }
-            targetSec = bestSec;
-        } else {
-            let best = minBar;
-            let bestDist = Infinity;
-            for (let bar = minBar; bar <= maxBar; bar++) {
+            for (let bar = minK; bar <= maxK; bar++) {
                 const sec = barBoundaries[bar];
                 if (!Number.isFinite(sec)) continue;
                 const d = Math.abs(sec - s);
                 if (d < bestDist) {
                     bestDist = d;
-                    best = bar;
+                    bestSec = sec;
                 }
             }
-            return best;
+            if (Number.isFinite(bestSec)) targetSec = bestSec;
         }
+
         const bar = barIndexForBoundarySec(targetSec, barBoundaries);
-        return Math.max(minBar, Math.min(maxBar, bar));
+        return Math.max(minK, Math.min(maxK, bar));
     }
 
     function repositionPhraseBoundaryHandlesFromSnapshot() {
@@ -1432,20 +2186,16 @@
 
     function applyPhraseGroupBarCounts(counts, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const overlayText = formatPhraseTextFromGroupBarCounts(counts, {
-            optimize: o.optimize !== false && !phraseBoundaryDragActive,
+        const text = formatPhraseTextFromGroupBarCounts(counts, {
+            optimize: o.optimize !== false,
         });
-        // ドラッグ中も入力欄は確定時と同じ最適化表記を表示する（オーバーレイは展開済み counts を使用）。
-        const displayText = phraseBoundaryDragActive
-            ? formatPhraseTextFromGroupBarCounts(counts, { optimize: true })
-            : overlayText;
-        musicalGridPhraseText = normalizeMusicalGridPhraseText(overlayText);
+        musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
         if (musicalGridPhraseInput) {
-            musicalGridPhraseInput.value = normalizeMusicalGridPhraseText(displayText);
+            musicalGridPhraseInput.value = musicalGridPhraseText;
         }
         if (phraseBoundaryDragActive) {
             drawMusicalGridOverlay();
-            repositionPhraseBoundaryHandlesFromSnapshot();
+            updatePhraseBoundaryOverlay();
         } else {
             scheduleMusicalGridRedraw();
         }
@@ -1471,6 +2221,10 @@
     let phraseBoundaryDragBoundaryIndex = -1;
     let phraseBoundaryDragBarBoundaries = null;
     let phraseBoundaryDragCounts = null;
+    let phraseBoundaryDragStartCounts = null;
+    let phraseBoundaryDragStartBoundaryIndex = -1;
+    let phraseBoundaryDragStartBarK = -1;
+    let phraseBoundaryDragStartClientX = 0;
     let phraseBoundaryDragDocMove = null;
     let phraseBoundaryDragDocUp = null;
 
@@ -1508,6 +2262,10 @@
         phraseBoundaryDragBoundaryIndex = -1;
         phraseBoundaryDragBarBoundaries = null;
         phraseBoundaryDragCounts = null;
+        phraseBoundaryDragStartCounts = null;
+        phraseBoundaryDragStartBoundaryIndex = -1;
+        phraseBoundaryDragStartBarK = -1;
+        phraseBoundaryDragStartClientX = 0;
         detachPhraseBoundaryDragDocListeners();
         const lanes = getWaveformLanesElForPhraseDrag();
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--phrase-boundary-drag');
@@ -1544,6 +2302,10 @@
         phraseBoundaryDragBoundaryIndex = b;
         phraseBoundaryDragBarBoundaries = barBoundaries;
         phraseBoundaryDragCounts = counts.slice();
+        phraseBoundaryDragStartCounts = counts.slice();
+        phraseBoundaryDragStartBoundaryIndex = b;
+        phraseBoundaryDragStartBarK = sumGroupBarCounts(counts, b) + counts[b];
+        phraseBoundaryDragStartClientX = ev.clientX;
 
         const lanes = getWaveformLanesElForPhraseDrag();
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--phrase-boundary-drag');
@@ -1553,25 +2315,23 @@
                 return;
             }
             e.preventDefault();
-            const transportSec =
-                typeof transportSecFromClientX === 'function'
-                    ? transportSecFromClientX(e.clientX)
-                    : null;
-            if (!Number.isFinite(transportSec)) return;
-            const nextCounts = phraseBoundaryDragCounts.slice();
-            const barIndex = snapBoundaryBarIndexForTransportSec(
-                transportSec,
+            const startCounts = phraseBoundaryDragStartCounts;
+            const b = phraseBoundaryDragStartBoundaryIndex;
+            if (!startCounts || b < 0 || b >= startCounts.length - 1) return;
+            const sumBefore = sumGroupBarCounts(startCounts, b);
+            const minK = sumBefore;
+            const maxK = sumBefore + startCounts[b] + startCounts[b + 1];
+            const targetK = targetBarKForPhraseBoundaryDrag(
+                phraseBoundaryDragStartBarK,
+                phraseBoundaryDragStartClientX,
+                e.clientX,
                 phraseBoundaryDragBarBoundaries,
-                phraseBoundaryDragBoundaryIndex,
-                nextCounts,
+                minK,
+                maxK,
             );
-            movePhraseBoundaryToBarIndex(
-                nextCounts,
-                phraseBoundaryDragBoundaryIndex,
-                barIndex,
+            applyPhraseBoundaryDragPreview(
+                countsForPhraseBoundaryAtBarIndex(startCounts, b, targetK),
             );
-            phraseBoundaryDragCounts = nextCounts;
-            applyPhraseGroupBarCounts(nextCounts, { persist: false });
         };
 
         phraseBoundaryDragDocUp = (e) => {
@@ -1580,22 +2340,58 @@
             }
             e.preventDefault();
             const finalCounts = phraseBoundaryDragCounts;
-            const boundaryIdx = phraseBoundaryDragBoundaryIndex;
+            const startCounts = phraseBoundaryDragStartCounts;
+            const boundaryIdx = phraseBoundaryDragStartBoundaryIndex;
+            if (finalCounts && finalCounts.length) {
+                if (!phraseGroupCountsEqual(startCounts, finalCounts)) {
+                    requestPhraseUndoCapture();
+                }
+                applyExplicitPhraseGroupBarCounts(finalCounts, { skipUndo: true });
+                persistMusicalGridAndRedraw({ skipUndo: true });
+            }
             endPhraseBoundaryDrag();
             if (finalCounts && finalCounts.length) {
-                applyPhraseGroupBarCounts(finalCounts, { persist: false });
-                persistMusicalGridAndRedraw();
                 if (typeof writeLog === 'function') {
-                    const left = phraseGroupLogLabelForIndex(boundaryIdx);
-                    const right = phraseGroupLogLabelForIndex(boundaryIdx + 1);
-                    writeLog(
-                        'Phrase boundary ' +
-                            left +
-                            '/' +
-                            right +
-                            ': ' +
-                            musicalGridPhraseText,
-                    );
+                    const mergedCount =
+                        startCounts && startCounts.length > finalCounts.length
+                            ? startCounts.length - finalCounts.length
+                            : 0;
+                    if (
+                        mergedCount > 0 &&
+                        wasLeftPhraseAbsorbedIntoRight(startCounts, finalCounts, boundaryIdx)
+                    ) {
+                        const left = phraseGroupLogLabelForIndex(boundaryIdx);
+                        const right = phraseGroupLogLabelForIndex(boundaryIdx + 1);
+                        writeLog(
+                            'Phrase ' +
+                                left +
+                                ' absorbed into ' +
+                                right +
+                                ': ' +
+                                musicalGridPhraseText,
+                        );
+                    } else if (mergedCount > 0) {
+                        const left = phraseGroupLogLabelForIndex(boundaryIdx);
+                        writeLog(
+                            'Phrase ' +
+                                left +
+                                ' merged ' +
+                                mergedCount +
+                                ' phrase(s): ' +
+                                musicalGridPhraseText,
+                        );
+                    } else {
+                        const left = phraseGroupLogLabelForIndex(boundaryIdx);
+                        const right = phraseGroupLogLabelForIndex(boundaryIdx + 1);
+                        writeLog(
+                            'Phrase boundary ' +
+                                left +
+                                '/' +
+                                right +
+                                ': ' +
+                                musicalGridPhraseText,
+                        );
+                    }
                 }
             }
         };
@@ -1627,11 +2423,13 @@
             phraseBoundaryRoot.hidden = true;
             return;
         }
-        const ranges = collectPhraseGroupRanges(
-            settings.meterSpec,
-            master,
-            settings.phraseSpec,
-        );
+        const ranges = phraseBoundaryDragActive
+            ? getPhraseGroupRangesSnapshot()
+            : collectPhraseGroupRanges(
+                  settings.meterSpec,
+                  master,
+                  settings.phraseSpec,
+              );
         if (ranges.length < 2) {
             phraseBoundaryRoot.hidden = true;
             return;
@@ -1647,7 +2445,11 @@
             const leftLabel = phraseGroupLabelForIndex(ranges[i].paletteIndex);
             const rightLabel = phraseGroupLabelForIndex(ranges[i + 1].paletteIndex);
             handle.title =
-                'Phrase ' + leftLabel + ' / ' + rightLabel + ' 境界（ドラッグで小節数を調整）';
+                'Phrase ' +
+                leftLabel +
+                ' / ' +
+                rightLabel +
+                ' 境界（ドラッグで小節数調整・左端で右と結合・右へ結合）';
             handle.addEventListener('pointerdown', (ev) => {
                 onPhraseBoundaryHandlePointerDown(ev, i);
             });
@@ -1714,8 +2516,15 @@
             });
         }
         if (musicalGridPhraseInput) {
+            musicalGridPhraseInput.addEventListener('focus', () => {
+                readMusicalGridFromInputs();
+                phraseInputFocusSnapshot = capturePhraseUndoSnapshot();
+            });
             musicalGridPhraseInput.addEventListener('input', onInput);
-            musicalGridPhraseInput.addEventListener('change', persistMusicalGridAndRedraw);
+            musicalGridPhraseInput.addEventListener('change', () => {
+                commitPhraseInputUndoIfChanged();
+                persistMusicalGridAndRedraw({ skipUndo: true });
+            });
             musicalGridPhraseInput.addEventListener('keydown', (e) => {
                 if (
                     matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
@@ -1732,7 +2541,8 @@
                 }
                 if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true })) {
                     e.preventDefault();
-                    persistMusicalGridAndRedraw();
+                    commitPhraseInputUndoIfChanged();
+                    persistMusicalGridAndRedraw({ skipUndo: true });
                     musicalGridPhraseInput.blur();
                     if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
                     return;
@@ -1778,6 +2588,16 @@
     window.jumpToAdjacentMusicalGridStop = jumpToAdjacentMusicalGridStop;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
+    window.handleMusicalGridPhraseSplitKeydown = handleMusicalGridPhraseSplitKeydown;
+    window.handleMusicalGridPhraseDeleteKeydown = handleMusicalGridPhraseDeleteKeydown;
+    window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;
+    window.joinPhraseAtTarget = joinPhraseAtTarget;
+    window.handleMusicalGridPhraseUndoKeydown = handleMusicalGridPhraseUndoKeydown;
+    window.handleMusicalGridPhraseRedoKeydown = handleMusicalGridPhraseRedoKeydown;
+    window.undoPhraseDefinition = undoPhraseDefinition;
+    window.redoPhraseDefinition = redoPhraseDefinition;
+    window.splitPhraseAtWaveformPointer = splitPhraseAtWaveformPointer;
+    window.deletePhraseAtWaveformPointer = deletePhraseAtWaveformPointer;
 
     initMusicalGridUi();
 })();

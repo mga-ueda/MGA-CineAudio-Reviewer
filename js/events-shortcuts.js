@@ -81,6 +81,20 @@
         }
 
         if (
+            typeof handleMusicalGridPhraseUndoKeydown === 'function' &&
+            handleMusicalGridPhraseUndoKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
+            typeof handleMusicalGridPhraseRedoKeydown === 'function' &&
+            handleMusicalGridPhraseRedoKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handlePlaybackRegionUndoKeydown === 'function' &&
             handlePlaybackRegionUndoKeydown(e)
         ) {
@@ -113,10 +127,19 @@
         }
 
         if (
+            (typeof handleMusicalGridPhraseSplitKeydown === 'function' &&
+                handleMusicalGridPhraseSplitKeydown(e)) ||
             (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                 handlePlaybackRegionSplitKeydown(e)) ||
             (typeof handlePlaybackRegionSlashKeydown === 'function' &&
                 handlePlaybackRegionSlashKeydown(e))
+        ) {
+            return;
+        }
+
+        if (
+            typeof handleMusicalGridPhraseJoinKeydown === 'function' &&
+            handleMusicalGridPhraseJoinKeydown(e)
         ) {
             return;
         }
@@ -200,6 +223,13 @@
             }
             e.preventDefault();
             togglePlayheadCenterLock();
+            return;
+        }
+
+        if (
+            typeof handleMusicalGridPhraseDeleteKeydown === 'function' &&
+            handleMusicalGridPhraseDeleteKeydown(e)
+        ) {
             return;
         }
 

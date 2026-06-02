@@ -352,6 +352,39 @@
                         <td>フォーカス解除。波形レーンへフォーカスを戻す</td>
                     </tr>
                     <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">フレーズ編集（Tempo/Sig 表示 <kbd>T</kbd> が ON のとき）</th>
+                    </tr>
+                    <tr>
+                        <td>フレーズ分割（小節線）</td>
+                        <td><kbd>X</kbd></td>
+                        <td>波形上：ポインタ近くの<strong>小節線</strong>で分割。波形外（再生中も同様）：<strong>シークバー</strong>に最も近い小節線で分割。Tempo/Sig ON 時はリージョン分割にはならない</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ連結（境界）</td>
+                        <td><kbd>B</kbd></td>
+                        <td>波形上：ポインタ近くの<strong>フレーズ境界</strong>で左右を1つに。波形外（再生中も同様）：シークバーが<strong>フレーズ境界上</strong>のときのみ（途中では不可）。Tempo/Sig ON 時はリージョン結合にはならない</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ削除</td>
+                        <td><kbd>Del</kbd>/<kbd>Backspace</kbd></td>
+                        <td>波形上：ポインタ下のフレーズを隣接フレーズへ吸収。波形外（再生中も同様）：シークバー位置のフレーズ。最後の1フレーズは不可。Tempo/Sig ON 時はリージョン削除より先</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ境界のドラッグ</td>
+                        <td>マウス（境界ハンドル）</td>
+                        <td>フレーズ着色 <kbd>P</kbd> ON 時、着色帯上の境界ハンドルをドラッグ。隣接フレーズ間で小節数を再分配・左端/右端で結合</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ定義の元に戻す</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
+                        <td>分割・連結・削除・境界ドラッグ・入力欄編集など。フレーズ履歴が空のときはリージョン編集を元に戻す</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ定義のやり直し</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
+                        <td>上記のやり直し。フレーズ履歴が空のときはリージョン編集をやり直す</td>
+                    </tr>
+                    <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">波形レーンにフォーカス時</th>
                     </tr>
                     <tr>
@@ -401,12 +434,12 @@
                     <tr>
                         <td>スプリット（2リージョンに分割）</td>
                         <td><kbd>X</kbd></td>
-                        <td>リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブな Audio Track</strong>（トラック名が赤いもの）を<strong>シークバー</strong>（再生ヘッド）の位置で分割</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブな Audio Track</strong>（トラック名が赤いもの）を<strong>シークバー</strong>（再生ヘッド）の位置で分割（<strong>Tempo/Sig ON</strong> 時はフレーズ分割を参照）</td>
                     </tr>
                     <tr>
                         <td>結合（隣接リージョンを1つに）</td>
                         <td><kbd>B</kbd></td>
-                        <td>隣接境界上にポインタを置いてから</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：隣接境界上にポインタを置いてから（<strong>Tempo/Sig ON</strong> 時はフレーズ連結を参照）</td>
                     </tr>
                     <tr>
                         <td>複数選択</td>
@@ -456,17 +489,17 @@
                     <tr>
                         <td>リージョン削除</td>
                         <td><kbd>Del</kbd>/<kbd>Backspace</kbd></td>
-                        <td>ポインタ下のリージョンを削除（最後の1つで全解除）。マーカー削除より先に判定</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：ポインタ下のリージョンを削除（最後の1つで全解除）。<strong>Tempo/Sig ON</strong> 時はフレーズ削除を先に判定</td>
                     </tr>
                     <tr>
                         <td>元に戻す（スプリット・削除・範囲変更など）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
-                        <td>リージョン編集の履歴をさかのぼる（回数無制限）</td>
+                        <td>フレーズ定義の履歴があればそれを優先。なければリージョン編集の履歴（いずれも回数無制限）</td>
                     </tr>
                     <tr>
                         <td>やり直し</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
-                        <td>元に戻すで戻した操作を進める</td>
+                        <td>元に戻すで戻した操作を進める（フレーズ定義を優先、なければリージョン）</td>
                     </tr>
                     <tr>
                         <td>解除</td>

@@ -2210,10 +2210,18 @@
 
         lanes.addEventListener('keydown', (ev) => {
             if (
+                (typeof handleMusicalGridPhraseSplitKeydown === 'function' &&
+                    handleMusicalGridPhraseSplitKeydown(ev)) ||
                 (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                     handlePlaybackRegionSplitKeydown(ev)) ||
                 (typeof handlePlaybackRegionSlashKeydown === 'function' &&
-                    handlePlaybackRegionSlashKeydown(ev)) ||
+                    handlePlaybackRegionSlashKeydown(ev))
+            ) {
+                return;
+            }
+            if (
+                (typeof handleMusicalGridPhraseJoinKeydown === 'function' &&
+                    handleMusicalGridPhraseJoinKeydown(ev)) ||
                 (typeof handlePlaybackRegionJoinKeydown === 'function' &&
                     handlePlaybackRegionJoinKeydown(ev))
             ) {
