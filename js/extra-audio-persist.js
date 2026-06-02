@@ -532,12 +532,12 @@
         const lite =
             typeof isWaveformLiteDrawRestricted === 'function' &&
             isWaveformLiteDrawRestricted();
-        let backingW = layoutW;
+        let backingW =
+            typeof getWaveformCanvasBackingWidthCss === 'function'
+                ? getWaveformCanvasBackingWidthCss(layoutW, dpr, lite)
+                : layoutW;
         let barCount = Math.min(4096, Math.max(64, layoutW));
         if (lite) {
-            if (typeof getWaveformLiteDrawWidthCss === 'function') {
-                backingW = getWaveformLiteDrawWidthCss(layoutW);
-            }
             if (typeof getWaveformLiteOverviewBarCount === 'function') {
                 barCount = getWaveformLiteOverviewBarCount();
             }
@@ -548,7 +548,9 @@
         ui.canvas.style.height = hCss + 'px';
         const ctx = ui.canvas.getContext('2d');
         if (ctx) {
-            if (lite && typeof applyWaveformLiteCanvasTransform === 'function') {
+            if (typeof applyWaveformCanvasContextTransform === 'function') {
+                applyWaveformCanvasContextTransform(ctx, layoutW, backingW, dpr);
+            } else if (lite && typeof applyWaveformLiteCanvasTransform === 'function') {
                 applyWaveformLiteCanvasTransform(ctx, layoutW, backingW, dpr);
             } else {
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

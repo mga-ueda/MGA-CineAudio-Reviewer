@@ -1115,6 +1115,33 @@
         ctx.setTransform(scaleX, 0, 0, dpr, 0, 0);
     }
 
+    /** ブラウザ canvas backing store の実効上限（device px） */
+    const WAVEFORM_CANVAS_BACKING_MAX_PX = 32767;
+
+    /** layoutW を CSS 座標のまま保ち、backing だけ上限内に収める */
+    function getWaveformCanvasBackingWidthCss(layoutW, dpr, lite) {
+        const lw = Math.max(1, layoutW | 0);
+        const d = Math.min(Math.max(dpr || 1, 1), 2);
+        let backingW = lw;
+        if (lite && typeof getWaveformLiteDrawWidthCss === 'function') {
+            backingW = Math.min(backingW, getWaveformLiteDrawWidthCss(lw));
+        }
+        const browserCap = Math.max(1, Math.floor(WAVEFORM_CANVAS_BACKING_MAX_PX / d));
+        return Math.min(backingW, browserCap);
+    }
+
+    function applyWaveformCanvasContextTransform(ctx, layoutW, backingW, dpr) {
+        if (!ctx) return;
+        const lw = Math.max(1, layoutW | 0);
+        const bw = Math.max(1, backingW | 0);
+        if (bw < lw) {
+            applyWaveformLiteCanvasTransform(ctx, lw, bw, dpr);
+        } else {
+            const d = Math.min(Math.max(dpr || 1, 1), 2);
+            ctx.setTransform(d, 0, 0, d, 0, 0);
+        }
+    }
+
     function clampWaveformTimelineZoom(z) {
         const n = Number(z);
         if (!Number.isFinite(n)) return WAVEFORM_TIMELINE_ZOOM_FIT;
@@ -1317,6 +1344,28 @@
         return dt0 < timeThresh && dt1 < timeThresh && db <= 12;
     }
 
+    /** 5d484d7 相当: Center lock 再生中は毎フレーム viewport peaks を追従させる */
+    function shouldWaveformFollowCenterLockPlayback() {
+        return (
+            playheadCenterLockActive &&
+            isTransportPlaying() &&
+            !isWaveformLiteDrawRestricted()
+        );
+    }
+
+    /** peaks 再計算前に scrollLeft を transport に合わせる（描画と可視範囲のずれ防止） */
+    function syncCenterLockScrollBeforeWaveformDraw() {
+        if (!shouldWaveformFollowCenterLockPlayback()) return;
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || waveformTimelineZoom <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) return;
+        const vw = waveformTimelineViewportWidthCss();
+        const scrubW = waveformTimelineScrubWidthCss();
+        const next = scrollLeftToCenterTransportSec(scrubW, vw);
+        if (Math.abs((lanes.scrollLeft || 0) - next) > 0.01) {
+            lanes.scrollLeft = next;
+        }
+    }
+
     function extraSlotsForViewportPeaks(opt) {
         if (opt && Array.isArray(opt.slots) && opt.slots.length) {
             return opt.slots.filter((s) => s >= 0);
@@ -1388,6 +1437,7 @@
         if (!spec) return false;
         const peaksMissing = anyExtraTracksNeedViewportPeaksRebuild(opt);
         if (
+            !shouldWaveformFollowCenterLockPlayback() &&
             !peaksMissing &&
             lastWaveformViewportHiresSpec &&
             waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, spec)
@@ -1502,11 +1552,17 @@
     }
 
     function flushWaveformVisualRefresh(opt) {
-        waveformVisualRefreshRaf = cancelPendingRaf(waveformVisualRefreshRaf);
+        if (waveformVisualRefreshRaf) {
+            cancelAnimationFrame(waveformVisualRefreshRaf);
+            waveformVisualRefreshRaf = 0;
+        }
+        syncCenterLockScrollBeforeWaveformDraw();
         const refreshed = applyWaveformViewportPeaksImmediate(opt);
         drawWaveformVisualLayers();
         drawWaveformChromeOverlays();
-        scheduleRegionBoundaryPresentationRefresh(opt);
+        if (opt && opt.sync) {
+            scheduleRegionBoundaryPresentationRefresh(opt);
+        }
         return refreshed;
     }
 
@@ -1517,7 +1573,7 @@
             if (!refreshed) scheduleWaveformHiresRedrawAfterZoom(opt);
             return;
         }
-        waveformVisualRefreshRaf = cancelPendingRaf(waveformVisualRefreshRaf);
+        if (waveformVisualRefreshRaf) return;
         waveformVisualRefreshRaf = requestAnimationFrame(() => {
             waveformVisualRefreshRaf = 0;
             const refreshed = flushWaveformVisualRefresh(opt);
@@ -1527,7 +1583,6 @@
 
     function refreshWaveformTimelineAfterZoomChange() {
         applyWaveformTimelineZoomLayout();
-        invalidateWaveformViewportHiresSpec();
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         if (isWaveformLiteDrawRestricted()) {
             cancelWaveformHiresRedraw();
@@ -1545,6 +1600,7 @@
         }
         drawWaveformChromeOverlays();
         if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
+        scheduleRegionBoundaryPresentationRefresh({ sync: true });
         scheduleWaveformVisualRefresh();
     }
 
@@ -2031,6 +2087,8 @@
     window.getWaveformLiteOverviewBarCount = getWaveformLiteOverviewBarCount;
     window.getWaveformLiteDrawWidthCss = getWaveformLiteDrawWidthCss;
     window.applyWaveformLiteCanvasTransform = applyWaveformLiteCanvasTransform;
+    window.getWaveformCanvasBackingWidthCss = getWaveformCanvasBackingWidthCss;
+    window.applyWaveformCanvasContextTransform = applyWaveformCanvasContextTransform;
     window.setWaveformLiteModeActive = setWaveformLiteModeActive;
     window.applySavedWaveformLiteMode = applySavedWaveformLiteMode;
     window.toggleWaveformLiteMode = toggleWaveformLiteMode;
