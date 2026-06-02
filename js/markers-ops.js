@@ -12,6 +12,7 @@
         pendingRangeStartSec = null;
         activeMarkerId = null;
         sessionMarkerMemoRestorePayload = null;
+        clearMarkerRestoreStateAfterUserClear();
         currentMarkers = [];
         setMarkerMemoText('');
         if (markersDisplayHidden) {

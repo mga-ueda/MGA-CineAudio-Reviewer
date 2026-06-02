@@ -124,6 +124,18 @@
 
     window.ensureMarkersRestoredFromSession = ensureMarkersRestoredFromSession;
 
+    /** Clear 後に F キー等のレイアウト更新でセッション復元されないようバッファを破棄 */
+    function clearMarkerRestoreStateAfterUserClear() {
+        pendingSessionMarkersForRestore = null;
+        sessionMarkersRestorePayload = null;
+        if (fileMain) {
+            markersByVideoKey.set(MARKER_SESSION_AUDIO_ONLY_KEY, []);
+            markerMemoByVideoKey.set(MARKER_SESSION_AUDIO_ONLY_KEY, '');
+        }
+    }
+
+    window.clearMarkerRestoreStateAfterUserClear = clearMarkerRestoreStateAfterUserClear;
+
     function flushPendingSessionMarkersRestore() {
         if (ensureMarkersRestoredFromSession()) {
             renderMarkerList();
