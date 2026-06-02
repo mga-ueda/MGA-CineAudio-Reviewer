@@ -1757,14 +1757,19 @@
                 const handleEl = fadeCandidates[c].el;
                 if (!handleEl || handleEl.hidden) continue;
                 const kind = fadeCandidates[c].kind;
-                const visualRect = handleEl.getBoundingClientRect();
-                const hitRect = fadeHandleHitTestRect(visualRect);
+                const fadeEdgeKind = kind === 'fade-in' ? 'in' : 'out';
                 if (
-                    !hitRect ||
-                    !isPointerOnFadeHandleTriangle(kind, hitRect, clientX, clientY)
+                    !isPointerInFadeHandleHitZone(
+                        regionEl,
+                        fadeEdgeKind,
+                        clientX,
+                        clientY,
+                    )
                 ) {
                     continue;
                 }
+                const hitRect = getFadeHandleHitRect(regionEl, fadeEdgeKind);
+                if (!hitRect) continue;
                 const cx = (hitRect.left + hitRect.right) * 0.5;
                 const cy = (hitRect.top + hitRect.bottom) * 0.5;
                 const dist = Math.hypot(clientX - cx, clientY - cy);
@@ -1805,6 +1810,32 @@
             }
         }
         return bestFade || best;
+    }
+
+    /** カーソル表示用（↔）。操作判定そのものは resolveRegionResizeHandleAtPointer の三角テスト */
+    function isPointerOnAnyRegionFadeHandle(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const lane = document.getElementById('extraAudioLane' + track.slot);
+            if (!lane || lane.hidden) continue;
+            const container = getPlaybackRegionsContainerEl(track);
+            if (!container || container.hidden) continue;
+            const regions = container.querySelectorAll(
+                '.audio-waveform-lane__playback-region',
+            );
+            for (let r = 0; r < regions.length; r++) {
+                const regionEl = regions[r];
+                if (
+                    isPointerInFadeHandleHitZone(regionEl, 'in', clientX, clientY) ||
+                    isPointerInFadeHandleHitZone(regionEl, 'out', clientX, clientY)
+                ) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function isPointerOnAnyRegionResizeHandle(clientX, clientY, opt) {
@@ -2295,12 +2326,40 @@
         return getSegmentTimelineStart(track, segmentIndex) + (seg.sourceOutSec - seg.sourceInSec);
     }
 
+    function segmentBoundaryJoinEpsilonSec() {
+        const frame =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 24;
+        return Math.max(SEGMENT_BOUNDARY_JOIN_EPS_SEC, frame * 0.5);
+    }
+
     function isSegmentBoundaryJoined(track, boundaryIndex) {
         const segments = getTrackSegments(track);
         if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
         const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
         const rightStart = getSegmentTimelineStart(track, boundaryIndex + 1);
-        return Math.abs(leftEnd - rightStart) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC;
+        return Math.abs(leftEnd - rightStart) <= segmentBoundaryJoinEpsilonSec();
+    }
+
+    /** B 結合: 同一クリップかつソース連続の隣接セグメント */
+    function isSegmentBoundaryJoinableAtIndex(track, boundaryIndex) {
+        const segments = getTrackSegments(track);
+        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
+        const left = segments[boundaryIndex];
+        const right = segments[boundaryIndex + 1];
+        if (!left || !right) return false;
+        const leftClip =
+            left.clipId || getSegmentClipId(track, boundaryIndex);
+        const rightClip =
+            right.clipId || getSegmentClipId(track, boundaryIndex + 1);
+        if (leftClip !== rightClip) return false;
+        const eps = segmentBoundaryJoinEpsilonSec();
+        return (
+            Math.abs(
+                (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
+            ) <= eps
+        );
     }
 
     /**
@@ -2343,6 +2402,8 @@
         if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
         if (hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex)) return false;
         if (hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex)) return false;
+        /** 同一クリップ連続スプリットは編集用分割のみ — 再生ではオーバーラップ不要 */
+        if (isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) return false;
         return true;
     }
 
@@ -2493,8 +2554,24 @@
         return (
             Math.abs(
                 (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
-            ) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC
+            ) <= segmentBoundaryJoinEpsilonSec()
         );
+    }
+
+    /** 同一クリップ連続結合チェーンのソース終端（再生ではリージョン境界を跨いで1本） */
+    function getContinuousJoinedSourceOutSec(track, segmentIndex) {
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        if (!seg) return 0;
+        let outSec = Number(seg.sourceOutSec) || 0;
+        for (let b = segmentIndex; b < segments.length - 1; b++) {
+            if (!isSegmentBoundaryJoined(track, b)) break;
+            if (!isSegmentSourceContinuousAtBoundary(track, b)) break;
+            const next = segments[b + 1];
+            if (!next) break;
+            outSec = Number(next.sourceOutSec) || outSec;
+        }
+        return outSec;
     }
 
     /**
@@ -2514,38 +2591,20 @@
             opt && Number.isFinite(opt.mapTransportSec)
                 ? opt.mapTransportSec
                 : fadeTransportSec;
-        const probeT = Math.max(fadeTransportSec, mapT);
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const sourceContinuous = isSegmentSourceContinuousAtBoundary(
             track,
             boundaryIndex,
         );
-        let bufferOff;
-        /** 右セグメントの再生開始以降は左マップでは先頭にクランプされるため、右から直接求める */
-        if (probeT >= playbackStart - 0.0005) {
-            bufferOff = segmentSourceSecFromTransport(track, segmentIndex, probeT);
-        } else if (sourceContinuous) {
-            const fromLeft = segmentSourceSecFromTransport(
-                track,
-                segmentIndex - 1,
-                probeT,
-            );
-            bufferOff = Math.max(
-                seg.sourceInSec,
-                Math.min(seg.sourceOutSec, fromLeft),
-            );
-        } else {
-            const localT = Math.max(0, probeT - fadeTransportSec);
-            bufferOff = Math.max(
-                seg.sourceInSec,
-                Math.min(seg.sourceOutSec, seg.sourceInSec + localT),
-            );
-        }
-        const remain = Math.max(0, seg.sourceOutSec - bufferOff);
-        if (remain <= 0.002) return null;
+        const liveHit = mapAllSegmentsAtTransport(track, mapT, {
+            forPlayback: true,
+        }).find((h) => h.segmentIndex === segmentIndex);
+        if (!liveHit || liveHit.remain <= 0.002) return null;
+        const bufferOff = liveHit.bufferOff;
+        const remain = liveHit.remain;
         let whenCtx = ctx.currentTime + 0.0005;
         const leftEntry = opt && opt.leftEntry ? opt.leftEntry : null;
-        const inCrossfadeLeadIn = probeT < playbackStart - 0.0005;
+        const inCrossfadeLeadIn = mapT < playbackStart - 0.0005;
         if (
             inCrossfadeLeadIn &&
             sourceContinuous &&
@@ -2562,7 +2621,7 @@
             whenCtx =
                 leftEntry.playbackAnchorCtxTime +
                 Math.max(0, fadeBuf - leftEntry.bufferOff);
-        } else if (inCrossfadeLeadIn) {
+        } else if (inCrossfadeLeadIn && mapT < fadeTransportSec) {
             whenCtx = ctx.currentTime + Math.max(0.0005, fadeTransportSec - mapT);
         }
         if (whenCtx < ctx.currentTime) {
@@ -2572,7 +2631,7 @@
             whenCtx,
             bufferOff,
             remain,
-            transportAnchor: probeT,
+            transportAnchor: mapT,
         };
     }
 
@@ -2651,15 +2710,25 @@
                 joinedNext &&
                 i < segments.length - 1 &&
                 hasManualSegmentFadeAtJoinedBoundary(track, i);
+            const continuousPrev =
+                forPlayback &&
+                joinedPrev &&
+                isSegmentSourceContinuousAtBoundary(track, i - 1);
+            const continuousNext =
+                forPlayback &&
+                joinedNext &&
+                isSegmentSourceContinuousAtBoundary(track, i);
             const inHandoffFromPrev =
                 joinedPrev &&
                 !manualFadePrev &&
+                !continuousPrev &&
                 boundaryPrev != null &&
                 t >= boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC &&
                 t < boundaryPrev + 0.00001;
             const inHandoffToNext =
                 joinedNext &&
                 !manualFadeNext &&
+                !continuousNext &&
                 boundaryNext != null &&
                 t >= boundaryNext - JOINED_BOUNDARY_CROSSFADE_SEC &&
                 t < boundaryNext + 0.00001;
@@ -2685,12 +2754,24 @@
                 }
             }
 
-            if (t < regionIn - 0.0005) continue;
+            if (
+                t < regionIn - 0.0005 &&
+                !(
+                    forPlayback &&
+                    (inHandoffFromPrev || inManualCrossfade)
+                )
+            ) {
+                continue;
+            }
             if (forPlayback) {
                 if (t < playbackStart - 0.0005 && !inHandoffFromPrev && !inManualCrossfade) {
                     continue;
                 }
-                if (t >= absEnd - 0.0005 && !inHandoffToNext && !inManualCrossfade) {
+                const playbackEndCutoff =
+                    joinedNext && continuousNext
+                        ? absEnd + 0.00001
+                        : absEnd - 0.0005;
+                if (t >= playbackEndCutoff && !inHandoffToNext && !inManualCrossfade) {
                     continue;
                 }
             } else if (t >= absEnd - 0.002) {
@@ -2704,15 +2785,9 @@
                 i > 0 &&
                 isSegmentSourceContinuousAtBoundary(track, i - 1)
             ) {
-                if (t >= playbackStart - 0.0005) {
-                    sourceSec = segmentSourceSecFromTransport(track, i, t);
-                } else {
-                    const fromLeft = segmentSourceSecFromTransport(track, i - 1, t);
-                    sourceSec = Math.max(
-                        seg.sourceInSec,
-                        Math.min(seg.sourceOutSec, fromLeft),
-                    );
-                }
+                /** 同一クリップ連続: 左セグメントのソース位置をそのまま使う（sourceInSec へクランプすると境界で飛ぶ） */
+                sourceSec = segmentSourceSecFromTransport(track, i - 1, t);
+                sourceSec = Math.min(seg.sourceOutSec, sourceSec);
             } else if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
                 const fadeStart = boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC;
                 sourceSec = seg.sourceInSec + Math.max(0, t - fadeStart);
@@ -2846,6 +2921,149 @@
         return peaks.slice(Math.max(0, i0), Math.min(peaks.length, Math.max(i0 + 1, i1)));
     }
 
+    function trackWaveformNeedsCrossfadeVisualMap(track) {
+        const segments = getTrackSegments(track);
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (hasManualSegmentFadeAtJoinedBoundary(track, b)) return true;
+            if (hasExtendedCrossfadeOverlapAtBoundary(track, b)) return true;
+            if (isAutoJoinedBoundaryCrossfadeEligible(track, b)) return true;
+        }
+        return false;
+    }
+
+    function trackSegmentsAreContinuousSameClipChain(track) {
+        const segments = getTrackSegments(track);
+        if (segments.length <= 1) return false;
+        const clip0 = segments[0].clipId || getSegmentClipId(track, 0);
+        for (let i = 1; i < segments.length; i++) {
+            const clip = segments[i].clipId || getSegmentClipId(track, i);
+            if (clip !== clip0) return false;
+            if (!isSegmentBoundaryJoined(track, i - 1)) return false;
+            if (!isSegmentSourceContinuousAtBoundary(track, i - 1)) return false;
+        }
+        return true;
+    }
+
+    function segmentIndexAtMasterTransport(track, transportSec) {
+        const segments = getTrackSegments(track);
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || !segments.length) return 0;
+        for (let i = segments.length - 1; i >= 0; i--) {
+            const start = getSegmentPlaybackTimelineStart(track, i);
+            const end = getSegmentTimelineEnd(track, i);
+            if (t >= start - 0.0005 && t < end + 0.0005) return i;
+        }
+        return 0;
+    }
+
+    /**
+     * 波形 1 パス分の gain を前計算（バーごとの mapAllSegmentsAtTransport を避ける）。
+     */
+    function createWaveformVisualGainState(track) {
+        const segments = getTrackSegments(track);
+        const n = segments.length;
+        if (!n) {
+            return { simple: true, uniform: 1, at: () => 1 };
+        }
+
+        const segGain = [];
+        const playStart = [];
+        const playEnd = [];
+        const fadeInSec = [];
+        const fadeOutSec = [];
+        const needsCrossfade = trackWaveformNeedsCrossfadeVisualMap(track);
+        let needsManualDisplay = false;
+        let uniformGain = null;
+
+        for (let i = 0; i < n; i++) {
+            const g = getSegmentGainLinear(track, i);
+            segGain.push(g);
+            playStart.push(getSegmentPlaybackTimelineStart(track, i));
+            playEnd.push(getSegmentTimelineEnd(track, i));
+            fadeInSec.push(getSegmentFadeDurationSec(track, i, 'in'));
+            fadeOutSec.push(getSegmentFadeDurationSec(track, i, 'out'));
+            if (fadeInSec[i] > 0.0005 || fadeOutSec[i] > 0.0005) {
+                needsManualDisplay = true;
+            }
+            if (uniformGain === null) uniformGain = g;
+            else if (Math.abs(uniformGain - g) > 0.001) uniformGain = NaN;
+        }
+        for (let b = 0; b < n - 1; b++) {
+            if (hasManualSegmentFadeAtJoinedBoundary(track, b)) {
+                needsManualDisplay = true;
+                break;
+            }
+        }
+
+        const simple =
+            !needsCrossfade && !needsManualDisplay && Number.isFinite(uniformGain);
+
+        if (simple) {
+            return {
+                simple: true,
+                uniform: uniformGain,
+                at: () => uniformGain,
+            };
+        }
+
+        const crossfadeCache = new Map();
+
+        function crossfadeAt(segmentIndex, transportSec) {
+            if (!needsCrossfade) return 1;
+            const bucket = Math.round(Number(transportSec) * 500);
+            const key = segmentIndex + ':' + bucket;
+            if (crossfadeCache.has(key)) return crossfadeCache.get(key);
+            const hits = mapAllSegmentsAtTransport(track, transportSec, {
+                forPlayback: true,
+            });
+            let v = 1;
+            if (hits.length > 1) {
+                const pos = hits.findIndex((h) => h.segmentIndex === segmentIndex);
+                if (
+                    pos >= 0 &&
+                    typeof computeEqualPowerCrossfadeGainsForGroup === 'function'
+                ) {
+                    const gains = computeEqualPowerCrossfadeGainsForGroup(
+                        hits,
+                        transportSec,
+                        {
+                            groupBySlot: false,
+                            sameSlotOnly: false,
+                            trackRefFromHit: () => track,
+                        },
+                    );
+                    v = Math.max(0, gains.get(hits[pos].key) ?? 1);
+                }
+            }
+            crossfadeCache.set(key, v);
+            return v;
+        }
+
+        return {
+            simple: false,
+            uniform: null,
+            at(segmentIndex, transportSec) {
+                const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
+                    track,
+                    segmentIndex,
+                    transportSec,
+                );
+                if (manualG != null) return manualG * segGain[segmentIndex];
+                let gIn = 1;
+                let gOut = 1;
+                const t = transportSec;
+                const i = segmentIndex;
+                if (fadeInSec[i] > 0.0005 && t <= playStart[i] + fadeInSec[i]) {
+                    gIn = segmentFadeCurve((t - playStart[i]) / fadeInSec[i]);
+                }
+                if (fadeOutSec[i] > 0.0005 && t >= playEnd[i] - fadeOutSec[i]) {
+                    gOut = segmentFadeCurve((playEnd[i] - t) / fadeOutSec[i]);
+                }
+                return crossfadeAt(i, t) * gIn * gOut * segGain[i];
+            },
+        };
+    }
+
     /** 再生ミックスと同じ等パワー・重なり（波形振幅表示用） */
     function computeSegmentCrossfadeVisualGain(track, segmentIndex, transportSec) {
         const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
@@ -2854,6 +3072,7 @@
             transportSec,
         );
         if (manualG != null) return manualG;
+        if (!trackWaveformNeedsCrossfadeVisualMap(track)) return 1;
         const hits = mapAllSegmentsAtTransport(track, transportSec, {
             forPlayback: true,
         });
@@ -2908,6 +3127,7 @@
         if (!vp || !vp.segments || !vp.segments.length || !(master > 0) || !track) {
             return;
         }
+        const gainState = createWaveformVisualGainState(track);
         const mid = hCss * 0.5;
         const bg =
             typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
@@ -2948,10 +3168,7 @@
                     s.masterStartSec + ((p + 0.5) / s.peaks.length) * segDur;
                 const hideBefore = getSegmentWaveformVisibleTimelineStart(track, segIdx);
                 if (barTransport < hideBefore - 0.0005) continue;
-                const gain =
-                    computeSegmentCrossfadeVisualGain(track, segIdx, barTransport) *
-                    computeSegmentFadeLinearAtTransport(track, segIdx, barTransport) *
-                    getSegmentGainLinear(track, segIdx);
+                const gain = gainState.at(segIdx, barTransport);
                 const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
                 const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
                 ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));

@@ -2,9 +2,24 @@
  * waveform-region-render.js — 波形リージョン描画
  */
     const REGION_OVERLAY_NARROW_PX = 22;
+    /** CSS .audio-waveform-lane__playback-region { min-width: 28px } と揃える */
+    const REGION_OVERLAY_MIN_CSS_PX = 28;
     const REGION_BOUNDARY_CLUSTER_PX = 12;
     const REGION_FADE_TRIANGLE_PX = 8;
     const FADE_TRIANGLE_COLLISION_GAP_PX = 1;
+
+    function regionFadeTriangleHandleVisible(showWhenAllowed) {
+        return !!showWhenAllowed;
+    }
+
+    function refreshAllPlaybackRegionFadeTriangles() {
+        const n = getExtraTrackCount();
+        for (let i = 0; i < n; i++) {
+            const track = { type: 'extra', slot: i };
+            const container = getPlaybackRegionsContainerEl(track);
+            if (container) refreshTrackFadeTriangleVisibility(track, container);
+        }
+    }
 
     function getRegionOverlayTimelineMetrics() {
         const lanes =
@@ -419,7 +434,7 @@
         if (fadeInHandle) {
             fadeInHandle.style.left = layout.fadeInAxisRatio * 100 + '%';
             fadeInHandle.style.right = 'auto';
-            fadeInHandle.hidden = !layout.showIn;
+            fadeInHandle.hidden = !regionFadeTriangleHandleVisible(layout.showIn);
         }
         const fadeOutHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-out',
@@ -427,7 +442,7 @@
         if (fadeOutHandle) {
             fadeOutHandle.style.left = layout.fadeOutAxisRatio * 100 + '%';
             fadeOutHandle.style.right = 'auto';
-            fadeOutHandle.hidden = !layout.showOut;
+            fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(layout.showOut);
         }
     }
 
@@ -458,7 +473,7 @@
         if (fadeInHandle) {
             fadeInHandle.style.left = fadeInAxisRatio * 100 + '%';
             fadeInHandle.style.right = 'auto';
-            fadeInHandle.hidden = !(fadeInMax > 0.0005);
+            fadeInHandle.hidden = !regionFadeTriangleHandleVisible(fadeInMax > 0.0005);
         }
         const fadeOutHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-out',
@@ -466,7 +481,7 @@
         if (fadeOutHandle) {
             fadeOutHandle.style.left = fadeOutAxisRatio * 100 + '%';
             fadeOutHandle.style.right = 'auto';
-            fadeOutHandle.hidden = !(fadeOutMax > 0.0005);
+            fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(fadeOutMax > 0.0005);
         }
     }
 
@@ -583,31 +598,45 @@
         if (!container) return;
         const denseSet = getDenseBoundaryTransportSet(track);
         const hasDense = denseSet.size > 0;
+        const phraseActive =
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible();
         container.classList.toggle(
             'audio-waveform-lane__playback-regions--dense-boundaries',
             hasDense,
+        );
+        container.classList.toggle(
+            'audio-waveform-lane__playback-regions--phrase-split-narrow',
+            phraseActive,
         );
 
         const regionEls = container.querySelectorAll(
             '.audio-waveform-lane__playback-region',
         );
-        if (!hasDense) {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const metrics = getRegionOverlayTimelineMetrics();
+
+        if (!hasDense && !phraseActive) {
             for (let i = 0; i < regionEls.length; i++) {
                 regionEls[i].classList.remove(
                     'audio-waveform-lane__playback-region--dense-boundary',
                     'audio-waveform-lane__playback-region--narrow',
+                    'audio-waveform-lane__playback-region--phrase-narrow',
                 );
             }
             applyDenseBoundaryLineHandleDedup(container);
             return;
         }
-        const metrics = getRegionOverlayTimelineMetrics();
+
         for (let i = 0; i < regionEls.length; i++) {
             const el = regionEls[i];
             const segmentIndex = Number(el.dataset.segmentIndex);
             if (!Number.isFinite(segmentIndex) || segmentIndex < 0) continue;
 
-            const inDense = isSegmentInDenseBoundaryZone(track, segmentIndex, denseSet);
+            const inDense = hasDense && isSegmentInDenseBoundaryZone(track, segmentIndex, denseSet);
             el.classList.toggle(
                 'audio-waveform-lane__playback-region--dense-boundary',
                 inDense,
@@ -617,12 +646,18 @@
                 track,
                 segmentIndex,
                 metrics,
-                typeof getMasterTransportDurationSec === 'function'
-                    ? getMasterTransportDurationSec()
-                    : 0,
+                master,
             );
             const narrow = inDense && widthPx > 0 && widthPx < REGION_OVERLAY_NARROW_PX;
+            const phraseNarrow =
+                phraseActive &&
+                widthPx > 0 &&
+                widthPx < REGION_OVERLAY_MIN_CSS_PX;
             el.classList.toggle('audio-waveform-lane__playback-region--narrow', narrow);
+            el.classList.toggle(
+                'audio-waveform-lane__playback-region--phrase-narrow',
+                phraseNarrow,
+            );
         }
 
         if (hasDense) {
@@ -643,6 +678,69 @@
     }
 
     window.refreshAllRegionBoundaryPresentation = refreshAllRegionBoundaryPresentation;
+
+    /** 同一クリップ連続結合チェーンを 1 本の overview として描画（セグメント数分のループを避ける） */
+    function drawContinuousSegmentChainOverview(
+        ctx,
+        track,
+        slot,
+        wCss,
+        hCss,
+        mid,
+        grad,
+        vp,
+        segments,
+        gainState,
+    ) {
+        if (!trackSegmentsAreContinuousSameClipChain(track)) return false;
+        for (let i = 0; i < segments.length; i++) {
+            if (segmentHasViewportPeaksForDraw(vp, i)) return false;
+        }
+        const clipId = segments[0].clipId || getSegmentClipId(track, 0);
+        const fullDur = getSegmentSourceDurationSec(track, segments[0]);
+        const peaks = getSegmentPeaksForDraw(slot, clipId);
+        if (!peaks || !peaks.length || !fullDur) return false;
+
+        const chainStart = getSegmentTimelineStart(track, 0);
+        const chainEnd = getSegmentTimelineEnd(track, segments.length - 1);
+        const chainDur = chainEnd - chainStart;
+        if (!(chainDur > 0.0005)) return false;
+
+        const srcIn = segments[0].sourceInSec;
+        const srcOut = segments[segments.length - 1].sourceOutSec;
+        const chainPeaks = slicePeaksForRegion(peaks, fullDur, srcIn, srcOut);
+        if (!chainPeaks || !chainPeaks.length) return false;
+
+        const startX =
+            typeof masterTimelineContentWidth === 'function'
+                ? masterTimelineContentWidth(wCss, chainStart)
+                : 0;
+        const contentW =
+            typeof masterTimelineContentWidth === 'function'
+                ? masterTimelineContentWidth(wCss, chainDur)
+                : wCss;
+        const drawW = contentW > 0 ? contentW : wCss;
+        const barW = drawW / chainPeaks.length;
+        const uniformGain = gainState && gainState.simple ? gainState.uniform : null;
+
+        ctx.fillStyle = grad || '#ffffff';
+        for (let p = 0; p < chainPeaks.length; p++) {
+            const pk = chainPeaks[p];
+            const x = startX + p * barW;
+            const barTransport =
+                chainStart + ((p + 0.5) / chainPeaks.length) * chainDur;
+            const segIdx = segmentIndexAtMasterTransport(track, barTransport);
+            const hideBefore = getSegmentWaveformVisibleTimelineStart(track, segIdx);
+            if (barTransport < hideBefore - 0.0005) continue;
+            if (viewportPeaksCoverMasterTime(vp, barTransport)) continue;
+            const gain =
+                uniformGain != null ? uniformGain : gainState.at(segIdx, barTransport);
+            const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
+            const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
+            ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+        }
+        return true;
+    }
 
     function drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad) {
         const track = { type: 'extra', slot };
@@ -708,52 +806,66 @@
         }
 
         ctx.fillStyle = grad || '#ffffff';
-        for (let i = 0; i < segments.length; i++) {
-            const seg = segments[i];
-            const clipId = seg.clipId || getSegmentClipId(track, i);
-            const fullDur = getSegmentSourceDurationSec(track, seg);
-            if (segmentHasViewportPeaksForDraw(vp, i)) continue;
+        const gainState = createWaveformVisualGainState(track);
+        const chainOverviewDrawn = drawContinuousSegmentChainOverview(
+            ctx,
+            track,
+            slot,
+            wCss,
+            hCss,
+            mid,
+            grad,
+            vp,
+            segments,
+            gainState,
+        );
+        if (!chainOverviewDrawn) {
+            for (let i = 0; i < segments.length; i++) {
+                const seg = segments[i];
+                const clipId = seg.clipId || getSegmentClipId(track, i);
+                const fullDur = getSegmentSourceDurationSec(track, seg);
+                if (segmentHasViewportPeaksForDraw(vp, i)) continue;
 
-            const peaks = getSegmentPeaksForDraw(slot, clipId);
-            if (!peaks || !peaks.length || !fullDur) continue;
-            const segPeaks = slicePeaksForRegion(
-                peaks,
-                fullDur,
-                seg.sourceInSec,
-                seg.sourceOutSec,
-            );
-            if (!segPeaks || !segPeaks.length) continue;
-            const contentDur = seg.sourceOutSec - seg.sourceInSec;
-            const segT0 = getSegmentTimelineStart(track, i);
-            const startX =
-                typeof masterTimelineContentWidth === 'function'
-                    ? masterTimelineContentWidth(wCss, segT0)
-                    : 0;
-            const contentW =
-                typeof masterTimelineContentWidth === 'function'
-                    ? masterTimelineContentWidth(wCss, contentDur)
-                    : wCss;
-            const drawW = contentW > 0 ? contentW : wCss;
-            const barW = drawW / segPeaks.length;
-            const waveformHideBefore = getSegmentWaveformVisibleTimelineStart(track, i);
-            for (let p = 0; p < segPeaks.length; p++) {
-                const pk = segPeaks[p];
-                const x = startX + p * barW;
-                const barTransport =
-                    segT0 + ((p + 0.5) / segPeaks.length) * contentDur;
-                if (barTransport < waveformHideBefore - 0.0005) {
-                    continue;
+                const peaks = getSegmentPeaksForDraw(slot, clipId);
+                if (!peaks || !peaks.length || !fullDur) continue;
+                const segPeaks = slicePeaksForRegion(
+                    peaks,
+                    fullDur,
+                    seg.sourceInSec,
+                    seg.sourceOutSec,
+                );
+                if (!segPeaks || !segPeaks.length) continue;
+                const contentDur = seg.sourceOutSec - seg.sourceInSec;
+                const segT0 = getSegmentTimelineStart(track, i);
+                const startX =
+                    typeof masterTimelineContentWidth === 'function'
+                        ? masterTimelineContentWidth(wCss, segT0)
+                        : 0;
+                const contentW =
+                    typeof masterTimelineContentWidth === 'function'
+                        ? masterTimelineContentWidth(wCss, contentDur)
+                        : wCss;
+                const drawW = contentW > 0 ? contentW : wCss;
+                const barW = drawW / segPeaks.length;
+                const waveformHideBefore = getSegmentWaveformVisibleTimelineStart(track, i);
+                const uniformGain = gainState.simple ? gainState.uniform : null;
+                for (let p = 0; p < segPeaks.length; p++) {
+                    const pk = segPeaks[p];
+                    const x = startX + p * barW;
+                    const barTransport =
+                        segT0 + ((p + 0.5) / segPeaks.length) * contentDur;
+                    if (barTransport < waveformHideBefore - 0.0005) {
+                        continue;
+                    }
+                    if (viewportPeaksCoverMasterTime(vp, barTransport)) {
+                        continue;
+                    }
+                    const gain =
+                        uniformGain != null ? uniformGain : gainState.at(i, barTransport);
+                    const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
+                    const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
+                    ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
                 }
-                if (viewportPeaksCoverMasterTime(vp, barTransport)) {
-                    continue;
-                }
-                const gain =
-                    computeSegmentCrossfadeVisualGain(track, i, barTransport) *
-                    computeSegmentFadeLinearAtTransport(track, i, barTransport) *
-                    getSegmentGainLinear(track, i);
-                const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
-                const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
-                ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
             }
         }
 
@@ -914,6 +1026,12 @@
                 return slot;
             }
         }
+        const domSlot = getActiveMixExtraSlotFromDom();
+        if (domSlot >= 0 && isExtraSlotUsableForRegion(domSlot)) return domSlot;
+        if (typeof getLastActiveMixExtraSlot === 'function') {
+            const slot = getLastActiveMixExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
         return -1;
     }
 
@@ -1011,6 +1129,8 @@
             const slot = extraSlotFromPlaybackRegionEl(regionEl);
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
         }
+        const targetSlot = resolveTargetExtraSlot();
+        if (targetSlot >= 0) return targetSlot;
         if (typeof resolveMixTargetFromPointer === 'function' && Number.isFinite(clientY)) {
             const target = resolveMixTargetFromPointer(clientY);
             if (target && target.kind === 'extra') {
@@ -2114,10 +2234,126 @@
     const REGION_HANDLE_HOVER_CURSOR_CLASS =
         'audio-waveform-composite__lanes--region-handle-hover';
 
+    function pointInClientRect(clientX, clientY, rect) {
+        if (!rect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        return (
+            clientX >= rect.left &&
+            clientX <= rect.right &&
+            clientY >= rect.top &&
+            clientY <= rect.bottom
+        );
+    }
+
+    /** ↔ カーソル判定矩形 */
+    function collectRegionEwCursorHitRectsForTrack(track) {
+        const container = getPlaybackRegionsContainerEl(track);
+        if (!container || container.hidden) return [];
+        const pad =
+            typeof REGION_HANDLE_HIT_PAD_PX === 'number' ? REGION_HANDLE_HIT_PAD_PX : 4;
+        const out = [];
+        const regions = container.querySelectorAll('.audio-waveform-lane__playback-region');
+        for (let r = 0; r < regions.length; r++) {
+            const regionEl = regions[r];
+            const regionRect = regionEl.getBoundingClientRect();
+
+            if (typeof getFadeHandleHitRect === 'function') {
+                for (let f = 0; f < 2; f++) {
+                    const edgeKind = f === 0 ? 'in' : 'out';
+                    const hitRect = getFadeHandleHitRect(regionEl, edgeKind);
+                    if (!hitRect) continue;
+                    out.push({
+                        regionEl,
+                        rect: hitRect,
+                        kind: 'fade-' + edgeKind,
+                    });
+                }
+            }
+
+            for (let e = 0; e < 2; e++) {
+                const edgeKind = e === 0 ? 'in' : 'out';
+                const sel =
+                    edgeKind === 'in'
+                        ? '.audio-waveform-lane__playback-region__handle--in'
+                        : '.audio-waveform-lane__playback-region__handle--out';
+                const handleEl = regionEl.querySelector(sel);
+                if (!handleEl) continue;
+                const handleRect = handleEl.getBoundingClientRect();
+                out.push({
+                    regionEl,
+                    rect: {
+                        left: handleRect.left - pad,
+                        top: regionRect.top,
+                        right: handleRect.right + pad,
+                        bottom: regionRect.bottom,
+                    },
+                    kind: 'edge-' + edgeKind,
+                });
+            }
+        }
+        return out;
+    }
+
+    function isPointerInRegionEwCursorHitZone(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const lane = document.getElementById('extraAudioLane' + track.slot);
+            if (!lane || lane.hidden) continue;
+            const laneRect = lane.getBoundingClientRect();
+            if (
+                clientY < laneRect.top ||
+                clientY > laneRect.bottom ||
+                clientX < laneRect.left ||
+                clientX > laneRect.right
+            ) {
+                continue;
+            }
+            const hits = collectRegionEwCursorHitRectsForTrack(track);
+            for (let i = 0; i < hits.length; i++) {
+                if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
+            }
+        }
+        return false;
+    }
+
+    function clearRegionEwCursorPresentation() {
+        const regions = document.querySelectorAll('.audio-waveform-lane__playback-region');
+        for (let i = 0; i < regions.length; i++) {
+            regions[i].classList.remove('audio-waveform-lane__playback-region--ew-cursor');
+            regions[i].style.removeProperty('cursor');
+        }
+        if (typeof syncPhraseBoundaryDeferToRegionHandles === 'function') {
+            syncPhraseBoundaryDeferToRegionHandles(false);
+        }
+    }
+
+    function applyRegionEwCursorFromPointer(clientX, clientY) {
+        clearRegionEwCursorPresentation();
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        let any = false;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const hits = collectRegionEwCursorHitRectsForTrack(track);
+            for (let i = 0; i < hits.length; i++) {
+                const item = hits[i];
+                if (!pointInClientRect(clientX, clientY, item.rect)) continue;
+                any = true;
+                item.regionEl.classList.add('audio-waveform-lane__playback-region--ew-cursor');
+                item.regionEl.style.cursor = 'ew-resize';
+            }
+        }
+        return any;
+    }
+
     function updateRegionResizeHandleCursorFromPointer(clientX, clientY) {
         const lanes = getWaveformLanesEl();
         if (!lanes) return;
-        const clear = () => lanes.classList.remove(REGION_HANDLE_HOVER_CURSOR_CLASS);
+        const clear = () => {
+            lanes.classList.remove(REGION_HANDLE_HOVER_CURSOR_CLASS);
+            clearRegionEwCursorPresentation();
+        };
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             clear();
             return;
@@ -2130,9 +2366,14 @@
             clear();
             return;
         }
-        const onHandle = isPointerOnAnyRegionResizeHandle(clientX, clientY);
+        const onHandle = applyRegionEwCursorFromPointer(clientX, clientY);
+        if (typeof syncPhraseBoundaryDeferToRegionHandles === 'function') {
+            syncPhraseBoundaryDeferToRegionHandles(onHandle);
+        }
         lanes.classList.toggle(REGION_HANDLE_HOVER_CURSOR_CLASS, onHandle);
     }
+
+    window.isPointerInRegionEwCursorHitZone = isPointerInRegionEwCursorHitZone;
 
     function updatePlaybackRegionHoverFromPointer(clientX, clientY, altKey) {
         updateRegionResizeHandleCursorFromPointer(clientX, clientY);

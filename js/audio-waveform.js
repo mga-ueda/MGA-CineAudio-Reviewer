@@ -894,6 +894,12 @@
         if (t.closest('.audio-waveform-composite__phrase-boundary-handle')) return true;
         if (t.closest('.audio-waveform-composite__seek-input')) return true;
         if (
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY)
+        ) {
+            return true;
+        }
+        if (
             typeof isPointerOnAnyRegionResizeHandle === 'function' &&
             isPointerOnAnyRegionResizeHandle(ev.clientX, ev.clientY)
         ) {
@@ -988,8 +994,12 @@
         waveformPointerGestureStartY = ev.clientY;
         waveformPointerGestureDidMove = false;
         const inPreTrackGap = clickIsInPreTrackTimelineGap(ev.clientX, ev.clientY);
+        const inRegionHandleZone =
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY);
         waveformPointerGestureRegionHit =
             !inPreTrackGap &&
+            !inRegionHandleZone &&
             regionHit &&
             canDragWaveformTrackTimelineStart(regionHit.slot)
                 ? regionHit
@@ -1020,7 +1030,11 @@
                 return;
             }
             waveformPointerGestureDidMove = true;
-            if (waveformPointerGestureRegionHit && !waveformOffsetDragActive) {
+            if (
+                waveformPointerGestureRegionHit &&
+                !waveformOffsetDragActive &&
+                !regionHandleDragActive
+            ) {
                 onWaveformTrackOffsetPointerDown(
                     e,
                     waveformPointerGestureRegionHit.slot,

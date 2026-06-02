@@ -579,6 +579,9 @@
         if (!musicalGridPhraseFillVisible) endPhraseBoundaryDrag();
         if (typeof drawMusicalGridOverlay === 'function') drawMusicalGridOverlay();
         else updatePhraseBoundaryOverlay();
+        if (typeof refreshAllRegionBoundaryPresentation === 'function') {
+            refreshAllRegionBoundaryPresentation();
+        }
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
         }
@@ -2271,7 +2274,22 @@
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--phrase-boundary-drag');
     }
 
+    function syncPhraseBoundaryDeferToRegionHandles(defer) {
+        if (!phraseBoundaryRoot || phraseBoundaryRoot.hidden) return;
+        if (phraseBoundaryDragActive) defer = false;
+        phraseBoundaryRoot.classList.toggle(
+            'audio-waveform-composite__phrase-boundaries--defer-regions',
+            !!defer,
+        );
+    }
+
     function onPhraseBoundaryHandlePointerDown(ev, boundaryIndex) {
+        if (
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY)
+        ) {
+            return;
+        }
         if (!getMusicalGridPhraseFillVisible()) return;
         if (ev.button !== 0) return;
         const settings = musicalGridDrawSettings();
@@ -2588,6 +2606,7 @@
     window.jumpToAdjacentMusicalGridStop = jumpToAdjacentMusicalGridStop;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
+    window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;
     window.handleMusicalGridPhraseSplitKeydown = handleMusicalGridPhraseSplitKeydown;
     window.handleMusicalGridPhraseDeleteKeydown = handleMusicalGridPhraseDeleteKeydown;
     window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;

@@ -26,6 +26,7 @@
     window.reviewMixNeedsPlaybackSync = reviewMixNeedsPlaybackSync;
     window.applyReviewMixCrossfadeGainsIfNeeded = applyReviewMixCrossfadeGainsIfNeeded;
     window.getSegmentMappingTransportSec = getSegmentMappingTransportSec;
+    window.extraTrackHasAudibleOrImminentSegment = extraTrackHasAudibleOrImminentSegment;
     window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC = EXTRA_AUDIO_SCHEDULE_AHEAD_SEC;
     window.beginVideoExportAudioFilter = beginVideoExportAudioFilter;
     window.endVideoExportAudioFilter = endVideoExportAudioFilter;

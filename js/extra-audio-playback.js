@@ -207,14 +207,40 @@
         }
     }
 
+    function extraTrackHasAudibleOrImminentSegment(slot, transportSec) {
+        if (typeof getActiveExtraSegmentsAtTransport !== 'function') return false;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        const ahead =
+            typeof EXTRA_AUDIO_SCHEDULE_AHEAD_SEC === 'number'
+                ? EXTRA_AUDIO_SCHEDULE_AHEAD_SEC
+                : 0.02;
+        const probes = [t, t + ahead + 0.04, t - 0.06];
+        for (let p = 0; p < probes.length; p++) {
+            if (probes[p] < -0.001) continue;
+            const hits = getActiveExtraSegmentsAtTransport(probes[p]);
+            if (hits.some((s) => s.slot === slot)) return true;
+        }
+        const ctx = ensureReviewMixCtx();
+        const tr = extraTrackBySlot(slot);
+        if (
+            ctx &&
+            tr &&
+            typeof extraTrackSourcesScheduledOrAudibleOnCtx === 'function' &&
+            extraTrackSourcesScheduledOrAudibleOnCtx(tr, ctx)
+        ) {
+            return true;
+        }
+        return false;
+    }
+
     function isExtraTrackWithinPlayableTimeline(slot, transportSec) {
         const track = { type: 'extra', slot };
         if (
             typeof isTrackRegionActive === 'function' &&
-            isTrackRegionActive(track) &&
-            typeof getActiveExtraSegmentsAtTransport === 'function'
+            isTrackRegionActive(track)
         ) {
-            return getActiveExtraSegmentsAtTransport(transportSec).some((s) => s.slot === slot);
+            return extraTrackHasAudibleOrImminentSegment(slot, transportSec);
         }
         if (typeof isTrackTransportAudible === 'function') {
             return isTrackTransportAudible(track, transportSec);
@@ -257,7 +283,10 @@
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             const tr = extraTrackBySlot(i);
             const shouldPlay = shouldExtraTrackSourceBePlaying(i);
-            const playing = extraTrackSourcesAudibleOnCtx(tr, ctx);
+            const playing =
+                typeof extraTrackSourcesScheduledOrAudibleOnCtx === 'function'
+                    ? extraTrackSourcesScheduledOrAudibleOnCtx(tr, ctx)
+                    : extraTrackSourcesAudibleOnCtx(tr, ctx);
             if (shouldPlay === playing) continue;
             if (!shouldPlay && playing) {
                 stopExtraTrackSourceIfPastPlayableEnd(i);
@@ -285,8 +314,23 @@
 
     function segmentSourcesReadyForActive(active) {
         if (!active || !active.length) return false;
+        const gainT = getCrossfadeGainTransportSec();
         for (const segHit of active) {
             const tr = extraTrackBySlot(segHit.slot);
+            const trackRef = { type: 'extra', slot: segHit.slot };
+            if (
+                typeof shouldDeferIncomingSourceAtContinuousJoinedBoundary ===
+                    'function' &&
+                shouldDeferIncomingSourceAtContinuousJoinedBoundary(
+                    trackRef,
+                    segHit,
+                    gainT,
+                    tr,
+                    active,
+                )
+            ) {
+                continue;
+            }
             const entry =
                 tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
             if (!entry || !entry.src) return false;
@@ -504,7 +548,23 @@
                     gainT,
                 );
                 const existing = tr.segmentSources && tr.segmentSources[segHit.key];
-                if (!existing || !existing.src) {
+                if (
+                    !existing ||
+                    !existing.src
+                ) {
+                    if (
+                        typeof shouldDeferIncomingSourceAtContinuousJoinedBoundary ===
+                            'function' &&
+                        shouldDeferIncomingSourceAtContinuousJoinedBoundary(
+                            trackRef,
+                            segHit,
+                            gainT,
+                            tr,
+                            activeAtT,
+                        )
+                    ) {
+                        continue;
+                    }
                     if (
                         segHit.segmentIndex > 0 &&
                         typeof isSegmentBoundaryJoined === 'function' &&
@@ -548,31 +608,10 @@
                                     crossfadeGains.get(refreshedLeft.key) ?? 1,
                                     gainT,
                                 );
-                                const restartLeft =
-                                    typeof isSegmentSourceContinuousAtBoundary ===
-                                        'function' &&
-                                    isSegmentSourceContinuousAtBoundary(
-                                        trackRef,
-                                        segHit.segmentIndex - 1,
-                                    );
-                                if (restartLeft) {
-                                    startExtraTrackSegmentSource(
-                                        i,
-                                        refreshedLeft,
-                                        gLeft,
-                                        ctx.currentTime + 0.001,
-                                        ctx,
-                                        {
-                                            force: true,
-                                            transportSec: gainT,
-                                        },
-                                    );
-                                } else {
-                                    applySegmentEntryGain(leftEntry, gLeft, ctx, {
-                                        rampSec: 0.008,
-                                        inCrossfade: true,
-                                    });
-                                }
+                                applySegmentEntryGain(leftEntry, gLeft, ctx, {
+                                    rampSec: 0.008,
+                                    inCrossfade: true,
+                                });
                             }
                         }
                     }

@@ -43,8 +43,102 @@
         ensureExtraTrackMixRouting(slot, ctx);
         const gainT = getCrossfadeGainTransportSec();
         const anchorT = Number.isFinite(opt.transportSec) ? opt.transportSec : gainT;
-        stopExtraTrackSegmentSourceEntry(existing);
         const trackRef = { type: 'extra', slot };
+        if (
+            !(opt && opt.force) &&
+            segHit.segmentIndex > 0 &&
+            typeof isSegmentSourceContinuousAtBoundary === 'function' &&
+            isSegmentSourceContinuousAtBoundary(trackRef, segHit.segmentIndex - 1) &&
+            !(
+                typeof hasManualSegmentFadeAtJoinedBoundary === 'function' &&
+                hasManualSegmentFadeAtJoinedBoundary(
+                    trackRef,
+                    segHit.segmentIndex - 1,
+                )
+            )
+        ) {
+            let leftKey = null;
+            if (typeof getActiveExtraSegmentsAtTransport === 'function') {
+                const activeAtT = getActiveExtraSegmentsAtTransport(anchorT);
+                const leftHit = activeAtT.find(
+                    (h) =>
+                        h.slot === slot &&
+                        h.segmentIndex === segHit.segmentIndex - 1,
+                );
+                if (leftHit) leftKey = leftHit.key;
+            }
+            if (!leftKey && typeof getTrackSegments === 'function') {
+                const segments = getTrackSegments(trackRef);
+                const leftSeg = segments[segHit.segmentIndex - 1];
+                if (leftSeg) {
+                    leftKey =
+                        slot +
+                        ':' +
+                        (leftSeg.id || 'i' + (segHit.segmentIndex - 1));
+                }
+            }
+            if (leftKey && leftKey !== key && tr.segmentSources[leftKey]) {
+                const leftEntry = tr.segmentSources[leftKey];
+                if (
+                    leftEntry &&
+                    leftEntry.src &&
+                    typeof isSegmentSourceAudibleOnCtx === 'function' &&
+                    isSegmentSourceAudibleOnCtx(leftEntry, ctx)
+                ) {
+                    delete tr.segmentSources[leftKey];
+                    tr.segmentSources[key] = leftEntry;
+                    tr.source = leftEntry.src;
+                    let liveBuf = leftEntry.bufferOff;
+                    if (typeof refreshSegmentHitAtTransport === 'function') {
+                        const fresh = refreshSegmentHitAtTransport(
+                            trackRef,
+                            segHit,
+                            anchorT,
+                        );
+                        if (fresh && Number.isFinite(fresh.bufferOff)) {
+                            liveBuf = fresh.bufferOff;
+                        }
+                    } else if (Number.isFinite(leftEntry.playbackAnchorCtxTime)) {
+                        const elapsed = Math.max(
+                            0,
+                            ctx.currentTime - leftEntry.playbackAnchorCtxTime,
+                        );
+                        liveBuf = Math.min(
+                            clip.buffer.duration - 0.002,
+                            leftEntry.bufferOff + elapsed,
+                        );
+                    }
+                    leftEntry.bufferOff = liveBuf;
+                    leftEntry.transportAnchor = anchorT;
+                    leftEntry.playbackAnchorCtxTime = ctx.currentTime;
+                    leftEntry.lastAppliedGain = null;
+                    tr.playbackAnchorTransportSec = anchorT;
+                    tr.playbackAnchorCtxTime = ctx.currentTime;
+                    applySegmentEntryGain(leftEntry, gainLinear, ctx);
+                    return;
+                }
+            }
+        }
+        if (
+            !(opt && opt.force) &&
+            typeof shouldDeferIncomingSourceAtContinuousJoinedBoundary === 'function'
+        ) {
+            const activeAtT =
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+                    ? getActiveExtraSegmentsAtTransport(anchorT)
+                    : null;
+            if (
+                shouldDeferIncomingSourceAtContinuousJoinedBoundary(
+                    trackRef,
+                    segHit,
+                    anchorT,
+                    tr,
+                    activeAtT,
+                )
+            ) {
+                return;
+            }
+        }
         let when = Number.isFinite(scheduleWhen)
             ? scheduleWhen
             : acquireExtraMixScheduleTime(ctx, opt);
@@ -79,7 +173,14 @@
             });
         if (
             boundaryJoined &&
-            typeof planIncomingSegmentStartAtJoinedBoundary === 'function'
+            typeof planIncomingSegmentStartAtJoinedBoundary === 'function' &&
+            !(
+                typeof isSegmentSourceContinuousAtBoundary === 'function' &&
+                isSegmentSourceContinuousAtBoundary(
+                    trackRef,
+                    segHit.segmentIndex - 1,
+                )
+            )
         ) {
             let leftEntry = null;
             if (othersPlaying) {
@@ -135,7 +236,16 @@
             startAt = Math.max(0, liveHit.bufferOff);
             remain = Math.max(0, liveHit.remain);
         }
-        if (remain <= 0.002) return;
+        if (remain <= 0.002) {
+            return;
+        }
+        const minStartRemain =
+            typeof EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC === 'number'
+                ? EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC
+                : 0.04;
+        if (remain <= minStartRemain) {
+            return;
+        }
         const maxOff = Math.max(0, clip.buffer.duration - 0.002);
         startAt = Math.min(startAt, maxOff);
         if (
@@ -159,13 +269,33 @@
                 }
             }
         }
+        stopExtraTrackSegmentSourceEntry(existing);
         const src = ctx.createBufferSource();
         src.buffer = clip.buffer;
         const segGain = ctx.createGain();
         segGain.gain.value = Math.max(0, gainLinear);
         src.connect(segGain);
         segGain.connect(tr.gainNode);
-        src.start(when, startAt, Math.min(remain, clip.buffer.duration - startAt));
+        const durationPad =
+            typeof EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC === 'number'
+                ? EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC
+                : 0.08;
+        let playEndOff = startAt + remain;
+        if (typeof getContinuousJoinedSourceOutSec === 'function') {
+            const chainOut = getContinuousJoinedSourceOutSec(
+                trackRef,
+                segHit.segmentIndex,
+            );
+            if (chainOut > startAt + 0.002) {
+                playEndOff = Math.max(playEndOff, chainOut);
+            }
+        }
+        playEndOff = Math.min(playEndOff, clip.buffer.duration - 0.002);
+        const playDur = Math.min(
+            playEndOff - startAt + durationPad,
+            clip.buffer.duration - startAt,
+        );
+        src.start(when, startAt, playDur);
         tr.segmentSources[key] = {
             src,
             segGain,
@@ -193,11 +323,52 @@
         tr.playbackAnchorTransportSec = playTransportSec;
         tr.playbackAnchorCtxTime = when;
         src.onended = () => {
-            if (tr.segmentSources[key] && tr.segmentSources[key].src === src) {
-                delete tr.segmentSources[key];
-                if (tr.source === src) {
-                    tr.source = null;
-                    clearExtraTrackPlaybackAnchor(tr);
+            if (!tr.segmentSources[key] || tr.segmentSources[key].src !== src) return;
+            delete tr.segmentSources[key];
+            if (tr.source === src) {
+                tr.source = null;
+                clearExtraTrackPlaybackAnchor(tr);
+            }
+            const minContinue =
+                typeof EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC === 'number'
+                    ? EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC
+                    : 0.04;
+            if (
+                isTransportPlayingForExtra() &&
+                typeof getActiveExtraSegmentsAtTransport === 'function'
+            ) {
+                const transportSec = getCrossfadeGainTransportSec();
+                const hit = getActiveExtraSegmentsAtTransport(transportSec).find(
+                    (h) => h.key === key && h.slot === slot,
+                );
+                if (hit && hit.remain > minContinue) {
+                    let g = Math.max(0, gainLinear);
+                    if (
+                        typeof computeSegmentCrossfadeGainsForActive === 'function' &&
+                        typeof segmentPlaybackGainLinear === 'function'
+                    ) {
+                        const active = getActiveExtraSegmentsAtTransport(transportSec);
+                        const gains = computeSegmentCrossfadeGainsForActive(
+                            ctx,
+                            active,
+                            transportSec,
+                        );
+                        g = segmentPlaybackGainLinear(
+                            hit,
+                            gains.get(key) ?? 1,
+                            transportSec,
+                        );
+                    }
+                    startExtraTrackSegmentSource(
+                        slot,
+                        hit,
+                        g,
+                        ctx.currentTime + 0.001,
+                        ctx,
+                        { force: false, transportSec: transportSec },
+                    );
+                    scheduleMasterPlaybackFinishCheck();
+                    return;
                 }
             }
             scheduleMasterPlaybackFinishCheck();

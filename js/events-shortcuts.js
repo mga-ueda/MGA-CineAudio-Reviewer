@@ -383,7 +383,7 @@
                 typeof getTransportSec === 'function'
                     ? getTransportSec()
                     : parseFloat(seekBar.value) || 0;
-            const target = Math.max(0, cur - 1);
+            const target = Math.max(0, cur - 3);
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(target, { resumeAfter: false });

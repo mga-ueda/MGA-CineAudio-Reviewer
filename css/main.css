@@ -1507,11 +1507,17 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            width: 14px;
+            width: 8px;
             transform: translateX(-50%);
             pointer-events: auto;
             cursor: col-resize;
             z-index: 1;
+        }
+        /* リージョン In/Out・Fade 操作帯では Phrase 境界の当たり判定を譲る */
+        .audio-waveform-composite__phrase-boundaries--defer-regions
+            .audio-waveform-composite__phrase-boundary-handle {
+            pointer-events: none;
+            cursor: inherit;
         }
         .audio-waveform-composite__phrase-boundary-handle::after {
             content: '';
@@ -2284,7 +2290,10 @@
         }
         /* 境界密集時のみ: 実幅が min-width 未満のリージョンは枠をタイムライン幅に合わせる */
         .audio-waveform-lane__playback-regions--dense-boundaries
-            .audio-waveform-lane__playback-region--narrow {
+            .audio-waveform-lane__playback-region--narrow,
+        /* Phrase 分割で短いリージョンも min-width 28px による三角ずれを防ぐ */
+        .audio-waveform-lane__playback-regions--phrase-split-narrow
+            .audio-waveform-lane__playback-region--phrase-narrow {
             min-width: 0;
             z-index: 8;
             overflow: visible;
@@ -2497,11 +2506,10 @@
         .audio-waveform-composite__lanes--region-drag {
             cursor: ew-resize;
         }
-        /* 重なりで前面リージョン本体の grab が隠す In/Out 付近でも ↔ を示す */
-        .audio-waveform-composite__lanes--region-handle-hover,
-        .audio-waveform-composite__lanes--region-handle-hover
-            .audio-waveform-lane__playback-region {
-            cursor: ew-resize;
+        /* 重なりで前面リージョン本体の grab が隠す In/Out / Fade 付近でも ↔ を示す */
+        .audio-waveform-composite__lanes--region-handle-hover .audio-waveform-lane__playback-region,
+        .audio-waveform-lane__playback-region--ew-cursor {
+            cursor: ew-resize !important;
         }
         .audio-waveform-composite__lanes--range-loop-drag {
             cursor: crosshair;

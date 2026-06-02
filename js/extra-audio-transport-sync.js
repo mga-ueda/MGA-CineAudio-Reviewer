@@ -186,6 +186,9 @@
             }
 
             if (regionActive) {
+                if (extraTrackHasAudibleOrImminentSegment(i, gainT)) {
+                    continue;
+                }
                 stopExtraTrackAllSources(i);
                 continue;
             }

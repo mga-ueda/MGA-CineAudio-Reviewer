@@ -62,7 +62,7 @@
     }
 
     function joinSegmentBoundaryAt(track, boundaryIndex, opt) {
-        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        if (!isSegmentBoundaryJoinableAtIndex(track, boundaryIndex)) return false;
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         const left = segments[boundaryIndex];
         const right = segments[boundaryIndex + 1];
@@ -74,17 +74,6 @@
             right.clipId || getSegmentClipId(track, boundaryIndex + 1);
         if (leftClip !== rightClip) {
             writeLog('Playback region: cannot join (different clips at boundary)');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Cannot join', 'notice');
-            }
-            return false;
-        }
-
-        const sourceJoin =
-            Math.abs((Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0)) <=
-            SEGMENT_BOUNDARY_JOIN_EPS_SEC;
-        if (!sourceJoin) {
-            writeLog('Playback region: cannot join (source gap at boundary)');
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'Cannot join', 'notice');
             }
@@ -180,6 +169,48 @@
         return joined;
     }
 
+    function joinedBoundaryPointerHitSec() {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        let hitSec = 0.05;
+        if (master > 0) {
+            const lanes =
+                typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
+            const m =
+                typeof waveformTimelineMetrics === 'function' && lanes
+                    ? waveformTimelineMetrics(lanes)
+                    : null;
+            if (m && m.scrubW > 0) {
+                hitSec = (12 / m.scrubW) * master;
+            }
+        }
+        return hitSec;
+    }
+
+    function resolveJoinedBoundaryIndexAtTransport(track, transportSec) {
+        if (!isExtraTrackRef(track)) return -1;
+        const segments = getTrackSegments(track);
+        if (segments.length < 2) return -1;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return -1;
+        const hitSec = joinedBoundaryPointerHitSec();
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (
+                typeof isSegmentBoundaryJoinableAtIndex === 'function' &&
+                !isSegmentBoundaryJoinableAtIndex(track, b)
+            ) {
+                continue;
+            }
+            const leftEnd = getSegmentTimelineEnd(track, b);
+            const rightStart = getSegmentTimelineStart(track, b + 1);
+            const dist = Math.min(Math.abs(t - leftEnd), Math.abs(t - rightStart));
+            if (dist <= hitSec) return b;
+        }
+        return -1;
+    }
+
     function resolveJoinedBoundaryIndexAtPointer(track, clientX, clientY) {
         if (!isExtraTrackRef(track)) return -1;
         const segments = getTrackSegments(track);
@@ -197,7 +228,7 @@
                         lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
                     if (m && parseInt(m[1], 10) === track.slot) {
                         const b = Number(splitHandle.dataset.boundaryIndex);
-                        if (Number.isFinite(b) && isSegmentBoundaryJoined(track, b)) {
+                        if (Number.isFinite(b) && isSegmentBoundaryJoinableAtIndex(track, b)) {
                             return b;
                         }
                     }
@@ -206,32 +237,11 @@
         }
 
         const transportSec =
-            typeof transportSecFromClientX === 'function'
+            Number.isFinite(clientX) && typeof transportSecFromClientX === 'function'
                 ? transportSecFromClientX(clientX)
                 : null;
-        if (!Number.isFinite(transportSec)) return -1;
-
-        const master =
-            typeof getMasterTransportDurationSec === 'function'
-                ? getMasterTransportDurationSec()
-                : 0;
-        let hitSec = 0.05;
-        if (master > 0) {
-            const lanes =
-                typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
-            const m =
-                typeof waveformTimelineMetrics === 'function' && lanes
-                    ? waveformTimelineMetrics(lanes)
-                    : null;
-            if (m && m.scrubW > 0) {
-                hitSec = (12 / m.scrubW) * master;
-            }
-        }
-
-        for (let b = 0; b < segments.length - 1; b++) {
-            if (!isSegmentBoundaryJoined(track, b)) continue;
-            const boundT = getSegmentTimelineEnd(track, b);
-            if (Math.abs(transportSec - boundT) <= hitSec) return b;
+        if (Number.isFinite(transportSec)) {
+            return resolveJoinedBoundaryIndexAtTransport(track, transportSec);
         }
         return -1;
     }
@@ -436,6 +446,13 @@
 
     function resolveRegionSegmentFromPointer(clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+        if (
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(clientX, clientY)
+        ) {
+            return null;
+        }
 
         const slotFromY =
             typeof waveformExtraLaneSlotFromClientY === 'function'
@@ -1012,7 +1029,7 @@
     }
 
     function joinPlaybackRegionAtPointer() {
-        const slot = resolveTargetExtraSlot();
+        const slot = resolveSplitTargetExtraSlot();
         if (slot < 0) {
             if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
                 writeLog(
@@ -1046,17 +1063,7 @@
         );
         if (boundaryIndex < 0) {
             const seekTransportSec = transportSecFromSeekbar();
-            if (Number.isFinite(seekTransportSec)) {
-                const segments = getTrackSegments(track);
-                for (let b = 0; b < segments.length - 1; b++) {
-                    if (!isSegmentBoundaryJoined(track, b)) continue;
-                    const boundT = getSegmentTimelineEnd(track, b);
-                    if (Math.abs(seekTransportSec - boundT) <= SEGMENT_BOUNDARY_JOIN_EPS_SEC) {
-                        boundaryIndex = b;
-                        break;
-                    }
-                }
-            }
+            boundaryIndex = resolveJoinedBoundaryIndexAtTransport(track, seekTransportSec);
         }
         if (boundaryIndex < 0) {
             writeLog('Playback region: hover a joined boundary or seek to boundary, then press B');

@@ -84,11 +84,64 @@
         );
     }
 
+    function shouldSkipContinuousJoinedEqualPowerPair(active, i, j, opt) {
+        const a = active[i];
+        const b = active[j];
+        const sameSlotOnly = !opt || opt.sameSlotOnly !== false;
+        if (sameSlotOnly && a.slot !== b.slot) return false;
+        const lo = a.segmentIndex < b.segmentIndex ? a : b;
+        const hi = a.segmentIndex < b.segmentIndex ? b : a;
+        if (hi.segmentIndex !== lo.segmentIndex + 1) return false;
+        const trackRef = trackRefForHit(lo, opt);
+        if (typeof window.isSegmentBoundaryJoined !== 'function') return false;
+        if (!window.isSegmentBoundaryJoined(trackRef, lo.segmentIndex)) return false;
+        if (typeof window.isSegmentSourceContinuousAtBoundary !== 'function') {
+            return false;
+        }
+        return window.isSegmentSourceContinuousAtBoundary(trackRef, lo.segmentIndex);
+    }
+
+    /**
+     * 重なり区間で Fade In/Out が有効なときは等パワーを使わない（フェード曲線と二重減衰になるため）。
+     */
+    function shouldSkipSegmentFadeOverlapEqualPowerPair(active, i, j, opt) {
+        if (shouldSkipManualJoinedEqualPowerPair(active, i, j, opt)) return true;
+        const getFade =
+            typeof window.getSegmentFadeDurationSec === 'function'
+                ? window.getSegmentFadeDurationSec
+                : null;
+        if (!getFade) return false;
+        const { out: outIdx, in: inIdx } = crossfadeOutInIndices(active, i, j, opt);
+        const outHit = active[outIdx];
+        const inHit = active[inIdx];
+        const trackRef = trackRefForHit(outHit, opt);
+        const fadeOut = getFade(trackRef, outHit.segmentIndex, 'out');
+        const fadeIn = getFade(trackRef, inHit.segmentIndex, 'in');
+        if (fadeOut <= 0.0005 && fadeIn <= 0.0005) return false;
+        const t =
+            opt && Number.isFinite(opt.transportSec) ? Number(opt.transportSec) : NaN;
+        if (!Number.isFinite(t)) return false;
+        const oStart = Math.max(outHit.timelineStart, inHit.timelineStart);
+        const oEnd = Math.min(outHit.timelineEnd, inHit.timelineEnd);
+        if (oEnd - oStart < MIN_CROSSFADE_OVERLAP_SEC) return false;
+        const inFadeZone =
+            fadeIn > 0.0005 &&
+            t >= inHit.timelineStart - TIMELINE_ORDER_EPS_SEC &&
+            t <= inHit.timelineStart + fadeIn + TIMELINE_ORDER_EPS_SEC;
+        const outFadeZone =
+            fadeOut > 0.0005 &&
+            t >= outHit.timelineEnd - fadeOut - TIMELINE_ORDER_EPS_SEC &&
+            t <= outHit.timelineEnd + TIMELINE_ORDER_EPS_SEC;
+        return inFadeZone || outFadeZone;
+    }
+
     function shouldSkipEqualPowerOverlapPair(active, i, j, opt) {
         if (opt && typeof opt.shouldSkipPair === 'function') {
             return opt.shouldSkipPair(active, i, j, opt);
         }
-        return shouldSkipManualJoinedEqualPowerPair(active, i, j, opt);
+        if (shouldSkipContinuousJoinedEqualPowerPair(active, i, j, opt)) return true;
+        if (shouldSkipManualJoinedEqualPowerPair(active, i, j, opt)) return true;
+        return shouldSkipSegmentFadeOverlapEqualPowerPair(active, i, j, opt);
     }
 
     function computeEqualPowerCrossfadeGainsForGroup(group, transportSec, opt) {
@@ -104,9 +157,10 @@
                 : MIN_CROSSFADE_OVERLAP_SEC;
         const weights = group.map(() => 1);
         const t = Number(transportSec);
+        const pairOpt = opt ? { ...opt, transportSec: t } : { transportSec: t };
         for (let i = 0; i < group.length; i++) {
             for (let j = i + 1; j < group.length; j++) {
-                if (shouldSkipEqualPowerOverlapPair(group, i, j, opt)) continue;
+                if (shouldSkipEqualPowerOverlapPair(group, i, j, pairOpt)) continue;
                 const oStart = Math.max(group[i].timelineStart, group[j].timelineStart);
                 const oEnd = Math.min(group[i].timelineEnd, group[j].timelineEnd);
                 if (oEnd - oStart < minOverlap || t < oStart || t > oEnd) {
@@ -157,6 +211,9 @@
     window.crossfadeEqualPowerGainIn = crossfadeEqualPowerGainIn;
     window.crossfadeOutInIndices = crossfadeOutInIndices;
     window.shouldSkipManualJoinedEqualPowerPair = shouldSkipManualJoinedEqualPowerPair;
+    window.shouldSkipEqualPowerOverlapPair = shouldSkipEqualPowerOverlapPair;
+    window.shouldSkipSegmentFadeOverlapEqualPowerPair =
+        shouldSkipSegmentFadeOverlapEqualPowerPair;
     window.computeEqualPowerCrossfadeGainsForGroup = computeEqualPowerCrossfadeGainsForGroup;
     window.computeEqualPowerCrossfadeGains = computeEqualPowerCrossfadeGains;
 })();

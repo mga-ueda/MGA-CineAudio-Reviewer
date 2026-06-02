@@ -10,6 +10,10 @@
     var extraWaveformEnsureGen = 0;
     var EXTRA_AUDIO_SCHEDULE_AHEAD_SEC = 0.02;
     var EXTRA_AUDIO_SEGMENT_ADD_AHEAD_SEC = 0.003;
+    /** BufferSource 終了をトランスポート壁時計のわずかな先行に合わせる余裕 */
+    var EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC = 0.08;
+    /** onended 後に再開する最小 remain（これ未満はビビビッ連打の原因になる） */
+    var EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC = 0.04;
     var EXTRA_AUDIO_RESYNC_DRIFT_SEC = 0.045;
     var extraTrackUi;
     var extraLaneUiOpen;

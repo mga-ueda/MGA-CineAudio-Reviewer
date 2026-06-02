@@ -497,6 +497,7 @@
     window.handlePlaybackRegionMixKeydown = handlePlaybackRegionMixKeydown;
     window.resolveMixTargetFromActiveRegion = resolveMixTargetFromActiveRegion;
     window.updateAllPlaybackRegionOverlays = updateAllPlaybackRegionOverlays;
+    window.refreshAllPlaybackRegionFadeTriangles = refreshAllPlaybackRegionFadeTriangles;
     window.updateTrackRegionOverlay = updateTrackRegionOverlays;
     window.setPendingPlaybackRegionRestore = setPendingPlaybackRegionRestore;
     window.applyPendingPlaybackRegionRestore = applyPendingPlaybackRegionRestore;
@@ -712,6 +713,7 @@
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
     window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
+    window.isSegmentBoundaryJoinableAtIndex = isSegmentBoundaryJoinableAtIndex;
     window.isAutoJoinedBoundaryCrossfadeEligible = isAutoJoinedBoundaryCrossfadeEligible;
     window.hasExtendedCrossfadeOverlapAtBoundary = hasExtendedCrossfadeOverlapAtBoundary;
     window.hasManualSegmentFadeAtJoinedBoundary = hasManualSegmentFadeAtJoinedBoundary;
@@ -719,11 +721,13 @@
     window.isTransportInManualJoinedBoundaryFadeZone =
         isTransportInManualJoinedBoundaryFadeZone;
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
+    window.getContinuousJoinedSourceOutSec = getContinuousJoinedSourceOutSec;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;
     window.JOINED_BOUNDARY_CROSSFADE_SEC = JOINED_BOUNDARY_CROSSFADE_SEC;
     window.getSegmentGainDb = getSegmentGainDb;
     window.getSegmentGainLinear = getSegmentGainLinear;
+    window.getSegmentFadeDurationSec = getSegmentFadeDurationSec;
     window.getSegmentPlaybackGainLinear = getSegmentPlaybackGainLinear;
     window.setSegmentGainDb = setSegmentGainDb;
     window.getSegmentRegionTimelineBounds = function (slot, segmentIndex) {
