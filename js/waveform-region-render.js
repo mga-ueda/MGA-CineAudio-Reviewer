@@ -690,7 +690,6 @@
         grad,
         vp,
         segments,
-        gainState,
     ) {
         if (!trackSegmentsAreContinuousSameClipChain(track)) return false;
         for (let i = 0; i < segments.length; i++) {
@@ -721,7 +720,6 @@
                 : wCss;
         const drawW = contentW > 0 ? contentW : wCss;
         const barW = drawW / chainPeaks.length;
-        const uniformGain = gainState && gainState.simple ? gainState.uniform : null;
 
         ctx.fillStyle = grad || '#ffffff';
         for (let p = 0; p < chainPeaks.length; p++) {
@@ -730,14 +728,21 @@
             const barTransport =
                 chainStart + ((p + 0.5) / chainPeaks.length) * chainDur;
             const segIdx = segmentIndexAtMasterTransport(track, barTransport);
-            const hideBefore = getSegmentWaveformVisibleTimelineStart(track, segIdx);
+            const hideBefore = getSegmentWaveformHideBeforeTimeline(track, segIdx);
             if (barTransport < hideBefore - 0.0005) continue;
             if (viewportPeaksCoverMasterTime(vp, barTransport)) continue;
-            const gain =
-                uniformGain != null ? uniformGain : gainState.at(segIdx, barTransport);
-            const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
-            const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
-            ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+            drawWaveformBarAtTransport(
+                ctx,
+                track,
+                slot,
+                x,
+                barW,
+                mid,
+                barTransport,
+                pk,
+                segIdx,
+                vp ? { viewportPeaks: vp } : null,
+            );
         }
         return true;
     }
@@ -806,7 +811,6 @@
         }
 
         ctx.fillStyle = grad || '#ffffff';
-        const gainState = createWaveformVisualGainState(track);
         const chainOverviewDrawn = drawContinuousSegmentChainOverview(
             ctx,
             track,
@@ -817,7 +821,6 @@
             grad,
             vp,
             segments,
-            gainState,
         );
         if (!chainOverviewDrawn) {
             for (let i = 0; i < segments.length; i++) {
@@ -835,8 +838,9 @@
                     seg.sourceOutSec,
                 );
                 if (!segPeaks || !segPeaks.length) continue;
-                const contentDur = seg.sourceOutSec - seg.sourceInSec;
                 const segT0 = getSegmentTimelineStart(track, i);
+                const contentDur = seg.sourceOutSec - seg.sourceInSec;
+                if (!(contentDur > 0.0005)) continue;
                 const startX =
                     typeof masterTimelineContentWidth === 'function'
                         ? masterTimelineContentWidth(wCss, segT0)
@@ -847,10 +851,8 @@
                         : wCss;
                 const drawW = contentW > 0 ? contentW : wCss;
                 const barW = drawW / segPeaks.length;
-                const waveformHideBefore = getSegmentWaveformVisibleTimelineStart(track, i);
-                const uniformGain = gainState.simple ? gainState.uniform : null;
+                const waveformHideBefore = getSegmentWaveformHideBeforeTimeline(track, i);
                 for (let p = 0; p < segPeaks.length; p++) {
-                    const pk = segPeaks[p];
                     const x = startX + p * barW;
                     const barTransport =
                         segT0 + ((p + 0.5) / segPeaks.length) * contentDur;
@@ -860,11 +862,18 @@
                     if (viewportPeaksCoverMasterTime(vp, barTransport)) {
                         continue;
                     }
-                    const gain =
-                        uniformGain != null ? uniformGain : gainState.at(i, barTransport);
-                    const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
-                    const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
-                    ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+                    drawWaveformBarAtTransport(
+                        ctx,
+                        track,
+                        slot,
+                        x,
+                        barW,
+                        mid,
+                        barTransport,
+                        segPeaks[p],
+                        i,
+                        vp ? { viewportPeaks: vp } : null,
+                    );
                 }
             }
         }

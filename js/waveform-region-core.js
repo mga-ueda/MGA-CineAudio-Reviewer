@@ -2921,7 +2921,260 @@
         return peaks.slice(Math.max(0, i0), Math.min(peaks.length, Math.max(i0 + 1, i1)));
     }
 
+    function samplePeakAtSourceSec(peaks, fullDurSec, sourceSec) {
+        if (!peaks || !peaks.length || !(fullDurSec > 0)) {
+            return { max: 0, min: 0 };
+        }
+        const s = Math.max(0, Math.min(fullDurSec, Number(sourceSec) || 0));
+        const pos = (s / fullDurSec) * peaks.length;
+        const i0 = Math.max(0, Math.min(peaks.length - 1, Math.floor(pos)));
+        const i1 = Math.min(peaks.length - 1, i0 + 1);
+        if (i0 === i1) return peaks[i0];
+        const f = pos - i0;
+        return {
+            max: peaks[i0].max * (1 - f) + peaks[i1].max * f,
+            min: peaks[i0].min * (1 - f) + peaks[i1].min * f,
+        };
+    }
+
+    /** 再生 map と同じソース秒（結合境界クロスフェードの先行区間を含む） */
+    function segmentWaveformSourceSecAtTransport(track, segmentIndex, transportSec) {
+        const hits = mapAllSegmentsAtTransport(track, transportSec, {
+            forPlayback: true,
+        });
+        const hit = hits.find((h) => h.segmentIndex === segmentIndex);
+        if (hit) return hit.sourceSec;
+        return segmentSourceSecFromTransport(track, segmentIndex, transportSec);
+    }
+
+    function getSegmentWaveformHideBeforeTimeline(track, segmentIndex) {
+        return Math.min(
+            getSegmentWaveformVisibleTimelineStart(track, segmentIndex),
+            getSegmentWaveformDrawTimelineStart(track, segmentIndex),
+        );
+    }
+
+    /** 再生区間と同じ基準でセグメント同士のタイムライン重なりがあるか */
+    function trackHasPlaybackSegmentOverlap(track) {
+        const segments = getTrackSegments(track);
+        for (let i = 0; i < segments.length; i++) {
+            for (let j = i + 1; j < segments.length; j++) {
+                const oStart = Math.max(
+                    getSegmentPlaybackTimelineStart(track, i),
+                    getSegmentPlaybackTimelineStart(track, j),
+                );
+                const oEnd = Math.min(
+                    getSegmentTimelineEnd(track, i),
+                    getSegmentTimelineEnd(track, j),
+                );
+                if (oEnd - oStart >= MIN_CROSSFADE_OVERLAP_SEC) return true;
+            }
+        }
+        return false;
+    }
+
+    function computeWaveformSegmentCrossfadeLinear(track, hits, transportSec) {
+        if (!hits || hits.length <= 1) return new Map();
+        if (typeof computeEqualPowerCrossfadeGainsForGroup !== 'function') {
+            return new Map();
+        }
+        return computeEqualPowerCrossfadeGainsForGroup(hits, transportSec, {
+            groupBySlot: false,
+            sameSlotOnly: false,
+            trackRefFromHit: () => track,
+        });
+    }
+
+    /**
+     * 再生ミックスと同じゲイン（等パワー × segmentPlaybackGainLinear）でピークを合成。
+     * 複数セグメントが同時に鳴る区間専用（単一セグメントは localPeak を使う）。
+     */
+    function lookupViewportPeakAtTransport(vp, segmentIndex, transportSec) {
+        if (!vp || !vp.segments || !vp.segments.length) return null;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        for (let i = 0; i < vp.segments.length; i++) {
+            const s = vp.segments[i];
+            if (s.segmentIndex !== segmentIndex) continue;
+            if (t + 1e-9 < s.masterStartSec || t - 1e-9 > s.masterEndSec) continue;
+            if (!s.peaks || !s.peaks.length) return null;
+            const segDur = s.masterEndSec - s.masterStartSec;
+            if (!(segDur > 1e-9)) return null;
+            const pos = ((t - s.masterStartSec) / segDur) * s.peaks.length;
+            const i0 = Math.max(0, Math.min(s.peaks.length - 1, Math.floor(pos)));
+            const i1 = Math.min(s.peaks.length - 1, i0 + 1);
+            if (i0 === i1) return s.peaks[i0];
+            const f = pos - i0;
+            return {
+                max: s.peaks[i0].max * (1 - f) + s.peaks[i1].max * f,
+                min: s.peaks[i0].min * (1 - f) + s.peaks[i1].min * f,
+            };
+        }
+        return null;
+    }
+
+    function waveformPeakForHitAtTransport(track, slot, hit, transportSec, opt) {
+        const vp = opt && opt.viewportPeaks;
+        if (vp) {
+            const vpPk = lookupViewportPeakAtTransport(
+                vp,
+                hit.segmentIndex,
+                transportSec,
+            );
+            if (vpPk) return vpPk;
+        }
+        const segments = getTrackSegments(track);
+        const seg = segments[hit.segmentIndex];
+        if (!seg) return null;
+        const fullDur = getSegmentSourceDurationSec(track, seg);
+        const peaks = getSegmentPeaksForDraw(slot, hit.clipId);
+        if (!peaks || !peaks.length || !(fullDur > 0)) return null;
+        return samplePeakAtSourceSec(peaks, fullDur, hit.sourceSec);
+    }
+
+    function waveformPlaybackGainForHit(track, hit, hits, transportSec) {
+        const cfGains = computeWaveformSegmentCrossfadeLinear(track, hits, transportSec);
+        const cf = cfGains.get(hit.key) ?? 1;
+        return cf * getSegmentPlaybackGainLinear(track, hit.segmentIndex, transportSec);
+    }
+
+    function computeWaveformMixPeakAtTransport(track, slot, transportSec, opt) {
+        const hits = mapAllSegmentsAtTransport(track, transportSec, {
+            forPlayback: true,
+        });
+        if (hits.length <= 1) return null;
+        let sumMax = 0;
+        let sumMin = 0;
+        let any = false;
+        for (let h = 0; h < hits.length; h++) {
+            const hit = hits[h];
+            const pk = waveformPeakForHitAtTransport(
+                track,
+                slot,
+                hit,
+                transportSec,
+                opt,
+            );
+            if (!pk) continue;
+            const gain = waveformPlaybackGainForHit(track, hit, hits, transportSec);
+            sumMax += pk.max * gain;
+            sumMin += pk.min * gain;
+            any = true;
+        }
+        if (!any) return null;
+        return { max: sumMax, min: sumMin };
+    }
+
+    function waveformGainForLocalSegment(track, hits, localSegmentIndex, barTransport) {
+        const localHit = hits.find((h) => h.segmentIndex === localSegmentIndex);
+        if (localHit) {
+            return waveformPlaybackGainForHit(track, localHit, hits, barTransport);
+        }
+        return getSegmentPlaybackGainLinear(track, localSegmentIndex, barTransport);
+    }
+
+    function drawLocalWaveformBarAtTransport(
+        ctx,
+        track,
+        hits,
+        x,
+        barW,
+        mid,
+        barTransport,
+        localPeak,
+        localSegmentIndex,
+    ) {
+        if (!localPeak) return;
+        const gain = waveformGainForLocalSegment(
+            track,
+            hits,
+            localSegmentIndex,
+            barTransport,
+        );
+        fillWaveformBarFromPeak(ctx, x, barW, mid, localPeak, gain);
+    }
+
+    /** タイムライン位置の波形バー（重なり時は合成、それ以外は localPeak を使用） */
+    function drawWaveformBarAtTransport(
+        ctx,
+        track,
+        slot,
+        x,
+        barW,
+        mid,
+        barTransport,
+        localPeak,
+        localSegmentIndex,
+        opt,
+    ) {
+        const hits = mapAllSegmentsAtTransport(track, barTransport, {
+            forPlayback: true,
+        });
+        const hasLocal =
+            typeof localSegmentIndex === 'number' &&
+            localSegmentIndex >= 0 &&
+            localPeak;
+
+        if (hits.length > 1) {
+            const mix = computeWaveformMixPeakAtTransport(track, slot, barTransport, opt);
+            if (mix) {
+                fillWaveformBarFromPeak(ctx, x, barW, mid, mix, 1);
+                return;
+            }
+            if (hasLocal) {
+                drawLocalWaveformBarAtTransport(
+                    ctx,
+                    track,
+                    hits,
+                    x,
+                    barW,
+                    mid,
+                    barTransport,
+                    localPeak,
+                    localSegmentIndex,
+                );
+            }
+            return;
+        }
+
+        if (hasLocal) {
+            drawLocalWaveformBarAtTransport(
+                ctx,
+                track,
+                hits,
+                x,
+                barW,
+                mid,
+                barTransport,
+                localPeak,
+                localSegmentIndex,
+            );
+            return;
+        }
+
+        if (hits.length === 1) {
+            const hit = hits[0];
+            const gain = waveformPlaybackGainForHit(track, hit, hits, barTransport);
+            const pk = waveformPeakForHitAtTransport(
+                track,
+                slot,
+                hit,
+                barTransport,
+                opt,
+            );
+            if (pk) fillWaveformBarFromPeak(ctx, x, barW, mid, pk, gain);
+        }
+    }
+
+    function fillWaveformBarFromPeak(ctx, x, barW, mid, pk, gainScale) {
+        const g = Number.isFinite(gainScale) ? gainScale : 1;
+        const top = mid - Math.max(0.5, pk.max * g * (mid - 2));
+        const bot = mid - Math.min(-0.5, pk.min * g * (mid - 2));
+        ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+    }
+
     function trackWaveformNeedsCrossfadeVisualMap(track) {
+        if (trackHasPlaybackSegmentOverlap(track)) return true;
         const segments = getTrackSegments(track);
         for (let b = 0; b < segments.length - 1; b++) {
             if (hasManualSegmentFadeAtJoinedBoundary(track, b)) return true;
@@ -3127,13 +3380,14 @@
         if (!vp || !vp.segments || !vp.segments.length || !(master > 0) || !track) {
             return;
         }
-        const gainState = createWaveformVisualGainState(track);
+        const slot = track.slot;
         const mid = hCss * 0.5;
         const bg =
             typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
                 ? TIMELINE_LANE_TRACK_BG
                 : '#161820';
         const gradFill = grad || '#ffffff';
+        const drawOpt = { viewportPeaks: vp };
 
         for (let si = 0; si < vp.segments.length; si++) {
             const s = vp.segments[si];
@@ -3162,16 +3416,23 @@
             const segIdx =
                 typeof s.segmentIndex === 'number' && s.segmentIndex >= 0 ? s.segmentIndex : si;
             for (let p = 0; p < s.peaks.length; p++) {
-                const pk = s.peaks[p];
                 const x = x0 + p * barW;
                 const barTransport =
                     s.masterStartSec + ((p + 0.5) / s.peaks.length) * segDur;
-                const hideBefore = getSegmentWaveformVisibleTimelineStart(track, segIdx);
+                const hideBefore = getSegmentWaveformHideBeforeTimeline(track, segIdx);
                 if (barTransport < hideBefore - 0.0005) continue;
-                const gain = gainState.at(segIdx, barTransport);
-                const top = mid - Math.max(0.5, pk.max * gain * (mid - 2));
-                const bot = mid - Math.min(-0.5, pk.min * gain * (mid - 2));
-                ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
+                drawWaveformBarAtTransport(
+                    ctx,
+                    track,
+                    slot,
+                    x,
+                    barW,
+                    mid,
+                    barTransport,
+                    s.peaks[p],
+                    segIdx,
+                    drawOpt,
+                );
             }
         }
     }
@@ -3184,13 +3445,13 @@
         const segEnd = getSegmentTimelineEnd(track, segmentIndex);
         let t0 = Math.max(
             spec.masterStartSec,
-            getSegmentWaveformVisibleTimelineStart(track, segmentIndex),
+            getSegmentWaveformDrawTimelineStart(track, segmentIndex),
         );
         let t1 = Math.min(segEnd, spec.masterEndSec);
         if (t1 <= t0 + 1e-9) return null;
 
-        const srcStart = segmentSourceSecFromTransport(track, segmentIndex, t0);
-        const srcEnd = segmentSourceSecFromTransport(track, segmentIndex, t1);
+        const srcStart = segmentWaveformSourceSecAtTransport(track, segmentIndex, t0);
+        const srcEnd = segmentWaveformSourceSecAtTransport(track, segmentIndex, t1);
         const clipId = seg.clipId || getSegmentClipId(track, segmentIndex);
         let buf = tr.buffer;
         if (typeof getExtraTrackClipBuffer === 'function') {
