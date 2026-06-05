@@ -204,6 +204,18 @@
                 <h2 class="docs-heading-box">マーカー（Markers）</h2>
                 <p><strong>右列</strong>が Markers パネルです。動画または追加音声を読み込んだあと、レビュー用の印とコメントを付けられます。同じマーカーは<strong>波形タイムライン</strong>上にも縦線・範囲・ラベルとして表示されます。</p>
 
+                <h3 class="docs-heading-box--sub">内部的な位置の管理（秒）</h3>
+                <p>マーカーの位置は、内部的に<strong>フレーム番号ではなく秒（トランスポート上の秒）</strong>で保持されます。<strong>Export Review</strong>（<code>.mgacr</code>）やブラウザ内キャッシュも同じ形式です。画面上の In / Out 列や映像上のタイムコードは、保持している秒から<strong>現在の FPS に基づいてフレーム表記（<code>HH:MM:SS:FF</code>）へ変換して表示しているだけ</strong>です。</p>
+                <ul>
+                    <li>表に見える TC と内部の秒は、常に同じ意味のフレーム境界を指すとは限りません。表示 TC は内部秒を最も近いフレームへ丸めた結果です。</li>
+                    <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、<strong>その時点の再生位置（秒）をそのまま記録</strong>します（フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>−</kbd> による ±1 フレーム調整を使ってください）。</li>
+                    <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）またはトランスポートのシークバー上のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>−</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
+                    <li>TC 欄の ±1 フレーム微調整は、いったんフレーム位置へ変換してから<strong>再び秒として保存</strong>されます。</li>
+                    <li><strong>Copy</strong> は内部秒から求めた<strong>ミリ秒表記</strong>（<code>00:00:00.000</code>）を出力します。<strong>Paste</strong> はそのミリ秒 TC を読み取り、<strong>現在読み込まれている FPS</strong> で最も近いフレーム位置に合わせてから秒として配置します。DAW 側の TC と 1 フレームずれることがあります。</li>
+                    <li>素材の FPS が異なると、同じ内部秒でも画面上のフレーム TC や Length 列のフレーム数が変わることがあります。</li>
+                    <li><strong>Length</strong> 列の秒/フレーム表示は、内部秒から算出した<strong>参考値</strong>です（Copy には含まれません）。</li>
+                </ul>
+
                 <h3 class="docs-heading-box--sub">パネル上部のボタン</h3>
                 <ul>
                     <li><strong>Hide / View</strong> — 波形上のマーカー表示を隠す/戻す（<kbd>V</kbd> と同じ）。マーカーが 1件以上あるときだけ有効。</li>
@@ -211,7 +223,7 @@
                         <strong>Copy</strong> — マーカー一覧をタブ区切りテキストでクリップボードにコピーします（Length 列は含めません）。<strong>Slack</strong>・Teams・メールなどへの貼り付けを想定しており、相手が同じ動画・音声を手元で再生できる前提で、<strong>タイムライン上のどの位置にどんなコメントか</strong>を返すやり取りに適しています。表の列は # / In / Out / Comment です。In/Out の時刻は <strong>00:00:00.000</strong> 形式（時・分・秒・ミリ秒。ミリ秒は常に3桁）で出力します。画面上のマーカー表はフレーム表記ですが、Copy では<strong>一般的な DAW のタイムラインで使われる秒表示</strong>（時:分:秒.ミリ秒）に合わせています。DAW 側の位置と照らし合わせやすくするためです。すべてのマーカーで「時」が 00 のときは、コピー時に先頭の <code>00:</code> を省略します（例: <code>01:23.456</code>）。<strong>Additional Comments</strong> に入力があるときは、表の末尾に In/Out が空の行として Feedback 列のみ付けてコピーします。スプレッドシートへ貼る用途にも使えます。
                     </li>
                     <li>
-                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Comment のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In/Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒3桁）を読み取ります。アプリ内部はフレーム精度で扱うため、タイムライン上の位置へは<strong>ミリ秒を現在の FPS に合わせてフレームに変換</strong>してから配置します。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。<strong>Additional Comments</strong> は表末尾の In/Out が空の行（Feedback 列のテキスト）、従来形式の <code>Additional Comments: …</code> 行、または <code>---MEMO---</code> 区切り以降のテキストから復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。クリップボードが空、またはブラウザから読み取れない場合は、テキストを直接貼れる<strong>貼り付けダイアログ</strong>が開きます（<kbd>Esc</kbd> でキャンセル）。動画または追加音声を読み込んだあとで利用できます。
+                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Comment のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In/Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒3桁）を読み取ります。内部では秒で保持するため、貼り付け時は<strong>ミリ秒 TC を現在の FPS で最も近いフレーム位置に合わせてから秒として配置</strong>します（上記「内部的な位置の管理」を参照）。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。<strong>Additional Comments</strong> は表末尾の In/Out が空の行（Feedback 列のテキスト）、従来形式の <code>Additional Comments: …</code> 行、または <code>---MEMO---</code> 区切り以降のテキストから復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。クリップボードが空、またはブラウザから読み取れない場合は、テキストを直接貼れる<strong>貼り付けダイアログ</strong>が開きます（<kbd>Esc</kbd> でキャンセル）。動画または追加音声を読み込んだあとで利用できます。
                     </li>
                     <li><strong>Clear</strong> — すべてのマーカーを削除。</li>
                 </ul>
