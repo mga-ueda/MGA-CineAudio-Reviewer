@@ -714,6 +714,7 @@
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
     window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
     window.isSegmentBoundaryJoinableAtIndex = isSegmentBoundaryJoinableAtIndex;
+    window.playbackRegionBoundaryJoinBlockReason = playbackRegionBoundaryJoinBlockReason;
     window.isAutoJoinedBoundaryCrossfadeEligible = isAutoJoinedBoundaryCrossfadeEligible;
     window.hasExtendedCrossfadeOverlapAtBoundary = hasExtendedCrossfadeOverlapAtBoundary;
     window.hasManualSegmentFadeAtJoinedBoundary = hasManualSegmentFadeAtJoinedBoundary;

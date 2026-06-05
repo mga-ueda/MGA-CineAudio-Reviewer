@@ -61,8 +61,24 @@
         redrawAfterRegionChange(track.slot);
     }
 
+    function notifyCannotJoinSegmentBoundary(track, boundaryIndex) {
+        const reason =
+            typeof playbackRegionBoundaryJoinBlockReason === 'function'
+                ? playbackRegionBoundaryJoinBlockReason(track, boundaryIndex)
+                : 'unknown block reason';
+        writeLog('Playback region: cannot join (' + reason + ')');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', "Can't join here", 'error');
+        }
+    }
+
     function joinSegmentBoundaryAt(track, boundaryIndex, opt) {
-        if (!isSegmentBoundaryJoinableAtIndex(track, boundaryIndex)) return false;
+        if (!isSegmentBoundaryJoinableAtIndex(track, boundaryIndex)) {
+            if (!(opt && opt.silent)) {
+                notifyCannotJoinSegmentBoundary(track, boundaryIndex);
+            }
+            return false;
+        }
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         const left = segments[boundaryIndex];
         const right = segments[boundaryIndex + 1];
@@ -72,13 +88,6 @@
             left.clipId || getSegmentClipId(track, boundaryIndex);
         const rightClip =
             right.clipId || getSegmentClipId(track, boundaryIndex + 1);
-        if (leftClip !== rightClip) {
-            writeLog('Playback region: cannot join (different clips at boundary)');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Cannot join', 'notice');
-            }
-            return false;
-        }
 
         const merged = {
             id: left.id || newRegionId(),
@@ -189,29 +198,66 @@
         return hitSec;
     }
 
-    function resolveJoinedBoundaryIndexAtTransport(track, transportSec) {
+    function segmentBoundaryPointerHitDistanceSec(track, boundaryIndex, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return Infinity;
+        const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
+        const rightStart = getSegmentTimelineStart(track, boundaryIndex + 1);
+        if (
+            typeof isSegmentBoundaryJoined === 'function' &&
+            isSegmentBoundaryJoined(track, boundaryIndex)
+        ) {
+            return Math.min(Math.abs(t - leftEnd), Math.abs(t - rightStart));
+        }
+        const leftPlay = getSegmentPlaybackTimelineStart(track, boundaryIndex);
+        const rightPlay = getSegmentPlaybackTimelineStart(track, boundaryIndex + 1);
+        const overlapStart = Math.max(leftPlay, rightPlay);
+        const overlapEnd = Math.min(
+            leftEnd,
+            getSegmentTimelineEnd(track, boundaryIndex + 1),
+        );
+        const minOverlap =
+            typeof window.MIN_CROSSFADE_OVERLAP_SEC === 'number'
+                ? window.MIN_CROSSFADE_OVERLAP_SEC
+                : 0.005;
+        if (overlapEnd - overlapStart >= minOverlap) {
+            if (t >= overlapStart && t <= overlapEnd) return 0;
+        }
+        return Math.min(Math.abs(t - leftEnd), Math.abs(t - rightStart));
+    }
+
+    function isSegmentBoundaryEligibleForResolve(track, boundaryIndex, joinableOnly) {
+        if (
+            joinableOnly &&
+            typeof isSegmentBoundaryJoinableAtIndex === 'function' &&
+            !isSegmentBoundaryJoinableAtIndex(track, boundaryIndex)
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    function resolveSegmentBoundaryIndexAtTransport(track, transportSec, joinableOnly) {
         if (!isExtraTrackRef(track)) return -1;
         const segments = getTrackSegments(track);
         if (segments.length < 2) return -1;
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return -1;
         const hitSec = joinedBoundaryPointerHitSec();
+        let bestB = -1;
+        let bestDist = Infinity;
         for (let b = 0; b < segments.length - 1; b++) {
-            if (
-                typeof isSegmentBoundaryJoinableAtIndex === 'function' &&
-                !isSegmentBoundaryJoinableAtIndex(track, b)
-            ) {
-                continue;
+            if (!isSegmentBoundaryEligibleForResolve(track, b, joinableOnly)) continue;
+            const dist = segmentBoundaryPointerHitDistanceSec(track, b, t);
+            if (dist <= hitSec && dist < bestDist) {
+                bestDist = dist;
+                bestB = b;
             }
-            const leftEnd = getSegmentTimelineEnd(track, b);
-            const rightStart = getSegmentTimelineStart(track, b + 1);
-            const dist = Math.min(Math.abs(t - leftEnd), Math.abs(t - rightStart));
-            if (dist <= hitSec) return b;
         }
-        return -1;
+        return bestB;
     }
 
-    function resolveJoinedBoundaryIndexAtPointer(track, clientX, clientY) {
+    function resolveSegmentBoundaryIndexAtPointer(track, clientX, clientY, joinableOnly) {
         if (!isExtraTrackRef(track)) return -1;
         const segments = getTrackSegments(track);
         if (segments.length < 2) return -1;
@@ -228,8 +274,37 @@
                         lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
                     if (m && parseInt(m[1], 10) === track.slot) {
                         const b = Number(splitHandle.dataset.boundaryIndex);
-                        if (Number.isFinite(b) && isSegmentBoundaryJoinableAtIndex(track, b)) {
+                        if (
+                            Number.isFinite(b) &&
+                            b >= 0 &&
+                            b < segments.length - 1 &&
+                            isSegmentBoundaryEligibleForResolve(track, b, joinableOnly)
+                        ) {
                             return b;
+                        }
+                    }
+                }
+                if (!joinableOnly) {
+                    const crossfadeMarker = hit.closest(
+                        '.audio-waveform-lane__crossfade-marker',
+                    );
+                    if (crossfadeMarker) {
+                        const lane = crossfadeMarker.closest('.audio-waveform-lane--extra');
+                        const m =
+                            lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                        if (m && parseInt(m[1], 10) === track.slot) {
+                            const transportSec =
+                                typeof transportSecFromClientX === 'function'
+                                    ? transportSecFromClientX(clientX)
+                                    : null;
+                            if (Number.isFinite(transportSec)) {
+                                const b = resolveSegmentBoundaryIndexAtTransport(
+                                    track,
+                                    transportSec,
+                                    false,
+                                );
+                                if (b >= 0) return b;
+                            }
                         }
                     }
                 }
@@ -241,7 +316,11 @@
                 ? transportSecFromClientX(clientX)
                 : null;
         if (Number.isFinite(transportSec)) {
-            return resolveJoinedBoundaryIndexAtTransport(track, transportSec);
+            return resolveSegmentBoundaryIndexAtTransport(
+                track,
+                transportSec,
+                joinableOnly,
+            );
         }
         return -1;
     }
@@ -1056,23 +1135,46 @@
             return false;
         }
         const { clientX, clientY } = waveformPointerClientXY();
-        let boundaryIndex = resolveJoinedBoundaryIndexAtPointer(
+        let boundaryIndex = resolveSegmentBoundaryIndexAtPointer(
             track,
             clientX,
             clientY,
+            true,
         );
         if (boundaryIndex < 0) {
             const seekTransportSec = transportSecFromSeekbar();
-            boundaryIndex = resolveJoinedBoundaryIndexAtTransport(track, seekTransportSec);
+            boundaryIndex = resolveSegmentBoundaryIndexAtTransport(
+                track,
+                seekTransportSec,
+                true,
+            );
         }
-        if (boundaryIndex < 0) {
-            writeLog('Playback region: hover a joined boundary or seek to boundary, then press B');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover/seek joined boundary', 'notice');
-            }
+        if (boundaryIndex >= 0) {
+            return joinSegmentBoundaryAt(track, boundaryIndex);
+        }
+        let blockedBoundaryIndex = resolveSegmentBoundaryIndexAtPointer(
+            track,
+            clientX,
+            clientY,
+            false,
+        );
+        if (blockedBoundaryIndex < 0) {
+            const seekTransportSec = transportSecFromSeekbar();
+            blockedBoundaryIndex = resolveSegmentBoundaryIndexAtTransport(
+                track,
+                seekTransportSec,
+                false,
+            );
+        }
+        if (blockedBoundaryIndex >= 0) {
+            notifyCannotJoinSegmentBoundary(track, blockedBoundaryIndex);
             return false;
         }
-        return joinSegmentBoundaryAt(track, boundaryIndex);
+        writeLog('Playback region: hover a joinable boundary or seek to boundary, then press B');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Hover/seek joinable boundary', 'notice');
+        }
+        return false;
     }
 
     function handlePlaybackRegionJoinKeydown(e) {

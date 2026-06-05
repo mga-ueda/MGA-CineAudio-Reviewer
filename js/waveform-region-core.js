@@ -2339,24 +2339,40 @@
         return Math.abs(leftEnd - rightStart) <= segmentBoundaryJoinEpsilonSec();
     }
 
-    /** B 結合: 同一クリップかつソース連続の隣接セグメント */
+    /** B 結合: 波形内容が連続している隣接境界のみ（分割直後相当） */
     function isSegmentBoundaryJoinableAtIndex(track, boundaryIndex) {
+        if (!isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) return false;
+        if (hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex)) return false;
+        if (hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex)) return false;
+        return true;
+    }
+
+    function playbackRegionBoundaryJoinBlockReason(track, boundaryIndex) {
         const segments = getTrackSegments(track);
-        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
-        const left = segments[boundaryIndex];
-        const right = segments[boundaryIndex + 1];
-        if (!left || !right) return false;
-        const leftClip =
-            left.clipId || getSegmentClipId(track, boundaryIndex);
-        const rightClip =
-            right.clipId || getSegmentClipId(track, boundaryIndex + 1);
-        if (leftClip !== rightClip) return false;
-        const eps = segmentBoundaryJoinEpsilonSec();
-        return (
-            Math.abs(
-                (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
-            ) <= eps
-        );
+        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) {
+            return 'invalid boundary';
+        }
+        if (!isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) {
+            if (!isSegmentBoundaryJoined(track, boundaryIndex)) {
+                return 'timeline gap or overlap at boundary';
+            }
+            const left = segments[boundaryIndex];
+            const right = segments[boundaryIndex + 1];
+            if (!left || !right) return 'invalid boundary';
+            const leftClip =
+                left.clipId || getSegmentClipId(track, boundaryIndex);
+            const rightClip =
+                right.clipId || getSegmentClipId(track, boundaryIndex + 1);
+            if (leftClip !== rightClip) return 'different clips at boundary';
+            return 'source not continuous at boundary';
+        }
+        if (hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex)) {
+            return 'crossfade at boundary';
+        }
+        if (hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex)) {
+            return 'crossfade overlap at boundary';
+        }
+        return 'unknown block reason';
     }
 
     /**

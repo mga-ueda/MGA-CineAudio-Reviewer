@@ -298,7 +298,7 @@
                     <li><strong>グループ化</strong> — 2つ以上選択した状態で <kbd>G</kbd>。Audio Track をまたいで可。成功するとメンバー全員の枠が一度黄色に発光します。通常時の見た目は通常リージョンと同じで、<strong>ホバー時</strong>にグループの全メンバーが黄色枠になります。グループ内のいずれかを<strong>ドラッグ</strong>すると、メンバー全体が同じ時間差で平行移動します（開始位置が異なる場合でも、いずれかがタイムライン先頭に達したらそこでグループ全体が止まります）。</li>
                     <li><strong>グループ解除</strong> — グループ内のリージョンを選択して <kbd>G</kbd>（グループ化と同じキー）。</li>
                     <li><strong>スプリット</strong>（<kbd>X</kbd>）— <strong>Tempo/Sig</strong>（<kbd>T</kbd>）OFF 時：リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Audio Track）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。Tempo/Sig ON 時はフレーズ分割（「トランスポート」参照）。</li>
-                    <li><strong>結合</strong>（<kbd>B</kbd>）— Tempo/Sig OFF 時：隣接リージョンの境界上にポインタを置いてから実行。Tempo/Sig ON 時はフレーズ連結。</li>
+                    <li><strong>結合</strong>（<kbd>B</kbd>）— Tempo/Sig OFF 時：隣接リージョンの境界上にポインタを置いてから実行。同一クリップ内で<strong>波形が連続している境界</strong>（分割直後のような状態）のみ結合できます。リージョンを入れ替えたり重ねてクロスフェードしている場合、Fade In/Out で境界をまたいでいる場合は結合できません。Tempo/Sig ON 時はフレーズ連結。</li>
                     <li><strong>削除</strong> — Tempo/Sig OFF 時：リージョン上にポインタがあるとき <kbd>Del</kbd> で削除（最後の1つを消すとリージョン表示を解除）。Tempo/Sig ON 時はフレーズ削除を先に判定。</li>
                     <li><strong>元に戻す/やり直し</strong> — スプリット・削除・範囲変更などは <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> で履歴をさかのぼれます（回数無制限）。フレーズ定義の履歴が残っているときはそちらを優先します。</li>
                     <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。<strong>複数選択中</strong>は選択だけ解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン表示を解除します（ショートカット表の Esc 優先順位を参照）。</li>
