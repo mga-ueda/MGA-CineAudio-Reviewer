@@ -853,12 +853,15 @@
                 const barW = drawW / segPeaks.length;
                 const waveformHideBefore = getSegmentWaveformHideBeforeTimeline(track, i);
                 for (let p = 0; p < segPeaks.length; p++) {
-                    const x = startX + p * barW;
                     const barTransport =
                         segT0 + ((p + 0.5) / segPeaks.length) * contentDur;
                     if (barTransport < waveformHideBefore - 0.0005) {
                         continue;
                     }
+                    const x =
+                        typeof masterTimelineContentWidth === 'function'
+                            ? masterTimelineContentWidth(wCss, barTransport) - barW * 0.5
+                            : startX + p * barW;
                     if (viewportPeaksCoverMasterTime(vp, barTransport)) {
                         continue;
                     }
@@ -899,6 +902,7 @@
         }
 
         const state = getPlaybackRegionsState(track);
+        const prevSegmentCount = state.segments ? state.segments.length : 0;
         state.segments = segments;
         state.active = true;
         bumpRegionPersistEpoch(track.slot);
@@ -910,7 +914,14 @@
         }
 
         updateTrackRegionOverlays(track);
-        redrawAfterRegionChange(track.slot, { invalidatePeakCache: true });
+        const redrawOpt = {
+            invalidatePeakCache: true,
+            segmentStructureChanged: prevSegmentCount !== segments.length,
+        };
+        if (opt && Array.isArray(opt.affectedSegmentIndices) && opt.affectedSegmentIndices.length) {
+            redrawOpt.affectedSegmentIndices = opt.affectedSegmentIndices;
+        }
+        redrawAfterRegionChange(track.slot, redrawOpt);
 
         if (!(opt && opt.silent)) {
             writeLog(
@@ -1363,9 +1374,12 @@
 
     function redrawAfterRegionChange(slot, opt) {
         const dragging = !!regionHandleDragActive;
+        const structureChanged = !!(opt && opt.segmentStructureChanged);
         let usedViewportRefresh = false;
         if (typeof slot === 'number' && slot >= 0) {
-            if (typeof refreshExtraTrackViewportPeaksForRegionEdit === 'function') {
+            if (structureChanged) {
+                clearExtraTrackViewportPeaksForSlot(slot);
+            } else if (typeof refreshExtraTrackViewportPeaksForRegionEdit === 'function') {
                 usedViewportRefresh = refreshExtraTrackViewportPeaksForRegionEdit(slot, opt);
             }
             if (!usedViewportRefresh) {
@@ -1865,9 +1879,6 @@
         if (Number.isFinite(clip.gainDb) && Math.abs(clip.gainDb) > 0.0005) {
             clone.gainDb = clip.gainDb;
         }
-        if (Number.isFinite(clip.fadeInSec) && clip.fadeInSec > 0.0005) {
-            clone.fadeInSec = clip.fadeInSec;
-        }
         if (Number.isFinite(clip.fadeOutSec) && clip.fadeOutSec > 0.0005) {
             clone.fadeOutSec = clip.fadeOutSec;
         }
@@ -1875,6 +1886,7 @@
         const fullDur = getSegmentSourceDurationSec(track, clone);
         if (!fullDur) return false;
         let norm = normalizeSegmentEntry(clone, track, fullDur);
+        delete norm.fadeInSec;
         const pastedAnchor = Number.isFinite(norm.timelineStartSec) ? norm.timelineStartSec : start;
         let pastedRegionIn = pastedAnchor;
         if (Number.isFinite(norm.regionTimelineInSec)) {
@@ -1907,6 +1919,10 @@
         const normalized = segments.map((s) =>
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
         );
+        const prevLast = normalized[lastIndex];
+        if (prevLast && Number.isFinite(prevLast.fadeOutSec)) {
+            delete prevLast.fadeOutSec;
+        }
         normalized.push(norm);
         applySegmentsToState(track, normalized, {
             silent: true,

@@ -899,7 +899,8 @@
         let segments = getTrackSegments(track);
 
         const leftStart = getSegmentTimelineStart(track, splitIndex);
-        const leftDur = sourceSplit - seg.sourceInSec;
+        const leftSourceDur = sourceSplit - seg.sourceInSec;
+        const splitTimelineSec = leftStart + leftSourceDur;
         const left = {
             id: newRegionId(),
             clipId: seg.clipId || clipId,
@@ -912,7 +913,7 @@
             clipId: seg.clipId || clipId,
             sourceInSec: sourceSplit,
             sourceOutSec: seg.sourceOutSec,
-            timelineStartSec: leftStart + leftDur,
+            timelineStartSec: splitTimelineSec,
         };
         if (Number.isFinite(seg.gainDb) && Math.abs(seg.gainDb) > 0.0005) {
             left.gainDb = seg.gainDb;
@@ -929,6 +930,7 @@
         const ok = !!setTrackSegments(track, next, {
             silent: true,
             skipUndo: !!(opt && opt.skipUndo),
+            affectedSegmentIndices: [splitIndex, splitIndex + 1],
         });
         if (ok && typeof schedulePersistExtraTrackSlot === 'function') {
             schedulePersistExtraTrackSlot(track.slot);
@@ -1987,17 +1989,12 @@
         return lead;
     }
 
-    /** 波形描画のタイムライン左端（結合境界のクロスフェード手前を含む） */
+    /** 波形描画のタイムライン左端（リージョン In / 再生開始と同一） */
     function getSegmentWaveformDrawTimelineStart(track, segmentIndex) {
-        let start = getSegmentRegionTimelineIn(track, segmentIndex);
-        if (segmentIndex > 0 && isSegmentBoundaryJoined(track, segmentIndex - 1)) {
-            const anchor = getSegmentTimelineStart(track, segmentIndex);
-            start = Math.min(start, anchor - JOINED_BOUNDARY_CROSSFADE_SEC);
-        }
-        return start;
+        return getSegmentWaveformVisibleTimelineStart(track, segmentIndex);
     }
 
-    /** 波形を表示するタイムライン左端（リージョン In 以降。結合クロスフェードは手前を含む） */
+    /** 波形を表示するタイムライン左端（リージョン In 以降） */
     function getSegmentWaveformVisibleTimelineStart(track, segmentIndex) {
         const segT0 = getSegmentTimelineStart(track, segmentIndex);
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
@@ -2397,14 +2394,9 @@
         return fadeOut > 0.0005 || fadeIn > 0.0005;
     }
 
-    /** 結合境界の自動 1 秒ハンドオフ（拡張重なり・手動フェードなし） */
-    function isAutoJoinedBoundaryCrossfadeEligible(track, boundaryIndex) {
-        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
-        if (hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex)) return false;
-        if (hasManualSegmentFadeAtJoinedBoundary(track, boundaryIndex)) return false;
-        /** 同一クリップ連続スプリットは編集用分割のみ — 再生ではオーバーラップ不要 */
-        if (isSegmentSourceContinuousAtBoundary(track, boundaryIndex)) return false;
-        return true;
+    /** 結合境界の自動 1 秒ハンドオフ（現状未使用: ペースト/分割は境界ぴったり） */
+    function isAutoJoinedBoundaryCrossfadeEligible(_track, _boundaryIndex) {
+        return false;
     }
 
     /** 結合境界の手動フェード重なり区間（左 FadeOut + 右 FadeIn） */
@@ -2718,15 +2710,23 @@
                 forPlayback &&
                 joinedNext &&
                 isSegmentSourceContinuousAtBoundary(track, i);
-            const inHandoffFromPrev =
+            const autoCrossfadePrev =
                 joinedPrev &&
+                i > 0 &&
+                isAutoJoinedBoundaryCrossfadeEligible(track, i - 1);
+            const autoCrossfadeNext =
+                joinedNext &&
+                i < segments.length - 1 &&
+                isAutoJoinedBoundaryCrossfadeEligible(track, i);
+            const inHandoffFromPrev =
+                autoCrossfadePrev &&
                 !manualFadePrev &&
                 !continuousPrev &&
                 boundaryPrev != null &&
                 t >= boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC &&
                 t < boundaryPrev + 0.00001;
             const inHandoffToNext =
-                joinedNext &&
+                autoCrossfadeNext &&
                 !manualFadeNext &&
                 !continuousNext &&
                 boundaryNext != null &&
@@ -3040,7 +3040,7 @@
 
     function computeWaveformMixPeakAtTransport(track, slot, transportSec, opt) {
         const hits = mapAllSegmentsAtTransport(track, transportSec, {
-            forPlayback: true,
+            forPlayback: false,
         });
         if (hits.length <= 1) return null;
         let sumMax = 0;
@@ -3108,7 +3108,7 @@
         opt,
     ) {
         const hits = mapAllSegmentsAtTransport(track, barTransport, {
-            forPlayback: true,
+            forPlayback: false,
         });
         const hasLocal =
             typeof localSegmentIndex === 'number' &&
@@ -3443,9 +3443,10 @@
         if (!seg) return null;
         const segT0 = getSegmentTimelineStart(track, segmentIndex);
         const segEnd = getSegmentTimelineEnd(track, segmentIndex);
+        // 表示はリージョン In 以降（結合境界のクロスフェード手前は含めない）
         let t0 = Math.max(
             spec.masterStartSec,
-            getSegmentWaveformDrawTimelineStart(track, segmentIndex),
+            getSegmentWaveformVisibleTimelineStart(track, segmentIndex),
         );
         let t1 = Math.min(segEnd, spec.masterEndSec);
         if (t1 <= t0 + 1e-9) return null;
@@ -3494,6 +3495,43 @@
         return false;
     }
 
+    function resolveRegionEditViewportPeakIndices(opt) {
+        if (opt && Array.isArray(opt.affectedSegmentIndices) && opt.affectedSegmentIndices.length) {
+            return opt.affectedSegmentIndices.filter(
+                (i) => typeof i === 'number' && i >= 0,
+            );
+        }
+        if (opt && typeof opt.segmentIndex === 'number' && opt.segmentIndex >= 0) {
+            return [opt.segmentIndex];
+        }
+        return null;
+    }
+
+    /** viewport peaks が現在のセグメント境界をはみ出していないか */
+    function viewportPeaksMatchTrackSegments(track, vp) {
+        const segments = getTrackSegments(track);
+        if (!segments.length) {
+            return !(vp && vp.segments && vp.segments.length);
+        }
+        if (!vp || !vp.segments || !vp.segments.length) return false;
+        const crossfadeSlack = JOINED_BOUNDARY_CROSSFADE_SEC + 0.05;
+        for (let i = 0; i < vp.segments.length; i++) {
+            const s = vp.segments[i];
+            if (!s.peaks || !s.peaks.length) continue;
+            if (!(s.masterEndSec > s.masterStartSec + 1e-9)) continue;
+            const idx =
+                typeof s.segmentIndex === 'number' && s.segmentIndex >= 0
+                    ? s.segmentIndex
+                    : i;
+            if (idx >= segments.length) return false;
+            const segEnd = getSegmentTimelineEnd(track, idx);
+            const visibleStart = getSegmentWaveformVisibleTimelineStart(track, idx);
+            if (s.masterEndSec > segEnd + 0.02) return false;
+            if (s.masterStartSec < visibleStart - crossfadeSlack) return false;
+        }
+        return true;
+    }
+
     /** リージョン編集中: 変更セグメントだけピラミッドから高解像度ピークを即時更新 */
     function refreshExtraTrackViewportPeaksForRegionEdit(slot, opt) {
         if (!(slot >= 0)) return false;
@@ -3503,15 +3541,17 @@
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
         if (!tr || !tr.buffer) return false;
-        const only =
-            opt && typeof opt.segmentIndex === 'number' && opt.segmentIndex >= 0
-                ? [opt.segmentIndex]
-                : null;
+        const track = { type: 'extra', slot };
+        const only = resolveRegionEditViewportPeakIndices(opt);
+        const structureChanged = !!(opt && opt.segmentStructureChanged);
         rebuildExtraTrackRegionViewportPeaks(slot, spec, {
             onlySegmentIndices: only,
-            merge: true,
+            merge: !!only && !structureChanged,
         });
-        return !!(tr.viewportPeaks && tr.viewportPeaks.segments && tr.viewportPeaks.segments.length);
+        if (!tr.viewportPeaks || !tr.viewportPeaks.segments || !tr.viewportPeaks.segments.length) {
+            return false;
+        }
+        return viewportPeaksMatchTrackSegments(track, tr.viewportPeaks);
     }
 
     window.refreshExtraTrackViewportPeaksForRegionEdit =
@@ -3558,13 +3598,20 @@
                     outSegs.splice(existing, 1);
                 }
             }
+            outSegs = outSegs.filter((s) => {
+                const idx =
+                    typeof s.segmentIndex === 'number' && s.segmentIndex >= 0
+                        ? s.segmentIndex
+                        : -1;
+                return idx >= 0 && idx < segments.length;
+            });
             if (outSegs.length) {
                 tr.viewportPeaks = {
                     masterStartSec: spec.masterStartSec,
                     masterEndSec: spec.masterEndSec,
                     segments: outSegs,
                 };
-            } else if (!merge) {
+            } else {
                 tr.viewportPeaks = null;
             }
             return;
@@ -3617,6 +3664,8 @@
                 masterEndSec: spec.masterEndSec,
                 segments: outSegs,
             };
+        } else {
+            tr.viewportPeaks = null;
         }
     }
 
