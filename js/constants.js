@@ -5,8 +5,6 @@
     window.EXTRA_TRACK_COUNT = 16;
 
     const LS_PREFS_KEY = 'cineaudio_reviewer_prefs_v1';
-    /** @deprecated monitorPrefs は LS_PREFS_KEY に統合。読み取り時に一度だけマイグレーション */
-    const LS_MONITOR_PREFS_LEGACY_KEY = 'mga_cineaudio_reviewer_monitor_prefs_v1';
     const IDB_NAME = 'cineaudio_reviewer_session_v1';
     const IDB_STORE = 'kv';
     const IDB_KEY_LAST = 'lastSession';

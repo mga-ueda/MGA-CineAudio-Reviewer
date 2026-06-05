@@ -1,4 +1,4 @@
-﻿/**
+/**
  * audio-monitor.js — レビューミックスのモニター（スペクトラム・メーター床・表示 prefs）。
  */
 (function reviewMixAudioMonitorModule() {
@@ -6,10 +6,7 @@
     const DEFAULT_SPECTRUM_FLOOR_DB = -50;
     const DEFAULT_METER_FLOOR_DB = -50;
 
-    const UI_PREFS_STORAGE_KEY =
-        typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string'
-            ? LS_MONITOR_PREFS_LEGACY_KEY
-            : 'mga_cineaudio_reviewer_monitor_prefs_v1';
+    const UI_PREFS_STORAGE_KEY = 'mga_cineaudio_reviewer_monitor_prefs_v1';
     const DEFAULT_MASTER_VOL_LINEAR = 1;
     const MASTER_VOL_UNITY_LINEAR = 1;
     const MASTER_VOL_SLIDER_STEP = 0.01;

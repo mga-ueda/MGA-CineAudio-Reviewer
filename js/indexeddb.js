@@ -620,7 +620,6 @@
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
         }
-        delete row.rangeLoop;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion) row.playbackRegion = playbackRegion;
@@ -713,11 +712,11 @@
         }
         let row = await readSessionRowForWrite();
         if (!row || typeof row !== 'object') {
-            row = { v: 4, audioOnlySession: true, extraTracks: [] };
+            row = { v: SESSION_ROW_VERSION, audioOnlySession: true, extraTracks: [] };
         }
         const nextStamp = sessionSaveStampSeq + 1;
         row.__saveStamp = nextStamp;
-        row.v = typeof row.v === 'number' ? row.v : 4;
+        row.v = SESSION_ROW_VERSION;
         if (!row.mBlob) row.audioOnlySession = true;
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
@@ -744,7 +743,6 @@
         row.extraTracks = normalizeExtraTracksEntriesBySlot(
             snapshot.map((e) => deepCloneForPersist(e)),
         );
-        delete row.rangeLoop;
         const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
         if (playbackRegion) row.playbackRegion = playbackRegion;
         else delete row.playbackRegion;
@@ -816,11 +814,10 @@
         );
         if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         if (!row || typeof row !== 'object') {
-            row = { v: 4, audioOnlySession: true, extraTracks: [] };
+            row = { v: SESSION_ROW_VERSION, audioOnlySession: true, extraTracks: [] };
         }
         const nextStamp = sessionSaveStampSeq + 1;
         row.__saveStamp = nextStamp;
-        delete row.rangeLoop;
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
             if (mem && mem.length) {
@@ -925,7 +922,7 @@
             if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
             row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
             row.extraTracks.push(entry);
-            row.v = typeof row.v === 'number' ? row.v : 4;
+            row.v = SESSION_ROW_VERSION;
             if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
             await idbPut(IDB_KEY_LAST, row);
             cacheLastSessionRow(row);
@@ -952,7 +949,7 @@
         if (!Array.isArray(row.extraTracks)) row.extraTracks = [];
         row.extraTracks = row.extraTracks.filter((e) => !e || e.slot !== entry.slot);
         row.extraTracks.push(entry);
-        row.v = typeof row.v === 'number' ? row.v : 4;
+        row.v = SESSION_ROW_VERSION;
         if (extraTrackPersistReqSeqBySlot[slot] !== reqSeq) return;
         await idbPut(IDB_KEY_LAST, row);
         cacheLastSessionRow(row);
@@ -1033,38 +1030,6 @@
         return sessionRowHasMarkers(row) || sessionRowHasMarkerMemo(row);
     }
 
-    async function mergePrevExtraTracksDuringRestore(row) {
-        if (!sessionRestoreInProgress) return;
-        try {
-            const prev = await idbGet(IDB_KEY_LAST);
-            if (prev && Array.isArray(prev.extraTracks) && prev.extraTracks.length > 0) {
-                row.extraTracks = prev.extraTracks;
-            }
-        } catch (_) {}
-    }
-
-    async function mergePrevMarkersDuringRestore(row) {
-        if (!sessionRestoreInProgress) return;
-        if (sessionRowHasMarkers(row)) return;
-        try {
-            const prev = await idbGet(IDB_KEY_LAST);
-            if (prev && sessionRowHasMarkers(prev)) {
-                row.markers = prev.markers;
-            }
-        } catch (_) {}
-    }
-
-    async function mergePrevMarkerMemoDuringRestore(row) {
-        if (!sessionRestoreInProgress) return;
-        if (sessionRowHasMarkerMemo(row)) return;
-        try {
-            const prev = await idbGet(IDB_KEY_LAST);
-            if (prev && sessionRowHasMarkerMemo(prev)) {
-                row.markerMemo = prev.markerMemo;
-            }
-        } catch (_) {}
-    }
-
     async function attachWaveformSessionFieldsToRow(row) {
         if (typeof getMarkersSnapshot === 'function') {
             const mem = getMarkersSnapshot();
@@ -1082,9 +1047,6 @@
                 delete row.markerMemo;
             }
         }
-        await mergePrevMarkersDuringRestore(row);
-        await mergePrevMarkerMemoDuringRestore(row);
-        delete row.rangeLoop;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion) row.playbackRegion = playbackRegion;
@@ -1096,8 +1058,6 @@
             const extra = getExtraTracksPersistSnapshot();
             if (extra && extra.length > 0) {
                 row.extraTracks = extra;
-            } else {
-                await mergePrevExtraTracksDuringRestore(row);
             }
         }
         /* スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
@@ -1107,7 +1067,7 @@
         const o = opt && typeof opt === 'object' ? opt : {};
         writePrefs();
         const row = {
-            v: 4,
+            v: SESSION_ROW_VERSION,
             loopPlayback: getLoopPlaybackEnabled(),
         };
         if (typeof getMusicalGridPersistSnapshot === 'function') {
@@ -1742,6 +1702,20 @@
                 'Session: restore row stamp = ' +
                     (Number.isFinite(row && row.__saveStamp) ? row.__saveStamp : 'none'),
             );
+            if (row && typeof row === 'object' && typeof validateStoredSessionRow === 'function') {
+                const check = validateStoredSessionRow(row);
+                if (!check.valid) {
+                    const prefs = readPrefs();
+                    applySavedLoopPlayback(prefs.loopPlayback);
+                    if (typeof applyUserMonitorDisplayPrefsFromStorage === 'function') {
+                        applyUserMonitorDisplayPrefsFromStorage(prefs);
+                    } else if (typeof applyTransportPrefsFromStorage === 'function') {
+                        applyTransportPrefsFromStorage(prefs);
+                    }
+                    await rejectInvalidSessionData('stored session', check.reason);
+                    return;
+                }
+            }
             if (!sessionRowHasRestorableContent(row)) {
                 const prefs = readPrefs();
                 applySavedLoopPlayback(prefs.loopPlayback);

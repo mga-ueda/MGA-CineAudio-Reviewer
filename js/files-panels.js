@@ -321,10 +321,11 @@
         }
     }
 
-    async function clearEntireSession() {
+    async function clearEntireSession(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         await releaseWaveformRestoreLockIfActive();
-        if (!sessionHasClearableContent()) {
-            if (typeof clearLog === 'function') clearLog();
+        if (!o.force && !sessionHasClearableContent()) {
+            if (!o.preserveLog && typeof clearLog === 'function') clearLog();
             writeLog('Session: nothing to clear');
             return;
         }
@@ -366,9 +367,9 @@
             refreshExportMediaOptionsUi();
         }
         updateSessionAllClearButton();
-        if (typeof clearLog === 'function') clearLog();
+        if (!o.preserveLog && typeof clearLog === 'function') clearLog();
         writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
-        if (typeof flashSeekHint === 'function') {
+        if (!o.silentToast && typeof flashSeekHint === 'function') {
             flashSeekHint('Session', 'All cleared', 'notice');
         }
     }

@@ -278,17 +278,6 @@
                 const parsed = JSON.parse(raw);
                 j = parsed && typeof parsed === 'object' ? parsed : {};
             }
-            if (!j.monitorPrefs && typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
-                try {
-                    const legRaw = localStorage.getItem(LS_MONITOR_PREFS_LEGACY_KEY);
-                    if (legRaw) {
-                        const leg = JSON.parse(legRaw);
-                        if (leg && typeof leg === 'object') {
-                            j.monitorPrefs = leg;
-                        }
-                    }
-                } catch (_) {}
-            }
             return j;
         } catch (_) {
             return {};
@@ -333,10 +322,5 @@
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
-            if (typeof LS_MONITOR_PREFS_LEGACY_KEY === 'string') {
-                try {
-                    localStorage.removeItem(LS_MONITOR_PREFS_LEGACY_KEY);
-                } catch (_) {}
-            }
         } catch (_) {}
     }

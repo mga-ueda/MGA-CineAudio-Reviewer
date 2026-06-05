@@ -519,7 +519,7 @@
         if (!row || typeof row !== 'object') return null;
         const media = normalizeExportMediaOptions(exportMedia);
         const out = {
-            v: typeof row.v === 'number' ? row.v : 4,
+            v: row.v,
             laneUi: row.laneUi,
             musicalGrid: row.musicalGrid,
             mName: row.mName,
@@ -705,7 +705,7 @@
         const sess = manifest.session;
         if (!sess || typeof sess !== 'object') return null;
         const row = {
-            v: typeof sess.v === 'number' ? sess.v : 4,
+            v: sess.v,
             laneUi: sess.laneUi,
             musicalGrid: sess.musicalGrid,
             mName: sess.mName,
@@ -808,8 +808,6 @@
         const p = manifest.prefs && typeof manifest.prefs === 'object' ? manifest.prefs : {};
         if (p.laneUi && typeof applyWaveformLaneUiPersistSnapshot === 'function') {
             applyWaveformLaneUiPersistSnapshot(p.laneUi);
-        } else if (typeof applySavedWaveformLaneUi === 'function') {
-            applySavedWaveformLaneUi(p.laneUi || null);
         }
         /* スペクトラム／メーター床は Import に含めない（localStorage のユーザー設定を維持） */
         const mp = manifest.monitorPrefs;
@@ -1042,6 +1040,15 @@
                     (manifest.appVersion ? ', exported with ' + manifest.appVersion : '') +
                     ')',
             );
+            if (typeof validateImportManifest === 'function') {
+                const check = validateImportManifest(manifest);
+                if (!check.valid) {
+                    if (typeof rejectInvalidSessionData === 'function') {
+                        await rejectInvalidSessionData('import review package', check.reason);
+                    }
+                    return;
+                }
+            }
             const restoreWasActive =
                 (typeof isSessionRestoreInProgress === 'function' &&
                     isSessionRestoreInProgress()) ||
