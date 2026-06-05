@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.02';
+    const APP_VERSION = '0.03';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.03',
+            date: '2026年6月5日',
+            items: [
+                '波形ズームを 1×/32× 切替に簡素化し Lite Waveform と Center lock を削除。タイムライン描画をモジュール分割してセッション復元時の不具合を修正し、キーボードスクラブと ± 音量ショートカットを改善。',
+            ],
+        },
         {
             version: '0.02',
             date: '2026年5月30日',
