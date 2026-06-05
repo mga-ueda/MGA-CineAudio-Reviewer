@@ -1115,8 +1115,44 @@
         }
     }
 
+    function runImportReviewFromFile(file, opt) {
+        if (!file) return Promise.resolve();
+        if (!isMgacrReviewFile(file)) {
+            const msg =
+                'Import Review は .mgacr ファイルのみ読み込めます（選択: "' +
+                (file.name || 'unknown') +
+                '"）';
+            writeLog('Import Review: rejected — ' + msg);
+            if (typeof showAppAlert === 'function') {
+                showAppAlert('インポートできません', msg);
+            }
+            return Promise.resolve();
+        }
+        const importBtn =
+            (opt && opt.importBtn) || document.getElementById('sessionImportBtn');
+        if (importBtn) importBtn.disabled = true;
+        return importSessionPackage(file)
+            .catch((e) => {
+                const msg = e && e.message ? e.message : String(e);
+                const src = file.name + ' (' + formatByteSize(file.size) + ')';
+                writeLog('Import Review: failed — ' + msg);
+                writeLog('Import Review: source was "' + src + '"');
+                if (e && e.stack) {
+                    writeLog('Import Review: error detail — ' + String(e.stack).split('\n')[0]);
+                }
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert('インポートに失敗しました', msg);
+                }
+            })
+            .finally(() => {
+                if (importBtn) importBtn.disabled = false;
+                refreshTransportControlsAfterImport();
+            });
+    }
+
     window.exportSessionPackage = exportSessionPackage;
     window.importSessionPackage = importSessionPackage;
+    window.runImportReviewFromFile = runImportReviewFromFile;
     window.refreshExportMediaOptionsUi = refreshExportMediaOptionsUi;
     window.buildVideoExportDownloadFilename = buildVideoExportDownloadFilename;
     window.getExportMediaOptionsFromUi = getExportMediaOptionsFromUi;
@@ -1341,39 +1377,9 @@
         importFile.addEventListener('change', () => {
             const f = importFile.files && importFile.files[0];
             if (!f) return;
-            if (!isMgacrReviewFile(f)) {
-                const msg =
-                    'Import Review は .mgacr ファイルのみ読み込めます（選択: "' +
-                    (f.name || 'unknown') +
-                    '"）';
-                writeLog('Import Review: rejected — ' + msg);
-                if (typeof showAppAlert === 'function') {
-                    showAppAlert('インポートできません', msg);
-                }
+            void runImportReviewFromFile(f, { importBtn }).finally(() => {
                 importFile.value = '';
-                return;
-            }
-            importBtn.disabled = true;
-            importSessionPackage(f)
-                .catch((e) => {
-                    const msg = e && e.message ? e.message : String(e);
-                    const src =
-                        importFile.files && importFile.files[0]
-                            ? importFile.files[0].name + ' (' + formatByteSize(importFile.files[0].size) + ')'
-                            : 'unknown file';
-                    writeLog('Import Review: failed — ' + msg);
-                    writeLog('Import Review: source was "' + src + '"');
-                    if (e && e.stack) {
-                        writeLog('Import Review: error detail — ' + String(e.stack).split('\n')[0]);
-                    }
-                    if (typeof showAppAlert === 'function') {
-                        showAppAlert('インポートに失敗しました', msg);
-                    }
-                })
-                .finally(() => {
-                    importBtn.disabled = false;
-                    refreshTransportControlsAfterImport();
-                });
+            });
         });
     }
 

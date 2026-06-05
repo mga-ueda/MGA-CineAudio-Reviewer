@@ -73,7 +73,7 @@
                     <li>波形上で位置を合わせ、Solo / Mute / フェーダーでミックスを調整する。</li>
                     <li>気になる箇所に<strong>マーカー</strong>（点または範囲）とコメントを付け、Slack 等へコピーして返す。</li>
                     <li>ミックス後の音を<strong>スペクトラム</strong>と<strong>レベルメーター</strong>で確認する。</li>
-                    <li>必要に応じて <strong>.mgacr</strong> にメディア込みで保存し、相手のブラウザで Import して同じレビュー状態を再現する。</li>
+                    <li>必要に応じて <strong>.mgacr</strong> にメディア込みで保存し、相手のブラウザで Import Review（ボタンまたはドロップ）して同じレビュー状態を再現する。</li>
                 </ul>
             </section>
 
@@ -95,7 +95,7 @@
                             </ul>
                         </li>
                         <li>
-                            <strong>音声波形エリア</strong> — 左サイドバーと右の波形タイムラインの2列構成。動画・追加音声の読み込みはここ（波形枠）へのドロップでも行えます。
+                            <strong>音声波形エリア</strong> — 左サイドバーと右の波形タイムラインの2列構成。ファイルのドロップはページ内どこでも可能で、ここへドロップしたときは波形枠がハイライト表示されます。
                             <ul>
                                 <li><strong>左サイドバー</strong>：各レーンの名前、S（Solo）/ M（Mute）/ ×（クリア）、レベルメーター、音量フェーダー、+ Add Track。Audio Track には ▲/▼（表示順の入れ替え）もあります。</li>
                                 <li><strong>右（広い）</strong>：Video Audio と各 Audio Track の波形、再生ヘッド（赤い縦線）、マーカー表示、範囲ループのハイライト。</li>
@@ -120,7 +120,7 @@
                 <h2 class="docs-heading-box">操作の流れ</h2>
                 <p>初めて使うときは、画面の上から次の順で進めると迷いにくいです。</p>
                 <ol class="guide-flow">
-                    <li><strong>映像エリア</strong>または<strong>波形エリア</strong>へ<strong>動画</strong>をドロップして読み込む。必要なら<strong>追加音声</strong>も同時または後から読み込む。</li>
+                    <li>ページ内の<strong>どこへでも</strong><strong>動画</strong>をドロップして読み込む。必要なら<strong>追加音声</strong>も同時または後から読み込む。</li>
                     <li><strong>映像</strong>を確認し、<strong>トランスポート</strong>の <strong>Play</strong> または <kbd>Space</kbd> で再生・停止する。</li>
                     <li>気になる箇所に<strong>マーカー</strong>（点または範囲）とコメントを付ける（右の Markers パネルと波形上の表示が連動）。</li>
                     <li><strong>波形</strong>上で位置を合わせ、左サイドバーの <strong>Solo / Mute / フェーダー</strong> でミックスを聴き比べる。追加音声の開始位置はリージョンのドラッグで調整する。</li>
@@ -131,20 +131,28 @@
 
             <section class="guide-section" id="load">
                 <h2 class="docs-heading-box">ファイルの読み込み</h2>
-                <p>読み込みは<strong>映像エリア</strong>（Video パネル）と<strong>音声波形エリア</strong>（波形表示枠）へのドラッグ＆ドロップで行います。ファイルはブラウザ内だけで処理され、外部へ送信されません。未読み込み時は各エリアに控えめな案内文が表示されます。</p>
+                <p>読み込みは、ページ内の<strong>どこへでも</strong>（テキスト入力欄を除く）ファイルをドラッグ＆ドロップできます。拡張子で種類を判別し、動画は Video パネルへ、追加音声は Audio Track へ、<strong>.mgacr</strong> は Import Review として読み込みます。映像エリア・波形エリアへドロップしたときは、該当箇所がハイライト表示されます。ファイルはブラウザ内だけで処理され、外部へ送信されません。未読み込み時は各エリアに控えめな案内文が表示されます。</p>
 
                 <h3 class="docs-heading-box--sub">まとめて読み込む</h3>
                 <ul>
-                    <li><strong>映像エリア</strong>または<strong>波形エリア</strong>へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
-                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（波形エリアへのまとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て）。</li>
+                    <li>ページ内の任意の場所へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
+                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（まとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て）。</li>
                     <li>映像フレームが空のときは、フレームを<strong>クリック</strong>してファイル選択ダイアログを開けます。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub">個別に読み込む</h3>
                 <ul>
-                    <li><strong>動画</strong> → <strong>左の映像エリア</strong>（Video パネル全体）へドロップ。</li>
-                    <li><strong>追加音声</strong> → <strong>音声波形エリア</strong>（波形表示枠）へドロップ。空いている Audio Track に入ります。</li>
-                    <li>読み込み済みの <strong>Audio Track レーン上</strong>へドロップすると、<strong>同じトラックに別クリップとして追加</strong>されます（1トラックあたり複数ファイル可）。空いている Audio Track へは、レーン外の波形エリアなどへドロップすると割り当てられます。</li>
+                    <li><strong>動画</strong> — 対応拡張子のファイルをページ内へドロップ（先頭1件を Video パネルへ読み込み）。</li>
+                    <li><strong>追加音声</strong> — 対応拡張子のファイルをページ内へドロップ。空いている Audio Track に入ります。</li>
+                    <li>読み込み済みの <strong>Audio Track レーン上</strong>へドロップすると、<strong>同じトラックに別クリップとして追加</strong>されます（1トラックあたり複数ファイル可）。</li>
+                </ul>
+
+                <h3 class="docs-heading-box--sub">レビューファイル（.mgacr）の読み込み</h3>
+                <ul>
+                    <li>受け取った <strong>.mgacr</strong> は、トランスポート中段の <strong>Import Review</strong> ボタン（<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd>）に加え、ページ内の<strong>どこへでも</strong>（入力欄以外）<strong>ドロップ</strong>して読み込めます（Import Review と同じ処理）。</li>
+                    <li>複数の .mgacr を同時にドロップした場合は、<strong>先頭の1件</strong>だけがインポートされます。</li>
+                    <li>動画・追加音声などと<strong>混在</strong>してドロップした場合も、<strong>.mgacr のみ</strong>が Import Review として読み込まれ、他のファイルは無視されます。</li>
+                    <li>復元内容の詳細は「<a href="#export">レビューの保存・共有（.mgacr）</a>」の Import Review を参照してください。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub">トラックの増やし方（+ Add Track）</h3>
@@ -240,7 +248,7 @@
 
             <section class="guide-section" id="audio">
                 <h2 class="docs-heading-box">音声波形・ミックス</h2>
-                <p><strong>音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Video Audio、Audio Track 1、Audio Track 2、… の順でレーンが並びます（表示されているレーンのみ。追加音声は最大16本まで）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio here</em> と控えめに表示されます（背景色なし）。</p>
+                <p><strong>音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Video Audio、Audio Track 1、Audio Track 2、… の順でレーンが並びます（表示されているレーンのみ。追加音声は最大16本まで）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio anywhere on the page</em> と控えめに表示されます（背景色なし）。</p>
 
                 <h3 class="docs-heading-box--sub">左サイドバー（各レーン）</h3>
                 <ul>
@@ -341,7 +349,7 @@
                     </li>
                     <li><strong>Analyze</strong> — スペクトラム/メーター表示のオン/オフ（<kbd>A</kbd>）。オフでも CLIP PROTECT は動作します。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
-                    <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み・保存。</li>
+                    <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
                     <li><strong>Export WebM</strong> — タイムコードとマーカーコメントを焼き込んだ WebM を実時間で書き出し。</li>
                 </ul>
 
@@ -392,7 +400,8 @@
 
                 <h3 class="docs-heading-box--sub">Import Review</h3>
                 <ul>
-                    <li>受け取った .mgacr を選ぶと、エクスポート時に含めた<strong>動画・追加音声</strong>と、マーカー・ミックス設定がまとめて復元されます。相手側で同じ素材を別途用意する必要はありません（パッケージにメディアが含まれている場合）。</li>
+                    <li><strong>Import Review</strong> ボタンで .mgacr を選ぶか、ページ内の<strong>どこへでも</strong><strong>ドロップ</strong>して読み込みます（「<a href="#load">ファイルの読み込み</a>」参照）。</li>
+                    <li>読み込むと、エクスポート時に含めた<strong>動画・追加音声</strong>と、マーカー・ミックス設定がまとめて復元されます。相手側で同じ素材を別途用意する必要はありません（パッケージにメディアが含まれている場合）。</li>
                     <li>大きなファイルは読み込みに時間がかかることがあります。ログ欄に進捗や結果が表示されます。</li>
                 </ul>
                 <p>素材を既に共有済みのチーム内では、マーカー <strong>Copy</strong> だけで足りることも多く、初回提出や DAW を持たない相手への渡しには <strong>.mgacr</strong> が向いています。</p>
@@ -432,7 +441,7 @@
                     <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
                     <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。トランスポートの <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
                     <li>Loop のオン/オフ、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
-                    <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには再度ドロップしてください。</li>
+                    <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには、ページ内のどこへでも再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>
                 </ul>
             </section>

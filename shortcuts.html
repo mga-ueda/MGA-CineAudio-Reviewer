@@ -40,6 +40,11 @@
                         <td>クリック</td>
                         <td>動画未読み込み時、映像フレームをクリックするとファイル選択ダイアログを開く</td>
                     </tr>
+                    <tr>
+                        <td>ファイルの読み込み</td>
+                        <td>ドロップ</td>
+                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加</td>
+                    </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生（動画読込後）</th>
                     </tr>
@@ -443,8 +448,8 @@
                     </tr>
                     <tr>
                         <td>同一 Audio Track への追加ファイル</td>
-                        <td>ドロップ（Audio Track）</td>
-                        <td>読み込み済み Audio Track 上へドロップすると別クリップとして追加（トラックあたり複数波形ファイル可）</td>
+                        <td>ドロップ（Audio Track レーン上）</td>
+                        <td>読み込み済み Audio Track レーン上へドロップすると別クリップとして追加（トラックあたり複数波形ファイル可）</td>
                     </tr>
                     <tr>
                         <td>次の Audio Track を表示</td>
@@ -477,7 +482,7 @@
                     <tr>
                         <td>Import Review（インポート）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd></td>
-                        <td>トランスポート中段の Import Review と同じ</td>
+                        <td>トランスポート中段の Import Review と同じ。.mgacr をドロップしても可</td>
                     </tr>
                     <tr>
                         <td>Export Review（エクスポート）</td>
