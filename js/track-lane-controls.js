@@ -164,6 +164,26 @@
         }
     }
 
+    function syncTrackLaneFaderUi(laneKey) {
+        ensureExtraLaneUiRefs();
+        if (laneKey === 'video') {
+            if (
+                laneUi.video.fader &&
+                typeof getVideoTrackVolLinear === 'function'
+            ) {
+                syncFaderFromVol(laneUi.video.fader, getVideoTrackVolLinear());
+            }
+            return;
+        }
+        if (typeof laneKey !== 'number' || laneKey < 0 || laneKey >= laneUi.extra.length) {
+            return;
+        }
+        const ui = laneUi.extra[laneKey];
+        if (ui.fader && typeof getExtraTrackVolLinear === 'function') {
+            syncFaderFromVol(ui.fader, getExtraTrackVolLinear(laneKey));
+        }
+    }
+
     function refreshTrackLaneControlsUi() {
         ensureExtraLaneUiRefs();
         const videoReadyNow = typeof videoReady === 'function' && videoReady();
@@ -250,6 +270,7 @@
 
     window.updateTrackLaneMeters = updateTrackLaneMeters;
     window.extinguishTrackLaneMeters = extinguishTrackLaneMeters;
+    window.syncTrackLaneFaderUi = syncTrackLaneFaderUi;
     window.refreshTrackLaneControlsUi = refreshTrackLaneControlsUi;
     window.initTrackLaneControlsUi = initTrackLaneControlsUi;
 

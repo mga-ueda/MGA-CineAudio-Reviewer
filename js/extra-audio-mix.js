@@ -1399,7 +1399,9 @@
         } else {
             setExtraTrackVolLinear(t.slot, next);
         }
-        refreshReviewMixUi();
+        if (typeof syncTrackLaneFaderUi === 'function') {
+            syncTrackLaneFaderUi(t.kind === 'video' ? 'video' : t.slot);
+        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
         const stoppedAtUnity =
             isMixLaneDbAtUnity(nextDb) &&
@@ -1449,7 +1451,9 @@
             return false;
         }
         setExtraTrackVolLinear(slot, trackLaneLinearGainFromDb(nextDb));
-        refreshReviewMixUi();
+        if (typeof syncTrackLaneFaderUi === 'function') {
+            syncTrackLaneFaderUi(slot);
+        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
         const stoppedAtUnity =
             isMixLaneDbAtUnity(nextDb) &&
