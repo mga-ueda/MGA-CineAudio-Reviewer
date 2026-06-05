@@ -704,13 +704,74 @@
         }
     }
 
+    function setActiveMixExtraSlot(slot) {
+        if (!(slot >= 0)) return;
+        lastActiveMixExtraSlot = slot;
+        const target = { kind: 'extra', slot };
+        forEachWaveformLaneMeta((entry) => {
+            entry.el.classList.toggle(
+                'audio-waveform-lane-meta--active',
+                isMixLaneTargetMatch(entry, target),
+            );
+        });
+    }
+
+    function getActiveMixExtraSlotFromDomLocal() {
+        for (let slot = 0; slot < extraTrackSlotCount(); slot++) {
+            const meta = document.getElementById('extraAudioMeta' + slot);
+            if (
+                meta &&
+                !meta.hidden &&
+                meta.classList.contains('audio-waveform-lane-meta--active')
+            ) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    function isMixExtraSlotUsable(slot) {
+        if (!(slot >= 0)) return false;
+        if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(slot)) {
+            return true;
+        }
+        const meta = document.getElementById('extraAudioMeta' + slot);
+        return !!(meta && !meta.hidden);
+    }
+
+    function firstUsableMixExtraSlot() {
+        const n = extraTrackSlotCount();
+        for (let i = 0; i < n; i++) {
+            if (isMixExtraSlotUsable(i)) return i;
+        }
+        return -1;
+    }
+
+    /** アクティブ Ex が無いとき 1 トラック目（最初に利用可能な Ex）を赤表示にする */
+    function ensureDefaultActiveMixExtraSlot() {
+        const domSlot = getActiveMixExtraSlotFromDomLocal();
+        if (domSlot >= 0 && isMixExtraSlotUsable(domSlot)) {
+            lastActiveMixExtraSlot = domSlot;
+            return domSlot;
+        }
+        if (lastActiveMixExtraSlot >= 0 && isMixExtraSlotUsable(lastActiveMixExtraSlot)) {
+            setActiveMixExtraSlot(lastActiveMixExtraSlot);
+            return lastActiveMixExtraSlot;
+        }
+        const slot = firstUsableMixExtraSlot();
+        if (slot < 0) return -1;
+        setActiveMixExtraSlot(slot);
+        return slot;
+    }
+
     function refreshActiveMixLaneHighlight(clientY) {
         const target =
             Number.isFinite(clientY) && typeof resolveMixTargetFromPointer === 'function'
                 ? resolveMixTargetFromPointer(clientY)
                 : null;
         if (target && target.kind === 'extra') {
-            lastActiveMixExtraSlot = target.slot;
+            setActiveMixExtraSlot(target.slot);
+            return;
         }
         forEachWaveformLaneMeta((entry) => {
             entry.el.classList.toggle(
@@ -726,6 +787,8 @@
 
     window.refreshActiveMixLaneHighlight = refreshActiveMixLaneHighlight;
     window.getLastActiveMixExtraSlot = getLastActiveMixExtraSlot;
+    window.setActiveMixExtraSlot = setActiveMixExtraSlot;
+    window.ensureDefaultActiveMixExtraSlot = ensureDefaultActiveMixExtraSlot;
 
     /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
     function waveformExtraLaneSlotFromPointer(ev) {

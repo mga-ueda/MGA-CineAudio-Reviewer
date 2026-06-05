@@ -159,6 +159,13 @@
         }
 
         if (
+            typeof handlePlaybackRegionSwapKeydown === 'function' &&
+            handlePlaybackRegionSwapKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handleSessionIoShortcutKeydown === 'function' &&
             handleSessionIoShortcutKeydown(e)
         ) {

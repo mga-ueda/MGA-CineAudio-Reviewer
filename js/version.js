@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.03';
+    const APP_VERSION = '0.04';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.04',
+            date: '2026年6月6日',
+            items: [
+                'Phrase 着色 ON 時に2リージョンを E で入れ替え（フレーズ定義の小節数も連動）。Ctrl+V のペースト先をコピー元直後に変更。セッション復元・Import 直後は最初の Audio Track を自動アクティブ化。入れ替えの Undo でリージョンと Phrase 定義を1回で復元。',
+            ],
+        },
         {
             version: '0.03',
             date: '2026年6月5日',

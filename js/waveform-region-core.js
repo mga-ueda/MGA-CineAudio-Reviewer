@@ -69,9 +69,29 @@
         return { active: false, segments: [], headPadSec: 0 };
     }
 
-    function captureRegionUndoSnapshot() {
+    function regionUndoSnapshotIncludePhrase(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!o.includePhrase) return false;
+        return (
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible() &&
+            typeof capturePhraseUndoSnapshot === 'function'
+        );
+    }
+
+    function normalizeRegionUndoSnapshot(snap) {
+        if (Array.isArray(snap)) {
+            return { tracks: snap, phrase: null };
+        }
+        if (snap && Array.isArray(snap.tracks)) {
+            return { tracks: snap.tracks, phrase: snap.phrase != null ? snap.phrase : null };
+        }
+        return { tracks: [], phrase: null };
+    }
+
+    function captureRegionUndoSnapshot(opt) {
+        const tracks = [];
         const n = getExtraTrackCount();
-        const snap = [];
         for (let i = 0; i < n; i++) {
             const tr =
                 typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
@@ -83,22 +103,29 @@
                 typeof getExtraTrackTimelineStartSec === 'function'
                     ? getExtraTrackTimelineStartSec(i)
                     : 0;
-            snap.push({ slot: i, playbackRegions, timelineStartSec });
+            tracks.push({ slot: i, playbackRegions, timelineStartSec });
         }
-        return snap;
+        let phrase = null;
+        if (regionUndoSnapshotIncludePhrase(opt)) {
+            phrase = capturePhraseUndoSnapshot();
+        }
+        return { tracks, phrase };
     }
 
     function regionUndoSnapshotsEqual(a, b) {
-        return JSON.stringify(a) === JSON.stringify(b);
+        return (
+            JSON.stringify(normalizeRegionUndoSnapshot(a)) ===
+            JSON.stringify(normalizeRegionUndoSnapshot(b))
+        );
     }
 
     function clearRegionRedoStack() {
         regionRedoStack.length = 0;
     }
 
-    function requestRegionUndoCapture() {
+    function requestRegionUndoCapture(opt) {
         if (regionUndoPaused) return;
-        const snap = captureRegionUndoSnapshot();
+        const snap = captureRegionUndoSnapshot(opt);
         const top = regionUndoStack.length
             ? regionUndoStack[regionUndoStack.length - 1]
             : null;
@@ -109,10 +136,10 @@
 
     function restoreRegionUndoSnapshot(snap) {
         regionUndoPaused = true;
-        const n =
-            getExtraTrackCount();
+        const normalized = normalizeRegionUndoSnapshot(snap);
+        const n = getExtraTrackCount();
         for (let i = 0; i < n; i++) {
-            const entry = snap.find((e) => e.slot === i);
+            const entry = normalized.tracks.find((e) => e.slot === i);
             const tr =
                 typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
             if (!tr) continue;
@@ -134,12 +161,22 @@
             syncExtraAudioToTransport({ force: true });
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        if (
+            normalized.phrase != null &&
+            typeof restorePhraseUndoSnapshot === 'function'
+        ) {
+            restorePhraseUndoSnapshot(normalized.phrase);
+        }
         regionUndoPaused = false;
+    }
+
+    function captureRegionUndoSnapshotForHistory() {
+        return captureRegionUndoSnapshot({ includePhrase: true });
     }
 
     function undoPlaybackRegion() {
         if (!regionUndoStack.length) return false;
-        const current = captureRegionUndoSnapshot();
+        const current = captureRegionUndoSnapshotForHistory();
         const prev = regionUndoStack.pop();
         regionRedoStack.push(current);
         restoreRegionUndoSnapshot(prev);
@@ -152,7 +189,7 @@
 
     function redoPlaybackRegion() {
         if (!regionRedoStack.length) return false;
-        const current = captureRegionUndoSnapshot();
+        const current = captureRegionUndoSnapshotForHistory();
         const next = regionRedoStack.pop();
         regionUndoStack.push(current);
         restoreRegionUndoSnapshot(next);
@@ -510,6 +547,181 @@
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Ungrouped', 'notice');
         }
+        return true;
+    }
+
+    function swapSegmentContentFields(a, b) {
+        if (!a || !b) return;
+        const keys = [
+            'id',
+            'clipId',
+            'sourceInSec',
+            'sourceOutSec',
+            'gainDb',
+            'fadeInSec',
+            'fadeOutSec',
+            'regionGroupId',
+        ];
+        for (let k = 0; k < keys.length; k++) {
+            const key = keys[k];
+            const tmp = a[key];
+            if (b[key] === undefined) delete a[key];
+            else a[key] = b[key];
+            if (tmp === undefined) delete b[key];
+            else b[key] = tmp;
+        }
+    }
+
+    /** 入れ替え後: 先頭アンカーを保ち、全リージョンを隙間なく並べ直す */
+    function compactSwappedSegmentTimeline(segments, track) {
+        if (!segments.length) return;
+        const t0 = getTrackTimelineStartSec(track);
+        let anchor = getSegmentTimelineStart(track, 0);
+        if (!Number.isFinite(anchor)) anchor = t0 + getHeadPadSec(track);
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            seg.timelineStartSec = anchor;
+            delete seg.regionTimelineInSec;
+            delete seg.regionLeadPadSec;
+            anchor = segmentEntryTimelineEnd(seg);
+        }
+        const state = getPlaybackRegionsState(track);
+        if (state) {
+            delete state.regionTimelineInSec;
+            delete state.regionLeadPadSec;
+            state.headPadSec = Math.max(
+                0,
+                (Number(segments[0].timelineStartSec) || t0) - t0,
+            );
+        }
+    }
+
+    function phraseGroupIndexForSegmentSwap(track, segmentIndex) {
+        if (segmentIndex < 0) return segmentIndex;
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const regionEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const mid = (regionIn + regionEnd) * 0.5;
+        if (typeof resolvePhraseGroupIndexAtTransportSec === 'function') {
+            const phraseIdx = resolvePhraseGroupIndexAtTransportSec(mid);
+            if (phraseIdx != null && phraseIdx >= 0) return phraseIdx;
+        }
+        if (
+            typeof resolvePhraseGroupAtTransportSec === 'function' &&
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible()
+        ) {
+            const hit = resolvePhraseGroupAtTransportSec(mid);
+            if (hit && Number.isFinite(hit.paletteIndex) && hit.paletteIndex >= 0) {
+                return hit.paletteIndex;
+            }
+        }
+        return segmentIndex;
+    }
+
+    function segmentEntryTimelineEnd(seg) {
+        const anchor = Number.isFinite(seg.timelineStartSec) ? seg.timelineStartSec : 0;
+        return (
+            anchor +
+            Math.max(
+                PLAYBACK_REGION_MIN_SEC,
+                (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0),
+            )
+        );
+    }
+
+    function playbackRegionSwapBlockReason() {
+        if (
+            typeof getMusicalGridPhraseFillVisible !== 'function' ||
+            !getMusicalGridPhraseFillVisible()
+        ) {
+            return 'phrase tint off';
+        }
+        if (regionSelectionEntries.length !== 2) {
+            return 'select exactly 2 regions';
+        }
+        if (selectionHasGroupedRegions()) {
+            return 'grouped regions';
+        }
+        const a = regionSelectionEntries[0];
+        const b = regionSelectionEntries[1];
+        if (a.slot !== b.slot) {
+            return 'different tracks';
+        }
+        const track = { type: 'extra', slot: a.slot };
+        if (!isTrackRegionActive(track)) {
+            return 'no active regions';
+        }
+        if (a.segmentIndex === b.segmentIndex) {
+            return 'select 2 different regions';
+        }
+        return null;
+    }
+
+    function notifyCannotSwapPlaybackRegions(reason) {
+        writeLog('Playback region: cannot swap (' + reason + ')');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', "Can't swap regions", 'error');
+        }
+    }
+
+    function swapSelectedPlaybackRegions() {
+        const reason = playbackRegionSwapBlockReason();
+        if (reason) {
+            notifyCannotSwapPlaybackRegions(reason);
+            return false;
+        }
+        const slotNum = regionSelectionEntries[0].slot;
+        const track = { type: 'extra', slot: slotNum };
+        const idxA = regionSelectionEntries[0].segmentIndex;
+        const idxB = regionSelectionEntries[1].segmentIndex;
+        const lo = Math.min(idxA, idxB);
+        const hi = Math.max(idxA, idxB);
+
+        const phraseLo = phraseGroupIndexForSegmentSwap(track, lo);
+        const phraseHi = phraseGroupIndexForSegmentSwap(track, hi);
+
+        if (!regionUndoPaused) requestRegionUndoCapture({ includePhrase: true });
+
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        if (!segments[lo] || !segments[hi]) {
+            notifyCannotSwapPlaybackRegions('invalid region');
+            return false;
+        }
+
+        swapSegmentContentFields(segments[lo], segments[hi]);
+        compactSwappedSegmentTimeline(segments, track);
+
+        const normalized = segments.map((s) =>
+            normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+        );
+        const affected = [];
+        for (let i = 0; i < normalized.length; i++) affected.push(i);
+        const ok = !!setTrackSegments(track, normalized, {
+            silent: true,
+            skipUndo: true,
+            affectedSegmentIndices: affected,
+            segmentStructureChanged: true,
+        });
+        if (!ok) {
+            notifyCannotSwapPlaybackRegions('apply failed');
+            return false;
+        }
+        if (typeof schedulePersistExtraTrackSlot === 'function') {
+            schedulePersistExtraTrackSlot(track.slot);
+        }
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
+        if (typeof swapPhraseGroupsAtIndices === 'function') {
+            swapPhraseGroupsAtIndices(phraseLo, phraseHi, { skipUndo: true });
+        }
+        writeLog(
+            'Playback region: swapped regions ' + (lo + 1) + ' and ' + (hi + 1),
+        );
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Swapped', 'notice');
+        }
+        clearRegionSelection();
         return true;
     }
 
@@ -3479,7 +3691,9 @@
         const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
         let peaks = [];
         if (typeof peaksForViewportRange === 'function') {
-            const bufId = typeof bufferPeakId === 'function' ? bufferPeakId(buf) : 0;
+            const bufId =
+                (typeof bufferPeakId === 'function' ? bufferPeakId(buf) : 0) +
+                (track && track.slot >= 0 ? (track.slot + 1) * 1000003 : 0);
             peaks = peaksForViewportRange(
                 buf,
                 tr.peakPyramid,
@@ -3647,7 +3861,8 @@
             let peaks = [];
             if (typeof peaksForViewportRange === 'function') {
                 const bufId =
-                    typeof bufferPeakId === 'function' ? bufferPeakId(tr.buffer) : 0;
+                    (typeof bufferPeakId === 'function' ? bufferPeakId(tr.buffer) : 0) +
+                    (slot >= 0 ? (slot + 1) * 1000003 : 0);
                 peaks = peaksForViewportRange(
                     tr.buffer,
                     tr.peakPyramid,

@@ -213,6 +213,9 @@
         if (typeof ensureMainVideoWaveformAfterSessionRestore === 'function') {
             ensureMainVideoWaveformAfterSessionRestore();
         }
+        if (typeof ensureDefaultActiveMixExtraSlot === 'function') {
+            ensureDefaultActiveMixExtraSlot();
+        }
     }
 
     function hasExtraTrackWaveformPeaks(slot) {

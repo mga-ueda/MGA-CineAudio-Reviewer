@@ -75,6 +75,11 @@
                     });
                 } catch (_) {}
             }
+            if (typeof ensureDefaultActiveMixExtraSlot === 'function') {
+                try {
+                    ensureDefaultActiveMixExtraSlot();
+                } catch (_) {}
+            }
         }
     }
 

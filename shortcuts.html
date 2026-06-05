@@ -417,6 +417,11 @@
                         <td>未グループ: 2つ以上選択（<strong>トラックをまたいで可</strong>）して <kbd>G</kbd> でグループ化（グループ内のいずれかにホバーすると<strong>メンバーすべて黄色枠</strong>・まとめてドラッグ可）。グループ内を選択して <kbd>G</kbd> で解除</td>
                     </tr>
                     <tr>
+                        <td>入れ替え（フレーズ並び）</td>
+                        <td><kbd>E</kbd></td>
+                        <td><strong>Phrase 着色 <kbd>P</kbd> ON</strong> 時のみ。同一 Audio Track 上で<strong>2リージョン</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ</td>
+                    </tr>
+                    <tr>
                         <td>ソース In/Out・スプリット点</td>
                         <td>ハンドル操作（Audio Track）</td>
                         <td>隣接時は境界を1本のスプリットハンドルで移動。離した後は各リージョンに In/Out</td>
@@ -442,9 +447,9 @@
                         <td>ポインタ下のリージョン（ソース In/Out・クリップ・リードパッド・音量補正dB等）</td>
                     </tr>
                     <tr>
-                        <td>リージョンをトラック末尾にペースト</td>
+                        <td>リージョンをコピー元の直後にペースト</td>
                         <td><kbd>Ctrl</kbd>+<kbd>V</kbd></td>
-                        <td>コピー元と同じ Audio Track の末尾へ追加（直前リージョンと重ならない）</td>
+                        <td>コピー元と同じ Audio Track の<strong>コピーしたリージョンの直後</strong>へ挿入。直後の隙間に収まればそこへ配置、足りなければ後続リージョンを後ろへずらす</td>
                     </tr>
                     <tr>
                         <td>同一 Audio Track への追加ファイル</td>

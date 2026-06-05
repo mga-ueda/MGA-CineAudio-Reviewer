@@ -1052,6 +1052,10 @@
             const slot = getLastActiveMixExtraSlot();
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
         }
+        if (typeof ensureDefaultActiveMixExtraSlot === 'function') {
+            const slot = ensureDefaultActiveMixExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
         return -1;
     }
 
@@ -1162,6 +1166,10 @@
         if (domSlot >= 0 && isExtraSlotUsableForRegion(domSlot)) return domSlot;
         if (typeof getLastActiveMixExtraSlot === 'function') {
             const slot = getLastActiveMixExtraSlot();
+            if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
+        }
+        if (typeof ensureDefaultActiveMixExtraSlot === 'function') {
+            const slot = ensureDefaultActiveMixExtraSlot();
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
         }
         return -1;
@@ -1800,7 +1808,7 @@
         }
         const segment = snapshotSegmentForClipboard(track, segmentIndex);
         if (!segment) return false;
-        regionSegmentClipboard = { slot, segment };
+        regionSegmentClipboard = { slot, segmentIndex, segment };
         writeLog(
             'Ex ' +
                 (slot + 1) +
@@ -1812,6 +1820,24 @@
             flashSeekHint('Ex ' + (slot + 1), 'Region copied', 'notice');
         }
         return true;
+    }
+
+    function shiftSegmentEntriesTimelineFromIndex(segments, track, fromIndex, delta) {
+        if (!Number.isFinite(delta) || Math.abs(delta) < 0.00001) return;
+        const state = getPlaybackRegionsState(track);
+        for (let i = fromIndex; i < segments.length; i++) {
+            const seg = segments[i];
+            if (Number.isFinite(seg.timelineStartSec)) {
+                seg.timelineStartSec += delta;
+            }
+            if (i === 0) {
+                if (state && Number.isFinite(state.regionTimelineInSec)) {
+                    state.regionTimelineInSec = Math.max(0, state.regionTimelineInSec + delta);
+                }
+            } else if (Number.isFinite(seg.regionTimelineInSec)) {
+                seg.regionTimelineInSec = Math.max(0, seg.regionTimelineInSec + delta);
+            }
+        }
     }
 
     function pasteRegionSegmentToTrackEnd() {
@@ -1848,26 +1874,41 @@
         const segments = getTrackSegments(track);
         if (!segments.length) return false;
 
-        const lastIndex = segments.length - 1;
-        const trackEnd = getSegmentTimelineEnd(track, lastIndex);
-        const snapped = snapRegionTransportSec(trackEnd, {
-            exclude: { slot, segmentIndex: segments.length },
-        });
-        const start = Math.max(
-            trackEnd,
-            Number.isFinite(snapped) ? snapped : trackEnd,
+        const eps = segmentBoundaryJoinEpsilonSec();
+        const pasteDur = Math.max(
+            PLAYBACK_REGION_MIN_SEC,
+            (Number(clip.sourceOutSec) || 0) - (Number(clip.sourceInSec) || 0),
         );
+
+        let srcIdx =
+            regionSegmentClipboard.slot === slot &&
+            Number.isFinite(regionSegmentClipboard.segmentIndex)
+                ? regionSegmentClipboard.segmentIndex | 0
+                : -1;
+        if (srcIdx < 0 || srcIdx >= segments.length) {
+            srcIdx = segments.length - 1;
+        }
+
+        const srcEnd = getSegmentTimelineEnd(track, srcIdx);
+        let availableGap = Infinity;
+        if (srcIdx < segments.length - 1) {
+            availableGap =
+                getSegmentTimelineStart(track, srcIdx + 1) - srcEnd;
+        }
+        const pushDelta =
+            availableGap >= pasteDur - eps ? 0 : pasteDur - availableGap;
+        const pasteStart = srcEnd;
 
         const clone = {
             id: newRegionId(),
             clipId: clip.clipId,
             sourceInSec: clip.sourceInSec,
             sourceOutSec: clip.sourceOutSec,
-            timelineStartSec: start,
+            timelineStartSec: pasteStart,
         };
         const regionInDelta = clip.regionInSec - clip.anchorStartSec;
         if (regionInDelta > SEGMENT_BOUNDARY_JOIN_EPS_SEC) {
-            clone.regionTimelineInSec = start + regionInDelta;
+            clone.regionTimelineInSec = pasteStart + regionInDelta;
         }
         if (
             Number.isFinite(clip.regionLeadPadSec) &&
@@ -1887,51 +1928,32 @@
         if (!fullDur) return false;
         let norm = normalizeSegmentEntry(clone, track, fullDur);
         delete norm.fadeInSec;
-        const pastedAnchor = Number.isFinite(norm.timelineStartSec) ? norm.timelineStartSec : start;
-        let pastedRegionIn = pastedAnchor;
-        if (Number.isFinite(norm.regionTimelineInSec)) {
-            pastedRegionIn = Math.max(pastedAnchor, norm.regionTimelineInSec);
-        }
-        const pastedEnd =
-            pastedAnchor + Math.max(0, norm.sourceOutSec - norm.sourceInSec);
-        for (let i = 0; i < segments.length; i++) {
-            const otherIn = getSegmentRegionTimelineIn(track, i);
-            const otherEnd = getSegmentTimelineEnd(track, i);
-            if (
-                intervalsOverlapTimeline(
-                    pastedRegionIn,
-                    pastedEnd,
-                    otherIn,
-                    otherEnd,
-                )
-            ) {
-                delete norm.regionTimelineInSec;
-                delete norm.regionLeadPadSec;
-                norm.timelineStartSec = Math.max(trackEnd, pastedAnchor);
-                norm = normalizeSegmentEntry(norm, track, fullDur);
-                pastedRegionIn = Number.isFinite(norm.timelineStartSec)
-                    ? norm.timelineStartSec
-                    : Math.max(trackEnd, pastedAnchor);
-                break;
-            }
-        }
+
         if (!regionUndoPaused) requestRegionUndoCapture();
-        const normalized = segments.map((s) =>
+        const working = segments.map((s) => ({ ...s }));
+        const insertAt = srcIdx + 1;
+        if (pushDelta > eps) {
+            shiftSegmentEntriesTimelineFromIndex(working, track, insertAt, pushDelta);
+        }
+        const normalized = working.map((s) =>
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
         );
-        const prevLast = normalized[lastIndex];
-        if (prevLast && Number.isFinite(prevLast.fadeOutSec)) {
-            delete prevLast.fadeOutSec;
+        const srcSeg = normalized[srcIdx];
+        if (srcSeg && Number.isFinite(srcSeg.fadeOutSec)) {
+            delete srcSeg.fadeOutSec;
         }
-        normalized.push(norm);
+        normalized.splice(insertAt, 0, norm);
         applySegmentsToState(track, normalized, {
             silent: true,
             skipUndo: true,
+            segmentStructureChanged: true,
         });
         writeLog(
             'Ex ' +
                 (slot + 1) +
-                ': region pasted at track end (' +
+                ': region pasted after region ' +
+                (srcIdx + 1) +
+                ' (' +
                 normalized.length +
                 ' total)',
         );

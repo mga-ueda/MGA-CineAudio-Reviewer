@@ -112,6 +112,24 @@
         return true;
     }
 
+    function handlePlaybackRegionSwapKeydown(e) {
+        if (!matchUserShortcut(e, 'regionSwap')) return false;
+        if (e.repeat) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
+            return false;
+        }
+        if (regionHandleDragActive) return false;
+        if (
+            typeof getMusicalGridPhraseFillVisible !== 'function' ||
+            !getMusicalGridPhraseFillVisible()
+        ) {
+            return false;
+        }
+        e.preventDefault();
+        swapSelectedPlaybackRegions();
+        return true;
+    }
+
     function handleRegionSelectionPointerDown(ev, regionHit) {
         if (!ev || !regionHit || !(regionHit.slot >= 0) || !(regionHit.segmentIndex >= 0)) {
             return false;
@@ -488,6 +506,8 @@
     window.clearRegionUndoStack = clearRegionUndoStack;
     window.handlePlaybackRegionEscapeKeydown = handlePlaybackRegionEscapeKeydown;
     window.handlePlaybackRegionGroupKeydown = handlePlaybackRegionGroupKeydown;
+    window.handlePlaybackRegionSwapKeydown = handlePlaybackRegionSwapKeydown;
+    window.swapSelectedPlaybackRegions = swapSelectedPlaybackRegions;
     window.handleRegionSelectionPointerDown = handleRegionSelectionPointerDown;
     window.toggleRegionSelection = toggleRegionSelection;
     window.clearRegionSelection = clearRegionSelection;

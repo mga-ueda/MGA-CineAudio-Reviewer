@@ -1010,6 +1010,9 @@
             if (typeof refreshExportMediaOptionsUi === 'function') {
                 refreshExportMediaOptionsUi();
             }
+            if (typeof ensureDefaultActiveMixExtraSlot === 'function') {
+                ensureDefaultActiveMixExtraSlot();
+            }
         };
         tick();
         requestAnimationFrame(tick);

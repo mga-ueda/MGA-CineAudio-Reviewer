@@ -1429,7 +1429,7 @@
         if (!counts || !counts.length) return;
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!o.skipUndo) requestPhraseUndoCapture();
-        const text = counts.map((c) => String(Math.max(1, c | 0))).join(',');
+        const text = formatPhraseTextFromGroupBarCounts(counts);
         musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
         if (musicalGridPhraseInput) {
             musicalGridPhraseInput.value = musicalGridPhraseText;
@@ -1675,25 +1675,9 @@
     }
 
     function resolvePhraseGroupIndexAtTransportSec(transportSec) {
-        if (!getMusicalGridVisible()) return null;
-        const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return null;
-        const master =
-            typeof getMasterTransportDurationSec === 'function'
-                ? getMasterTransportDurationSec()
-                : 0;
-        if (!(master > 0)) return null;
-        const counts = expandPhraseSpecToGroupBarCounts(
-            settings.meterSpec,
-            master,
-            settings.phraseSpec,
-        );
-        if (!counts.length) return null;
-        const ranges = collectPhraseGroupRangesFromBarCounts(
-            settings.meterSpec,
-            master,
-            counts,
-        );
+        if (!getMusicalGridPhraseFillVisible()) return null;
+        const ranges = getPhraseGroupRangesSnapshot();
+        if (!ranges.length) return null;
         const s = Number(transportSec);
         if (!Number.isFinite(s)) return null;
         for (let i = 0; i < ranges.length; i++) {
@@ -1703,6 +1687,49 @@
             }
         }
         return null;
+    }
+
+    /** 展開済み Phrase グループ lo / hi の小節数定義を入れ替える（リージョン入れ替え E 用）。 */
+    function swapPhraseGroupsAtIndices(lo, hi, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!getMusicalGridPhraseFillVisible()) return false;
+        readMusicalGridFromInputs();
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.phraseSpec) return false;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return false;
+        const loIdx = lo | 0;
+        const hiIdx = hi | 0;
+        if (loIdx < 0 || hiIdx < 0 || loIdx === hiIdx) return false;
+        const counts = expandPhraseSpecToGroupBarCounts(
+            settings.meterSpec,
+            master,
+            settings.phraseSpec,
+        );
+        if (!counts.length || loIdx >= counts.length || hiIdx >= counts.length) {
+            return false;
+        }
+        if (!o.skipUndo) requestPhraseUndoCapture();
+        const next = counts.slice();
+        const tmp = next[loIdx];
+        next[loIdx] = next[hiIdx];
+        next[hiIdx] = tmp;
+        applyExplicitPhraseGroupBarCounts(next, { skipUndo: true });
+        persistMusicalGridAndRedraw();
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Phrase: swapped groups ' +
+                    phraseGroupLogLabelForIndex(loIdx) +
+                    ' and ' +
+                    phraseGroupLogLabelForIndex(hiIdx) +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        }
+        return true;
     }
 
     /** Phrase グループ g を隣接グループへ吸収して削除。2 グループ未満は null。 */
@@ -2617,6 +2644,10 @@
     window.redoPhraseDefinition = redoPhraseDefinition;
     window.splitPhraseAtWaveformPointer = splitPhraseAtWaveformPointer;
     window.deletePhraseAtWaveformPointer = deletePhraseAtWaveformPointer;
+    window.swapPhraseGroupsAtIndices = swapPhraseGroupsAtIndices;
+    window.resolvePhraseGroupIndexAtTransportSec = resolvePhraseGroupIndexAtTransportSec;
+    window.capturePhraseUndoSnapshot = capturePhraseUndoSnapshot;
+    window.restorePhraseUndoSnapshot = restorePhraseUndoSnapshot;
 
     initMusicalGridUi();
 })();
