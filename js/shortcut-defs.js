@@ -39,14 +39,6 @@
         // ---------- 表示 ----------
         musicalGridToggle: { code: 'KeyT' },
         musicalGridPhraseToggle: { code: 'KeyP' },
-        playheadCenterLockToggle: {
-            code: 'KeyC',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: false,
-        },
         videoMarkersPanelsToggle: {
             code: 'KeyF',
             primary: false,
@@ -56,14 +48,6 @@
             shift: false,
         },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
-        waveformLiteToggle: {
-            code: 'KeyQ',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: false,
-        },
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -110,24 +94,34 @@
         mixLaneSoloExclusive: { code: 'KeyS', ctrl: false, alt: true, meta: false, shift: false },
         mixLaneMuteToggle: { code: 'KeyM', ctrl: false, alt: false, meta: false, shift: false },
         mixLaneMuteClearAll: { code: 'KeyM', ctrl: false, alt: true, meta: false, shift: false },
-        mixLaneVolumeUp: { code: 'PageUp', ctrl: false, alt: false, meta: false, shift: false },
-        mixLaneVolumeDown: { code: 'PageDown', ctrl: false, alt: false, meta: false, shift: false },
+        mixLaneVolumeUp: {
+            codes: ['NumpadAdd'],
+            keys: ['+'],
+            ctrl: false,
+            alt: false,
+            meta: false,
+            shift: false,
+        },
+        mixLaneVolumeUpUsLayout: {
+            code: 'Equal',
+            shift: true,
+            ctrl: false,
+            alt: false,
+            meta: false,
+        },
+        mixLaneVolumeDown: {
+            codes: ['NumpadSubtract', 'Minus'],
+            keys: ['-'],
+            ctrl: false,
+            alt: false,
+            meta: false,
+            shift: false,
+        },
         masterVolumeResetUnity: { code: 'KeyV', primary: true, shift: true, alt: false },
         addExtraTrack: { code: 'KeyN', primary: true, shift: false, alt: false },
-        releaseExtraTrackUnityHold: { codes: ['PageUp', 'PageDown'], ctrl: false, alt: false, meta: false },
 
         // ---------- 波形タイムライン ----------
-        waveformTimelineZoomIn: { codes: ['Equal', 'NumpadAdd'] },
-        waveformTimelineZoomOut: { codes: ['Minus', 'NumpadSubtract'] },
-        waveformTimelineFit: {
-            code: 'KeyZ',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: true,
-        },
-        waveformTimelineZoomMax: {
+        waveformTimelineZoomToggle: {
             code: 'KeyZ',
             primary: false,
             ctrl: false,
@@ -324,12 +318,10 @@
             soloExclusive: formatShortcutDef(s.mixLaneSoloExclusive),
             mute: formatShortcutDef(s.mixLaneMuteToggle),
             muteClearAll: formatShortcutDef(s.mixLaneMuteClearAll),
-            laneVolume: chordWithArrows([], 'PageUp', 'PageDown'),
+            laneVolume: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             addExtraTrack: formatShortcutDef(s.addExtraTrack),
             markerHide: formatShortcutDef(s.markerHideToggle),
             analyze: formatShortcutDef(s.analyzeToggle),
-            waveformLite: formatShortcutDef(s.waveformLiteToggle),
-            centerLock: formatShortcutDef(s.playheadCenterLockToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
             musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
             sessionImport: formatShortcutDef(s.sessionImport),
@@ -341,10 +333,7 @@
             markerRowNav: chordWithArrows(['Shift'], 'ArrowUp', 'ArrowDown'),
             cancelEdit: formatShortcutDef(s.cancelEditing),
             submitEdit: formatShortcutDef(s.submitEditing),
-            zoomIn: shortcutKeyLabel(s.waveformTimelineZoomIn),
-            zoomOut: shortcutKeyLabel(s.waveformTimelineZoomOut),
-            zoomFit: formatShortcutDef(s.waveformTimelineFit),
-            zoomMax: formatShortcutDef(s.waveformTimelineZoomMax),
+            zoomToggle: formatShortcutDef(s.waveformTimelineZoomToggle),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
@@ -398,7 +387,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomIn}/${h.zoomOut} でズーム、${h.zoomFit} で全体表示、${h.zoomMax} で最大倍率（32×）、Ctrl+ホイールで高速ズーム（3倍）、Shift+ホイールで横スクロール、Shift+Ctrl+ホイールで高速スクロール（3倍）。`,
+            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomToggle} で 1× / 32× 切替、Shift+ホイールで横スクロール。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
@@ -417,27 +406,12 @@
             setElementTitle(phraseLbl, phraseTitle);
         }
 
-        const centerExplain =
-            'ズームや横スクロール時、波形ビュー内のシークバー（再生位置）を常に中央に固定する';
-        const centerTitle = `Center lock — ${centerExplain}（${h.centerLock} で ON/OFF）`;
-        setElementTitle(document.getElementById('playheadCenterLockCheckbox'), centerTitle);
-        const centerWrap = document.querySelector('.playhead-center-lock-options');
-        setElementTitle(centerWrap, centerTitle);
-        const centerLbl = document.getElementById('playheadCenterLockLabel');
-        setElementTitle(centerLbl, centerTitle);
-
         const analyzeTitle = `スペクトラムとレベルメーターを表示（${h.analyze} で切替）`;
         setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);
         setElementTitle(
             document.getElementById('analyzeToggleWrap'),
             `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
         );
-
-        const liteExplain =
-            'ズーム/スクロール後も波形をデフォルト解像度のまま維持し、CPU 負荷を抑える';
-        const liteTitle = `Lite Waveform — ${liteExplain}（${h.waveformLite} で ON/OFF）`;
-        setElementTitle(document.getElementById('waveformLiteCheckbox'), liteTitle);
-        setElementTitle(document.getElementById('waveformLiteToggleWrap'), liteTitle);
 
         setElementTitle(
             document.getElementById('masterVolSlider'),
@@ -455,6 +429,21 @@
         return matchesShortcut(event, def, opt);
     }
 
+    function matchMixLaneVolumeUp(event, opt) {
+        return (
+            matchUserShortcut(event, 'mixLaneVolumeUp', opt) ||
+            matchUserShortcut(event, 'mixLaneVolumeUpUsLayout', opt)
+        );
+    }
+
+    function matchMixLaneVolumeDown(event, opt) {
+        return matchUserShortcut(event, 'mixLaneVolumeDown', opt);
+    }
+
+    function matchMixLaneVolumeKey(event, opt) {
+        return matchMixLaneVolumeUp(event, opt) || matchMixLaneVolumeDown(event, opt);
+    }
+
     function getUserShortcut(shortcutName) {
         return SHORTCUTS[shortcutName] || null;
     }
@@ -464,6 +453,9 @@
     window.formatShortcutDef = formatShortcutDef;
     window.matchesShortcut = matchesShortcut;
     window.matchUserShortcut = matchUserShortcut;
+    window.matchMixLaneVolumeUp = matchMixLaneVolumeUp;
+    window.matchMixLaneVolumeDown = matchMixLaneVolumeDown;
+    window.matchMixLaneVolumeKey = matchMixLaneVolumeKey;
     window.getUserShortcut = getUserShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;

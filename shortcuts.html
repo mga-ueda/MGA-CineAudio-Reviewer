@@ -114,11 +114,6 @@
                         <td><kbd>A</kbd></td>
                         <td>トランスポート下段の Analyze チェックと同じ。オフ時は解析枠を非表示（オートゲインは維持）。設定は次回起動時に復元（Import/Export には含めない）</td>
                     </tr>
-                    <tr>
-                        <td>Lite Waveform（波形詳細描画のオフ）</td>
-                        <td><kbd>Q</kbd></td>
-                        <td>オン/オフ切替（デフォルトオフ・localStorage に保存）。オン時はズーム/スクロール後も波形をデフォルト解像度のまま維持し、CPU 負荷を抑える。Master Vol 左隣の Lite Waveform チェックでも操作可。Import/Export には含めない</td>
-                    </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
                     </tr>
@@ -214,34 +209,14 @@
                         <td>Audio Track 上のリージョンではクリックでシーク・ドラッグで移動（再生リージョン参照）</td>
                     </tr>
                     <tr>
-                        <td>ズーム</td>
+                        <td>ズーム（1× ↔ 32×）</td>
                         <td>ホイール（波形上）</td>
-                        <td>全体表示（1×）からもズームアウト可（最小0.25×、最大32×）</td>
+                        <td>上方向で 32×、下方向で 1×（全体表示）</td>
                     </tr>
                     <tr>
-                        <td>高速ズーム（3倍）</td>
-                        <td><kbd>Ctrl</kbd>+ホイール（波形上）</td>
-                        <td>—</td>
-                    </tr>
-                    <tr>
-                        <td>ズーム</td>
-                        <td><kbd>+</kbd>/<kbd>−</kbd>（テンキー可）</td>
-                        <td>マーカーパネル内では無効。<kbd>Alt</kbd>押下中も無効（Audio Track 上のリージョン音量と競合しないよう）</td>
-                    </tr>
-                    <tr>
-                        <td>高速ズーム（3倍）</td>
-                        <td><kbd>Shift</kbd>+<kbd>+</kbd>/<kbd>−</kbd>（テンキー可）</td>
-                        <td>同上。<kbd>Shift</kbd> または <kbd>Ctrl</kbd> 併用でも高速</td>
-                    </tr>
-                    <tr>
-                        <td>波形全体表示（ズーム1×）</td>
-                        <td><kbd>Shift</kbd>+<kbd>Z</kbd></td>
-                        <td>ズームアウト後も <kbd>Shift</kbd>+<kbd>Z</kbd> で全体表示に戻す（<kbd>Ctrl</kbd>+<kbd>Z</kbd> の元に戻すとは別）</td>
-                    </tr>
-                    <tr>
-                        <td>最大倍率でズーム（32×）</td>
+                        <td>ズーム切替（1× ↔ 32×）</td>
                         <td><kbd>Z</kbd></td>
-                        <td>再生位置を中心に最大倍率へ。マーカーパネル内では無効</td>
+                        <td>32× のときは 1× に戻す。マーカーパネル内では無効</td>
                     </tr>
                     <tr>
                         <td>ダブルクリックでズーム（波形上）</td>
@@ -256,22 +231,12 @@
                     <tr>
                         <td>ダブルクリックでズーム（範囲マーカー）</td>
                         <td>ダブルクリック（波形上の範囲マーカー）</td>
-                        <td>範囲が画面幅にほぼ収まる倍率（画面いっぱいに合わせる倍率より1段階だけ縮小）へ拡大。再生位置は範囲中央へ移動し、再生ヘッドを画面中央に表示。既に32×のときは全体表示（1×）に戻す</td>
-                    </tr>
-                    <tr>
-                        <td>再生ヘッド中央固定（Center lock）</td>
-                        <td><kbd>C</kbd></td>
-                        <td>オン/オフ切替（デフォルトオフ・localStorage に保存）。オン時はズーム中、水色の縦線が常にビューポート中央に追従。トランスポートの Center lock チェックでも操作可</td>
+                        <td>範囲中央を 32× で画面中央に表示。再生位置は範囲中央へ移動。既に32×のときは全体表示（1×）に戻す</td>
                     </tr>
                     <tr>
                         <td>横スクロール</td>
                         <td><kbd>Shift</kbd>+ホイール（波形上）</td>
                         <td>ズームして横スクロール可能なときのみ</td>
-                    </tr>
-                    <tr>
-                        <td>高速横スクロール（3倍）</td>
-                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+ホイール（波形上）</td>
-                        <td>ズーム時のみ</td>
                     </tr>
                     <tr>
                         <td>Musical Grid 表示のオン/オフ</td>
@@ -305,18 +270,13 @@
                     </tr>
                     <tr>
                         <td>アクティブトラック音量 ±1 dB</td>
-                        <td><kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
+                        <td><kbd>+</kbd>/<kbd>−</kbd>（テンキー可。US 配列では <kbd>Shift</kbd>+<kbd>=</kbd> が +）</td>
                         <td>ポインタ下の Video Audio/Audio Track（0 dBをまたぐときは一度0 dBで止まる）</td>
                     </tr>
                     <tr>
                         <td>横スクロール</td>
                         <td><kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
-                        <td>ズーム時のみ。上記の音量操作が使えないとき（ポインタがレーン外など）</td>
-                    </tr>
-                    <tr>
-                        <td>高速横スクロール（3倍）</td>
-                        <td><kbd>Shift</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
-                        <td>ズーム時のみ</td>
+                        <td>ズーム時のみ（ポインタがレーン外のとき）</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">Musical Grid 入力欄（トランスポート下段）</th>

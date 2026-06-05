@@ -1210,19 +1210,11 @@
                   : Math.max(1, audioWaveformTrack.clientWidth | 0);
         const hCss = Math.max(1, audioWaveformTrack.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const lite =
-            typeof isWaveformLiteDrawRestricted === 'function' &&
-            isWaveformLiteDrawRestricted();
         let backingW =
             typeof getWaveformCanvasBackingWidthCss === 'function'
-                ? getWaveformCanvasBackingWidthCss(layoutW, dpr, lite)
+                ? getWaveformCanvasBackingWidthCss(layoutW, dpr)
                 : layoutW;
         let barCount = Math.min(4096, Math.max(64, layoutW));
-        if (lite) {
-            if (typeof getWaveformLiteOverviewBarCount === 'function') {
-                barCount = getWaveformLiteOverviewBarCount();
-            }
-        }
         audioWaveformCanvas.width = Math.max(1, Math.round(backingW * dpr));
         audioWaveformCanvas.height = Math.max(1, Math.round(hCss * dpr));
         audioWaveformCanvas.style.width = layoutW + 'px';
@@ -1231,8 +1223,6 @@
         if (ctx) {
             if (typeof applyWaveformCanvasContextTransform === 'function') {
                 applyWaveformCanvasContextTransform(ctx, layoutW, backingW, dpr);
-            } else if (lite && typeof applyWaveformLiteCanvasTransform === 'function') {
-                applyWaveformLiteCanvasTransform(ctx, layoutW, backingW, dpr);
             } else {
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             }
@@ -1244,18 +1234,12 @@
         waveformViewportPeaks = null;
     }
 
-    /** 現在のタイムライン幅に合わせて overview ピークを再構築（Lite Waveform 切替時など） */
+    /** 現在のタイムライン幅に合わせて overview ピークを再構築 */
     function rebuildMainWaveformOverviewPeaksIfNeeded() {
         if (!waveformAudioBuffer) return false;
         const sized = syncAudioWaveformCanvasSize();
         if (!sized) return false;
         const barCount = sized.barCount;
-        const lite =
-            typeof isWaveformLiteDrawRestricted === 'function' &&
-            isWaveformLiteDrawRestricted();
-        if (lite && waveformPeaks && waveformPeaks.length === barCount) {
-            return true;
-        }
         if (waveformPeakPyramid && typeof peaksOverviewFromPyramid === 'function') {
             const overview = peaksOverviewFromPyramid(waveformPeakPyramid, barCount);
             if (overview && overview.length) waveformPeaks = overview;
@@ -2259,7 +2243,26 @@
                 ratio = Math.min(1, ratio + masterFrameSec / master);
             else return;
             ev.preventDefault();
-            applyTransportAtRatio(ratio, { logInput: true, flash: true });
+            if (typeof noteKeyboardTransportScrubBegin === 'function') {
+                noteKeyboardTransportScrubBegin(ev);
+            }
+            applyTransportAtRatio(ratio, {
+                scrubbing: true,
+                markers: false,
+                logInput: !ev.repeat,
+                flash: false,
+                fromRepeat: ev.repeat,
+            });
+        });
+
+        lanes.addEventListener('keyup', (ev) => {
+            if (
+                typeof isWaveformLaneSeekShortcut === 'function' &&
+                isWaveformLaneSeekShortcut(ev) &&
+                typeof flushKeyboardTransportScrubIfActive === 'function'
+            ) {
+                flushKeyboardTransportScrubIfActive();
+            }
         });
     }
 

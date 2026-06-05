@@ -648,6 +648,7 @@
     }
 
     function applyTransportUiImmediate(sec, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const x =
             typeof clampTransportSec === 'function'
                 ? clampTransportSec(sec)
@@ -656,17 +657,28 @@
                   : 0;
         transportPlaybackSec = x;
         transportPlaybackLastTs = performance.now();
-        if (!(opt && opt.deferSeekBar) && typeof setTransportSec === 'function') {
+        if (!o.deferSeekBar && typeof setTransportSec === 'function') {
             setTransportSec(x);
         }
         if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
             currentTimeEl.textContent = formatTimecodeForTransport(x);
         }
-        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+        if (
+            !o.keyboardScrub &&
+            typeof updateMusicalGridPlayheadDisplay === 'function'
+        ) {
             updateMusicalGridPlayheadDisplay(x);
         }
-        if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
-        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        if (!o.lightweight && !o.keyboardScrub && typeof updateTimecodeOverlay === 'function') {
+            updateTimecodeOverlay();
+        }
+        if (typeof updateAllWaveformPlayheads === 'function') {
+            if (o.keyboardScrub) {
+                updateAllWaveformPlayheads({ keyboardScrub: true });
+            } else {
+                updateAllWaveformPlayheads(o.lightweight ? { lightweight: true } : undefined);
+            }
+        }
     }
 
     function unstickVideoFromSpuriousEnd(targetSec) {
@@ -818,11 +830,27 @@
     }
 
     async function seekTransportToAndWait(sec, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const keyboardScrub = !!(
+            o.keyboardScrub ||
+            (typeof isKeyboardTransportScrubActive === 'function' &&
+                isKeyboardTransportScrubActive())
+        );
+        if (
+            keyboardScrub &&
+            typeof isKeyboardScrubLightweight === 'function' &&
+            isKeyboardScrubLightweight(o) &&
+            typeof applyKeyboardTransportScrubStep === 'function'
+        ) {
+            applyKeyboardTransportScrubStep(sec, o);
+            rejectExplicitSeekWaiters();
+            return true;
+        }
         const playingBeforeSeek = captureTransportWasActive();
         if (playingBeforeSeek) {
             transportExplicitSeekResumeIntent = true;
         }
-        if (opt && opt.resumeAfter === false && !transportExplicitSeekResumeIntent) {
+        if (o.resumeAfter === false && !transportExplicitSeekResumeIntent) {
             transportExplicitSeekResumeIntent = false;
         }
 

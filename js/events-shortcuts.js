@@ -187,13 +187,6 @@
         }
 
         if (
-            typeof handleWaveformLiteShortcutKeydown === 'function' &&
-            handleWaveformLiteShortcutKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
             matchUserShortcut(e, 'musicalGridToggle') &&
             typeof toggleMusicalGridVisible === 'function'
         ) {
@@ -208,21 +201,6 @@
         ) {
             e.preventDefault();
             toggleMusicalGridPhraseFillVisible();
-            return;
-        }
-
-        if (
-            matchUserShortcut(e, 'playheadCenterLockToggle') &&
-            typeof togglePlayheadCenterLock === 'function'
-        ) {
-            if (
-                typeof isWaveformTimelineInteractionReady === 'function' &&
-                !isWaveformTimelineInteractionReady()
-            ) {
-                return;
-            }
-            e.preventDefault();
-            togglePlayheadCenterLock();
             return;
         }
 
@@ -420,6 +398,9 @@
             matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
             matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
         ) {
+            const lanesEl =
+                typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+            if (lanesEl && document.activeElement === lanesEl) return;
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -427,6 +408,9 @@
                 return;
             }
             e.preventDefault();
+            if (typeof noteKeyboardTransportScrubBegin === 'function') {
+                noteKeyboardTransportScrubBegin(e);
+            }
             const wasPlaying =
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
@@ -449,10 +433,23 @@
             const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
             let t = (parseFloat(seekBar.value) || 0) + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
+            if (
+                e.repeat &&
+                typeof applyKeyboardTransportScrubStep === 'function'
+            ) {
+                applyKeyboardTransportScrubStep(t, {
+                    keyboardScrub: true,
+                    fromRepeat: true,
+                    resumeAfter: wasPlaying && !oneFrameStep,
+                });
+                return;
+            }
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(t, {
                         resumeAfter: wasPlaying && !oneFrameStep,
+                        keyboardScrub: true,
+                        fromRepeat: e.repeat,
                     });
                 } else {
                     applyTimeToVideo(t);
@@ -484,18 +481,37 @@
                 } else {
                     logArrowSeekDebounced(line);
                 }
-                const sym = dir > 0 ? '→' : '←';
-                let deltaTxt;
-                if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-                    deltaTxt = dir > 0 ? '+10s' : '−10s';
-                } else if (e.ctrlKey || e.metaKey) {
-                    deltaTxt = dir > 0 ? '+5s' : '−5s';
-                } else if (e.shiftKey) {
-                    deltaTxt = dir > 0 ? '+1s' : '−1s';
-                } else {
-                    deltaTxt = dir > 0 ? '+1f' : '−1f';
+                if (!e.repeat) {
+                    const sym = dir > 0 ? '→' : '←';
+                    let deltaTxt;
+                    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+                        deltaTxt = dir > 0 ? '+10s' : '−10s';
+                    } else if (e.ctrlKey || e.metaKey) {
+                        deltaTxt = dir > 0 ? '+5s' : '−5s';
+                    } else if (e.shiftKey) {
+                        deltaTxt = dir > 0 ? '+1s' : '−1s';
+                    } else {
+                        deltaTxt = dir > 0 ? '+1f' : '−1f';
+                    }
+                    flashSeekHint(sym, deltaTxt);
                 }
-                flashSeekHint(sym, deltaTxt);
             })();
+        }
+    });
+
+    function isTransportSeekArrowKeyup(e) {
+        return (
+            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
+        );
+    }
+
+    window.addEventListener('keyup', (e) => {
+        if (!isTransportSeekArrowKeyup(e)) return;
+        const lanesEl =
+            typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        if (lanesEl && document.activeElement === lanesEl) return;
+        if (typeof flushKeyboardTransportScrubIfActive === 'function') {
+            flushKeyboardTransportScrubIfActive();
         }
     });

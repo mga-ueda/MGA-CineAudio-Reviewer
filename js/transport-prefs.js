@@ -1,5 +1,5 @@
 /**
- * transport-prefs.js — トランスポート関連 prefs（ループ再生・プレイヘッド中心ロック等）の適用。
+ * transport-prefs.js — トランスポート関連 prefs（ループ再生・モニター床等）の適用。
  */
     function getLoopPlaybackEnabled() {
         return !!(loopPlaybackCheckbox && loopPlaybackCheckbox.checked);
@@ -25,12 +25,6 @@
     function applyTransportPrefsFromStorage(prefs) {
         const p = prefs && typeof prefs === 'object' ? prefs : {};
         applySavedLoopPlayback(p.loopPlayback);
-        if (typeof applySavedPlayheadCenterLock === 'function') {
-            applySavedPlayheadCenterLock(!!p.playheadCenterLock);
-        }
-        if (typeof applySavedWaveformLiteMode === 'function') {
-            applySavedWaveformLiteMode(!!p.waveformLiteMode);
-        }
         if (
             p.monitorPrefs &&
             typeof applyMonitorUiPersistSnapshot === 'function'

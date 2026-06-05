@@ -1321,8 +1321,11 @@
     }
 
     function handleActiveMixLaneVolumeKeydown(e) {
-        const isUp = matchUserShortcut(e, 'mixLaneVolumeUp', { allowRepeat: true });
-        const isDown = matchUserShortcut(e, 'mixLaneVolumeDown', { allowRepeat: true });
+        const isUp =
+            typeof matchMixLaneVolumeUp === 'function' && matchMixLaneVolumeUp(e, { allowRepeat: true });
+        const isDown =
+            typeof matchMixLaneVolumeDown === 'function' &&
+            matchMixLaneVolumeDown(e, { allowRepeat: true });
         if (!isUp && !isDown) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;

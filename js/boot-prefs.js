@@ -8,12 +8,6 @@
             } else {
                 const p = readPrefs();
                 applySavedLoopPlayback(p.loopPlayback);
-                if (typeof applySavedPlayheadCenterLock === 'function') {
-                    applySavedPlayheadCenterLock(!!p.playheadCenterLock);
-                }
-                if (typeof applySavedWaveformLiteMode === 'function') {
-                    applySavedWaveformLiteMode(!!p.waveformLiteMode);
-                }
             }
         } catch (_) {}
     }

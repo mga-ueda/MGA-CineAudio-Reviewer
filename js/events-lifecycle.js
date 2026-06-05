@@ -29,6 +29,9 @@
         if (typeof setAltKeySnapSuppressed === 'function') {
             setAltKeySnapSuppressed(false);
         }
+        if (typeof flushKeyboardTransportScrubIfActive === 'function') {
+            flushKeyboardTransportScrubIfActive();
+        }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -36,9 +39,13 @@
             return;
         }
 
-        if (!matchUserShortcut(e, 'releaseExtraTrackUnityHold', { allowRepeat: true })) return;
-        if (typeof window.clearExtraTrackVolumeUnityHold === 'function') {
-            window.clearExtraTrackVolumeUnityHold();
+        if (
+            typeof matchMixLaneVolumeKey === 'function' &&
+            matchMixLaneVolumeKey(e, { allowRepeat: true })
+        ) {
+            if (typeof window.clearExtraTrackVolumeUnityHold === 'function') {
+                window.clearExtraTrackVolumeUnityHold();
+            }
         }
     });
 
