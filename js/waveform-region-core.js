@@ -319,6 +319,97 @@
             .map((m) => m.segmentIndex);
     }
 
+    const REGION_GROUP_EDGE_TOP = 'audio-waveform-lane__playback-region--group-edge-top';
+    const REGION_GROUP_EDGE_RIGHT = 'audio-waveform-lane__playback-region--group-edge-right';
+    const REGION_GROUP_EDGE_BOTTOM = 'audio-waveform-lane__playback-region--group-edge-bottom';
+    const REGION_GROUP_EDGE_LEFT = 'audio-waveform-lane__playback-region--group-edge-left';
+    const REGION_GROUP_EDGE_CLASSES = [
+        REGION_GROUP_EDGE_TOP,
+        REGION_GROUP_EDGE_RIGHT,
+        REGION_GROUP_EDGE_BOTTOM,
+        REGION_GROUP_EDGE_LEFT,
+    ];
+    const REGION_GROUP_OUTER_EDGE_EPS_SEC = 0.002;
+
+    function clearRegionGroupEdgeClasses(el) {
+        if (!el) return;
+        for (let i = 0; i < REGION_GROUP_EDGE_CLASSES.length; i++) {
+            el.classList.remove(REGION_GROUP_EDGE_CLASSES[i]);
+        }
+    }
+
+    function applyRegionGroupEdgeClasses(el, edges) {
+        if (!el || !edges) return;
+        el.classList.toggle(REGION_GROUP_EDGE_TOP, !!edges.top);
+        el.classList.toggle(REGION_GROUP_EDGE_RIGHT, !!edges.right);
+        el.classList.toggle(REGION_GROUP_EDGE_BOTTOM, !!edges.bottom);
+        el.classList.toggle(REGION_GROUP_EDGE_LEFT, !!edges.left);
+    }
+
+    /** 同一グループ内で隣接しない内側の辺を除き、外周 □ のみ色付けする */
+    function computeRegionGroupOuterEdges(members) {
+        const result = new Map();
+        if (!members || !members.length) return result;
+        const bySlot = new Map();
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            if (!bySlot.has(m.slot)) bySlot.set(m.slot, []);
+            bySlot.get(m.slot).push(m);
+        }
+        bySlot.forEach((slotMembers, slot) => {
+            const track = { type: 'extra', slot };
+            const intervals = [];
+            for (let i = 0; i < slotMembers.length; i++) {
+                const m = slotMembers[i];
+                const bounds = getSegmentRegionOverlayTimelineInterval(track, m.segmentIndex);
+                intervals.push({
+                    slot: m.slot,
+                    segmentIndex: m.segmentIndex,
+                    start: bounds.start,
+                    end: bounds.end,
+                });
+            }
+            for (let i = 0; i < intervals.length; i++) {
+                const item = intervals[i];
+                let leftOuter = true;
+                let rightOuter = true;
+                for (let j = 0; j < intervals.length; j++) {
+                    if (j === i) continue;
+                    const other = intervals[j];
+                    if (
+                        Math.abs(other.end - item.start) <= REGION_GROUP_OUTER_EDGE_EPS_SEC
+                    ) {
+                        leftOuter = false;
+                    }
+                    if (
+                        Math.abs(other.start - item.end) <= REGION_GROUP_OUTER_EDGE_EPS_SEC
+                    ) {
+                        rightOuter = false;
+                    }
+                }
+                result.set(regionGroupMemberKey(item.slot, item.segmentIndex), {
+                    top: true,
+                    bottom: true,
+                    left: leftOuter,
+                    right: rightOuter,
+                });
+            }
+        });
+        return result;
+    }
+
+    function getPlaybackRegionOverlayEl(slot, segmentIndex) {
+        const lane = document.getElementById('extraAudioLane' + slot);
+        if (!lane) return null;
+        const container = lane.querySelector('.audio-waveform-lane__playback-regions');
+        if (!container) return null;
+        return container.querySelector(
+            '.audio-waveform-lane__playback-region[data-segment-index="' +
+                segmentIndex +
+                '"]',
+        );
+    }
+
     /** グループ平行移動: いずれかが TC0 手前に出ないよう delta を共有クランプ */
     function clampRegionGroupMoveDelta(members, deltaRaw, startRegionInByKey) {
         if (!Number.isFinite(deltaRaw)) return 0;
@@ -358,11 +449,58 @@
                 const slot = parseInt(m[1], 10);
                 const segmentIndex = Number(el.dataset.segmentIndex);
                 if (!Number.isFinite(segmentIndex)) return;
+                const selected = isRegionEntrySelected(slot, segmentIndex);
                 el.classList.toggle(
                     'audio-waveform-lane__playback-region--selected',
-                    isRegionEntrySelected(slot, segmentIndex),
+                    selected,
                 );
+                if (!selected) {
+                    if (
+                        !el.classList.contains(
+                            'audio-waveform-lane__playback-region--group-flash',
+                        ) &&
+                        !el.classList.contains(
+                            'audio-waveform-lane__playback-region--group-ungroup-flash',
+                        )
+                    ) {
+                        clearRegionGroupEdgeClasses(el);
+                    }
+                }
             });
+
+        const selectedByGroup = new Map();
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            const track = { type: 'extra', slot: e.slot };
+            const gid = getSegmentRegionGroupId(track, e.segmentIndex);
+            if (!gid) continue;
+            if (!selectedByGroup.has(gid)) selectedByGroup.set(gid, []);
+            selectedByGroup.get(gid).push(e);
+        }
+        selectedByGroup.forEach((members) => {
+            const edgeMap = computeRegionGroupOuterEdges(members);
+            for (let i = 0; i < members.length; i++) {
+                const m = members[i];
+                const el = getPlaybackRegionOverlayEl(m.slot, m.segmentIndex);
+                if (!el) continue;
+                applyRegionGroupEdgeClasses(
+                    el,
+                    edgeMap.get(regionGroupMemberKey(m.slot, m.segmentIndex)),
+                );
+            }
+        });
+
+        if (
+            typeof updatePlaybackRegionHoverFromPointer === 'function' &&
+            Number.isFinite(lastRegionHoverClientX) &&
+            Number.isFinite(lastRegionHoverClientY)
+        ) {
+            updatePlaybackRegionHoverFromPointer(
+                lastRegionHoverClientX,
+                lastRegionHoverClientY,
+                false,
+            );
+        }
     }
 
     function clearRegionSelection() {
@@ -434,12 +572,6 @@
 
     function toggleRegionGroupFromSelection() {
         if (!regionSelectionEntries.length) {
-            writeLog(
-                'Playback region: select regions (Ctrl+click), then G to group or ungroup',
-            );
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Select region(s)', 'notice');
-            }
             return false;
         }
         if (selectionHasGroupedRegions()) {
@@ -450,10 +582,6 @@
 
     function groupSelectedPlaybackRegions() {
         if (regionSelectionEntries.length < 2) {
-            writeLog('Playback region: select 2+ regions (Ctrl+click), then press G');
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Select 2+ regions', 'notice');
-            }
             return false;
         }
         if (!regionUndoPaused) requestRegionUndoCapture();
@@ -470,12 +598,14 @@
             if (raw) raw.regionGroupId = gid;
             touchedSlots.add(e.slot);
         }
+        const groupedMembers = Array.from(unique.values());
         for (const slot of touchedSlots) {
             if (typeof updateTrackRegionOverlays === 'function') {
                 updateTrackRegionOverlays({ type: 'extra', slot });
             }
         }
-        const groupedMembers = Array.from(unique.values());
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        clearRegionSelection();
         if (typeof flashRegionGroupMembers === 'function') {
             flashRegionGroupMembers(groupedMembers);
         }
@@ -486,8 +616,6 @@
                 touchedSlots.size +
                 ' track(s)',
         );
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
-        clearRegionSelection();
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Grouped', 'notice');
         }
@@ -503,13 +631,26 @@
             return false;
         }
         const gids = new Set();
+        const ungroupFlashMembers = new Map();
+        const seenUngroupFlashGids = new Set();
         for (let i = 0; i < regionSelectionEntries.length; i++) {
             const e = regionSelectionEntries[i];
-            const gid = getSegmentRegionGroupId(
-                { type: 'extra', slot: e.slot },
-                e.segmentIndex,
-            );
-            if (gid) gids.add(gid);
+            const track = { type: 'extra', slot: e.slot };
+            const gid = getSegmentRegionGroupId(track, e.segmentIndex);
+            if (gid) {
+                gids.add(gid);
+                if (!seenUngroupFlashGids.has(gid)) {
+                    seenUngroupFlashGids.add(gid);
+                    const members = collectRegionGroupMembers(track, e.segmentIndex);
+                    for (let j = 0; j < members.length; j++) {
+                        const m = members[j];
+                        ungroupFlashMembers.set(
+                            regionGroupMemberKey(m.slot, m.segmentIndex),
+                            m,
+                        );
+                    }
+                }
+            }
         }
         let ungrouped = false;
         if (!regionUndoPaused) requestRegionUndoCapture();
@@ -544,6 +685,11 @@
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
         clearRegionSelection();
+        if (typeof flashRegionGroupMembers === 'function') {
+            flashRegionGroupMembers(Array.from(ungroupFlashMembers.values()), {
+                kind: 'ungroup',
+            });
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Ungrouped', 'notice');
         }
@@ -2132,6 +2278,35 @@
             return regionIn < anchor - 0.00001 ? anchor : regionIn;
         }
         return anchor;
+    }
+
+    /**
+     * リージョン右端（Out ハンドル）。
+     * カスタム In があるとき Out は segment 先頭 + 長さのまま固定され、
+     * regionIn + (anchor - regionIn + segDur) で In オフセットを反映する。
+     */
+    function getSegmentRegionTimelineOut(track, segmentIndex) {
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const timelineEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const segDur = Math.max(0, timelineEnd - anchor);
+        return regionIn + (anchor - regionIn + segDur);
+    }
+
+    /** オーバーレイ描画・外周 □ 判定と同じ [In, Out] 区間 */
+    function getSegmentRegionOverlayTimelineInterval(track, segmentIndex) {
+        const trackStart = getTrackTimelineStartSec(track);
+        const start = Math.max(trackStart, getSegmentRegionTimelineIn(track, segmentIndex));
+        const end = getSegmentRegionTimelineOut(track, segmentIndex);
+        return { start, end };
+    }
+
+    /** マーカー等: trackStart でクランプしない In〜Out */
+    function getSegmentRegionTimelineInterval(track, segmentIndex) {
+        return {
+            start: getSegmentRegionTimelineIn(track, segmentIndex),
+            end: getSegmentRegionTimelineOut(track, segmentIndex),
+        };
     }
 
     /** アンカーと regionTimelineInSec の差（ドラッグ移動で維持する In オフセット） */

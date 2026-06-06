@@ -2088,6 +2088,10 @@
             min-height: var(--wave-lane-h);
             max-height: var(--wave-lane-h);
         }
+        .audio-waveform-lane--extra {
+            /* 波形とリージョン overlay を同量だけ上げ、下端 border の見切れを防ぐ */
+            --playback-lane-bottom-inset: 1px;
+        }
         .audio-waveform-lane--has-regions {
             z-index: 5;
         }
@@ -2100,9 +2104,18 @@
             cursor: pointer;
             background: transparent;
         }
-        .audio-waveform-lane--video .audio-waveform-lane__track,
-        .audio-waveform-lane--extra .audio-waveform-lane__track {
+        .audio-waveform-lane--video .audio-waveform-lane__track {
             position: relative;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .audio-waveform-lane--extra .audio-waveform-lane__track {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            bottom: var(--playback-lane-bottom-inset);
+            height: auto;
             z-index: 1;
             pointer-events: none;
         }
@@ -2260,7 +2273,10 @@
         }
         .audio-waveform-lane__playback-regions {
             position: absolute;
-            inset: 0;
+            top: 0;
+            right: 0;
+            bottom: var(--playback-lane-bottom-inset, 0px);
+            left: 0;
             z-index: 7;
             pointer-events: none;
             user-select: none;
@@ -2308,76 +2324,242 @@
             .audio-waveform-lane__playback-region__handle--dense-boundary-secondary::after {
             display: none;
         }
-        .audio-waveform-lane__playback-region--hover {
+        .audio-waveform-lane__playback-region--hover:not(
+                .audio-waveform-lane__playback-region--grouped
+            ) {
             z-index: 9;
+            border-top: 0.5px solid rgba(150, 156, 168, 0.88);
+            border-bottom: 0.5px solid rgba(150, 156, 168, 0.88);
             border-left-width: 0.5px;
             border-right-width: 0.5px;
             border-left-color: rgba(150, 156, 168, 0.88) !important;
             border-right-color: rgba(150, 156, 168, 0.88) !important;
-            box-shadow: inset 0 0 0 0.5px rgba(150, 156, 168, 0.88);
         }
-        .audio-waveform-lane__playback-region--hover
+        .audio-waveform-lane__playback-region--hover:not(
+                .audio-waveform-lane__playback-region--grouped
+            )
             .audio-waveform-lane__playback-region__handle::after {
             background: rgba(150, 156, 168, 0.92);
         }
-        /* グループ化: 通常時は通常リージョンと同じ見た目、ホバー時のみ黄色 */
+        /* グループ化: 通常時は通常リージョンと同じ見た目、ホバー時のみ外周 □ を黄色 */
         .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover {
             z-index: 9;
-            border-left-width: 0.5px;
-            border-right-width: 0.5px;
-            border-left-color: rgba(255, 214, 64, 0.95) !important;
-            border-right-color: rgba(255, 214, 64, 0.95) !important;
-            box-shadow: inset 0 0 0 0.5px rgba(255, 214, 64, 0.9);
         }
-        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover
-            .audio-waveform-lane__playback-region__handle::after {
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-top {
+            border-top: 0.5px solid rgba(255, 214, 64, 0.95);
+        }
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-bottom {
+            border-bottom: 0.5px solid rgba(255, 214, 64, 0.95);
+        }
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-left {
+            border-left-width: 0.5px;
+            border-left-color: rgba(255, 214, 64, 0.95) !important;
+        }
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-right {
+            border-right-width: 0.5px;
+            border-right-color: rgba(255, 214, 64, 0.95) !important;
+        }
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-left
+            .audio-waveform-lane__playback-region__handle--in::after,
+        .audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover.audio-waveform-lane__playback-region--group-edge-right
+            .audio-waveform-lane__playback-region__handle--out::after {
             background: rgba(255, 214, 64, 0.92);
         }
-        /* グループ化直後の一回発光 */
-        .audio-waveform-lane__playback-region--group-flash {
+        /* グループ化/解除直後の発光（外周 □ のみ・専用オーバーレイ） */
+        .audio-waveform-lane__playback-region--group-flash,
+        .audio-waveform-lane__playback-region--group-ungroup-flash {
             z-index: 11;
-            animation: regionGroupGlowPulse 0.7s ease-in-out 1;
         }
-        @keyframes regionGroupGlowPulse {
+        .audio-waveform-lane__playback-region__flash-outline {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 12;
+            box-sizing: border-box;
+            background: transparent;
+        }
+        .audio-waveform-lane__playback-region__flash-outline--yellow.audio-waveform-lane__playback-region--group-edge-top {
+            border-top: 0.5px solid rgba(255, 214, 64, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--yellow.audio-waveform-lane__playback-region--group-edge-bottom {
+            border-bottom: 0.5px solid rgba(255, 214, 64, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--yellow.audio-waveform-lane__playback-region--group-edge-left {
+            border-left: 0.5px solid rgba(255, 214, 64, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--yellow.audio-waveform-lane__playback-region--group-edge-right {
+            border-right: 0.5px solid rgba(255, 214, 64, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--cyan.audio-waveform-lane__playback-region--group-edge-top {
+            border-top: 1px solid rgba(0, 232, 255, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--cyan.audio-waveform-lane__playback-region--group-edge-bottom {
+            border-bottom: 1px solid rgba(0, 232, 255, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--cyan.audio-waveform-lane__playback-region--group-edge-left {
+            border-left: 1px solid rgba(0, 232, 255, 0.85);
+        }
+        .audio-waveform-lane__playback-region__flash-outline--cyan.audio-waveform-lane__playback-region--group-edge-right {
+            border-right: 1px solid rgba(0, 232, 255, 0.85);
+        }
+        @keyframes regionGroupGlowPulseTop {
             0%,
             100% {
-                border-left-color: rgba(255, 214, 64, 0.7) !important;
-                border-right-color: rgba(255, 214, 64, 0.7) !important;
-                box-shadow:
-                    inset 0 0 0 0.5px rgba(255, 214, 64, 0.45),
-                    0 0 4px rgba(255, 214, 64, 0.25);
+                border-top-width: 0.5px;
+                border-top-color: rgba(255, 214, 64, 0.85);
             }
             50% {
-                border-left-color: rgba(255, 240, 140, 1) !important;
-                border-right-color: rgba(255, 240, 140, 1) !important;
-                box-shadow:
-                    inset 0 0 0 1px rgba(255, 230, 100, 0.95),
-                    0 0 14px rgba(255, 214, 64, 0.9),
-                    0 0 26px rgba(255, 190, 40, 0.55);
+                border-top-width: 1.5px;
+                border-top-color: rgba(255, 252, 210, 1);
             }
         }
-        .audio-waveform-lane__playback-region--group-flash
-            .audio-waveform-lane__playback-region__handle::after {
-            background: rgba(255, 230, 100, 0.95);
+        @keyframes regionGroupGlowPulseBottom {
+            0%,
+            100% {
+                border-bottom-width: 0.5px;
+                border-bottom-color: rgba(255, 214, 64, 0.85);
+            }
+            50% {
+                border-bottom-width: 1.5px;
+                border-bottom-color: rgba(255, 252, 210, 1);
+            }
+        }
+        @keyframes regionGroupGlowPulseLeft {
+            0%,
+            100% {
+                border-left-width: 0.5px;
+                border-left-color: rgba(255, 214, 64, 0.85) !important;
+            }
+            50% {
+                border-left-width: 1.5px;
+                border-left-color: rgba(255, 252, 210, 1) !important;
+            }
+        }
+        @keyframes regionGroupGlowPulseRight {
+            0%,
+            100% {
+                border-right-width: 0.5px;
+                border-right-color: rgba(255, 214, 64, 0.85) !important;
+            }
+            50% {
+                border-right-width: 1.5px;
+                border-right-color: rgba(255, 252, 210, 1) !important;
+            }
+        }
+        @keyframes regionGroupGlowPulseHalo {
+            0%,
+            100% {
+                filter: drop-shadow(0 0 2px rgba(255, 214, 64, 0.35))
+                    drop-shadow(0 0 5px rgba(255, 214, 64, 0.2));
+            }
+            50% {
+                filter: drop-shadow(0 0 5px rgba(255, 240, 140, 1))
+                    drop-shadow(0 0 14px rgba(255, 214, 64, 0.92))
+                    drop-shadow(0 0 26px rgba(255, 190, 40, 0.58));
+            }
+        }
+        @keyframes regionGroupUnglowPulseTop {
+            0%,
+            100% {
+                border-top-width: 1px;
+                border-top-color: rgba(0, 232, 255, 0.85);
+            }
+            50% {
+                border-top-width: 2px;
+                border-top-color: rgba(200, 255, 255, 1);
+            }
+        }
+        @keyframes regionGroupUnglowPulseBottom {
+            0%,
+            100% {
+                border-bottom-width: 1px;
+                border-bottom-color: rgba(0, 232, 255, 0.85);
+            }
+            50% {
+                border-bottom-width: 2px;
+                border-bottom-color: rgba(200, 255, 255, 1);
+            }
+        }
+        @keyframes regionGroupUnglowPulseLeft {
+            0%,
+            100% {
+                border-left-width: 1px;
+                border-left-color: rgba(0, 232, 255, 0.85) !important;
+            }
+            50% {
+                border-left-width: 2px;
+                border-left-color: rgba(200, 255, 255, 1) !important;
+            }
+        }
+        @keyframes regionGroupUnglowPulseRight {
+            0%,
+            100% {
+                border-right-width: 1px;
+                border-right-color: rgba(0, 232, 255, 0.85) !important;
+            }
+            50% {
+                border-right-width: 2px;
+                border-right-color: rgba(200, 255, 255, 1) !important;
+            }
+        }
+        @keyframes regionGroupUnglowPulseHalo {
+            0%,
+            100% {
+                filter: drop-shadow(0 0 2px rgba(0, 232, 255, 0.35))
+                    drop-shadow(0 0 5px rgba(0, 232, 255, 0.2));
+            }
+            50% {
+                filter: drop-shadow(0 0 5px rgba(160, 255, 255, 1))
+                    drop-shadow(0 0 14px rgba(0, 232, 255, 0.92))
+                    drop-shadow(0 0 26px rgba(0, 200, 255, 0.58));
+            }
         }
         /* 複数選択: シークバー同色・ホバー（黄）より優先・枠をやや太く */
-        .audio-waveform-lane__playback-region--selected,
-        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--hover,
-        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped,
-        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover {
+        .audio-waveform-lane__playback-region--selected:not(
+                .audio-waveform-lane__playback-region--grouped
+            ),
+        .audio-waveform-lane__playback-region--selected:not(
+                .audio-waveform-lane__playback-region--grouped
+            ).audio-waveform-lane__playback-region--hover {
             z-index: 10;
+            border-top: 1px solid var(--waveform-seek-cyan-border);
+            border-bottom: 1px solid var(--waveform-seek-cyan-border);
             border-left-width: 1px;
             border-right-width: 1px;
             border-left-color: var(--waveform-seek-cyan-border) !important;
             border-right-color: var(--waveform-seek-cyan-border) !important;
-            box-shadow: inset 0 0 0 1px var(--waveform-seek-cyan-inset);
         }
-        .audio-waveform-lane__playback-region--selected
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped {
+            z-index: 10;
+        }
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-top {
+            border-top: 1px solid var(--waveform-seek-cyan-border);
+        }
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-bottom {
+            border-bottom: 1px solid var(--waveform-seek-cyan-border);
+        }
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-left {
+            border-left-width: 1px;
+            border-left-color: var(--waveform-seek-cyan-border) !important;
+        }
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-right {
+            border-right-width: 1px;
+            border-right-color: var(--waveform-seek-cyan-border) !important;
+        }
+        .audio-waveform-lane__playback-region--selected:not(
+                .audio-waveform-lane__playback-region--grouped
+            )
             .audio-waveform-lane__playback-region__handle::after,
-        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--hover
-            .audio-waveform-lane__playback-region__handle::after,
-        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--hover
+        .audio-waveform-lane__playback-region--selected:not(
+                .audio-waveform-lane__playback-region--grouped
+            ).audio-waveform-lane__playback-region--hover
             .audio-waveform-lane__playback-region__handle::after {
+            background: var(--waveform-seek-cyan-border);
+        }
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-left
+            .audio-waveform-lane__playback-region__handle--in::after,
+        .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--grouped.audio-waveform-lane__playback-region--group-edge-right
+            .audio-waveform-lane__playback-region__handle--out::after {
             background: var(--waveform-seek-cyan-border);
         }
         .audio-waveform-lane__playback-region__cursor-line {

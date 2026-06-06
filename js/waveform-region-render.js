@@ -1701,9 +1701,11 @@
         return mapHitUi ? mapHitUi.segmentIndex : -1;
     }
 
-    function deleteRegionSegmentAt(track, segmentIndex) {
-        if (typeof clearRegionSelection === 'function') clearRegionSelection();
-        if (!regionUndoPaused) requestRegionUndoCapture();
+    function deleteRegionSegmentAt(track, segmentIndex, opt) {
+        if (!(opt && opt.skipClearSelection) && typeof clearRegionSelection === 'function') {
+            clearRegionSelection();
+        }
+        if (!(opt && opt.skipUndoCapture) && !regionUndoPaused) requestRegionUndoCapture();
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return false;
         segments.splice(segmentIndex, 1);
@@ -1780,32 +1782,11 @@
     }
 
     function copyRegionSegmentUnderCursor() {
-        const slot = resolveTargetExtraSlot();
-        if (slot < 0) {
-            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
-                writeLog('Playback region: hover an Ex lane, then Ctrl+C to copy');
-                if (typeof flashSeekHint === 'function') {
-                    flashSeekHint('Region', 'Hover Ex lane', 'notice');
-                }
-            }
-            return false;
-        }
+        if (!regionSelectionEntries.length) return false;
+        if (regionSelectionEntries.length > 1) return false;
+        const { slot, segmentIndex } = regionSelectionEntries[0];
         const track = { type: 'extra', slot };
         if (!isTrackRegionActive(track)) return false;
-        const { clientX, clientY } = waveformPointerClientXY();
-        let segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
-        if (segmentIndex < 0) {
-            const t = clampRegionEditTransportSec(track, transportSecFromWaveformPointer());
-            const playHit = mapTransportToSegmentForPlayback(track, t);
-            if (playHit) segmentIndex = playHit.segmentIndex;
-        }
-        if (segmentIndex < 0) {
-            writeLog('Playback region: copy — hover a region on Ex ' + (slot + 1));
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover a region', 'notice');
-            }
-            return false;
-        }
         const segment = snapshotSegmentForClipboard(track, segmentIndex);
         if (!segment) return false;
         regionSegmentClipboard = { slot, segmentIndex, segment };
@@ -1964,15 +1945,43 @@
     }
 
     function deleteRegionSegmentUnderCursor() {
-        const slot = resolveTargetExtraSlot();
-        if (slot < 0) return false;
-        const track = { type: 'extra', slot };
-        if (!isTrackRegionActive(track)) return false;
-        const { clientX, clientY } = waveformPointerClientXY();
-        const segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
-        if (segmentIndex < 0) return false;
-        noteRegionShrinkPersistIntent(track.slot);
-        return deleteRegionSegmentAt(track, segmentIndex);
+        if (!regionSelectionEntries.length) return false;
+        const entries = regionSelectionEntries.map((e) => ({
+            slot: e.slot,
+            segmentIndex: e.segmentIndex,
+        }));
+        if (typeof clearRegionSelection === 'function') clearRegionSelection();
+        if (!regionUndoPaused) requestRegionUndoCapture();
+
+        const bySlot = {};
+        for (let i = 0; i < entries.length; i++) {
+            const e = entries[i];
+            if (!bySlot[e.slot]) bySlot[e.slot] = [];
+            if (bySlot[e.slot].indexOf(e.segmentIndex) < 0) {
+                bySlot[e.slot].push(e.segmentIndex);
+            }
+        }
+
+        let anyDeleted = false;
+        const slotKeys = Object.keys(bySlot);
+        for (let s = 0; s < slotKeys.length; s++) {
+            const slot = parseInt(slotKeys[s], 10);
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            noteRegionShrinkPersistIntent(slot);
+            const indices = bySlot[slot].sort((a, b) => b - a);
+            for (let i = 0; i < indices.length; i++) {
+                if (
+                    deleteRegionSegmentAt(track, indices[i], {
+                        skipClearSelection: true,
+                        skipUndoCapture: true,
+                    })
+                ) {
+                    anyDeleted = true;
+                }
+            }
+        }
+        return anyDeleted;
     }
 
     function getWaveformLanesEl() {
@@ -2197,39 +2206,156 @@
         }
     }
 
-    function getPlaybackRegionOverlayEl(slot, segmentIndex) {
-        const container = getPlaybackRegionsContainerEl({ type: 'extra', slot });
-        if (!container) return null;
-        return container.querySelector(
-            '.audio-waveform-lane__playback-region[data-segment-index="' +
-                segmentIndex +
-                '"]',
-        );
+    function regionGroupMembersForOverlayEl(regionEl) {
+        if (!regionEl) return [];
+        const lane = regionEl.closest('.audio-waveform-lane--extra');
+        const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+        if (!m) return [];
+        const slot = parseInt(m[1], 10);
+        const segmentIndex = Number(regionEl.dataset.segmentIndex);
+        if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return [];
+        const track = { type: 'extra', slot };
+        if (!getSegmentRegionGroupId(track, segmentIndex)) {
+            return [{ slot, segmentIndex }];
+        }
+        return collectRegionGroupMembers(track, segmentIndex);
+    }
+
+    function slotAndSegmentIndexFromRegionOverlayEl(regionEl) {
+        const lane = regionEl && regionEl.closest('.audio-waveform-lane--extra');
+        const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+        if (!m) return null;
+        const segmentIndex = Number(regionEl.dataset.segmentIndex);
+        if (!Number.isFinite(segmentIndex) || segmentIndex < 0) return null;
+        return { slot: parseInt(m[1], 10), segmentIndex };
     }
 
     const REGION_GROUP_FLASH_CLASS =
         'audio-waveform-lane__playback-region--group-flash';
+    const REGION_GROUP_UNGROUP_FLASH_CLASS =
+        'audio-waveform-lane__playback-region--group-ungroup-flash';
+    const REGION_FLASH_OUTLINE_CLASS =
+        'audio-waveform-lane__playback-region__flash-outline';
+    const REGION_FLASH_OUTLINE_YELLOW =
+        'audio-waveform-lane__playback-region__flash-outline--yellow';
+    const REGION_FLASH_OUTLINE_CYAN =
+        'audio-waveform-lane__playback-region__flash-outline--cyan';
+    const REGION_GROUP_FLASH_MS = 700;
 
-    /** グループ化完了時: メンバー全リージョンの枠を一度発光 */
-    function flashRegionGroupMembers(members) {
+    function removeRegionFlashOutlines(regionEl) {
+        if (!regionEl) return;
+        const existing = regionEl.querySelectorAll('.' + REGION_FLASH_OUTLINE_CLASS);
+        for (let i = 0; i < existing.length; i++) {
+            existing[i].remove();
+        }
+    }
+
+    function createRegionFlashOutline(regionEl, edges, kind) {
+        removeRegionFlashOutlines(regionEl);
+        const outline = document.createElement('div');
+        outline.className =
+            REGION_FLASH_OUTLINE_CLASS +
+            ' ' +
+            (kind === 'ungroup' ? REGION_FLASH_OUTLINE_CYAN : REGION_FLASH_OUTLINE_YELLOW);
+        outline.setAttribute('aria-hidden', 'true');
+        applyRegionGroupEdgeClasses(outline, edges);
+        const buildAnim =
+            kind === 'ungroup'
+                ? buildRegionGroupUnglowAnimation
+                : buildRegionGroupFlashAnimation;
+        const anim = buildAnim(edges);
+        if (anim) {
+            outline.style.animation = anim;
+        }
+        regionEl.appendChild(outline);
+        return outline;
+    }
+
+    function buildRegionGroupGlowAnimation(edges, prefix) {
+        const parts = [];
+        if (edges && edges.top) {
+            parts.push(prefix + 'Top ' + REGION_GROUP_FLASH_MS + 'ms ease-in-out 1');
+        }
+        if (edges && edges.bottom) {
+            parts.push(prefix + 'Bottom ' + REGION_GROUP_FLASH_MS + 'ms ease-in-out 1');
+        }
+        if (edges && edges.left) {
+            parts.push(prefix + 'Left ' + REGION_GROUP_FLASH_MS + 'ms ease-in-out 1');
+        }
+        if (edges && edges.right) {
+            parts.push(prefix + 'Right ' + REGION_GROUP_FLASH_MS + 'ms ease-in-out 1');
+        }
+        parts.push(
+            (prefix === 'regionGroupUnglowPulse'
+                ? 'regionGroupUnglowPulseHalo'
+                : 'regionGroupGlowPulseHalo') +
+                ' ' +
+                REGION_GROUP_FLASH_MS +
+                'ms ease-in-out 1',
+        );
+        return parts.join(', ');
+    }
+
+    function buildRegionGroupFlashAnimation(edges) {
+        return buildRegionGroupGlowAnimation(edges, 'regionGroupGlowPulse');
+    }
+
+    function buildRegionGroupUnglowAnimation(edges) {
+        return buildRegionGroupGlowAnimation(edges, 'regionGroupUnglowPulse');
+    }
+
+    function applyGroupedRegionHoverEdgeClasses() {
+        if (!hoveredPlaybackRegionEl || !hoveredPlaybackRegionEls.length) return;
+        const members = regionGroupMembersForOverlayEl(hoveredPlaybackRegionEl);
+        const edgeMap = computeRegionGroupOuterEdges(members);
+        for (let i = 0; i < hoveredPlaybackRegionEls.length; i++) {
+            const rel = hoveredPlaybackRegionEls[i];
+            if (!rel.classList.contains('audio-waveform-lane__playback-region--grouped')) {
+                continue;
+            }
+            const ref = slotAndSegmentIndexFromRegionOverlayEl(rel);
+            if (!ref) continue;
+            applyRegionGroupEdgeClasses(
+                rel,
+                edgeMap.get(regionGroupMemberKey(ref.slot, ref.segmentIndex)),
+            );
+        }
+    }
+
+    /** グループ化/解除完了時: 外周 □ のみ発光（kind: 'group' 黄 / 'ungroup' 水色） */
+    function flashRegionGroupMembers(members, opt) {
         if (!members || !members.length) return;
+        const kind = opt && opt.kind === 'ungroup' ? 'ungroup' : 'group';
+        const flashClass =
+            kind === 'ungroup'
+                ? REGION_GROUP_UNGROUP_FLASH_CLASS
+                : REGION_GROUP_FLASH_CLASS;
+        const edgeMap = computeRegionGroupOuterEdges(members);
+        const flashed = [];
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
             const el = getPlaybackRegionOverlayEl(m.slot, m.segmentIndex);
             if (!el) continue;
-            el.classList.remove(REGION_GROUP_FLASH_CLASS);
-            const onEnd = (e) => {
-                if (e && e.animationName && e.animationName !== 'regionGroupGlowPulse') {
-                    return;
-                }
-                el.classList.remove(REGION_GROUP_FLASH_CLASS);
-                el.removeEventListener('animationend', onEnd);
-            };
-            el.addEventListener('animationend', onEnd);
-            requestAnimationFrame(() => {
-                el.classList.add(REGION_GROUP_FLASH_CLASS);
-            });
+            const edges = edgeMap.get(regionGroupMemberKey(m.slot, m.segmentIndex));
+            el.classList.remove(REGION_GROUP_FLASH_CLASS, REGION_GROUP_UNGROUP_FLASH_CLASS);
+            removeRegionFlashOutlines(el);
+            clearRegionGroupEdgeClasses(el);
+            el.classList.add(flashClass);
+            const outline = createRegionFlashOutline(el, edges, kind);
+            flashed.push({ el, outline });
         }
+        if (!flashed.length) return;
+        setTimeout(() => {
+            for (let i = 0; i < flashed.length; i++) {
+                const item = flashed[i];
+                item.outline.remove();
+                item.el.classList.remove(
+                    REGION_GROUP_FLASH_CLASS,
+                    REGION_GROUP_UNGROUP_FLASH_CLASS,
+                );
+            }
+            applyGroupedRegionHoverEdgeClasses();
+        }, REGION_GROUP_FLASH_MS);
     }
 
     function collectRegionGroupHoverElements(regionEl) {
@@ -2255,9 +2381,12 @@
 
     function clearHoveredPlaybackRegionHighlight() {
         for (let i = 0; i < hoveredPlaybackRegionEls.length; i++) {
-            hoveredPlaybackRegionEls[i].classList.remove(
-                'audio-waveform-lane__playback-region--hover',
-            );
+            const el = hoveredPlaybackRegionEls[i];
+            el.classList.remove('audio-waveform-lane__playback-region--hover');
+            // 選択中のグループは --group-edge-* が水色枠に必要（ホバー解除で消さない）
+            if (!el.classList.contains('audio-waveform-lane__playback-region--selected')) {
+                clearRegionGroupEdgeClasses(el);
+            }
         }
         hoveredPlaybackRegionEls.length = 0;
     }
@@ -2276,6 +2405,7 @@
                 'audio-waveform-lane__playback-region--hover',
             );
         }
+        applyGroupedRegionHoverEdgeClasses();
     }
 
     const REGION_HANDLE_HOVER_CURSOR_CLASS =

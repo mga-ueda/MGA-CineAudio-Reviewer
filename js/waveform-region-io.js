@@ -756,9 +756,10 @@
         if (!isTrackRegionActive(track)) return null;
         const state = getPlaybackRegionsState(track);
         if (!state || !state.segments[segmentIndex]) return null;
+        const bounds = getSegmentRegionTimelineInterval(track, segmentIndex);
         return {
-            startSec: getSegmentRegionTimelineIn(track, segmentIndex),
-            endSec: getSegmentTimelineEnd(track, segmentIndex),
+            startSec: bounds.start,
+            endSec: bounds.end,
         };
     };
     window.handlePlaybackRegionGainWheel = handlePlaybackRegionGainWheel;
