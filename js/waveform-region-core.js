@@ -777,6 +777,12 @@
 
     function playbackRegionSwapBlockReason() {
         if (
+            typeof isPlaybackRegionSwapAnimActive === 'function' &&
+            isPlaybackRegionSwapAnimActive()
+        ) {
+            return 'swap animation in progress';
+        }
+        if (
             typeof getMusicalGridPhraseFillVisible !== 'function' ||
             !getMusicalGridPhraseFillVisible()
         ) {
@@ -842,32 +848,62 @@
         );
         const affected = [];
         for (let i = 0; i < normalized.length; i++) affected.push(i);
-        const ok = !!setTrackSegments(track, normalized, {
-            silent: true,
-            skipUndo: true,
-            affectedSegmentIndices: affected,
+        const redrawOpt = {
+            invalidatePeakCache: true,
             segmentStructureChanged: true,
-        });
+            affectedSegmentIndices: affected,
+        };
+
+        function applyPlaybackRegionSwap(animOpt) {
+            return !!setTrackSegments(track, normalized, {
+                silent: true,
+                skipUndo: true,
+                affectedSegmentIndices: affected,
+                segmentStructureChanged: true,
+                deferRedraw: !!(animOpt && animOpt.deferRedraw),
+            });
+        }
+
+        function finalizePlaybackRegionSwap() {
+            if (typeof schedulePersistExtraTrackSlot === 'function') {
+                schedulePersistExtraTrackSlot(track.slot);
+            }
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+            if (typeof swapPhraseGroupsAtIndices === 'function') {
+                swapPhraseGroupsAtIndices(phraseLo, phraseHi, { skipUndo: true });
+            }
+            writeLog(
+                'Playback region: swapped regions ' + (lo + 1) + ' and ' + (hi + 1),
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Swapped', 'notice');
+            }
+            clearRegionSelection();
+        }
+
+        if (typeof playPlaybackRegionSwapAnimation === 'function') {
+            const animResult = playPlaybackRegionSwapAnimation({
+                track,
+                swapLo: lo,
+                swapHi: hi,
+                previewSegments: normalized,
+                redrawOpt,
+                applySwap: (animOpt) => applyPlaybackRegionSwap(animOpt),
+                finalizeSwap: finalizePlaybackRegionSwap,
+            });
+            if (animResult === 'started' || animResult === 'applied-recovered') {
+                return true;
+            }
+        }
+
+        const ok = applyPlaybackRegionSwap();
         if (!ok) {
             notifyCannotSwapPlaybackRegions('apply failed');
             return false;
         }
-        if (typeof schedulePersistExtraTrackSlot === 'function') {
-            schedulePersistExtraTrackSlot(track.slot);
-        }
-        if (typeof notifyMasterTransportDurationChanged === 'function') {
-            notifyMasterTransportDurationChanged();
-        }
-        if (typeof swapPhraseGroupsAtIndices === 'function') {
-            swapPhraseGroupsAtIndices(phraseLo, phraseHi, { skipUndo: true });
-        }
-        writeLog(
-            'Playback region: swapped regions ' + (lo + 1) + ' and ' + (hi + 1),
-        );
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Swapped', 'notice');
-        }
-        clearRegionSelection();
+        finalizePlaybackRegionSwap();
         return true;
     }
 
