@@ -862,6 +862,21 @@
         waveformPointerGestureId = null;
         waveformPointerGestureRegionHit = null;
         waveformPointerGestureDidMove = false;
+        const lanes = waveformScrubTargetEl();
+        if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--scrubbing');
+    }
+
+    function beginWaveformPointerScrubTransport() {
+        if (
+            typeof captureTransportWasActive === 'function' &&
+            captureTransportWasActive() &&
+            typeof pauseTransportBeforeSeek === 'function'
+        ) {
+            pauseTransportBeforeSeek();
+        }
+        const lanes = waveformScrubTargetEl();
+        if (lanes) lanes.classList.add('audio-waveform-composite__lanes--scrubbing');
+        if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
     }
 
     function noteWaveformLanesPointerDownForDoubleClick(clientX, clientY) {
@@ -1068,7 +1083,8 @@
                 : null;
 
         if (!waveformPointerGestureRegionHit) {
-            seekFromWaveformPointer(ev.clientX, { scrubbing: true });
+            beginWaveformPointerScrubTransport();
+            seekFromWaveformPointer(ev.clientX, { scrubbing: true, logInput: true, flash: true });
             if (typeof updateAllWaveformPlayheads === 'function') {
                 updateAllWaveformPlayheads();
             }
@@ -1103,7 +1119,7 @@
                     waveformPointerGestureRegionHit.segmentIndex,
                 );
             } else if (!waveformOffsetDragActive) {
-                seekFromWaveformPointer(e.clientX, { scrubbing: true });
+                seekFromWaveformPointer(e.clientX, { scrubbing: true, logInput: true, flash: true });
                 if (typeof updateAllWaveformPlayheads === 'function') {
                     updateAllWaveformPlayheads();
                 }
@@ -2244,6 +2260,13 @@
             seekBar.addEventListener('pointerdown', (ev) => {
                 ev.stopPropagation();
                 if (ev.button !== 0) return;
+                if (
+                    typeof captureTransportWasActive === 'function' &&
+                    captureTransportWasActive() &&
+                    typeof pauseTransportBeforeSeek === 'function'
+                ) {
+                    pauseTransportBeforeSeek();
+                }
                 if (noteWaveformLanesPointerDownForDoubleClick(ev.clientX, ev.clientY)) {
                     ev.preventDefault();
                 }

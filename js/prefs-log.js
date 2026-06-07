@@ -258,6 +258,7 @@
 
     let seekFlashHideTimer = 0;
     let seekFlashAriaTimer = 0;
+    let seekFlashShowGen = 0;
 
     /**
      * @param {string} [kind] 'notice' = 長め表示, 'error' = 赤トースト, 省略 = 通常（短い・白）
@@ -269,6 +270,7 @@
         if (!root || !pEl || !sEl) return;
         clearTimeout(seekFlashHideTimer);
         clearTimeout(seekFlashAriaTimer);
+        const gen = ++seekFlashShowGen;
 
         root.classList.remove('seek-flash--notice', 'seek-flash--error');
         if (kind === 'notice') {
@@ -283,22 +285,22 @@
         sEl.hidden = !sec;
 
         root.setAttribute('aria-hidden', 'false');
-        if (!root.classList.contains('seek-flash--visible')) {
-            requestAnimationFrame(() => {
-                root.classList.add('seek-flash--visible');
-            });
-        } else {
+        root.classList.remove('seek-flash--visible');
+        requestAnimationFrame(() => {
+            if (gen !== seekFlashShowGen) return;
             root.classList.add('seek-flash--visible');
-        }
+        });
 
         const isNotice = kind === 'notice';
         const isError = kind === 'error';
         const holdMs = isNotice ? 2100 : isError ? 2600 : 680;
         const fadeOutMs = 820;
         seekFlashHideTimer = setTimeout(() => {
+            if (gen !== seekFlashShowGen) return;
             root.classList.remove('seek-flash--visible');
         }, holdMs);
         seekFlashAriaTimer = setTimeout(() => {
+            if (gen !== seekFlashShowGen) return;
             seekFlashAriaTimer = 0;
             root.setAttribute('aria-hidden', 'true');
             root.classList.remove('seek-flash--notice', 'seek-flash--error');

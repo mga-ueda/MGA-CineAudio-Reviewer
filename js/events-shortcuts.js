@@ -18,6 +18,29 @@
         return false;
     }
 
+    function transportArrowSeekStepLabel(e) {
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey) return 'Ctrl+Shift ±10s';
+        if (e.ctrlKey || e.metaKey) return 'Ctrl ±5s';
+        if (e.shiftKey) return 'Shift ±1s';
+        return 'Frame ±1f';
+    }
+
+    function flashTransportArrowSeekHint(dir, e) {
+        if (typeof flashSeekHint !== 'function') return;
+        const sym = dir > 0 ? '→' : '←';
+        let deltaTxt;
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
+            deltaTxt = dir > 0 ? '+10s' : '−10s';
+        } else if (e.ctrlKey || e.metaKey) {
+            deltaTxt = dir > 0 ? '+5s' : '−5s';
+        } else if (e.shiftKey) {
+            deltaTxt = dir > 0 ? '+1s' : '−1s';
+        } else {
+            deltaTxt = dir > 0 ? '+1f' : '−1f';
+        }
+        flashSeekHint(sym, deltaTxt);
+    }
+
     window.addEventListener('keydown', (e) => {
         const isCodeInGroup =
             typeof window.isShortcutCodeInGroup === 'function'
@@ -310,6 +333,9 @@
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
                     : !videoMain.paused;
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
+            }
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(target, { resumeAfter: wasPlaying });
@@ -323,7 +349,6 @@
                         formatTimecodeForTransport(target) +
                         seekLogSuffix
                 );
-                flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
             })();
             return;
         }
@@ -443,6 +468,14 @@
                 });
                 return;
             }
+            if (!e.repeat) {
+                flashTransportArrowSeekHint(dir, e);
+            }
+            const stepLabel = transportArrowSeekStepLabel(e);
+            const arrow =
+                dir > 0
+                    ? (getUserShortcut('transportSeekArrowRight') || {}).code
+                    : (getUserShortcut('transportSeekArrowLeft') || {}).code;
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(t, {
@@ -455,18 +488,6 @@
                     currentTimeEl.textContent = formatTimecodeForTransport(t);
                     updateTimecodeOverlay();
                 }
-                let stepLabel;
-                if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-                    stepLabel = 'Ctrl+Shift ±10s';
-                } else if (e.ctrlKey || e.metaKey) {
-                    stepLabel = 'Ctrl ±5s';
-                } else if (e.shiftKey) {
-                    stepLabel = 'Shift ±1s';
-                } else {
-                    stepLabel = 'Frame ±1f';
-                }
-                const arrow =
-                    dir > 0 ? (getUserShortcut('transportSeekArrowRight') || {}).code : (getUserShortcut('transportSeekArrowLeft') || {}).code;
                 const line =
                     'Seek keyboard: ' +
                     arrow +
@@ -479,20 +500,6 @@
                     writeLog(line);
                 } else {
                     logArrowSeekDebounced(line);
-                }
-                if (!e.repeat) {
-                    const sym = dir > 0 ? '→' : '←';
-                    let deltaTxt;
-                    if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-                        deltaTxt = dir > 0 ? '+10s' : '−10s';
-                    } else if (e.ctrlKey || e.metaKey) {
-                        deltaTxt = dir > 0 ? '+5s' : '−5s';
-                    } else if (e.shiftKey) {
-                        deltaTxt = dir > 0 ? '+1s' : '−1s';
-                    } else {
-                        deltaTxt = dir > 0 ? '+1f' : '−1f';
-                    }
-                    flashSeekHint(sym, deltaTxt);
                 }
             })();
         }
