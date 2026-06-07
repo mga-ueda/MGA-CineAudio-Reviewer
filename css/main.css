@@ -1169,11 +1169,14 @@
         .video-panel__status .transport-drift-suffix {
             color: var(--transport-opt-label-color);
         }
-        .video-panel__status .transport-drift-ms,
-        .video-panel__status .transport-drift-ms--safe,
-        .video-panel__status .transport-drift-ms--warn,
+        .video-panel__status .transport-drift-ms--safe {
+            color: var(--transport-opt-label-color);
+        }
+        .video-panel__status .transport-drift-ms--warn {
+            color: #ff9a3c;
+        }
         .video-panel__status .transport-drift-ms--danger {
-            color: var(--transport-opt-value-color);
+            color: #ff5a5a;
         }
         .video-panel__status .transport-drift-display {
             font-family: var(--font-mono);

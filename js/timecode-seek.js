@@ -1306,6 +1306,13 @@
             }
         }
         updateSeekUiFromVideo();
+        if (
+            typeof isPlaybackDriftMonitoringActive === 'function' &&
+            !isPlaybackDriftMonitoringActive() &&
+            typeof refreshVideoDriftPanelStat === 'function'
+        ) {
+            refreshVideoDriftPanelStat();
+        }
         const anySeeking = videoMain.seeking;
         if (transportActive || anySeeking) {
             rafId = requestAnimationFrame(tick);

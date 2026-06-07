@@ -31,6 +31,23 @@
     function resetVideoDriftMonitorSchedule() {
         lastVideoDriftSampleAt = 0;
         lastPlaybackDriftUiSigned = null;
+        refreshVideoDriftPanelStat();
+    }
+
+    function isPlaybackDriftMonitoringActive() {
+        const playing =
+            (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
+            (videoMain && !videoMain.paused && !videoMain.ended);
+        if (!playing) return false;
+        if (typeof isSeeking !== 'undefined' && isSeeking) return false;
+        if (videoMain && videoMain.seeking) return false;
+        if (
+            typeof isAudioWaveformScrubActive === 'function' &&
+            isAudioWaveformScrubActive()
+        ) {
+            return false;
+        }
+        return true;
     }
 
     function shouldSampleVideoDriftNow(opt) {
@@ -98,9 +115,8 @@
 
     /** @returns {'safe'|'warn'|'danger'} */
     function playbackDriftToneFromFrames(frames) {
-        const threshFrames = videoDriftThresholdFrames();
-        if (frames >= threshFrames) return 'danger';
-        if (frames >= Math.max(1, Math.round(threshFrames * 0.55))) return 'warn';
+        if (frames >= 2) return 'danger';
+        if (frames === 1) return 'warn';
         return 'safe';
     }
 
@@ -156,6 +172,15 @@
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
         statEl.title = 'Playback Drift: セッション未ロード（0 f）';
+    }
+
+    function showPlaybackDriftPanelInactive(statEl) {
+        const driftBox = videoDriftTransportBoxEl(statEl);
+        if (driftBox) driftBox.hidden = false;
+        setPlaybackDriftDisplayUnknown(statEl);
+        applyPlaybackDriftPanelTone(statEl, 'safe');
+        if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
+        statEl.title = 'Playback Drift: 停止・シーク中は監視していません（---- f を表示）';
     }
 
     function applyPlaybackDriftPanelTone(statEl, tone) {
@@ -221,6 +246,10 @@
             );
             return;
         }
+        if (!isPlaybackDriftMonitoringActive()) {
+            showPlaybackDriftPanelInactive(statEl);
+            return;
+        }
 
         const audioSec =
             opt && Number.isFinite(opt.audioSec)
@@ -241,23 +270,12 @@
                 if (signed != null) lastPlaybackDriftUiSigned = signed;
             }
         } else {
-            const playingUi =
-                (typeof isTransportPlaying === 'function' && isTransportPlaying()) ||
-                (videoMain && !videoMain.paused && !videoMain.ended);
-            if (playingUi) {
-                const sampled = sampleVideoDriftForPlayback(audioSec, opt);
-                if (sampled != null) {
-                    signed = sampled;
-                    lastPlaybackDriftUiSigned = sampled;
-                } else {
-                    signed = lastPlaybackDriftUiSigned;
-                }
+            const sampled = sampleVideoDriftForPlayback(audioSec, opt);
+            if (sampled != null) {
+                signed = sampled;
+                lastPlaybackDriftUiSigned = sampled;
             } else {
                 signed = lastPlaybackDriftUiSigned;
-                if (signed == null) {
-                    signed = measureVideoPlaybackDriftSec(audioSec);
-                    if (signed != null) lastPlaybackDriftUiSigned = signed;
-                }
             }
         }
         if (signed == null) {
@@ -269,7 +287,6 @@
         }
 
         const frames = playbackDriftFramesFromSec(signed);
-        const threshFrames = videoDriftThresholdFrames();
         const corrected =
             !!(opt && opt.corrected) || performance.now() < videoDriftCorrectFlashUntil;
         if (driftBox) driftBox.hidden = false;
@@ -279,13 +296,12 @@
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
         }
         statEl.title = VIDEO_DRIFT_AUTO_CORRECT_ENABLED
-            ? 'Playback Drift と audio master の差（約1秒ごとに更新、' +
-              threshFrames +
-              ' f 超で video を補正）。'
-            : 'Playback Drift と audio master の差（約1秒ごとに更新、自動補正は無効）。';
+            ? 'Playback Drift と audio master の差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、video を補正）。'
+            : 'Playback Drift と audio master の差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、自動補正は無効）。';
     }
 
     window.refreshVideoDriftPanelStat = refreshVideoDriftPanelStat;
+    window.isPlaybackDriftMonitoringActive = isPlaybackDriftMonitoringActive;
 
     function isTransportTailPlaybackActive() {
         return transportTailPlaybackActive;
