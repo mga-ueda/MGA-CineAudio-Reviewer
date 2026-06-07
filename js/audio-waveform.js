@@ -2331,6 +2331,8 @@
                     ? getMasterTransportDurationSec()
                     : 0;
             if (!master) return;
+            // Shift+←/→（±1s）と Ctrl+Shift+←/→（±10s）は events-shortcuts 側で処理する。
+            if (ev.shiftKey) return;
             let ratio = transportRatioFromMasterSec(
                 typeof getTransportSec === 'function' ? getTransportSec() : 0,
             );

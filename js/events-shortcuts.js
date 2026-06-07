@@ -436,7 +436,9 @@
             if ((e.ctrlKey || e.metaKey) && !e.shiftKey) return;
             const lanesEl =
                 typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
-            if (lanesEl && document.activeElement === lanesEl) return;
+            // 波形レーンにフォーカスがあるときは ±1f をレーン側で処理する。
+            // Shift+←/→（±1s）と Ctrl+Shift+←/→（±10s）はグローバル側で処理する。
+            if (lanesEl && document.activeElement === lanesEl && !e.shiftKey) return;
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -516,7 +518,7 @@
         if (!isTransportSeekArrowKeyup(e)) return;
         const lanesEl =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
-        if (lanesEl && document.activeElement === lanesEl) return;
+        if (lanesEl && document.activeElement === lanesEl && !e.shiftKey) return;
         if (typeof flushKeyboardTransportScrubIfActive === 'function') {
             flushKeyboardTransportScrubIfActive();
         }
