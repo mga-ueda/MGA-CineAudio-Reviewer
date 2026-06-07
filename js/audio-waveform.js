@@ -2344,6 +2344,15 @@
                 ratio = Math.min(1, ratio + masterFrameSec / master);
             else return;
             ev.preventDefault();
+            if (
+                !ev.repeat &&
+                typeof flashSeekHint === 'function' &&
+                (matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }) ||
+                    matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true }))
+            ) {
+                const fwd = matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true });
+                flashSeekHint(fwd ? '→' : '←', fwd ? '+1f' : '−1f');
+            }
             if (typeof noteKeyboardTransportScrubBegin === 'function') {
                 noteKeyboardTransportScrubBegin(ev);
             }
