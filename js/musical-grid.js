@@ -1869,20 +1869,24 @@
     }
 
     /** Tempo/Sig ON 時 — 小節線（赤）の右に、リージョン内の 1 小節目からの番号を描画 */
-    function drawRegionBarNumberLabels(ctx, w, h, master, barLines, meterSpec) {
+    const REGION_BAR_NUMBER_LABEL_FONT_PX = 10;
+    const REGION_BAR_NUMBER_LABEL_Y = 8;
+    const REGION_BAR_NUMBER_LABEL_X_OFFSET = 3;
+
+    function drawRegionBarNumberLabels(ctx, w, _h, master, barLines, meterSpec) {
         if (!getMusicalGridVisible() || !barLines.length || !meterSpec) return;
         const spans = collectPlaybackRegionSpansForBarLabels();
         if (!spans.length) return;
         const barBoundaries = collectBarBoundarySecs(meterSpec, master);
         if (!barBoundaries.length) return;
         const secToX = (sec) => (sec / master) * w;
-        const fontPx = Math.max(9, Math.min(11, h * 0.038));
+        const fontPx = REGION_BAR_NUMBER_LABEL_FONT_PX;
         ctx.save();
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.font = '400 ' + fontPx + 'px system-ui, "Segoe UI", sans-serif';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = Math.max(1, fontPx * 0.1);
+        ctx.lineWidth = 1;
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
         ctx.fillStyle = 'rgba(255, 230, 80, 0.95)';
 
@@ -1890,8 +1894,8 @@
             const x = secToX(sec);
             if (x < -0.5 || x > w + 0.5) return;
             const xi = Math.round(x) + 0.5;
-            const labelX = xi + 3;
-            const labelY = Math.max(8, h * 0.055);
+            const labelX = xi + REGION_BAR_NUMBER_LABEL_X_OFFSET;
+            const labelY = REGION_BAR_NUMBER_LABEL_Y;
             ctx.strokeText(label, labelX, labelY);
             ctx.fillText(label, labelX, labelY);
         }
