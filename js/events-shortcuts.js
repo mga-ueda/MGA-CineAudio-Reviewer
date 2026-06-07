@@ -446,7 +446,18 @@
                 return;
             }
             e.preventDefault();
-            if (typeof noteKeyboardTransportScrubBegin === 'function') {
+            const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
+            const playingBeforeStep =
+                typeof isTransportPlaying === 'function'
+                    ? isTransportPlaying()
+                    : !videoMain.paused;
+            // 再生中の ±1f は1回だけ（キーリピート無効・keyup 確定も不要）
+            if (oneFrameStep && playingBeforeStep && e.repeat) return;
+            const useKeyboardScrubSession = !(oneFrameStep && playingBeforeStep);
+            if (
+                useKeyboardScrubSession &&
+                typeof noteKeyboardTransportScrubBegin === 'function'
+            ) {
                 noteKeyboardTransportScrubBegin(e);
             }
             const dur =
@@ -456,17 +467,18 @@
             const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
             const stepSec = transportArrowSeekStepSec(e);
             const resumeAfter = transportArrowSeekResumeAfter(e);
-            const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
             let t = (parseFloat(seekBar.value) || 0) + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
             if (
                 e.repeat &&
+                useKeyboardScrubSession &&
                 typeof applyKeyboardTransportScrubStep === 'function'
             ) {
                 applyKeyboardTransportScrubStep(t, {
                     keyboardScrub: true,
                     fromRepeat: true,
                     resumeAfter: resumeAfter && !oneFrameStep,
+                    pauseAfterSeek: oneFrameStep,
                 });
                 return;
             }
@@ -482,7 +494,8 @@
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(t, {
                         resumeAfter: resumeAfter && !oneFrameStep,
-                        keyboardScrub: true,
+                        pauseAfterSeek: oneFrameStep,
+                        keyboardScrub: useKeyboardScrubSession,
                         fromRepeat: e.repeat,
                     });
                 } else {

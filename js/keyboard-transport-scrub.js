@@ -6,6 +6,11 @@
     let keyboardScrubPendingSec = null;
     let keyboardScrubRafId = 0;
     let keyboardScrubResumeAfter = false;
+    let keyboardScrubPauseAfter = false;
+
+    function isOneFrameTransportArrowSeek(ev) {
+        return !!(ev && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey);
+    }
 
     function isKeyboardTransportScrubActive() {
         return keyboardTransportScrubActive;
@@ -38,12 +43,15 @@
         return isKeyboardScrubLightweight(opt) && isKeyboardScrubZoomed();
     }
 
-    function beginKeyboardTransportScrub() {
+    function beginKeyboardTransportScrub(ev) {
         if (keyboardTransportScrubActive) return;
         const wasActive =
             typeof captureTransportWasActive === 'function' &&
             captureTransportWasActive();
-        if (wasActive) {
+        const oneFrame = isOneFrameTransportArrowSeek(ev);
+        if (wasActive && oneFrame) {
+            keyboardScrubPauseAfter = true;
+        } else if (wasActive) {
             keyboardScrubResumeAfter = true;
             transportExplicitSeekResumeIntent = true;
             if (typeof pauseTransportBeforeSeek === 'function') {
@@ -137,8 +145,11 @@
             transportExplicitSeekFinalizeTimer = 0;
         }
         const shouldResume = keyboardScrubResumeAfter || transportExplicitSeekResumeIntent;
+        const pauseAfter = keyboardScrubPauseAfter;
         keyboardScrubResumeAfter = false;
+        keyboardScrubPauseAfter = false;
         transportExplicitSeekResumeIntent = false;
+        transportExplicitSeekPauseAfterIntent = false;
         keyboardScrubPendingSec = null;
         const target =
             transportExplicitSeekTargetSec != null &&
@@ -155,8 +166,19 @@
             } else if (typeof finalizeExplicitTransportSeek === 'function') {
                 ok = await finalizeExplicitTransportSeek();
             }
-            if (ok && shouldResume && typeof resumeTransportAfterExplicitSeek === 'function') {
+            if (
+                ok &&
+                shouldResume &&
+                !pauseAfter &&
+                typeof resumeTransportAfterExplicitSeek === 'function'
+            ) {
                 await resumeTransportAfterExplicitSeek(target);
+            } else if (
+                ok &&
+                pauseAfter &&
+                typeof pauseTransportBeforeSeek === 'function'
+            ) {
+                pauseTransportBeforeSeek();
             }
         }
         refreshTransportAfterKeyboardScrub();
@@ -179,7 +201,7 @@
     }
 
     function noteKeyboardTransportScrubBegin(ev) {
-        if (!ev || !ev.repeat) beginKeyboardTransportScrub();
+        if (!ev || !ev.repeat) beginKeyboardTransportScrub(ev);
     }
 
     window.isKeyboardTransportScrubActive = isKeyboardTransportScrubActive;

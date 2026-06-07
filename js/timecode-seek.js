@@ -568,6 +568,7 @@
 
     function cancelTransportExplicitSeekTail() {
         transportExplicitSeekResumeIntent = false;
+        transportExplicitSeekPauseAfterIntent = false;
         transportExplicitSeekSerial += 1;
         transportExplicitSeekTargetSec = null;
         if (transportExplicitSeekFinalizeTimer) {
@@ -799,7 +800,9 @@
                         return;
                     }
                     const shouldResume = transportExplicitSeekResumeIntent;
+                    const shouldPauseAfter = transportExplicitSeekPauseAfterIntent;
                     transportExplicitSeekResumeIntent = false;
+                    transportExplicitSeekPauseAfterIntent = false;
                     if (shouldResume) {
                         await resumeTransportAfterExplicitSeek(target);
                         if (
@@ -809,11 +812,17 @@
                         ) {
                             forceTransportRafLoop();
                         }
+                    } else if (
+                        shouldPauseAfter &&
+                        typeof pauseTransportBeforeSeek === 'function'
+                    ) {
+                        pauseTransportBeforeSeek();
                     }
                     resolve(true);
                 } catch (_) {
                     if (serial === transportExplicitSeekSerial) {
                         transportExplicitSeekResumeIntent = false;
+                        transportExplicitSeekPauseAfterIntent = false;
                     }
                     resolve(false);
                 }
@@ -878,13 +887,18 @@
             return true;
         }
         const playingBeforeSeek = captureTransportWasActive();
+        const pauseAfterSeek = !!(o.pauseAfterSeek && playingBeforeSeek);
         transportExplicitSeekResumeIntent =
-            playingBeforeSeek && o.resumeAfter !== false;
+            playingBeforeSeek && o.resumeAfter !== false && !pauseAfterSeek;
+        transportExplicitSeekPauseAfterIntent = pauseAfterSeek;
 
         transportExplicitSeekTargetSec = sec;
         const serial = ++transportExplicitSeekSerial;
 
-        if (playingBeforeSeek || (videoMain && !videoMain.paused)) {
+        if (
+            (playingBeforeSeek || (videoMain && !videoMain.paused)) &&
+            !pauseAfterSeek
+        ) {
             pauseTransportBeforeSeek();
         }
 

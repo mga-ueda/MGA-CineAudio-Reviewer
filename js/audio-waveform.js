@@ -2343,15 +2343,34 @@
             else if (matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true }))
                 ratio = Math.min(1, ratio + masterFrameSec / master);
             else return;
+            const isOneFrameLaneSeek =
+                matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }) ||
+                matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true });
+            const playingBeforeStep =
+                typeof isTransportPlaying === 'function'
+                    ? isTransportPlaying()
+                    : !!(videoMain && !videoMain.paused);
             ev.preventDefault();
+            if (isOneFrameLaneSeek && playingBeforeStep && ev.repeat) return;
             if (
                 !ev.repeat &&
                 typeof flashSeekHint === 'function' &&
-                (matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }) ||
-                    matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true }))
+                isOneFrameLaneSeek
             ) {
                 const fwd = matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true });
                 flashSeekHint(fwd ? '→' : '←', fwd ? '+1f' : '−1f');
+            }
+            if (isOneFrameLaneSeek && playingBeforeStep) {
+                const t = ratio * master;
+                if (typeof seekTransportToAndWait === 'function') {
+                    void seekTransportToAndWait(t, {
+                        pauseAfterSeek: true,
+                        resumeAfter: false,
+                    });
+                } else {
+                    applyTransportAtRatio(ratio, { markers: true });
+                }
+                return;
             }
             if (typeof noteKeyboardTransportScrubBegin === 'function') {
                 noteKeyboardTransportScrubBegin(ev);

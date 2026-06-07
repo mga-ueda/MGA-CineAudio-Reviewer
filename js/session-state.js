@@ -13,6 +13,8 @@
     let transportPlayGeneration = 0;
     /** 連続ジャンプバースト中、最後に再生を再開するか */
     let transportExplicitSeekResumeIntent = false;
+    /** 連続ジャンプバースト中、シーク確定後に停止するか（±1f 用） */
+    let transportExplicitSeekPauseAfterIntent = false;
     /** 最新の明示シーク（古い tail はこれと不一致なら破棄） */
     let transportExplicitSeekSerial = 0;
     /** 連続ジャンプの最終シーク先（秒） */
