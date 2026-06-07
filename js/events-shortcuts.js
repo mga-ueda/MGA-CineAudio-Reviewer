@@ -18,11 +18,23 @@
         return false;
     }
 
+    function transportArrowSeekStepSec(e) {
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey) return 10;
+        if (e.shiftKey) return 1;
+        return masterFrameSec;
+    }
+
     function transportArrowSeekStepLabel(e) {
         if ((e.ctrlKey || e.metaKey) && e.shiftKey) return 'Ctrl+Shift ±10s';
-        if (e.ctrlKey || e.metaKey) return 'Ctrl ±5s';
         if (e.shiftKey) return 'Shift ±1s';
         return 'Frame ±1f';
+    }
+
+    function transportArrowSeekResumeAfter(e) {
+        if (!e.shiftKey) return false;
+        return typeof isTransportPlaying === 'function'
+            ? isTransportPlaying()
+            : !videoMain.paused;
     }
 
     function flashTransportArrowSeekHint(dir, e) {
@@ -31,8 +43,6 @@
         let deltaTxt;
         if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
             deltaTxt = dir > 0 ? '+10s' : '−10s';
-        } else if (e.ctrlKey || e.metaKey) {
-            deltaTxt = dir > 0 ? '+5s' : '−5s';
         } else if (e.shiftKey) {
             deltaTxt = dir > 0 ? '+1s' : '−1s';
         } else {
@@ -422,6 +432,8 @@
             matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
             matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
         ) {
+            if (e.altKey) return;
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey) return;
             const lanesEl =
                 typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
             if (lanesEl && document.activeElement === lanesEl) return;
@@ -435,25 +447,13 @@
             if (typeof noteKeyboardTransportScrubBegin === 'function') {
                 noteKeyboardTransportScrubBegin(e);
             }
-            const wasPlaying =
-                typeof isTransportPlaying === 'function'
-                    ? isTransportPlaying()
-                    : !videoMain.paused;
             const dur =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
             const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
-            let stepSec;
-            if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-                stepSec = 10;
-            } else if (e.ctrlKey || e.metaKey) {
-                stepSec = 5;
-            } else if (e.shiftKey) {
-                stepSec = 1;
-            } else {
-                stepSec = masterFrameSec;
-            }
+            const stepSec = transportArrowSeekStepSec(e);
+            const resumeAfter = transportArrowSeekResumeAfter(e);
             const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
             let t = (parseFloat(seekBar.value) || 0) + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
@@ -464,7 +464,7 @@
                 applyKeyboardTransportScrubStep(t, {
                     keyboardScrub: true,
                     fromRepeat: true,
-                    resumeAfter: wasPlaying && !oneFrameStep,
+                    resumeAfter: resumeAfter && !oneFrameStep,
                 });
                 return;
             }
@@ -479,7 +479,7 @@
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(t, {
-                        resumeAfter: wasPlaying && !oneFrameStep,
+                        resumeAfter: resumeAfter && !oneFrameStep,
                         keyboardScrub: true,
                         fromRepeat: e.repeat,
                     });

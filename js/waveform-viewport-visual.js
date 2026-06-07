@@ -55,8 +55,12 @@
         let densityScale = 1;
         if (zoom <= 1.02) {
             densityScale = 0.42;
-        } else if (zoom <= 2.0) {
+        } else if (zoom <= 4.5) {
+            densityScale = 0.55;
+        } else if (zoom <= 8.5) {
             densityScale = 0.68;
+        } else if (zoom <= 16.5) {
+            densityScale = 0.8;
         } else {
             densityScale = 0.92;
         }

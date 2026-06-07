@@ -1374,21 +1374,58 @@
         );
     }
 
+    function markerStopNavigationResumeAfterSeek() {
+        return typeof isTransportUiClockActive === 'function'
+            ? isTransportUiClockActive()
+            : typeof isTransportPlaying === 'function'
+              ? isTransportPlaying()
+              : !videoMain.paused;
+    }
+
+    function runAdjacentStopNavigation(dir, navOpt) {
+        const markerNavActive = !markersDisplayHidden && currentMarkers.length > 0;
+        const musicalNavActive =
+            typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops();
+        if (markerNavActive) {
+            return jumpToAdjacentMarkerStop(dir, navOpt);
+        }
+        if (
+            musicalNavActive &&
+            typeof jumpToAdjacentMusicalGridStop === 'function' &&
+            jumpToAdjacentMusicalGridStop(dir, navOpt)
+        ) {
+            return true;
+        }
+        if (musicalNavActive) {
+            return false;
+        }
+        if (typeof jumpToAdjacentRegionStop !== 'function') return false;
+        return jumpToAdjacentRegionStop(dir, navOpt);
+    }
+
+    function handleMarkerStopJumpKeydown(e) {
+        if (!markerTimelineReady()) return false;
+        const isPrev = matchUserShortcut(e, 'markerStopJumpPrev', { allowRepeat: true });
+        const isNext = matchUserShortcut(e, 'markerStopJumpNext', { allowRepeat: true });
+        if (!isPrev && !isNext) return false;
+        if (e.altKey || e.shiftKey) return false;
+        if (isTypingTarget(e.target)) return false;
+        const dir = isNext ? 1 : -1;
+        const navOpt = {
+            focusComment: false,
+            resumeAfterSeek: markerStopNavigationResumeAfterSeek(),
+        };
+        if (!runAdjacentStopNavigation(dir, navOpt)) return false;
+        e.preventDefault();
+        return true;
+    }
+
     function handleMarkerNavigationKeydown(e) {
         if (!markerTimelineReady()) return false;
         const isUp = matchUserShortcut(e, 'markerNavigateUp', { allowRepeat: true });
         const isDown = matchUserShortcut(e, 'markerNavigateDown', { allowRepeat: true });
         if (!isUp && !isDown) return false;
         if (e.ctrlKey || e.metaKey) return false;
-
-        const inMarkerPanel = isMarkerAreaKeyboardActive({ target: e.target });
-        // トランスポート有効時: ↑↓（↑=次、↓=前）。Markers パネル内: Shift+↑↓
-        // マーカー非表示時はフォーカス位置に関わらず ↑↓ でリージョン In/Out へ
-        const markerStopNav =
-            !e.altKey &&
-            (markersDisplayHidden ||
-                e.shiftKey ||
-                (!inMarkerPanel && markerTimelineReady()));
 
         // Alt+↑↓: 一覧内の行移動（↑=上の行、↓=下の行）。列はフォーカス先に追従
         if (e.altKey && !e.shiftKey) {
@@ -1398,50 +1435,6 @@
             suppressMarkerRowHoverSeek(300);
             const column = markerListNavColumnFromFocus();
             jumpToAdjacentMarker(dir, column ? { column: column } : { focusComment: true });
-            return true;
-        }
-
-        if (markerStopNav) {
-            const dir = isUp ? 1 : -1;
-            if (isTypingTarget(e.target)) return false;
-            const wasPlaying =
-                typeof isTransportUiClockActive === 'function'
-                    ? isTransportUiClockActive()
-                    : typeof isTransportPlaying === 'function'
-                      ? isTransportPlaying()
-                      : !videoMain.paused;
-            const navOpt = {
-                focusComment: false,
-                resumeAfterSeek: wasPlaying,
-            };
-            const markerNavActive = !markersDisplayHidden && currentMarkers.length > 0;
-            const musicalNavActive =
-                typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops();
-            if (markerNavActive) {
-                e.preventDefault();
-                jumpToAdjacentMarkerStop(dir, navOpt);
-                return true;
-            }
-            if (
-                musicalNavActive &&
-                typeof jumpToAdjacentMusicalGridStop === 'function' &&
-                jumpToAdjacentMusicalGridStop(dir, navOpt)
-            ) {
-                e.preventDefault();
-                return true;
-            }
-            if (musicalNavActive) {
-                return false;
-            }
-            if (markersDisplayHidden) {
-                if (typeof jumpToAdjacentRegionStop !== 'function') return false;
-                if (!jumpToAdjacentRegionStop(dir, navOpt)) return false;
-                e.preventDefault();
-                return true;
-            }
-            if (typeof jumpToAdjacentRegionStop !== 'function') return false;
-            if (!jumpToAdjacentRegionStop(dir, navOpt)) return false;
-            e.preventDefault();
             return true;
         }
 
@@ -2303,3 +2296,4 @@
     }
 
     window.handleMarkerBracketKeydown = handleMarkerBracketKeydown;
+    window.handleMarkerStopJumpKeydown = handleMarkerStopJumpKeydown;

@@ -312,7 +312,7 @@
                 <ul>
                     <li><strong>Length</strong> 列 — 範囲マーカーの長さ（秒/フレーム）。ポイントマーカーは <code>—</code>。<strong>Copy</strong> には含まれません（画面上の参考表示のみ）。</li>
                     <li>行をクリックするとその位置へシークします（<strong>再生中はジャンプしません</strong> — 停止してから操作してください）。</li>
-                    <li>Markers パネル<strong>外</strong>では <kbd>↑</kbd>/<kbd>↓</kbd> でタイムライン上の停止点（マーカー＞小節/拍/フレーズ＞リージョンの優先順）へ移動します。パネル<strong>内</strong>では <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で同様に移動します（<kbd>↑</kbd>/<kbd>↓</kbd> 単体は無効）。<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で一覧の前後の行へ移動します（<kbd>↑</kbd>＝上の行、<kbd>↓</kbd>＝下の行）。フォーカスしている列に応じて移動先が変わります。<strong>Comment</strong> 列では Comment 欄、<strong>In</strong> 列では In 欄、<strong>Out</strong> 列では Out TC が確定済みの行の Out 欄へ移動します。パネル外から操作したときは Comment 欄へ移動します。Comment / In / Out 欄の編集中も有効です。</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> でタイムライン上の停止点（マーカー＞小節/拍/フレーズ＞リージョンの優先順）へ移動します（<kbd>→</kbd>＝次、<kbd>←</kbd>＝前）。再生中はシーク後に再生を再開します。<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で一覧の前後の行へ移動します（<kbd>↑</kbd>＝上の行、<kbd>↓</kbd>＝下の行）。フォーカスしている列に応じて移動先が変わります。<strong>Comment</strong> 列では Comment 欄、<strong>In</strong> 列では In 欄、<strong>Out</strong> 列では Out TC が確定済みの行の Out 欄へ移動します。パネル外から操作したときは Comment 欄へ移動します。Comment / In / Out 欄の編集中も有効です。</li>
                     <li>選択中のマーカーは <kbd>Del</kbd> で削除できます（行末の削除ボタンからも可能）。</li>
                 </ul>
                 <p>波形上のマーカー表示が重なる場合は、縦に段を下げてラベルを並べます。</p>
@@ -340,9 +340,9 @@
                     <li><strong>赤い縦線</strong>が再生ヘッドです。再生中は通過軌跡が残る表示があります。</li>
                     <li>マウスを乗せると、再生ヘッドとは別の薄い縦線（ホバー位置）が表示されます。</li>
                     <li><strong>クリック</strong>でその位置へシークします。空のレーン部分を<strong>ドラッグ</strong>すると、押している間その位置で再生しながらシーク（スクラブ）できます。</li>
-                    <li>ホイールでズーム・横スクロール（<kbd>Shift</kbd> 併用で横スクロール）。拡大時は<strong>32×</strong>のみ（1× ↔ 32× の切替）。<kbd>Z</kbd> でも切替できます（詳細はショートカット表）。32× では再生ヘッドが常に画面中央に追従します。再生中にズーム操作すると一度停止してから切替します。</li>
+                    <li>マーカーリスト上を除き、<kbd>↑</kbd>/<kbd>↓</kbd> で倍率を 1 段階変更できます（1×→4×→8×→16×→32×）。<kbd>Ctrl</kbd>+<kbd>↑</kbd> で 32×、<kbd>Ctrl</kbd>+<kbd>↓</kbd> で全体表示（1×）に戻します。拡大時は <kbd>Shift</kbd>+ホイールで横スクロールできます。32× では再生ヘッドが常に画面中央に追従します。再生中にズーム操作すると一度停止してから切替します。再生開始時は自動的に 1× に戻ります。</li>
                     <li><strong>ダブルクリック</strong>でズーム — マーカー以外の波形上ではクリック位置を32×で中央表示します。既に32×のときは全体表示（1×）に戻します。点/範囲マーカー上の動作は「マーカー」を参照してください。</li>
-                    <li><kbd>↑</kbd>/<kbd>↓</kbd> は、Markers パネル外で表示中要素の優先順に従い次/前へ移動します（マーカー表示中＞小節/拍/フレーズ表示中＞リージョンのみ）。時間が進む方向が <kbd>↑</kbd> で、再生中はシーク後に再生を再開します。パネル内では <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（詳細は「マーカー」参照）。</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> で表示中要素の優先順に従い次/前へ移動します（マーカー表示中＞小節/拍/フレーズ表示中＞リージョンのみ）。時間が進む方向が <kbd>→</kbd> で、再生中はシーク後に再生を再開します（詳細は「マーカー」参照）。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="audio-regions">Audio Track の再生リージョン</h3>
@@ -448,10 +448,10 @@
 
                 <h3 class="docs-heading-box--sub" id="transport-seek">シーク・ジャンプ（動画読み込み後）</h3>
                 <ul>
-                    <li>矢印キー：1フレーム（再生中の ±1フレームは一度停止してから）</li>
-                    <li><kbd>Shift</kbd> + 矢印：1秒</li>
-                    <li><kbd>Ctrl</kbd> + 矢印：5秒</li>
-                    <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + 矢印：10秒</li>
+                    <li><kbd>←</kbd>/<kbd>→</kbd>：1フレーム（再生中の ±1フレームは一度停止してから）</li>
+                    <li><kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：1秒（再生中でもシーク後に再生を再開）</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：10秒（再生中でもシーク後に再生を再開）</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：タイムライン上の停止点へ移動（マーカー＞小節/拍/フレーズ＞リージョンの優先順。再生中はシーク後に再生を再開）</li>
                     <li><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
                     <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>、または <kbd>Shift</kbd> + 上段 <kbd>0</kbd>〜<kbd>9</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。テンキーは <kbd>Shift</kbd> 不要（Windows ではテンキーに Shift が届かないため）。数字を続けて入力し、入力が途切れてから約 0.3 秒で確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。Tempo/Sig OFF 時にテンキーを押した場合は % ジャンプにフォールバック。再生中はシーク後に再生を再開</li>
                     <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Phrase 着色（<kbd>P</kbd>）ON かつ Audio Track にリージョンがあるとき、練習番号（A / B / C …）の先頭へジャンプ</li>

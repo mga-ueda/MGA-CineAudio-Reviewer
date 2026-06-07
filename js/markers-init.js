@@ -53,6 +53,9 @@
                 if (handleMarkerHideViewKeydown(e)) {
                     e.preventDefault();
                     e.stopPropagation();
+                } else if (handleMarkerStopJumpKeydown(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 } else if (handleMarkerNavigationKeydown(e)) {
                     e.preventDefault();
                     e.stopPropagation();

@@ -82,14 +82,14 @@
                         <td>再生中でもシーク後に再生を再開</td>
                     </tr>
                     <tr>
-                        <td>5秒</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td>—</td>
-                    </tr>
-                    <tr>
                         <td>10秒</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td>—</td>
+                        <td>再生中でもシーク後に再生を再開</td>
+                    </tr>
+                    <tr>
+                        <td>タイムライン上の停止点へ移動</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
+                        <td><kbd>→</kbd>＝次、<kbd>←</kbd>＝前。表示中マーカー＞小節/拍/フレーズ＞リージョンの優先順。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>位置ジャンプ（尺の10分割）</td>
@@ -163,16 +163,6 @@
                         <td><kbd>[</kbd> で In 開始後のみ有効。現在の再生位置で Out を確定</td>
                     </tr>
                     <tr>
-                        <td>タイムライン上の停止点へ移動</td>
-                        <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td><kbd>↑</kbd>＝次、<kbd>↓</kbd>＝前。Markers パネル<strong>外</strong>で有効。表示中マーカー＞小節/拍/フレーズ＞リージョンの優先順。再生中はシーク後に再生を再開</td>
-                    </tr>
-                    <tr>
-                        <td>タイムライン上の停止点へ移動（Markers パネル内）</td>
-                        <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>パネル内では <kbd>↑</kbd>/<kbd>↓</kbd> 単体では無効。<kbd>Shift</kbd> 併用で上記と同じ優先順の移動</td>
-                    </tr>
-                    <tr>
                         <td>マーカー一覧の前後行へ</td>
                         <td><kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
                         <td><kbd>↑</kbd>＝上の行、<kbd>↓</kbd>＝下の行。Comment / In / Out 列のいずれかにフォーカスがあるときはその列のまま移動（Out 列は Out TC 確定済みの行のみ）。パネル外からは Comment 列へ。テキスト入力中も有効</td>
@@ -224,14 +214,14 @@
                         <td>Audio Track 上のリージョンではクリックでシーク・ドラッグで移動（再生リージョン参照）</td>
                     </tr>
                     <tr>
-                        <td>ズーム（1× ↔ 32×）</td>
-                        <td>ホイール（波形上）</td>
-                        <td>上方向で 32×、下方向で 1×（全体表示）</td>
+                        <td>ズーム（1段階）</td>
+                        <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
+                        <td>マーカーリスト上を除きグローバル。<kbd>↑</kbd>＝拡大、<kbd>↓</kbd>＝縮小（1×→4×→8×→16×→32×）</td>
                     </tr>
                     <tr>
-                        <td>ズーム切替（1× ↔ 32×）</td>
-                        <td><kbd>Z</kbd></td>
-                        <td>32× のときは 1× に戻す。マーカーパネル内では無効</td>
+                        <td>ズーム（最大/全体表示）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
+                        <td>マーカーリスト上を除きグローバル。<kbd>Ctrl</kbd>+<kbd>↑</kbd>＝32×、<kbd>Ctrl</kbd>+<kbd>↓</kbd>＝1×（全体表示）</td>
                     </tr>
                     <tr>
                         <td>ダブルクリックでズーム（波形上）</td>
@@ -297,11 +287,6 @@
                         <td>アクティブトラック音量 ±1 dB</td>
                         <td><kbd>+</kbd>/<kbd>−</kbd>（テンキー可。US 配列では <kbd>Shift</kbd>+<kbd>=</kbd> が +）</td>
                         <td>ポインタ下の Video Audio/Audio Track（0 dBをまたぐときは一度0 dBで止まる）</td>
-                    </tr>
-                    <tr>
-                        <td>横スクロール</td>
-                        <td><kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
-                        <td>ズーム時のみ（ポインタがレーン外のとき）</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">Musical Grid 入力欄（トランスポート下段）</th>

@@ -1,10 +1,11 @@
 ﻿/**
- * waveform-timeline-zoom.js — 波形タイムライン 1×/32× ズーム・横スクロール・レイアウト。
+ * waveform-timeline-zoom.js — 波形タイムライン 1×/4×/8×/16×/32× ズーム・横スクロール・レイアウト。
  */
 (function waveformTimelineZoomModule() {
     /** 波形全体がビューポートに収まる倍率 */
     const WAVEFORM_TIMELINE_ZOOM_FIT = 1;
     const WAVEFORM_TIMELINE_ZOOM_MAX = 32;
+    const WAVEFORM_TIMELINE_ZOOM_LEVELS = Object.freeze([1, 4, 8, 16, 32]);
     /** MARKERS の In/Out TC 編集（+/-）中の波形倍率 */
     const MARKER_TC_EDIT_WAVEFORM_ZOOM = WAVEFORM_TIMELINE_ZOOM_MAX;
     let waveformTimelineZoom = 1;
@@ -37,13 +38,37 @@
     function snapWaveformTimelineZoom(z) {
         const n = Number(z);
         if (!Number.isFinite(n)) return WAVEFORM_TIMELINE_ZOOM_FIT;
-        return n >= (WAVEFORM_TIMELINE_ZOOM_FIT + WAVEFORM_TIMELINE_ZOOM_MAX) * 0.5
-            ? WAVEFORM_TIMELINE_ZOOM_MAX
-            : WAVEFORM_TIMELINE_ZOOM_FIT;
+        let best = WAVEFORM_TIMELINE_ZOOM_LEVELS[0];
+        let bestDist = Math.abs(n - best);
+        for (let i = 1; i < WAVEFORM_TIMELINE_ZOOM_LEVELS.length; i++) {
+            const level = WAVEFORM_TIMELINE_ZOOM_LEVELS[i];
+            const dist = Math.abs(n - level);
+            if (dist < bestDist) {
+                best = level;
+                bestDist = dist;
+            }
+        }
+        return best;
     }
 
     function clampWaveformTimelineZoom(z) {
         return snapWaveformTimelineZoom(z);
+    }
+
+    function waveformTimelineZoomLevelIndex(z) {
+        const snapped = snapWaveformTimelineZoom(z);
+        const idx = WAVEFORM_TIMELINE_ZOOM_LEVELS.findIndex(
+            (level) => Math.abs(level - snapped) < 0.001,
+        );
+        return idx >= 0 ? idx : 0;
+    }
+
+    function stepWaveformTimelineZoomLevel(dir) {
+        const d = dir > 0 ? 1 : dir < 0 ? -1 : 0;
+        if (!d) return waveformTimelineZoom;
+        const idx = waveformTimelineZoomLevelIndex(waveformTimelineZoom);
+        const next = Math.max(0, Math.min(WAVEFORM_TIMELINE_ZOOM_LEVELS.length - 1, idx + d));
+        return WAVEFORM_TIMELINE_ZOOM_LEVELS[next];
     }
 
     function isWaveformTimelineAtFitZoom() {
@@ -130,6 +155,18 @@
         if (typeof refreshWaveformTimelineVisualAfterZoomChange === 'function') {
             refreshWaveformTimelineVisualAfterZoomChange();
         }
+    }
+
+    function waveformTimelineZoomHintLabel(zoom) {
+        const z = snapWaveformTimelineZoom(zoom);
+        return z + '×';
+    }
+
+    function flashWaveformTimelineZoomHint(zoom, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.silent) return;
+        if (typeof flashSeekHint !== 'function') return;
+        flashSeekHint('Zoom', waveformTimelineZoomHintLabel(zoom), 'notice');
     }
 
     function waveformTimelineInnerEl() {
@@ -259,6 +296,7 @@
         if (lanes) lanes.scrollLeft = scrollLeft;
         notifyWaveformTimelineZoomChanged();
         centerWaveformTimelineOnTransport();
+        flashWaveformTimelineZoomHint(z, o);
         return true;
     }
 
@@ -361,15 +399,6 @@
             return;
         }
 
-        if (!delta) return;
-        ev.preventDefault();
-        if (delta < 0) {
-            if (!isWaveformTimelineAtMaxZoom()) {
-                setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
-            }
-        } else if (!isWaveformTimelineAtFitZoom()) {
-            setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, true);
-        }
     }
 
     function onWaveformTimelineWheelCapture(ev) {
@@ -402,6 +431,23 @@
 
     function isWaveformTimelineKeyboardReady() {
         return isWaveformTimelineInteractionReady();
+    }
+
+    /** マーカーリスト上（フォーカスまたはホバー）では ↑/↓ ズームを無効にする */
+    function isWaveformTimelineZoomKeyboardBlocked(e) {
+        if (
+            typeof isMarkerAreaKeyboardActive === 'function' &&
+            isMarkerAreaKeyboardActive({ target: e && e.target })
+        ) {
+            return true;
+        }
+        if (
+            typeof markerPanelPointerInside !== 'undefined' &&
+            markerPanelPointerInside
+        ) {
+            return true;
+        }
+        return false;
     }
 
     function resetWaveformTimelineZoom(opt) {
@@ -439,7 +485,7 @@
             return;
         }
         markerTcEditWaveformZoomActive = true;
-        setWaveformTimelineZoom(MARKER_TC_EDIT_WAVEFORM_ZOOM, true);
+        setWaveformTimelineZoom(MARKER_TC_EDIT_WAVEFORM_ZOOM, true, { silent: true });
     }
 
     function endMarkerTcEditWaveformZoom() {
@@ -449,24 +495,6 @@
             allowDuringPlayback: true,
             silent: true,
         });
-    }
-
-    function toggleWaveformTimelineZoom() {
-        if (isWaveformTimelineAtMaxZoom()) {
-            resetWaveformTimelineZoom();
-        } else {
-            setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
-        }
-    }
-
-    function scrollWaveformTimeline(direction) {
-        const lanes = waveformScrubTargetEl();
-        if (!lanes || isWaveformTimelineAtFitZoom()) return false;
-        const step = Math.max(48, Math.round(waveformTimelineViewportWidthCss() * 0.12));
-        const max = Math.max(0, lanes.scrollWidth - lanes.clientWidth);
-        lanes.scrollLeft = Math.max(0, Math.min(max, lanes.scrollLeft + step * direction));
-        onWaveformLanesScroll();
-        return true;
     }
 
     function handleWaveformTimelineKeydown(e) {
@@ -479,24 +507,27 @@
         }
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
 
-        if (matchUserShortcut(e, 'waveformTimelineZoomToggle')) {
-            e.preventDefault();
-            toggleWaveformTimelineZoom();
-            return true;
-        }
-
-        if (e.ctrlKey || e.altKey || e.metaKey) return false;
-
-        if (
-            matchUserShortcut(e, 'waveformTimelineScrollBack', { allowRepeat: true }) ||
-            matchUserShortcut(e, 'waveformTimelineScrollForward', { allowRepeat: true })
-        ) {
-            e.preventDefault();
-            const dir = matchUserShortcut(e, 'waveformTimelineScrollForward', { allowRepeat: true })
-                ? 1
-                : -1;
-            scrollWaveformTimeline(dir);
-            return true;
+        if (!isWaveformTimelineZoomKeyboardBlocked(e)) {
+            if (matchUserShortcut(e, 'waveformTimelineZoomMax')) {
+                e.preventDefault();
+                setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformTimelineZoomFit')) {
+                e.preventDefault();
+                resetWaveformTimelineZoom();
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformTimelineZoomIn', { allowRepeat: true })) {
+                e.preventDefault();
+                setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(1), true);
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformTimelineZoomOut', { allowRepeat: true })) {
+                e.preventDefault();
+                setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(-1), true);
+                return true;
+            }
         }
 
         return false;
@@ -535,6 +566,8 @@
     window.setWaveformTimelineZoom = setWaveformTimelineZoom;
     window.isWaveformTimelineAtFitZoom = isWaveformTimelineAtFitZoom;
     window.isWaveformTimelineAtMaxZoom = isWaveformTimelineAtMaxZoom;
+    window.isWaveformTimelineZoomKeyboardBlocked = isWaveformTimelineZoomKeyboardBlocked;
+    window.WAVEFORM_TIMELINE_ZOOM_LEVELS = WAVEFORM_TIMELINE_ZOOM_LEVELS;
     window.zoomWaveformTimelineToMarkerPointSec = zoomWaveformTimelineToMarkerPointSec;
     window.zoomWaveformTimelineToMarkerRangeSec = zoomWaveformTimelineToMarkerRangeSec;
     window.handleWaveformTimelineDoubleClickZoom = handleWaveformTimelineDoubleClickZoom;

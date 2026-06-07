@@ -159,16 +159,46 @@
         addExtraTrack: { code: 'KeyN', primary: true, shift: false, alt: false },
 
         // ---------- 波形タイムライン ----------
-        waveformTimelineZoomToggle: {
-            code: 'KeyZ',
+        waveformTimelineZoomIn: {
+            code: 'ArrowUp',
             primary: false,
             ctrl: false,
             meta: false,
             alt: false,
             shift: false,
         },
-        waveformTimelineScrollBack: { code: 'PageUp' },
-        waveformTimelineScrollForward: { code: 'PageDown' },
+        waveformTimelineZoomOut: {
+            code: 'ArrowDown',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        waveformTimelineZoomMax: {
+            code: 'ArrowUp',
+            primary: true,
+            alt: false,
+            shift: false,
+        },
+        waveformTimelineZoomFit: {
+            code: 'ArrowDown',
+            primary: true,
+            alt: false,
+            shift: false,
+        },
+        markerStopJumpPrev: {
+            code: 'ArrowLeft',
+            primary: true,
+            alt: false,
+            shift: false,
+        },
+        markerStopJumpNext: {
+            code: 'ArrowRight',
+            primary: true,
+            alt: false,
+            shift: false,
+        },
         waveformLaneSeekHome: { code: 'Home' },
         waveformLaneSeekEnd: { code: 'End' },
         waveformLaneSeekPrev: { code: 'ArrowLeft' },
@@ -241,8 +271,6 @@
             'Minus',
             'NumpadAdd',
             'NumpadSubtract',
-            'PageUp',
-            'PageDown',
         ],
     };
 
@@ -491,10 +519,11 @@
             masterVolReset: formatShortcutDef(s.masterVolumeResetUnity),
             markerDelete: formatShortcutDef(s.regionDelete),
             feedbackRowNav: chordWithArrows(['Alt'], 'ArrowUp', 'ArrowDown'),
-            markerRowNav: chordWithArrows(['Shift'], 'ArrowUp', 'ArrowDown'),
             cancelEdit: formatShortcutDef(s.cancelEditing),
             submitEdit: formatShortcutDef(s.submitEditing),
-            zoomToggle: formatShortcutDef(s.waveformTimelineZoomToggle),
+            waveformZoom: chordWithArrows([], 'ArrowUp', 'ArrowDown'),
+            waveformZoomExtreme: chordWithArrows(['Ctrl'], 'ArrowUp', 'ArrowDown'),
+            markerStopJump: chordWithArrows(['Ctrl'], 'ArrowLeft', 'ArrowRight'),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
@@ -548,7 +577,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック／ドラッグでシーク。ホイールまたは ${h.zoomToggle} で 1× / 32× 切替、Shift+ホイールで横スクロール。`,
+            `クリック／ドラッグでシーク。${h.waveformZoom} で倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、Shift+ホイールで横スクロール。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
