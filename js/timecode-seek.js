@@ -844,6 +844,22 @@
         }
     }
 
+    /** 明示ジャンプ — 再生中は一度停止し、シーク確定後に再生を再開 */
+    function applyJumpTransportSeek(sec, resumeAfter) {
+        const resume = !!resumeAfter;
+        if (typeof seekTransportToAndWait === 'function') {
+            void seekTransportToAndWait(sec, { resumeAfter: resume });
+            return;
+        }
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(sec, { resumeAfter: resume });
+            return;
+        }
+        if (typeof applyTimeToVideo === 'function') {
+            applyTimeToVideo(sec);
+        }
+    }
+
     async function seekTransportToAndWait(sec, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const keyboardScrub = !!(
@@ -862,12 +878,8 @@
             return true;
         }
         const playingBeforeSeek = captureTransportWasActive();
-        if (playingBeforeSeek) {
-            transportExplicitSeekResumeIntent = true;
-        }
-        if (o.resumeAfter === false && !transportExplicitSeekResumeIntent) {
-            transportExplicitSeekResumeIntent = false;
-        }
+        transportExplicitSeekResumeIntent =
+            playingBeforeSeek && o.resumeAfter !== false;
 
         transportExplicitSeekTargetSec = sec;
         const serial = ++transportExplicitSeekSerial;

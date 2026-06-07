@@ -494,8 +494,11 @@
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
         }
-        if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(t, Object.assign({ resumeAfter: false }, opt || {}));
+        const resumeAfter = !!(opt && opt.resumeAfter);
+        if (typeof applyJumpTransportSeek === 'function') {
+            applyJumpTransportSeek(t, resumeAfter);
+        } else if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(t, { resumeAfter: resumeAfter });
         } else {
             if (typeof transportPlaybackSec !== 'undefined') {
                 transportPlaybackSec = t;

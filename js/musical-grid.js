@@ -1229,7 +1229,9 @@
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
         }
-        if (typeof applyTransportAtSec === 'function') {
+        if (typeof applyJumpTransportSeek === 'function') {
+            applyJumpTransportSeek(target, resumeAfter);
+        } else if (typeof applyTransportAtSec === 'function') {
             applyTransportAtSec(target, { resumeAfter: resumeAfter });
         } else if (typeof applyTimeToVideo === 'function') {
             applyTimeToVideo(target);
@@ -1734,7 +1736,9 @@
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
         }
-        if (typeof applyTransportAtSec === 'function') {
+        if (typeof applyJumpTransportSeek === 'function') {
+            applyJumpTransportSeek(target, resumeAfter);
+        } else if (typeof applyTransportAtSec === 'function') {
             applyTransportAtSec(target, { resumeAfter: resumeAfter });
         } else if (typeof applyTimeToVideo === 'function') {
             applyTimeToVideo(target);
@@ -3094,7 +3098,9 @@
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
         }
-        if (typeof applyTransportAtSec === 'function') {
+        if (typeof applyJumpTransportSeek === 'function') {
+            applyJumpTransportSeek(target, resumeAfter);
+        } else if (typeof applyTransportAtSec === 'function') {
             applyTransportAtSec(target, { resumeAfter: resumeAfter });
         } else if (typeof applyTimeToVideo === 'function') {
             applyTimeToVideo(target);
