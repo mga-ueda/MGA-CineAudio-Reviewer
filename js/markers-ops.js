@@ -358,8 +358,8 @@
         addRangeMarkerBetweenSecs(start, currentTransportSec());
     }
 
-    function clampMarkerSec(sec) {
-        const dur = masterDurForTimelineMarkers();
+    function clampMarkerSec(sec, opt) {
+        const dur = masterDurForTimelineMarkers(opt);
         if (!dur || dur <= 0) return 0;
         return Math.max(0, Math.min(dur - 0.001, sec));
     }
@@ -511,7 +511,6 @@
         const sec = transportSecFromMarkerTcString(trimmed);
         if (sec == null) return null;
         return { kind: 'sec', sec: sec };
-        return null;
     }
 
     /** 範囲マーカーの Out TC を削除し、同じ In 位置の点マーカーに戻す */
@@ -534,13 +533,14 @@
     function applyMarkerTcEdit(markerId, edge, sec, opt) {
         const m = currentMarkers.find((x) => x.id === markerId);
         if (!m) return false;
-        const t = clampMarkerSec(sec);
+        const clampSec = opt && opt.clampSec;
+        const t = clampMarkerSec(sec, clampSec);
         const oneFrame = markerOneFrameSec();
         if (m.type === 'point') {
             if (edge === 'in') {
                 m.timeSec = t;
             } else if (edge === 'out') {
-                const start = clampMarkerSec(m.timeSec);
+                const start = clampMarkerSec(m.timeSec, clampSec);
                 m.type = 'range';
                 m.startSec = start;
                 m.endSec = Math.max(start + oneFrame, t);
@@ -578,22 +578,6 @@
     }
 
     /** +/- 用: Out が空の点マーカーは In 位置を基準にする（従来どおり） */
-    function markerTcFrameIndexForNudge(m, edge) {
-        const effEdge = effectiveMarkerTcEdge(m, edge);
-        let idx = markerTcFrameIndexForEdge(m, effEdge);
-        if (idx != null) return idx;
-        if (effEdge === 'out') {
-            const inSec = markerInSec(m);
-            if (Number.isFinite(inSec)) {
-                return playbackFrameIndexForSide(
-                    markerVideoSecForTransportSec(inSec),
-                    'main',
-                );
-            }
-        }
-        return null;
-    }
-
     function markerVideoSecForTcInputRaw(raw, m, edge) {
         const trimmed = String(raw || '').trim();
         if (trimmed) {
@@ -638,30 +622,39 @@
         input.value = markerListRowTcValueForEdge(m, eff);
     }
 
+    /** +/- 用: モデルのトランスポート秒を基準にする（映像終端以降のマスター尺も移動可） */
+    function markerTransportSecForNudge(m, edge, inputOpt) {
+        const effEdge = effectiveMarkerTcEdge(m, edge);
+        let sec = markerTcSecForEdge(m, effEdge);
+        if (sec != null && Number.isFinite(sec)) return sec;
+        if (effEdge === 'out') {
+            sec = markerInSec(m);
+            if (Number.isFinite(sec)) return sec;
+        }
+        if (inputOpt && inputOpt.value) {
+            const fromTc = transportSecFromMarkerTcString(String(inputOpt.value).trim());
+            if (fromTc != null) return fromTc;
+        }
+        return null;
+    }
+
     function nudgeMarkerTcByEdge(m, edge, sign, bySeconds, inputOpt) {
         if (!m || !markerTimelineReady() || !Number.isFinite(sign) || sign === 0) return false;
         const effEdge = effectiveMarkerTcEdge(m, edge);
-        let idx = markerTcFrameIndexForNudge(m, edge);
-        if (idx == null) {
-            const raw = inputOpt && inputOpt.value ? inputOpt.value : '';
-            idx = frameIndexFromMarkerTcInputRaw(raw, m, effEdge);
+        const currentSec = markerTransportSecForNudge(m, edge, inputOpt);
+        if (currentSec == null) return false;
+        const delta = bySeconds ? sign : sign * markerOneFrameSec();
+        const rawNewSec = currentSec + delta;
+        const clampSec = { pendingSec: rawNewSec };
+        const newSec = clampMarkerSec(rawNewSec, clampSec);
+        if (
+            !applyMarkerTcEdit(m.id, effEdge, newSec, {
+                skipMarkerList: true,
+                clampSec,
+            })
+        ) {
+            return false;
         }
-        if (idx == null) return false;
-        let newIdx;
-        if (bySeconds) {
-            const transportSec = transportSecFromPlaybackFrameIndex(idx);
-            if (transportSec == null) return false;
-            const bumped = clampMarkerSec(transportSec + sign);
-            newIdx = playbackFrameIndexForSide(
-                markerVideoSecForTransportSec(bumped),
-                'main',
-            );
-        } else {
-            newIdx = clampFrameIndexToClip(idx + sign, 'main');
-        }
-        const newSec = transportSecFromPlaybackFrameIndex(newIdx);
-        if (newSec == null) return false;
-        if (!applyMarkerTcEdit(m.id, effEdge, newSec, { skipMarkerList: true })) return false;
         const t = commitMarkerTransportSeek(newSec);
         syncMarkerSeekTransportUi(t);
         const input =

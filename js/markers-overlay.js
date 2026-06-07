@@ -657,8 +657,25 @@
             : transportSec;
     }
 
-    /** マーカー欄 TC は動画焼き込み TC（映像位置）と一致させる。 */
+    function markerTransportSecIsBeyondVideoEnd(transportSec) {
+        if (!Number.isFinite(transportSec)) return false;
+        if (typeof videoReady === 'function' && !videoReady()) return false;
+        const vd =
+            typeof getVideoPlaybackEndSec === 'function' ? getVideoPlaybackEndSec() : 0;
+        if (!(vd > 0)) return false;
+        const eps =
+            typeof masterTransportTailEpsilonSec === 'function'
+                ? masterTransportTailEpsilonSec()
+                : 0.001;
+        return transportSec > vd - eps;
+    }
+
+    /** マーカー欄 TC: 映像内は焼き込み TC、動画終端以降はトランスポート TC。 */
     function tcLabelForSec(transportSec) {
+        if (!Number.isFinite(transportSec)) return '';
+        if (markerTransportSecIsBeyondVideoEnd(transportSec)) {
+            return formatTimecodeForTransport(transportSec);
+        }
         return formatTimecodeForSide(markerVideoSecForTransportSec(transportSec), 'main');
     }
 
@@ -719,7 +736,7 @@
         };
     }
 
-    function masterDurForTimelineMarkers() {
+    function masterDurForTimelineMarkers(opt) {
         let dur = 0;
         if (typeof getMasterTransportDurationSec === 'function') {
             dur = getMasterTransportDurationSec();
@@ -727,24 +744,26 @@
         if (!dur || dur <= 0) {
             dur = getDuration(videoMain);
         }
-        if (currentMarkers.length > 0) {
-            let markerMax = 0;
-            for (const m of currentMarkers) {
-                if (m.type === 'range') {
-                    markerMax = Math.max(
-                        markerMax,
-                        Number(m.startSec),
-                        Number(m.endSec),
-                    );
-                } else {
-                    markerMax = Math.max(markerMax, Number(m.timeSec));
-                }
+        let markerMax = 0;
+        for (const m of currentMarkers) {
+            if (m.type === 'range') {
+                markerMax = Math.max(
+                    markerMax,
+                    Number(m.startSec),
+                    Number(m.endSec),
+                );
+            } else {
+                markerMax = Math.max(markerMax, Number(m.timeSec));
             }
-            if (Number.isFinite(markerMax) && markerMax > 0) {
-                const floor = markerMax + Math.max(markerOneFrameSec(), 0.04);
-                if (dur <= 0.01 + 1e-6 || floor > dur) {
-                    dur = Math.max(dur, floor);
-                }
+        }
+        const pending = opt && opt.pendingSec;
+        if (Number.isFinite(pending) && pending > 0) {
+            markerMax = Math.max(markerMax, pending);
+        }
+        if (Number.isFinite(markerMax) && markerMax > 0) {
+            const floor = markerMax + Math.max(markerOneFrameSec(), 0.04);
+            if (dur <= 0.01 + 1e-6 || floor > dur) {
+                dur = Math.max(dur, floor);
             }
         }
         return dur > 0 ? dur : 0;
