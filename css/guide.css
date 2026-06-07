@@ -2,7 +2,7 @@
 
 .guide-page__layout {
     display: grid;
-    grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
     gap: 0 24px;
     max-width: 1180px;
     margin: 0 auto;
@@ -31,18 +31,73 @@
     font-size: 0.82rem;
 }
 
+.guide-nav__list {
+    list-style: decimal;
+}
+
+.guide-nav__list > li {
+    margin-bottom: 0.55em;
+}
+
+.guide-nav__list > li:last-child {
+    margin-bottom: 0;
+}
+
+.guide-nav__group:not(.guide-nav__group--open) .guide-nav__sublist {
+    display: none;
+}
+
+.guide-nav__group.guide-nav__group--open .guide-nav__sublist {
+    display: block;
+}
+
+.guide-nav__sublist {
+    margin: 0.35em 0 0;
+    padding-left: 1rem;
+    list-style: none;
+    font-size: 0.74rem;
+    line-height: 1.35;
+}
+
+.guide-nav__sublist li {
+    margin-bottom: 0.28em;
+    position: relative;
+    padding-left: 0.65rem;
+}
+
+.guide-nav__sublist li::before {
+    content: '·';
+    position: absolute;
+    left: 0;
+    color: var(--app-text-muted);
+}
+
+.guide-nav__sublist li:last-child {
+    margin-bottom: 0;
+}
+
+.guide-nav__list > li > .guide-nav__chapter,
+.guide-nav__list > li > a {
+    font-weight: 600;
+}
+
 .guide-nav li {
     margin-bottom: 0.4em;
 }
 
 .guide-nav a {
-    color: var(--app-doc-text);
+    color: var(--app-accent);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color 0.15s ease, opacity 0.15s ease;
 }
 
 .guide-nav a:hover {
-    color: var(--app-accent);
+    text-decoration: underline;
+}
+
+.guide-nav a[aria-current="location"] {
+    text-decoration: underline;
+    font-weight: 700;
 }
 
 .guide-main {
@@ -68,10 +123,20 @@
     padding: 7px 12px;
     font-size: 0.96rem;
     border-radius: 6px;
+    scroll-margin-top: 20px;
 }
 
 .guide-section p {
     margin: 0 0 0.75em;
+}
+
+.guide-section a {
+    color: var(--app-accent);
+    text-decoration: none;
+}
+
+.guide-section a:hover {
+    text-decoration: underline;
 }
 
 .guide-section ul,
