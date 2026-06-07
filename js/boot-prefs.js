@@ -3,11 +3,14 @@
  */
     function initPrefsFromStorage() {
         try {
+            const p = readPrefs();
             if (typeof applyTransportPrefsFromStorage === 'function') {
-                applyTransportPrefsFromStorage(readPrefs());
+                applyTransportPrefsFromStorage(p);
             } else {
-                const p = readPrefs();
                 applySavedLoopPlayback(p.loopPlayback);
+            }
+            if (typeof applyDebugLogFromPrefs === 'function') {
+                applyDebugLogFromPrefs(p);
             }
         } catch (_) {}
     }

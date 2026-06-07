@@ -102,7 +102,7 @@
                             </ul>
                         </li>
                         <li>
-                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / Analyze / レビュー入出力 / Master Vol）。
+                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / P. Offset / Analyze / レビュー入出力 / Master Vol）。
                         </li>
                         <li>
                             <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
@@ -136,7 +136,7 @@
                 <h3 class="docs-heading-box--sub">まとめて読み込む</h3>
                 <ul>
                     <li>ページ内の任意の場所へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
-                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（まとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て）。</li>
+                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（まとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て。波形エリア全体へ複数ファイルをドロップした場合も同様に<strong>1 ファイルずつ</strong>空き Ex へ順に入ります）。</li>
                     <li>映像フレームが空のときは、フレームを<strong>クリック</strong>してファイル選択ダイアログを開けます。</li>
                 </ul>
 
@@ -294,17 +294,27 @@
                     <li>リージョン左上・右上の<strong>Fade In / Fade Out 三角</strong>を内側へドラッグすると、リージョン端のフェード長を調整できます（曲線表示付き）。</li>
                     <li>リージョン上で <kbd>Alt</kbd>+ホイールすると ±1dB刻みでそのリージョンの音量補正（中央に赤いdB表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの<strong>Comment</strong>列に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0dB 下げる</code>）が入ります。<strong>0.0dB</strong>に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In/Out とコメント列を更新します。</li>
                     <li>リージョン情報（ソース In/Out・音量補正 dB など）は、<kbd>Ctrl</kbd>+クリックでリージョンを<strong>選択</strong>（シアン枠）したうえで <kbd>Ctrl</kbd>+<kbd>C</kbd> でコピーし、<kbd>Ctrl</kbd>+<kbd>V</kbd> で同じ Audio Track の<strong>コピー元リージョンの直後</strong>にペーストできます。直後にちょうど収まる隙間があればそこへ配置し、足りなければ後続リージョンを後ろへずらします。</li>
-                    <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。リージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>のやや太い枠で示されます。</li>
+                    <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> のときは、リージョン間の<strong>無音スロット</strong>も <kbd>Ctrl</kbd>+クリックで選択でき、無音スロット 1 つ＋リージョン 1 つの組み合わせで <kbd>E</kbd> による入れ替えが可能です。<kbd>Ctrl</kbd> なしでリージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>のやや太い枠で示されます。</li>
                     <li><strong>グループ化</strong> — 2つ以上選択した状態で <kbd>G</kbd>。Audio Track をまたいで可。成功するとメンバー全員の枠が一度黄色に発光します。通常時の見た目は通常リージョンと同じで、<strong>ホバー時</strong>にグループの全メンバーが黄色枠になります。グループ内のいずれかを<strong>ドラッグ</strong>すると、メンバー全体が同じ時間差で平行移動します（開始位置が異なる場合でも、いずれかがタイムライン先頭に達したらそこでグループ全体が止まります）。</li>
                     <li><strong>グループ解除</strong> — グループ内のリージョンを選択して <kbd>G</kbd>（グループ化と同じキー）。</li>
-                    <li><strong>入れ替え</strong> — <strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>、2リージョンを <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd> を押すと、タイムライン上の順序（フレーズの並び）を入れ替えます（<strong>隣接していなくても可</strong>）。各リージョンの<strong>元の長さ</strong>を保ち、先の位置に収まらない場合は後続を後ろへずらして空け、短くなった側では余った隙間を詰めます。入れ替え不能なときは赤いトーストで通知されます（同一 Audio Track・未グループの2つのみ）。</li>
+                    <li><strong>入れ替え</strong> — <strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>、同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>E</strong>xchange の頭文字）を押すと、タイムライン上の順序（フレーズの並び）を入れ替えます（<strong>隣接していなくても可</strong>）。各リージョンの<strong>元の長さ</strong>を保ち、先の位置に収まらない場合は後続を後ろへずらして空け、短くなった側では余った隙間を詰めます。入れ替え不能なときは赤いトーストで通知されます。</li>
                     <li><strong>スプリット</strong>（<kbd>X</kbd>）— <strong>Tempo/Sig</strong>（<kbd>T</kbd>）OFF 時：リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブトラック</strong>（トラック名が赤い Audio Track）を<strong>シークバー</strong>（再生ヘッド）の位置で分割。Tempo/Sig ON 時はフレーズ分割（「トランスポート」参照）。</li>
-                    <li><strong>結合</strong>（<kbd>B</kbd>）— Tempo/Sig OFF 時：隣接リージョンの境界上にポインタを置いてから実行。同一クリップ内で<strong>波形が連続している境界</strong>（分割直後のような状態）のみ結合できます。リージョンを入れ替えたり重ねてクロスフェードしている場合、Fade In/Out で境界をまたいでいる場合は結合できません。Tempo/Sig ON 時はフレーズ連結。</li>
+                    <li><strong>結合</strong>（<kbd>B</kbd> — <strong>B</strong>ond の頭文字）— Tempo/Sig OFF 時：隣接リージョンの境界上にポインタを置いてから実行。同一クリップ内で<strong>波形が連続している境界</strong>（分割直後のような状態）のみ結合できます。リージョンを入れ替えたり重ねてクロスフェードしている場合、Fade In/Out で境界をまたいでいる場合は結合できません。Tempo/Sig ON 時はフレーズ連結。</li>
                     <li><strong>削除</strong> — Tempo/Sig OFF 時：<kbd>Ctrl</kbd>+クリックでリージョンを<strong>選択</strong>（シアン枠）したうえで <kbd>Del</kbd> で削除（複数選択時はまとめて削除。最後の1つを消すとリージョン表示を解除）。Tempo/Sig ON 時はフレーズ削除を先に判定。</li>
                     <li><strong>元に戻す/やり直し</strong> — スプリット・削除・範囲変更などは <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> で履歴をさかのぼれます（回数無制限）。フレーズ定義の履歴が残っているときはそちらを優先します。</li>
-                    <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。<strong>複数選択中</strong>は選択だけ解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン表示を解除します（ショートカット表の Esc 優先順位を参照）。</li>
+                    <li><strong>Esc</strong> — ハンドル操作中はドラッグ取消。<strong>リージョン・無音スロットの複数選択中</strong>は選択だけ解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン表示を解除します（ショートカット表の Esc 優先順位を参照）。</li>
                     <li>各レーン右端付近には、読み込み済みクリップの<strong>インテグレーテッド LKFS</strong>（ITU-R BS.1770 系）が表示されます（デコード完了後に計測）。</li>
                 </ul>
+
+                <h3 class="docs-heading-box--sub">Phrase 着色時のオーバーレイ（練習番号・無音スロット）</h3>
+                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track のリージョンとリージョン間の<strong>無音スロット</strong>に、練習番号などのラベルが重なって表示されます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
+                <ul>
+                    <li><strong>練習番号（A / B / C …）</strong> — フレーズスロットごとの練習用番号。Phrase 着色 ON ではリージョン中央付近に大きく表示されます。</li>
+                    <li><strong>スロット番号（左下）</strong> — タイムライン上の内部スロット位置（A B …）。入れ替え前の由来を示すラベルと、Tempo/Sig・小節数のメタ情報（例: <code>140-4/4 8</code>）が併記されることがあります。</li>
+                    <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。Phrase 着色 ON では練習番号と同様の表示が付き、<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
+                    <li><strong>P. Offset</strong> — 上記の <strong>フレーズオフセット</strong>。先頭フレーズをアウフタクトとして番号なしにし、本編から A を始めます（詳細は「トランスポート」の P. Offset を参照）。</li>
+                </ul>
+                <p>Phrase 着色 OFF のときは、練習番号・スロット番号・無音スロット上のラベルは非表示です（リージョン操作自体は従来どおり可能）。</p>
 
                 <h3 class="docs-heading-box--sub">範囲ループ（波形上）</h3>
                 <ul>
@@ -340,8 +350,9 @@
                 <h3 class="docs-heading-box--sub">波形直下（オプションバー上段）</h3>
                 <ul>
                     <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
-                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。</li>
-                    <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時も <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。</li>
+                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。</li>
+                    <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時も <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
+                    <li><strong>P. Offset</strong> — <strong>フレーズオフセット</strong>（Phrase Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。Import/Export Review（.mgacr）にのみ保存されます。</li>
                     <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Analyze / レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
                 </ul>
 
@@ -349,10 +360,10 @@
                 <p><strong>Tempo/Sig</strong>（<kbd>T</kbd>）が ON のとき、<kbd>X</kbd> / <kbd>B</kbd> / <kbd>Del</kbd> は再生リージョンではなく<strong>フレーズ定義</strong>の操作になります（この3キーでは Phrase 着色 <kbd>P</kbd> は不要）。編集結果は Phrase 入力欄に反映され、セッション保存の対象です。</p>
                 <ul>
                     <li><strong>分割</strong>（<kbd>X</kbd>）— 小節線でフレーズを2つに分けます。波形上ではポインタ近くの小節線、<strong>波形トラック外</strong>（再生中も同様）では<strong>シークバー</strong>に最も近い小節線を使います。既存のフレーズ境界上では分割できません。</li>
-                    <li><strong>連結</strong>（<kbd>B</kbd>）— 隣接する2フレーズを1つにします。波形上ではポインタ近くの<strong>フレーズ境界</strong>、波形トラック外ではシークバーが<strong>フレーズ境界上</strong>にあるときのみ（フレーズ途中では不可）。</li>
+                    <li><strong>連結</strong>（<kbd>B</kbd> — <strong>B</strong>ond の頭文字）— 隣接する2フレーズを1つにします。波形上ではポインタ近くの<strong>フレーズ境界</strong>、波形トラック外ではシークバーが<strong>フレーズ境界上</strong>にあるときのみ（フレーズ途中では不可）。</li>
                     <li><strong>削除</strong>（<kbd>Del</kbd>）— 対象フレーズを隣接フレーズへ吸収して消します。波形上ではポインタ下のフレーズ、波形トラック外ではシークバー位置のフレーズ。残り1フレーズのときは削除できません。</li>
                     <li><strong>境界ドラッグ</strong> — 上記キーとは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。着色帯上の境界ハンドルをドラッグして隣接フレーズ間の小節数を調整できます。左へドラッグで左フレーズを短く／右フレーズを長くし、さらに左端で左フレーズを右へ吸収。右へドラッグで逆方向の再分配・結合ができます。</li>
-                    <li><strong>リージョン入れ替え</strong> — 上記とは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。同一 Audio Track 上で2リージョンを <kbd>Ctrl</kbd>+クリックで選択し <kbd>E</kbd> でフレーズの並びを入れ替えます（<strong>隣接していなくても可</strong>。元の長さを保ち、必要なら後続をずらして空け、余りは詰め）。</li>
+                    <li><strong>リージョン入れ替え</strong> — 上記とは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。同一 Audio Track 上で 2 リージョン、または無音スロット 1 つ＋リージョン 1 つを <kbd>Ctrl</kbd>+クリックで選択し <kbd>E</kbd>（<strong>E</strong>xchange の頭文字）でフレーズの並びを入れ替えます（<strong>隣接していなくても可</strong>。元の長さを保ち、必要なら後続をずらして空け、余りは詰め）。</li>
                     <li><strong>元に戻す/やり直し</strong> — 上記および Phrase 入力欄の変更は <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> で履歴をさかのぼれます。フレーズの履歴が空のときは、従来どおりリージョン編集の Undo/Redo になります。</li>
                 </ul>
 
@@ -400,7 +411,7 @@
                 <ul>
                     <li><strong>Include in export</strong> の <strong>Video</strong> がオンなら、動画は <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
                     <li><strong>Audio</strong> がオンなら、追加音声（読み込み済みの全 Audio Track）を<strong>すべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
-                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、再生位置、表示設定など。</li>
+                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、<strong>P. Offset</strong>（フレーズオフセット／アウフタクト設定）、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 
@@ -434,7 +445,7 @@
 
             <section class="guide-section" id="log">
                 <h2 class="docs-heading-box">ログ</h2>
-                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
+                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログ（<code>[RegionRestore]</code> / <code>[MusicalSlot]</code> など）も出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -444,7 +455,7 @@
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>トランスポート上段の <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<kbd>O</kbd>（トランスポート下段のオプションとログの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd>（Musical Grid 表示切替）、<kbd>P</kbd>（Musical Grid フレーズ表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集があります。</p>
+                <p>最近追加した主なキーとして、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプションとログの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Musical Grid 表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>

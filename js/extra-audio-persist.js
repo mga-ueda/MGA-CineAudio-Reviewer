@@ -304,11 +304,8 @@
                 onBuilt(buildPeakPyramidFromBuffer(buffer));
             }
         };
-        if (typeof requestIdleCallback === 'function') {
-            requestIdleCallback(run, { timeout: 3000 });
-        } else {
-            setTimeout(run, 16);
-        }
+        /* 複数 Ex 同時デコード時は idle が遅延しやすい — 早めに pyramid を構築 */
+        setTimeout(run, 0);
     }
 
     /** 表示中かつ読み込み済みの Ex スロット */

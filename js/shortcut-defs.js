@@ -37,8 +37,38 @@
         loopToggle: { code: 'KeyL' },
 
         // ---------- 表示 ----------
-        musicalGridToggle: { code: 'KeyT' },
-        musicalGridPhraseToggle: { code: 'KeyP' },
+        musicalGridToggle: {
+            code: 'KeyT',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        musicalGridPhraseToggle: {
+            code: 'KeyP',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        musicalGridMeterFocus: {
+            code: 'KeyT',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: true,
+            shift: false,
+        },
+        musicalGridPhraseFocus: {
+            code: 'KeyP',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: true,
+            shift: false,
+        },
         videoMarkersPanelsToggle: {
             code: 'KeyF',
             primary: false,
@@ -72,8 +102,8 @@
         cancelEditing: { key: 'Escape' },
 
         // ---------- リージョン編集 ----------
-        regionSplit: { code: 'KeyX' },
-        regionJoin: { code: 'KeyB' },
+        regionSplit: { code: 'KeyX', shift: false },
+        regionJoin: { code: 'KeyB', shift: false },
         regionGroup: {
             code: 'KeyG',
             primary: false,
@@ -332,6 +362,8 @@
             analyze: formatShortcutDef(s.analyzeToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
             musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
+            musicalGridMeterFocus: formatShortcutDef(s.musicalGridMeterFocus),
+            musicalGridPhraseFocus: formatShortcutDef(s.musicalGridPhraseFocus),
             sessionImport: formatShortcutDef(s.sessionImport),
             sessionExport: formatShortcutDef(s.sessionExport),
             sessionAllClear: formatShortcutDef(s.sessionAllClear),
@@ -413,6 +445,11 @@
             const phraseLbl = phraseChk.closest('label');
             setElementTitle(phraseLbl, phraseTitle);
         }
+
+        const meterInputTitle = `Tempo/Sig（${h.musicalGridMeterFocus} で編集、Enter/Esc で確定）`;
+        setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
+        const phraseInputTitle = `Phrase 小節数（${h.musicalGridPhraseFocus} で編集、Enter/Esc で確定）`;
+        setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
 
         const analyzeTitle = `スペクトラムとレベルメーターを表示（${h.analyze} で切替）`;
         setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);

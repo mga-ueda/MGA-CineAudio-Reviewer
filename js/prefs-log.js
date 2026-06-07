@@ -2,6 +2,43 @@
  * prefs-log.js — localStorage 設定の読み書き、ログパネル、確認ダイアログ、writeLog。
  */
     let logLines = [];
+    let debugLogEnabled = false;
+
+    function isDebugLogEnabled() {
+        return !!debugLogEnabled;
+    }
+
+    function syncDebugLogCheckbox() {
+        const cb = document.getElementById('logDebugCheckbox');
+        if (cb) cb.checked = !!debugLogEnabled;
+    }
+
+    function applyDebugLogFromPrefs(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        setDebugLogEnabled(p.debugLogEnabled === true, { persist: false, logChange: false });
+    }
+
+    function setDebugLogEnabled(on, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const next = !!on;
+        const changed = next !== debugLogEnabled;
+        debugLogEnabled = next;
+        syncDebugLogCheckbox();
+        if (o.persist !== false && typeof writePrefs === 'function') {
+            writePrefs();
+        }
+        if (changed && o.logChange !== false && typeof writeLog === 'function') {
+            writeLog(
+                next
+                    ? 'Debug Log enabled ([RegionRestore], [MusicalSlot], etc.)'
+                    : 'Debug Log disabled',
+            );
+        }
+    }
+
+    window.isDebugLogEnabled = isDebugLogEnabled;
+    window.setDebugLogEnabled = setDebugLogEnabled;
+    window.applyDebugLogFromPrefs = applyDebugLogFromPrefs;
 
     function syncLogEl() {
         if (!logEl) return;
@@ -196,6 +233,13 @@
                 }
             });
         }
+        const debugCb = document.getElementById('logDebugCheckbox');
+        if (debugCb) {
+            syncDebugLogCheckbox();
+            debugCb.addEventListener('change', () => {
+                setDebugLogEnabled(debugCb.checked);
+            });
+        }
     })();
 
     function logArrowSeekDebounced(msg) {
@@ -318,9 +362,10 @@
             }
             if (typeof window.isTimecodeOverlayUserHidden === 'function') {
                 payload.timecodeOverlayHidden = window.isTimecodeOverlayUserHidden();
-            } else if (typeof prev.timecodeOverlayHidden === 'boolean') {
+            } else             if (typeof prev.timecodeOverlayHidden === 'boolean') {
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }
+            payload.debugLogEnabled = isDebugLogEnabled();
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
         } catch (_) {}
     }

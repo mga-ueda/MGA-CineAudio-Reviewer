@@ -15,6 +15,46 @@
 
     const measureGenByTrack = new WeakMap();
     const lkfsPendingByTrack = new WeakMap();
+    const lkfsValueByTrack = new WeakMap();
+
+    function isWaveformTrackLkfsDisplaySuppressed() {
+        if (typeof getMusicalGridVisible === 'function' && getMusicalGridVisible()) {
+            return true;
+        }
+        if (
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible()
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    function refreshAllWaveformTrackLkfsVisibility() {
+        const suppressed = isWaveformTrackLkfsDisplaySuppressed();
+        const trackEls = [];
+        const main = document.getElementById('audioWaveformTrack');
+        if (main) trackEls.push(main);
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            const el = document.getElementById('extraAudioTrack' + slot);
+            if (el) trackEls.push(el);
+        }
+        for (let i = 0; i < trackEls.length; i++) {
+            const trackEl = trackEls[i];
+            const el = getTrackLkfsEl(trackEl);
+            if (!el) continue;
+            if (suppressed) {
+                el.hidden = true;
+                continue;
+            }
+            const lkfs = lkfsValueByTrack.get(trackEl);
+            if (Number.isFinite(lkfs)) {
+                el.textContent = formatLkfsDisplay(lkfs);
+                el.hidden = false;
+            }
+        }
+    }
 
     function channelWeights(channelCount) {
         switch (channelCount | 0) {
@@ -307,12 +347,14 @@
         if (!el) return;
         const text = formatLkfsDisplay(lkfs);
         if (!text) {
+            if (trackEl) lkfsValueByTrack.delete(trackEl);
             el.textContent = '';
             el.hidden = true;
             return;
         }
+        if (trackEl) lkfsValueByTrack.set(trackEl, lkfs);
         el.textContent = text;
-        el.hidden = false;
+        el.hidden = isWaveformTrackLkfsDisplaySuppressed();
     }
 
     function setWaveformTrackLkfsPending(trackEl, pending) {
@@ -356,8 +398,12 @@
         if (!lkfsEl) return;
         setWaveformTrackLkfsPending(trackEl, true);
         syncLoadingForTrackEl(trackEl);
-        lkfsEl.textContent = '…';
-        lkfsEl.hidden = false;
+        if (!isWaveformTrackLkfsDisplaySuppressed()) {
+            lkfsEl.textContent = '…';
+            lkfsEl.hidden = false;
+        } else {
+            lkfsEl.hidden = true;
+        }
 
         if (!(opt && opt.skipYield)) {
             await yieldToBrowser();
@@ -379,4 +425,9 @@
     window.clearWaveformTrackLkfs = clearWaveformTrackLkfs;
     window.scheduleWaveformTrackLkfsMeasure = scheduleWaveformTrackLkfsMeasure;
     window.isWaveformTrackLkfsReady = isWaveformTrackLkfsReady;
+    window.refreshAllWaveformTrackLkfsVisibility = refreshAllWaveformTrackLkfsVisibility;
+
+    if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => refreshAllWaveformTrackLkfsVisibility());
+    }
 })();

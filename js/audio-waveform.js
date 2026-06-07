@@ -716,20 +716,6 @@
         });
     }
 
-    function getActiveMixExtraSlotFromDomLocal() {
-        for (let slot = 0; slot < extraTrackSlotCount(); slot++) {
-            const meta = document.getElementById('extraAudioMeta' + slot);
-            if (
-                meta &&
-                !meta.hidden &&
-                meta.classList.contains('audio-waveform-lane-meta--active')
-            ) {
-                return slot;
-            }
-        }
-        return -1;
-    }
-
     function isMixExtraSlotUsable(slot) {
         if (!(slot >= 0)) return false;
         if (typeof isExtraTrackLoaded === 'function' && isExtraTrackLoaded(slot)) {
@@ -749,7 +735,10 @@
 
     /** アクティブ Ex が無いとき 1 トラック目（最初に利用可能な Ex）を赤表示にする */
     function ensureDefaultActiveMixExtraSlot() {
-        const domSlot = getActiveMixExtraSlotFromDomLocal();
+        const domSlot =
+            typeof getActiveMixExtraSlotFromDom === 'function'
+                ? getActiveMixExtraSlotFromDom()
+                : -1;
         if (domSlot >= 0 && isMixExtraSlotUsable(domSlot)) {
             lastActiveMixExtraSlot = domSlot;
             return domSlot;
@@ -956,6 +945,7 @@
         if (t.closest('.seek-bar-marker')) return true;
         if (t.closest('.audio-waveform-composite__phrase-boundary-handle')) return true;
         if (t.closest('.audio-waveform-composite__seek-input')) return true;
+        if (t.closest('.audio-waveform-lane__playback-silent-gap')) return true;
         if (
             typeof isPointerInRegionEwCursorHitZone === 'function' &&
             isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY)
@@ -1028,6 +1018,15 @@
                 : null;
 
         // Ctrl/Cmd+クリックは shouldSkipWaveformPointerGesture で弾かれるため、先に選択を処理する
+        // 無音スロットをリージョンより先 — 長尺リージョンのタイムライン跨ぎで誤ヒットしないよう
+        if (
+            typeof handleSilentGapSelectionPointerDown === 'function' &&
+            handleSilentGapSelectionPointerDown(ev)
+        ) {
+            cancelWaveformPointerGesture();
+            return;
+        }
+
         if (
             regionHit &&
             typeof handleRegionSelectionPointerDown === 'function' &&
@@ -1037,7 +1036,7 @@
             return;
         }
 
-        if (typeof clearRegionSelection === 'function') {
+        if (!(ev.ctrlKey || ev.metaKey) && typeof clearRegionSelection === 'function') {
             clearRegionSelection();
         }
 
@@ -1546,8 +1545,9 @@
                 startRegionInByKey: waveformOffsetDragGroupStartRegionInByKey,
                 startAnchorByKey: waveformOffsetDragGroupStartAnchorByKey,
                 skipPersist: !!(opt && opt.skipPersist),
-                forceAudio: true,
-                skipUndo: true,
+                forceAudio: !!(opt && opt.forceAudio !== false),
+                skipUndo: !!(opt && opt.skipUndo),
+                geometryOnly: !!(opt && opt.geometryOnly),
             });
         }
     }
@@ -1639,6 +1639,7 @@
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
                     skipPersist: true,
+                    geometryOnly: true,
                 });
             } else {
                 applyWaveformTimelineStartFromDrag(slot, next, { skipPersist: true });
@@ -1651,8 +1652,20 @@
                 waveformOffsetDragStartClientX,
             );
             const next = waveformOffsetDragStartTimelineSec + delta;
+            const dragMembers =
+                waveformOffsetDragGroupMembers && waveformOffsetDragGroupMembers.length
+                    ? waveformOffsetDragGroupMembers.slice()
+                    : waveformOffsetDragSegmentIndex >= 0
+                      ? [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }]
+                      : [];
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next);
+                if (
+                    dragMembers.length &&
+                    typeof finalizeRegionOffsetDragPresentation === 'function'
+                ) {
+                    finalizeRegionOffsetDragPresentation(dragMembers);
+                }
             } else {
                 applyWaveformTimelineStartFromDrag(slot, next);
             }

@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.04';
+    const APP_VERSION = '0.05';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.05',
+            date: '2026年6月7日',
+            items: [
+                'Playback Region をタイムラインスロット・無音区間・Phrase 練習番号付きオーバーレイへ拡張し、関連 JS を責務別に分割。複数 Ex 同時ドロップ時のリージョン縮小とセッション保存競合を修正。P. Offset（フレーズオフセット）・Debug Log・Alt+T / Alt+P（Tempo / Phrase 編集）を追加。',
+            ],
+        },
         {
             version: '0.04',
             date: '2026年6月6日',

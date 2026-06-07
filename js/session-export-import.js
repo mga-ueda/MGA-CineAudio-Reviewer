@@ -529,6 +529,12 @@
             playbackRegion: row.playbackRegion,
             mix: row.mix,
             extraTracks: [],
+            rehearsalMark: {
+                offset:
+                    typeof getRehearsalMarkOffsetEnabled === 'function'
+                        ? getRehearsalMarkOffsetEnabled()
+                        : false,
+            },
         };
         if (Array.isArray(row.extraTracks)) {
             for (const entry of row.extraTracks) {
@@ -829,6 +835,13 @@
         if (mg && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(mg);
             if (typeof writePrefs === 'function') writePrefs();
+        }
+        const rm =
+            manifest.session && typeof manifest.session.rehearsalMark === 'object'
+                ? manifest.session.rehearsalMark
+                : null;
+        if (typeof applyRehearsalMarkImportSnapshot === 'function') {
+            applyRehearsalMarkImportSnapshot(rm || { offset: false });
         }
     }
 

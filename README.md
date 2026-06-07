@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.04 |
+| **バージョン** | v0.05 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,10 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.05 - 2026年6月7日
+
+- Playback Region をタイムラインスロット・無音区間・Phrase 練習番号付きオーバーレイへ拡張し、関連 JS を責務別に分割。複数 Ex 同時ドロップ時のリージョン縮小とセッション保存競合を修正。P. Offset（フレーズオフセット）・Debug Log・Alt+T / Alt+P（Tempo / Phrase 編集）を追加。
 
 ### v0.04 - 2026年6月6日
 

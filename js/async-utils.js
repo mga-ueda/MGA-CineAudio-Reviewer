@@ -6,17 +6,68 @@
         return new Promise((resolve) => setTimeout(resolve, 0));
     }
 
-    function clonePersistValue(value) {
+    function clonePersistScalar(value) {
         if (value === null || value === undefined) return value;
         if (typeof Blob !== 'undefined' && value instanceof Blob) return value;
         if (typeof File !== 'undefined' && value instanceof File) return value;
-        if (Array.isArray(value)) return value.map(clonePersistValue);
         if (typeof value !== 'object') return value;
-        const out = {};
-        for (const key of Object.keys(value)) {
-            out[key] = clonePersistValue(value[key]);
+        return null;
+    }
+
+    /** 深い JSON 木でも stack overflow しないよう明示スタックで複製 */
+    function clonePersistValue(value, seen) {
+        const scalar = clonePersistScalar(value);
+        if (scalar !== null || value === null || value === undefined) {
+            return scalar;
         }
-        return out;
+        if (!seen) seen = new WeakSet();
+        if (seen.has(value)) return undefined;
+
+        const root = Array.isArray(value) ? [] : {};
+        seen.add(value);
+        const stack = [{ src: value, dst: root }];
+
+        while (stack.length) {
+            const frame = stack.pop();
+            const src = frame.src;
+            const dst = frame.dst;
+            if (Array.isArray(src)) {
+                for (let i = 0; i < src.length; i++) {
+                    const item = src[i];
+                    const itemScalar = clonePersistScalar(item);
+                    if (itemScalar !== null || item === null || item === undefined) {
+                        dst[i] = itemScalar;
+                        continue;
+                    }
+                    if (seen.has(item)) {
+                        dst[i] = undefined;
+                        continue;
+                    }
+                    const next = Array.isArray(item) ? [] : {};
+                    seen.add(item);
+                    dst[i] = next;
+                    stack.push({ src: item, dst: next });
+                }
+                continue;
+            }
+            for (const key of Object.keys(src)) {
+                const item = src[key];
+                const itemScalar = clonePersistScalar(item);
+                if (itemScalar !== null || item === null || item === undefined) {
+                    dst[key] = itemScalar;
+                    continue;
+                }
+                if (seen.has(item)) {
+                    dst[key] = undefined;
+                    continue;
+                }
+                const next = Array.isArray(item) ? [] : {};
+                seen.add(item);
+                dst[key] = next;
+                stack.push({ src: item, dst: next });
+            }
+        }
+        return root;
     }
 
     function deepCloneJson(value, opt) {

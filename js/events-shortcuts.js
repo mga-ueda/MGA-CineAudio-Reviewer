@@ -1,6 +1,23 @@
 /**
  * events-shortcuts.js — キーボードショートカット（再生・シーク・マーカー・Ex 操作など）。
  */
+    function callWindowShortcut(name, e) {
+        const fn = window[name];
+        return typeof fn === 'function' && fn(e);
+    }
+
+    function dispatchShortcutHandlers(specs, e) {
+        for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i];
+            if (typeof spec === 'function') {
+                if (spec(e)) return true;
+                continue;
+            }
+            if (callWindowShortcut(spec, e)) return true;
+        }
+        return false;
+    }
+
     window.addEventListener('keydown', (e) => {
         const isCodeInGroup =
             typeof window.isShortcutCodeInGroup === 'function'
@@ -22,6 +39,22 @@
                 }
                 return;
             }
+            e.preventDefault();
+            return;
+        }
+
+        if (
+            matchUserShortcut(e, 'musicalGridMeterFocus') &&
+            callWindowShortcut('focusMusicalGridMeterEditor', e)
+        ) {
+            e.preventDefault();
+            return;
+        }
+
+        if (
+            matchUserShortcut(e, 'musicalGridPhraseFocus') &&
+            callWindowShortcut('focusMusicalGridPhraseEditor', e)
+        ) {
             e.preventDefault();
             return;
         }
@@ -81,86 +114,27 @@
         }
 
         if (
-            typeof handleMusicalGridPhraseUndoKeydown === 'function' &&
-            handleMusicalGridPhraseUndoKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handleMusicalGridPhraseRedoKeydown === 'function' &&
-            handleMusicalGridPhraseRedoKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionUndoKeydown === 'function' &&
-            handlePlaybackRegionUndoKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionRedoKeydown === 'function' &&
-            handlePlaybackRegionRedoKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionCopyKeydown === 'function' &&
-            handlePlaybackRegionCopyKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionPasteKeydown === 'function' &&
-            handlePlaybackRegionPasteKeydown(e)
-        ) {
-            return;
-        }
-
-        if (typeof handleMarkerBracketKeydown === 'function' && handleMarkerBracketKeydown(e)) {
-            return;
-        }
-
-        if (
-            (typeof handleMusicalGridPhraseSplitKeydown === 'function' &&
-                handleMusicalGridPhraseSplitKeydown(e)) ||
-            (typeof handlePlaybackRegionSplitKeydown === 'function' &&
-                handlePlaybackRegionSplitKeydown(e)) ||
-            (typeof handlePlaybackRegionSlashKeydown === 'function' &&
-                handlePlaybackRegionSlashKeydown(e))
-        ) {
-            return;
-        }
-
-        if (
-            typeof handleMusicalGridPhraseJoinKeydown === 'function' &&
-            handleMusicalGridPhraseJoinKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionJoinKeydown === 'function' &&
-            handlePlaybackRegionJoinKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionGroupKeydown === 'function' &&
-            handlePlaybackRegionGroupKeydown(e)
-        ) {
-            return;
-        }
-
-        if (
-            typeof handlePlaybackRegionSwapKeydown === 'function' &&
-            handlePlaybackRegionSwapKeydown(e)
+            dispatchShortcutHandlers(
+                [
+                    'handleMusicalGridPhraseUndoKeydown',
+                    'handleMusicalGridPhraseRedoKeydown',
+                    'handlePlaybackRegionUndoKeydown',
+                    'handlePlaybackRegionRedoKeydown',
+                    'handlePlaybackRegionCopyKeydown',
+                    'handlePlaybackRegionPasteKeydown',
+                    'handleMarkerBracketKeydown',
+                    (ev) =>
+                        callWindowShortcut('handleMusicalGridPhraseSplitKeydown', ev) ||
+                        callWindowShortcut('handlePlaybackRegionSplitKeydown', ev) ||
+                        callWindowShortcut('handlePlaybackRegionSlashKeydown', ev),
+                    'handleMusicalGridPhraseJoinKeydown',
+                    'handlePlaybackRegionJoinKeydown',
+                    'handlePlaybackRegionGroupKeydown',
+                    'handlePlaybackRegionSwapKeydown',
+                    'handlePlaybackRegionRehearsalMarkJumpKeydown',
+                ],
+                e,
+            )
         ) {
             return;
         }
@@ -193,21 +167,16 @@
             return;
         }
 
-        if (
-            matchUserShortcut(e, 'musicalGridToggle') &&
-            typeof toggleMusicalGridVisible === 'function'
-        ) {
+        if (matchUserShortcut(e, 'musicalGridToggle') && callWindowShortcut('toggleMusicalGridVisible', e)) {
             e.preventDefault();
-            toggleMusicalGridVisible();
             return;
         }
 
         if (
             matchUserShortcut(e, 'musicalGridPhraseToggle') &&
-            typeof toggleMusicalGridPhraseFillVisible === 'function'
+            callWindowShortcut('toggleMusicalGridPhraseFillVisible', e)
         ) {
             e.preventDefault();
-            toggleMusicalGridPhraseFillVisible();
             return;
         }
 

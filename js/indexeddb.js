@@ -183,6 +183,14 @@
         row.playbackRegion.extra.push(entry);
     }
 
+    function hasFreshRegionPersistEdit(slot) {
+        if (!(slot >= 0)) return false;
+        const curEpoch =
+            typeof getRegionPersistEpoch === 'function' ? getRegionPersistEpoch(slot) : 0;
+        const savedEpoch = Number(regionPersistEpochSavedBySlot[slot] || 0);
+        return curEpoch > savedEpoch;
+    }
+
     function protectRegionShrinkOnPersist(row, prevRow) {
         if (
             !row ||
@@ -196,6 +204,7 @@
             const prev = prevRow.extraTracks[i];
             if (!prev || !(prev.slot >= 0)) continue;
             const slot = prev.slot;
+            if (hasFreshRegionPersistEdit(slot)) continue;
             const nextIdx = row.extraTracks.findIndex((e) => e && e.slot === slot);
             if (nextIdx < 0) continue;
             const next = row.extraTracks[nextIdx];
@@ -310,6 +319,7 @@
             if (!(floorCount > 0)) continue;
             const nextCount = regionSegmentsCountFromEntry(next);
             if (nextCount >= floorCount) continue;
+            if (hasFreshRegionPersistEdit(slot)) continue;
             const allowShrink =
                 typeof canPersistRegionShrink === 'function' && canPersistRegionShrink(slot);
             if (allowShrink) {
@@ -541,6 +551,35 @@
                     }
                 } finally {
                     sessionRestoreTeardownPending = false;
+                    if (typeof rebuildAllTrackTimelineSlots === 'function') {
+                        try {
+                            rebuildAllTrackTimelineSlots({
+                                infer: true,
+                                preserveStored: true,
+                                skipPresentationRefresh: true,
+                            });
+                        } catch (err) {
+                            writeLog(
+                                'Session: musical slot rebuild after restore failed — ' +
+                                    (err && err.message ? err.message : String(err)),
+                            );
+                        }
+                    }
+                    if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+                        try {
+                            refreshAllRegionRehearsalMarkLabels();
+                        } catch (_) {}
+                    }
+                    if (typeof updateAllPlaybackRegionOverlays === 'function') {
+                        try {
+                            updateAllPlaybackRegionOverlays();
+                        } catch (err) {
+                            writeLog(
+                                'Session: overlay refresh after restore failed — ' +
+                                    (err && err.message ? err.message : String(err)),
+                            );
+                        }
+                    }
                 }
             }
         });
@@ -841,16 +880,18 @@
         let persistedRegionSegments = 0;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
-            if (playbackRegion) {
-                row.playbackRegion = playbackRegion;
-                if (Array.isArray(playbackRegion.extra)) {
-                    const hit = playbackRegion.extra.find(
-                        (e) => e && e.slot === entry.slot && Array.isArray(e.segments),
-                    );
-                    if (hit) persistedRegionSegments = hit.segments.length;
+            if (playbackRegion && Array.isArray(playbackRegion.extra)) {
+                const hit = playbackRegion.extra.find(
+                    (e) =>
+                        e &&
+                        e.slot === slot &&
+                        Array.isArray(e.segments) &&
+                        e.segments.length,
+                );
+                if (hit) {
+                    upsertPlaybackRegionExtraForSlot(row, deepCloneForPersist(hit));
+                    persistedRegionSegments = hit.segments.length;
                 }
-            } else {
-                delete row.playbackRegion;
             }
         }
         const entryRegionSegments = Array.isArray(entry.regionSegments)
@@ -1387,18 +1428,15 @@
                         }
                     }
                     if (
-                        Array.isArray(restoreRegionSegments) &&
-                        restoreRegionSegments.length
+                        prEntry &&
+                        Array.isArray(prEntry.timelineSlots) &&
+                        prEntry.timelineSlots.length &&
+                        typeof window.restoreTimelineSlotsForTrack === 'function'
                     ) {
-                        if (typeof finalizePlaybackRegionsForExtraSlot === 'function') {
-                            finalizePlaybackRegionsForExtraSlot(entry.slot);
-                        } else if (typeof setTrackSegments === 'function') {
-                            setTrackSegments(
-                                { type: 'extra', slot: entry.slot },
-                                restoreRegionSegments,
-                                { silent: true, keepPendingRestore: true },
-                            );
-                        }
+                        window.restoreTimelineSlotsForTrack(
+                            { type: 'extra', slot: entry.slot },
+                            prEntry.timelineSlots,
+                        );
                     }
                 }
                 if (
@@ -1454,6 +1492,14 @@
         }
     }
 
+    function syncRegionPersistEpochSavedFromLiveState() {
+        if (typeof getRegionPersistEpoch !== 'function') return;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            regionPersistEpochSavedBySlot[slot] = getRegionPersistEpoch(slot) || 0;
+        }
+    }
+
     function applyPlaybackRegionRestoreFromRow(row) {
         if (row.playbackRegion && typeof setPendingPlaybackRegionRestore === 'function') {
             setPendingPlaybackRegionRestore(row.playbackRegion);
@@ -1506,6 +1552,7 @@
         if (typeof applyPendingPlaybackRegionRestore === 'function') {
             applyPendingPlaybackRegionRestore();
         }
+        syncRegionPersistEpochSavedFromLiveState();
         if (typeof syncSeekMax === 'function') syncSeekMax();
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
@@ -1525,6 +1572,11 @@
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
+        if (typeof logSessionRestoreRegionPhraseSnapshot === 'function') {
+            requestAnimationFrame(() => {
+                logSessionRestoreRegionPhraseSnapshot();
+            });
+        }
         requestAnimationFrame(() => {
             if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
         });

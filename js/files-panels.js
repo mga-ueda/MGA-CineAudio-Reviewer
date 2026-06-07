@@ -323,52 +323,90 @@
 
     async function clearEntireSession(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        await releaseWaveformRestoreLockIfActive();
+        const diagRunAsync =
+            typeof window.regionRestoreDiagRunStepAsync === 'function'
+                ? window.regionRestoreDiagRunStepAsync
+                : async function (_label, fn) {
+                      return fn();
+                  };
+        const diagLog =
+            typeof window.regionRestoreDiagLog === 'function'
+                ? window.regionRestoreDiagLog
+                : function () {};
+
+        diagLog('allClear/begin', null);
+        await diagRunAsync('allClear/releaseRestoreLock', () =>
+            releaseWaveformRestoreLockIfActive(),
+        );
         if (!o.force && !sessionHasClearableContent()) {
             if (!o.preserveLog && typeof clearLog === 'function') clearLog();
             writeLog('Session: nothing to clear');
             return;
         }
-        if (typeof haltTransportForSessionMutation === 'function') {
-            haltTransportForSessionMutation({ silent: true });
-        }
+        await diagRunAsync('allClear/haltTransport', async () => {
+            if (typeof haltTransportForSessionMutation === 'function') {
+                haltTransportForSessionMutation({ silent: true });
+            }
+        });
         if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
         if (typeof pendingLaneUiRestore !== 'undefined') pendingLaneUiRestore = null;
         if (typeof setSessionMixRestore === 'function') setSessionMixRestore(null);
-        if (typeof resetTransportPlaybackClock === 'function') {
-            resetTransportPlaybackClock();
-        }
-        if (typeof deleteStoredSession === 'function') {
-            await deleteStoredSession();
-        }
-        if (typeof resetMasterVolumeForSessionClear === 'function') {
-            resetMasterVolumeForSessionClear();
-        }
-        if (typeof window.resetMusicalGridToDefaults === 'function') {
-            window.resetMusicalGridToDefaults({ silent: true });
-        } else {
-            if (typeof window.setMusicalGridVisible === 'function') {
-                window.setMusicalGridVisible(false, { silent: true });
+        await diagRunAsync('allClear/resetTransportClock', async () => {
+            if (typeof resetTransportPlaybackClock === 'function') {
+                resetTransportPlaybackClock();
             }
-            if (typeof window.setMusicalGridPhraseFillVisible === 'function') {
-                window.setMusicalGridPhraseFillVisible(false, { silent: true });
+        });
+        await diagRunAsync('allClear/deleteStoredSession', () => deleteStoredSession());
+        await diagRunAsync('allClear/resetMasterVolume', async () => {
+            if (typeof resetMasterVolumeForSessionClear === 'function') {
+                resetMasterVolumeForSessionClear();
             }
-        }
-        revokeAll();
-        if (typeof resetVideoDriftMonitorSchedule === 'function') {
-            resetVideoDriftMonitorSchedule();
-        }
-        if (typeof refreshVideoDriftPanelStat === 'function') {
-            refreshVideoDriftPanelStat();
-        }
-        if (typeof syncSeekMax === 'function') syncSeekMax();
-        if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
-        if (typeof refreshExportMediaOptionsUi === 'function') {
-            refreshExportMediaOptionsUi();
-        }
-        updateSessionAllClearButton();
+        });
+        await diagRunAsync('allClear/revokeAll', async () => {
+            try {
+                revokeAll();
+            } catch (err) {
+                writeLog(
+                    'Session: revoke failed — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        });
+        await diagRunAsync('allClear/resetMusicalGrid', async () => {
+            if (typeof window.resetMusicalGridToDefaults === 'function') {
+                window.resetMusicalGridToDefaults({ silent: true, skipRegionRefresh: true });
+            } else {
+                if (typeof window.setMusicalGridVisible === 'function') {
+                    window.setMusicalGridVisible(false, {
+                        silent: true,
+                        skipRegionRefresh: true,
+                    });
+                }
+                if (typeof window.setMusicalGridPhraseFillVisible === 'function') {
+                    window.setMusicalGridPhraseFillVisible(false, {
+                        silent: true,
+                        skipRegionRefresh: true,
+                    });
+                }
+            }
+        });
+        await diagRunAsync('allClear/postRevokeUi', async () => {
+            if (typeof resetVideoDriftMonitorSchedule === 'function') {
+                resetVideoDriftMonitorSchedule();
+            }
+            if (typeof refreshVideoDriftPanelStat === 'function') {
+                refreshVideoDriftPanelStat();
+            }
+            if (typeof syncSeekMax === 'function') syncSeekMax();
+            if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+            if (typeof refreshExportMediaOptionsUi === 'function') {
+                refreshExportMediaOptionsUi();
+            }
+            updateSessionAllClearButton();
+        });
         if (!o.preserveLog && typeof clearLog === 'function') clearLog();
         writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
+        diagLog('allClear/done', null);
         if (!o.silentToast && typeof flashSeekHint === 'function') {
             flashSeekHint('Session', 'All cleared', 'notice');
         }

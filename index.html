@@ -307,7 +307,7 @@
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="140-4/4"
-                    title="BPM-拍子。例: 140-4/4 / 140-1/16,140-4/4 / (140-4/4,140-2/4)。空欄でグリッド非表示。"
+                    title="BPM-拍子。例: 140-4/4 / 140-1/16,140-4/4 / (140-4/4,140-2/4)。Alt+T で編集、Enter/Esc で確定。"
                 >
                 <label
                     class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
@@ -325,7 +325,7 @@
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="1,8"
-                    title="Phrase の小節数。8 = 8小節ごと。1,8 = 最初の1小節のみ、その後は8小節ごと。"
+                    title="Phrase の小節数。8 = 8小節ごと。1,8 = 最初の1小節のみ、その後は8小節ごと。Alt+P で編集、Enter/Esc で確定。"
                 >
             </div>
         </div>
@@ -344,6 +344,10 @@
             <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — スペクトラムとレベルメーター（A で切替）。OFF でも CLIP PROTECT は有効。">
                 <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
                 <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze (A to toggle)" title="スペクトラムとレベルメーターを表示（A で切替）">
+            </div>
+            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap" title="P. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（フレーズオフセット）。Import/Export Review のみ保存。">
+                <label class="transport-opt-label" for="rehearsalMarkOffsetCheckbox">P. Offset</label>
+                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Phrase offset (P. Offset)" title="ON: 先頭フレーズに練習番号を付けない（アウフタクト扱い）。旧 B が A になる">
             </div>
             <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
@@ -461,6 +465,10 @@
         <div class="log-wrap">
             <div id="log">&gt; System Ready.</div>
             <div class="log-actions" aria-label="Log actions">
+                <label class="log-debug-toggle" title="診断用の詳細ログ（[RegionRestore] / [MusicalSlot] 等）を出力">
+                    <input type="checkbox" id="logDebugCheckbox" />
+                    <span>Debug Log</span>
+                </label>
                 <button id="logCopyBtn" type="button" class="log-action-btn">Copy</button>
                 <button id="logClearBtn" type="button" class="log-action-btn">Clear</button>
             </div>
@@ -578,23 +586,42 @@
     <script src="js/range-loop.js"></script>
     <script src="js/crossfade-math.js"></script>
     <script src="js/waveform-region-shared.js"></script>
+    <script src="js/waveform-region-segment-copy.js"></script>
     <script src="js/waveform-region-core.js"></script>
-    <script src="js/waveform-region-render.js"></script>
+    <script src="js/waveform-region-selection.js"></script>
+    <script src="js/waveform-region-boundary-join.js"></script>
+    <script src="js/waveform-region-playback-map.js"></script>
+    <script src="js/waveform-region-phrase.js"></script>
+    <script src="js/waveform-region-silent-gaps.js"></script>
+    <script src="js/waveform-region-fade-gain.js"></script>
+    <script src="js/waveform-region-snap-split.js"></script>
+    <script src="js/waveform-region-render-meta.js"></script>
+    <script src="js/waveform-region-render-segments.js"></script>
+    <script src="js/waveform-region-render-hover.js"></script>
+    <script src="js/waveform-region-io-keyboard.js"></script>
+    <script src="js/waveform-region-io-persist.js"></script>
+    <script src="js/waveform-region-io-nav.js"></script>
+    <script src="js/region-restore-diag.js"></script>
+    <script src="js/waveform-region-swap-anim.js"></script>
     <script src="js/waveform-region-ui.js"></script>
     <script src="js/waveform-region-io.js"></script>
+    <script src="js/timeline-musical-slots-diag.js"></script>
+    <script src="js/timeline-musical-slots.js"></script>
     <script src="js/loudness-lkfs.js"></script>
     <script src="js/audio-decode.js"></script>
     <script src="js/audio-waveform.js"></script>
     <script src="js/track-lane-fader-scale.js"></script>
     <script src="js/extra-audio-shared.js"></script>
+    <script src="js/extra-audio-lane-mix.js"></script>
+    <script src="js/extra-audio-review-mix.js"></script>
     <script src="js/extra-audio-state.js"></script>
-    <script src="js/extra-audio-mix.js"></script>
     <script src="js/extra-audio-playback.js"></script>
     <script src="js/extra-audio-crossfade.js"></script>
     <script src="js/extra-audio-decode-peaks.js"></script>
+    <script src="js/extra-audio-lane-ui.js"></script>
+    <script src="js/extra-audio-slot-transfer.js"></script>
     <script src="js/extra-audio-transport-sync.js"></script>
     <script src="js/extra-audio-persist.js"></script>
-    <script src="js/extra-audio-waveform.js"></script>
     <script src="js/extra-audio-load.js"></script>
     <script src="js/extra-audio-init.js"></script>
     <script src="js/extra-audio-io.js"></script>

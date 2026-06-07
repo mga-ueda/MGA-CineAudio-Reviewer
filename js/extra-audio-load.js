@@ -9,6 +9,20 @@
         setExtraTrackLaneUiOpen(slot, true);
         const tr = extraTrackBySlot(slot);
         const gen = ++tr.loadGen;
+        const replacingTrack = !(opt && opt.addClip);
+        if (replacingTrack) {
+            tr.playbackRegions = { active: false, segments: [], headPadSec: 0 };
+            delete tr.region;
+            if (typeof bumpRegionPersistEpoch === 'function') {
+                bumpRegionPersistEpoch(slot);
+            }
+            if (
+                !(opt && opt.fromSessionRestore) &&
+                typeof setPendingPlaybackRegionRestore === 'function'
+            ) {
+                setPendingPlaybackRegionRestore(null);
+            }
+        }
         const n = file.size || 0;
         if (n > EXTRA_AUDIO_DECODE_MAX_BYTES) {
             const mb = Math.round((n / (1024 * 1024)) * 10) / 10;
@@ -255,14 +269,12 @@
                 void scheduleWaveformTrackLkfsMeasure(trackEl, buffer);
             }
             setExtraTrackLoaded(slot, true, { skipLayoutRefresh: true });
-            refreshExtraTrackUi(slot);
-            if (opt && opt.fromSessionRestore) {
-                if (
-                    !opt.deferRegionFinalize &&
-                    typeof finalizePlaybackRegionsForExtraSlot === 'function'
-                ) {
-                    finalizePlaybackRegionsForExtraSlot(slot);
-                }
+            const restoreLoad = !!(opt && opt.fromSessionRestore);
+            refreshExtraTrackUi(slot, {
+                skipRegionOverlay: restoreLoad,
+                skipDraw: restoreLoad,
+            });
+            if (restoreLoad) {
                 applyExtraSlotMixFromSessionRestore(slot);
             } else {
                 removeExtraSlotFromSessionMixRestore(slot);
@@ -277,13 +289,17 @@
                     ' (synced to video head)'
             );
             syncExtraAudioToTransport();
-            if (typeof notifyMasterTransportDurationChanged === 'function') {
+            if (!restoreLoad && typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            if (!(opt && opt.fromSessionRestore)) {
+            if (!restoreLoad) {
                 schedulePersistExtraTrackSlot(slot);
             }
-            scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
+            if (restoreLoad) {
+                scheduleExtraTrackWaveformRedraw(slot);
+            } else {
+                scheduleExtraTrackWaveformRedraw(slot, { notifyMaster: true });
+            }
             if (typeof syncExtraTrackWaveformLoading === 'function') {
                 syncExtraTrackWaveformLoading(slot);
             }

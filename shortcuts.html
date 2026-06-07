@@ -43,7 +43,7 @@
                     <tr>
                         <td>ファイルの読み込み</td>
                         <td>ドロップ</td>
-                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加</td>
+                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空き Ex へ<strong>1 ファイルずつ</strong>順に割当</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生（動画読込後）</th>
@@ -254,6 +254,16 @@
                         <td>フレーズ表示を切り替え（テンキー <kbd>0</kbd>〜<kbd>9</kbd> のジャンプ先も変わる）</td>
                     </tr>
                     <tr>
+                        <td>Tempo/Sig 入力欄へフォーカス</td>
+                        <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
+                        <td>BPM・拍子入力欄を編集モードに（<kbd>Enter</kbd>/<kbd>Esc</kbd> で確定/取消）</td>
+                    </tr>
+                    <tr>
+                        <td>Phrase 入力欄へフォーカス</td>
+                        <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
+                        <td>Phrase 小節数入力欄を編集モードに（<kbd>Enter</kbd>/<kbd>Esc</kbd> で確定/取消）</td>
+                    </tr>
+                    <tr>
                         <td>ソロ（ポインタ下の Video Audio/Audio Track）</td>
                         <td><kbd>S</kbd></td>
                         <td>波形レーン上にポインタがあるとき。左サイドバーの S ボタンと同じ</td>
@@ -285,6 +295,16 @@
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">Musical Grid 入力欄（トランスポート下段）</th>
+                    </tr>
+                    <tr>
+                        <td>メーター欄へフォーカス</td>
+                        <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
+                        <td>波形レーンから Tempo/Sig 入力へ移る（<kbd>T</kbd> 単体はグリッド表示の切替）</td>
+                    </tr>
+                    <tr>
+                        <td>フレーズ欄へフォーカス</td>
+                        <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
+                        <td>波形レーンから Phrase 入力へ移る（<kbd>P</kbd> 単体は Phrase 着色の切替）</td>
                     </tr>
                     <tr>
                         <td>BPM・拍子の ±1（メーター欄）</td>
@@ -327,7 +347,7 @@
                     <tr>
                         <td>フレーズ連結（境界）</td>
                         <td><kbd>B</kbd></td>
-                        <td>波形上：ポインタ近くの<strong>フレーズ境界</strong>で左右を1つに。波形外（再生中も同様）：シークバーが<strong>フレーズ境界上</strong>のときのみ（途中では不可）。Tempo/Sig ON 時はリージョン結合にはならない</td>
+                        <td>波形上：ポインタ近くの<strong>フレーズ境界</strong>で左右を1つに。波形外（再生中も同様）：シークバーが<strong>フレーズ境界上</strong>のときのみ（途中では不可）。Tempo/Sig ON 時はリージョン結合にはならない。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
                     </tr>
                     <tr>
                         <td>フレーズ削除</td>
@@ -404,12 +424,12 @@
                     <tr>
                         <td>結合（隣接リージョンを1つに）</td>
                         <td><kbd>B</kbd></td>
-                        <td><strong>Tempo/Sig OFF</strong> 時：隣接境界上にポインタを置いてから。波形が連続している境界のみ（クロスフェード・入れ替え後は不可）（<strong>Tempo/Sig ON</strong> 時はフレーズ連結を参照）</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：隣接境界上にポインタを置いてから。波形が連続している境界のみ（クロスフェード・入れ替え後は不可）（<strong>Tempo/Sig ON</strong> 時はフレーズ連結を参照）。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
                     </tr>
                     <tr>
                         <td>複数選択</td>
-                        <td><kbd>Ctrl</kbd>+クリック（リージョン上）</td>
-                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
+                        <td><kbd>Ctrl</kbd>+クリック（リージョンまたは無音スロット上）</td>
+                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>Phrase 着色 <kbd>P</kbd> ON</strong> では無音スロット 1 つ＋リージョン 1 つの組み合わせも可（<kbd>E</kbd> で入れ替え）。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
                     </tr>
                     <tr>
                         <td>グループ化 / 解除</td>
@@ -419,7 +439,7 @@
                     <tr>
                         <td>入れ替え（フレーズ並び）</td>
                         <td><kbd>E</kbd></td>
-                        <td><strong>Phrase 着色 <kbd>P</kbd> ON</strong> 時のみ。同一 Audio Track 上で<strong>2リージョン</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ</td>
+                        <td><strong>Phrase 着色 <kbd>P</kbd> ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
                     </tr>
                     <tr>
                         <td>ソース In/Out・スプリット点</td>
@@ -479,7 +499,7 @@
                     <tr>
                         <td>解除</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>ハンドル操作中はドラッグ取消。複数選択中は選択解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン解除</td>
+                        <td>ハンドル操作中はドラッグ取消。リージョン・無音スロットの複数選択中は選択解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン解除</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">レビューの保存・共有（.mgacr）</th>

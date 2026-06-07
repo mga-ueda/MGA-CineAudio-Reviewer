@@ -2302,3 +2302,4 @@
         return false;
     }
 
+    window.handleMarkerBracketKeydown = handleMarkerBracketKeydown;

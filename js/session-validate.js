@@ -35,6 +35,7 @@
     const ALLOWED_IMPORT_SESSION_KEYS = new Set([
         ...ALLOWED_SESSION_ROW_KEYS,
         'videoBlobKey',
+        'rehearsalMark',
     ]);
 
     function findDeprecatedKey(obj, pathPrefix) {
@@ -75,6 +76,18 @@
         return null;
     }
 
+    function validateRehearsalMarkSnap(snap, pathPrefix) {
+        if (snap == null) return null;
+        if (typeof snap !== 'object') return pathPrefix + ' (not an object)';
+        for (const key of Object.keys(snap)) {
+            if (key !== 'offset') return pathPrefix + '.' + key;
+        }
+        if ('offset' in snap && typeof snap.offset !== 'boolean') {
+            return pathPrefix + '.offset';
+        }
+        return null;
+    }
+
     function validateSessionRow(row, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const allowedKeys = o.importSession ? ALLOWED_IMPORT_SESSION_KEYS : ALLOWED_SESSION_ROW_KEYS;
@@ -109,6 +122,11 @@
         if (row.musicalGrid != null) {
             const mgErr = validateMusicalGridSnap(row.musicalGrid, 'musicalGrid');
             if (mgErr) return { valid: false, reason: 'invalid musicalGrid: ' + mgErr };
+        }
+
+        if (row.rehearsalMark != null) {
+            const rmErr = validateRehearsalMarkSnap(row.rehearsalMark, 'rehearsalMark');
+            if (rmErr) return { valid: false, reason: 'invalid rehearsalMark: ' + rmErr };
         }
 
         return { valid: true, reason: '' };
