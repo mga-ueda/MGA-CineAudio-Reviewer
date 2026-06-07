@@ -1101,6 +1101,9 @@
                 row.extraTracks = extra;
             }
         }
+        if (typeof getRehearsalMarkPersistSnapshot === 'function') {
+            row.rehearsalMark = getRehearsalMarkPersistSnapshot();
+        }
         /* スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
     }
 
@@ -1655,6 +1658,13 @@
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(row.musicalGrid);
+        }
+        if (typeof applyRehearsalMarkImportSnapshot === 'function') {
+            applyRehearsalMarkImportSnapshot(
+                row.rehearsalMark && typeof row.rehearsalMark === 'object'
+                    ? row.rehearsalMark
+                    : { offset: false },
+            );
         }
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);

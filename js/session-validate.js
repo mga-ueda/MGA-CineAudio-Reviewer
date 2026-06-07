@@ -27,6 +27,7 @@
         'playbackRegion',
         'mix',
         'extraTracks',
+        'rehearsalMark',
         'audioOnlySession',
         '__saveStamp',
         '__regionPinnedBySlot',

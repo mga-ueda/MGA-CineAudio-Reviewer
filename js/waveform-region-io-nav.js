@@ -97,6 +97,18 @@
         }
     }
 
+    function regionNavHintTitleForSlot(slot) {
+        if (slot < 0) return 'Range loop';
+        if (
+            typeof extraTrackBySlot === 'function' &&
+            typeof getExtraTrackFileName === 'function'
+        ) {
+            const name = getExtraTrackFileName(extraTrackBySlot(slot));
+            if (name) return name;
+        }
+        return 'Ex ' + (slot + 1);
+    }
+
     function seekToRegionNavStop(stop, opt) {
         if (!stop || !Number.isFinite(stop.sec)) return false;
         const resumeAfter = !!(opt && opt.resumeAfterSeek);
@@ -119,9 +131,7 @@
         const hintTitle =
             opt && opt.hintTitle
                 ? opt.hintTitle
-                : stop.slot >= 0
-                  ? 'Ex ' + (stop.slot + 1)
-                  : 'Range loop';
+                : regionNavHintTitleForSlot(stop.slot);
         writeLog('Region: seek to ' + hintTitle + ' ' + hintTc + edgeLabel);
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(hintTitle, hintTc + edgeLabel);
@@ -282,6 +292,10 @@
         return rehearsalMarkOffsetEnabled;
     }
 
+    function getRehearsalMarkPersistSnapshot() {
+        return { offset: rehearsalMarkOffsetEnabled };
+    }
+
     function setRehearsalMarkOffsetEnabled(value, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         rehearsalMarkOffsetEnabled = !!value;
@@ -293,6 +307,9 @@
         }
         if (!o.silent && typeof writeLog === 'function') {
             writeLog('P. Offset: ' + (rehearsalMarkOffsetEnabled ? 'ON' : 'OFF'));
+        }
+        if (!o.silent && !o.skipPersist && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
         }
     }
 
@@ -423,5 +440,6 @@
     window.phraseSlotIndexForRehearsalMarkKeyIndex = phraseSlotIndexForRehearsalMarkKeyIndex;
     window.getRehearsalMarkOffsetEnabled = getRehearsalMarkOffsetEnabled;
     window.setRehearsalMarkOffsetEnabled = setRehearsalMarkOffsetEnabled;
+    window.getRehearsalMarkPersistSnapshot = getRehearsalMarkPersistSnapshot;
     window.applyRehearsalMarkImportSnapshot = applyRehearsalMarkImportSnapshot;
 

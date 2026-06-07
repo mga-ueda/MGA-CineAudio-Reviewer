@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.05';
+    const APP_VERSION = '0.06';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.06',
+            date: '2026年6月8日',
+            items: [
+                '↑↓ ジャンプ時のトーストを改善。リージョンは Ex 番号の代わりにファイル名、マーカーはコメント（範囲は In/Out 付き）、Grid は Phrase / Tempo/Sig の状態に応じて練習番号・小節番号を表示。',
+            ],
+        },
         {
             version: '0.05',
             date: '2026年6月7日',

@@ -1059,6 +1059,22 @@
         return out;
     }
 
+    /** フレーズスロット index → 練習番号表示（P. Offset 時の番号なしは空文字） */
+    function phraseRehearsalDisplayMarkForSlot(phraseSlotIndex) {
+        if (typeof rehearsalMarkLabelForPhraseSlotIndex === 'function') {
+            const internal = rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex);
+            if (typeof rehearsalMarkDisplayLabel === 'function') {
+                return rehearsalMarkDisplayLabel(internal);
+            }
+            const unlabeled =
+                typeof REHEARSAL_MARK_UNLABELED !== 'undefined'
+                    ? REHEARSAL_MARK_UNLABELED
+                    : '_';
+            return internal && internal !== unlabeled ? internal : '';
+        }
+        return phraseGroupLabelForIndex(phraseSlotIndex);
+    }
+
     function resolvePhraseGroupRanges(opt) {
         const requireFillVisible = !!(opt && opt.requireFillVisible);
         if (requireFillVisible && !getMusicalGridPhraseFillVisible()) return [];
@@ -1129,7 +1145,7 @@
         if (!ranges.length) return [];
         return ranges.map((r) => ({
             sec: r.startSec,
-            label: phraseGroupLabelForIndex(r.paletteIndex),
+            label: phraseRehearsalDisplayMarkForSlot(r.paletteIndex),
             paletteIndex: r.paletteIndex,
         }));
     }
@@ -1197,7 +1213,7 @@
             typeof formatTimecodeForTransport === 'function'
                 ? formatTimecodeForTransport(target)
                 : String(target);
-        const hintTitle = 'Phrase ' + stop.label;
+        const hintTitle = stop.label || 'Phrase';
         if (typeof writeLog === 'function') {
             writeLog('Phrase: seek to ' + hintTitle + ' @ ' + hintTc);
         }
@@ -2944,6 +2960,99 @@
         }
         return best;
     }
+
+    /** 境界の後ろ側（右／先）に属する Phrase 範囲 */
+    function phraseRangeAfterGridBoundarySec(sec) {
+        const ranges = resolvePhraseGroupRanges({ requireFillVisible: false });
+        if (!ranges.length) return null;
+        const eps = musicalGridNavStopEpsilonSec();
+        const s = Number(sec);
+        if (!Number.isFinite(s)) return null;
+        for (let i = 0; i < ranges.length; i++) {
+            if (Math.abs(s - ranges[i].startSec) <= eps) {
+                return ranges[i];
+            }
+        }
+        for (let i = 0; i < ranges.length - 1; i++) {
+            if (Math.abs(s - ranges[i].endSec) <= eps) {
+                return ranges[i + 1];
+            }
+        }
+        for (let i = 0; i < ranges.length; i++) {
+            if (s >= ranges[i].startSec - eps && s < ranges[i].endSec - eps) {
+                return ranges[i];
+            }
+        }
+        if (s >= ranges[ranges.length - 1].startSec - eps) {
+            return ranges[ranges.length - 1];
+        }
+        return null;
+    }
+
+    /** 境界の後ろ側（右／先）に属する練習番号（A/B/…）。P. Offset 時の番号なしは空文字 */
+    function phraseRehearsalMarkAfterGridBoundarySec(sec) {
+        const range = phraseRangeAfterGridBoundarySec(sec);
+        return range ? phraseRehearsalDisplayMarkForSlot(range.paletteIndex) : '';
+    }
+
+    function localBarNumberForPhraseAtSec(phraseStartSec, sec, barBoundaries) {
+        const phraseStartIdx = barIndexForBoundarySec(phraseStartSec, barBoundaries);
+        const barIdx = barIndexForBoundarySec(sec, barBoundaries);
+        const localBar = barIdx - phraseStartIdx + 1;
+        return localBar >= 1 ? localBar : null;
+    }
+
+    function barNumberAfterGridBoundarySec(sec) {
+        if (!getMusicalGridVisible()) return null;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+        const phraseRange = phraseRangeAfterGridBoundarySec(sec);
+        if (phraseRange) {
+            const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+            if (barBoundaries.length) {
+                const localBar = localBarNumberForPhraseAtSec(
+                    phraseRange.startSec,
+                    sec,
+                    barBoundaries,
+                );
+                if (localBar != null && localBar >= 1) return localBar;
+            }
+        }
+        const pos = getMusicalGridBarBySec(settings.meterSpec, sec, master);
+        if (!pos) return null;
+        return (pos.barIndex | 0) + 1;
+    }
+
+    function musicalGridSeekToastPrimary(sec) {
+        const phraseOn = getMusicalGridPhraseFillVisible();
+        const tempoOn = getMusicalGridVisible();
+        const mark = phraseOn ? phraseRehearsalMarkAfterGridBoundarySec(sec) : '';
+        const parts = [];
+        if (mark) {
+            parts.push(mark);
+        } else if (phraseOn) {
+            parts.push('Phrase');
+        }
+        if (tempoOn) {
+            const barNum = barNumberAfterGridBoundarySec(sec);
+            if (barNum != null && barNum > 0) {
+                parts.push('Bar ' + barNum);
+            }
+        }
+        if (parts.length) return parts.join(' ');
+        return phraseOn ? 'Phrase' : 'Bar';
+    }
+
+    function flashMusicalGridSeekHint(targetSec, hintTc) {
+        if (typeof flashSeekHint !== 'function') return;
+        flashSeekHint(musicalGridSeekToastPrimary(targetSec), hintTc);
+    }
+
     function seekToMusicalGridNavStop(stopSec, opt) {
         if (!Number.isFinite(stopSec)) return false;
         const resumeAfter = !!(opt && opt.resumeAfterSeek);
@@ -2969,12 +3078,11 @@
             typeof formatTimecodeForTransport === 'function'
                 ? formatTimecodeForTransport(target)
                 : String(target);
+        const hintTitle = musicalGridSeekToastPrimary(target);
         if (typeof writeLog === 'function') {
-            writeLog('Grid: seek to ' + hintTc);
+            writeLog('Grid: seek to ' + hintTitle + ' @ ' + hintTc);
         }
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Grid', hintTc);
-        }
+        flashMusicalGridSeekHint(target, hintTc);
         return true;
     }
     function jumpToAdjacentMusicalGridStop(dir, opt) {

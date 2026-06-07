@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.05 |
+| **バージョン** | v0.06 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,10 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.06 - 2026年6月8日
+
+- ↑↓ ジャンプ時のトーストを改善。リージョンは Ex 番号の代わりにファイル名、マーカーはコメント（範囲は In/Out 付き）、Grid は Phrase / Tempo/Sig の状態に応じて練習番号・小節番号を表示。
 
 ### v0.05 - 2026年6月7日
 

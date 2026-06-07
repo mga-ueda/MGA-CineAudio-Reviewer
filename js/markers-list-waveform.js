@@ -531,15 +531,16 @@
         if (opt.seekEnd && !markerHasOutTc(m)) return;
         const quiet = !!(opt && opt.quiet);
         const target = clampMarkerSec(opt.seekIn ? markerInSec(m) : m.endSec);
-        const edgeLabel = opt.seekIn ? 'In' : 'Out';
         if (opt.seekEnd) markerActiveTcEdge = 'out';
         else if (opt.seekIn) markerActiveTcEdge = 'in';
         const t = commitMarkerTransportSeek(target, { resumeAfter: false });
         syncMarkerSeekTransportUi(t);
         renderSeekBarMarkers();
         if (!quiet) {
-            writeLog('Marker: row sync ' + tcLabelForSec(t) + ' ' + edgeLabel);
-            flashSeekHint('Marker', tcLabelForSec(t) + ' ' + edgeLabel);
+            const hintSuffix =
+                m.type === 'range' ? (opt.seekIn ? ' In' : ' Out') : '';
+            writeLog('Marker: row sync ' + tcLabelForSec(t) + hintSuffix);
+            flashMarkerSeekHint(m, tcLabelForSec(t), hintSuffix);
         }
     }
 
@@ -916,6 +917,38 @@
         else requestAnimationFrame(run);
     }
 
+    const MARKER_SEEK_TOAST_COMMENT_MAX_CHARS = 48;
+
+    function markerCommentForSeekToast(m) {
+        if (!m) return '';
+        const raw = String(m.comment || '').replace(/\s+/g, ' ').trim();
+        if (!raw) return '';
+        if (raw.length <= MARKER_SEEK_TOAST_COMMENT_MAX_CHARS) return raw;
+        return raw.slice(0, MARKER_SEEK_TOAST_COMMENT_MAX_CHARS) + '...';
+    }
+
+    function flashMarkerSeekHint(m, hintTc, hintSuffix) {
+        if (typeof flashSeekHint !== 'function') return;
+        const suffix = hintSuffix || '';
+        const comment = markerCommentForSeekToast(m);
+        flashSeekHint((comment || 'Marker') + suffix, hintTc);
+    }
+
+    function markerSeekHintSuffix(m, opt, targetSec) {
+        if (!m || m.type !== 'range') return '';
+        if (opt && opt.seekEnd) return ' Out';
+        if (opt && opt.seekIn) return ' In';
+        if (Number.isFinite(targetSec)) {
+            const eps = markerNavStopEpsilonSec();
+            if (Math.abs(targetSec - m.endSec) <= eps) return ' Out';
+            if (Math.abs(targetSec - m.startSec) <= eps) return ' In';
+            return Math.abs(targetSec - m.endSec) < Math.abs(targetSec - m.startSec)
+                ? ' Out'
+                : ' In';
+        }
+        return ' In';
+    }
+
     function seekToMarker(m, opt) {
         if (!markerTimelineReady() || !m) return;
         const focusComment = !!(opt && opt.focusComment);
@@ -932,14 +965,9 @@
         updateMarkerListRowClasses();
         renderSeekBarMarkers();
         const hintTc = tcLabelForSec(t);
-        const hintSuffix =
-            m.type === 'range' && !(opt && Number.isFinite(opt.targetSec))
-                ? seekEnd
-                    ? ' Out'
-                    : ' In'
-                : '';
+        const hintSuffix = markerSeekHintSuffix(m, opt, target);
         writeLog('Marker: seek to ' + hintTc + hintSuffix);
-        flashSeekHint('Marker', hintTc + hintSuffix);
+        flashMarkerSeekHint(m, hintTc, hintSuffix);
         const focusTcEdge = opt && opt.focusTcEdge;
         if (focusComment) {
             suppressMarkerRowHoverSeek(300);
@@ -1150,10 +1178,15 @@
             typeof isTransportPlaying === 'function'
                 ? isTransportPlaying()
                 : !videoMain.paused;
-        seekToMarker(m, {
+        const seekOpt = {
             targetSec: target,
             resumeAfterSeek: wasPlaying,
-        });
+        };
+        if (m.type === 'range') {
+            if (edge === 'out') seekOpt.seekEnd = true;
+            else if (edge === 'in') seekOpt.seekIn = true;
+        }
+        seekToMarker(m, seekOpt);
     }
 
     function bindSeekBarMarkerPointerSeek(el, m, resolveTargetSec) {

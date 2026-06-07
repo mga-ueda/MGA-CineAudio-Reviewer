@@ -529,12 +529,15 @@
             playbackRegion: row.playbackRegion,
             mix: row.mix,
             extraTracks: [],
-            rehearsalMark: {
-                offset:
-                    typeof getRehearsalMarkOffsetEnabled === 'function'
-                        ? getRehearsalMarkOffsetEnabled()
-                        : false,
-            },
+            rehearsalMark:
+                row.rehearsalMark && typeof row.rehearsalMark === 'object'
+                    ? { offset: !!row.rehearsalMark.offset }
+                    : {
+                          offset:
+                              typeof getRehearsalMarkOffsetEnabled === 'function'
+                                  ? getRehearsalMarkOffsetEnabled()
+                                  : false,
+                      },
         };
         if (Array.isArray(row.extraTracks)) {
             for (const entry of row.extraTracks) {
