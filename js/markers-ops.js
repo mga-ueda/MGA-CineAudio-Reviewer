@@ -69,7 +69,21 @@
         return inPanel(document.activeElement);
     }
 
+    /** マーカー一覧の TC 欄・コメント欄を編集中（フォーカス中） */
+    function isMarkerListEditableFieldActive(opt) {
+        const inField = (el) => {
+            if (!el || el.nodeType !== 1 || !el.closest) return false;
+            return (
+                !!el.closest('.marker-table__tc-input') ||
+                !!el.closest('.marker-table__comment[data-marker-comment]')
+            );
+        };
+        if (inField(opt && opt.target)) return true;
+        return inField(document.activeElement);
+    }
+
     window.isMarkerAreaKeyboardActive = isMarkerAreaKeyboardActive;
+    window.isMarkerListEditableFieldActive = isMarkerListEditableFieldActive;
 
     function isWaveformDrawingAreaActive(opt) {
         const inWaveform = (el) =>

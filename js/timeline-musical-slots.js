@@ -1884,10 +1884,30 @@
             if (idx >= 0 && idx < o.counts.length) phraseBars = o.counts[idx] | 0;
         }
         if (!(contentBars > 0) && phraseBars > 0) contentBars = phraseBars;
-        const meter =
+        let meter = '';
+        const settings = getMeterSettings();
+        if (
+            settings &&
+            settings.meterSpec &&
+            binding &&
+            typeof window.formatMeterTextForBarRange === 'function'
+        ) {
+            const barStart = binding.meterBarStart | 0;
+            const barCount = phraseBars > 0 ? phraseBars : contentBars;
+            if (barCount > 0) {
+                meter = window.formatMeterTextForBarRange(
+                    settings.meterSpec,
+                    barStart,
+                    barCount,
+                );
+            }
+        }
+        if (
+            !meter &&
             typeof window.getMusicalGridMeterDisplayText === 'function'
-                ? window.getMusicalGridMeterDisplayText()
-                : '';
+        ) {
+            meter = window.getMusicalGridMeterDisplayText();
+        }
         return typeof window.formatPhraseSlotMusicalMetaText === 'function'
             ? window.formatPhraseSlotMusicalMetaText(meter, phraseBars, contentBars)
             : '';

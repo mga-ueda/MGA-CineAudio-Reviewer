@@ -255,11 +255,32 @@
 
     function formatMeterSpec(spec) {
         if (!spec || !spec.entries || !spec.entries.length) return '';
-        const parts = spec.entries.map(
-            (e) => formatBpmForMeter(e.bpm) + '-' + e.sig.num + '/' + e.sig.den,
-        );
+        const parts = spec.entries.map((e) => formatMeterEntryToken(e));
         const joined = parts.join(',');
         return spec.mode === 'alternate' ? '(' + joined + ')' : joined;
+    }
+
+    function formatMeterEntryToken(entry) {
+        if (!entry || !entry.sig) return '';
+        return formatBpmForMeter(entry.bpm) + '-' + entry.sig.num + '/' + entry.sig.den;
+    }
+
+    /** 指定小節範囲に適用される Tempo/Sig をグローバル spec から抽出（連続同一は 1 つにまとめる） */
+    function formatMeterTextForBarRange(spec, barStart, barCount) {
+        if (!spec || !spec.entries || !spec.entries.length || !(barCount > 0)) return '';
+        const parts = [];
+        let lastToken = null;
+        const start = barStart | 0;
+        const count = barCount | 0;
+        for (let i = 0; i < count; i++) {
+            const token = formatMeterEntryToken(getMeterEntryForBar(spec, start + i));
+            if (!token) continue;
+            if (token !== lastToken) {
+                parts.push(token);
+                lastToken = token;
+            }
+        }
+        return parts.join(', ');
     }
 
     function getMeterEntryForBar(spec, barIndex) {
@@ -701,9 +722,12 @@
         return getMusicalGridPhraseFillVisible();
     }
     function relayoutExtraTrackRegionsToPhraseComposition(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         if (!canCommitPhraseCompositionLayout()) return 0;
         readMusicalGridFromInputs();
-        clearPhraseGroupBarCountsOverride();
+        if (!o.preservePhraseBarCountsOverride) {
+            clearPhraseGroupBarCountsOverride();
+        }
         clearMusicalGridPositionCache();
         if (typeof window.applyPhraseCompositionToAllExtraTrackRegions !== 'function') {
             if (typeof writeLog === 'function') {
@@ -711,7 +735,7 @@
             }
             return 0;
         }
-        return window.applyPhraseCompositionToAllExtraTrackRegions(opt);
+        return window.applyPhraseCompositionToAllExtraTrackRegions(o);
     }
     /** 波形側 Phrase 境界操作確定 — Phrase 欄へ反映後、構成どおりにリージョンを切り直す */
     function persistPhraseWaveformEditAndRedraw(opt) {
@@ -735,46 +759,39 @@
             if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
         }
         const shouldRelayout = !!(o.relayoutRegions && canCommitPhraseCompositionLayout());
-        const shouldRelayoutSlotsFromMeter = !!(
+        const shouldRelayoutFromMeter = !!(
             o.relayoutSlotsFromMeter &&
             canCommitPhraseCompositionLayout() &&
             !shouldRelayout
         );
-        const shouldCompress = !!(o.compressPhrase || shouldRelayout);
-        if (shouldCompress) {
+        const shouldRelayoutRegions = shouldRelayout || shouldRelayoutFromMeter;
+        if (o.compressPhrase) {
             compressPhraseDefinitionFromExpandedCounts({ skipUndo: !!o.skipUndo });
         }
         clearMusicalGridPositionCache();
         persistMusicalGridToStorage();
         scheduleMusicalGridRedraw();
-        if (shouldRelayout) {
+        if (shouldRelayoutRegions) {
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
-            });
-        } else if (
-            shouldRelayoutSlotsFromMeter &&
-            typeof window.relayoutAllTracksFromTimelineSlots === 'function'
-        ) {
-            window.relayoutAllTracksFromTimelineSlots({
-                skipUndo: !!o.skipUndo,
-                silent: true,
+                preservePhraseBarCountsOverride: shouldRelayoutFromMeter,
             });
         }
         if (typeof rebuildAllTrackTimelineSlots === 'function') {
             rebuildAllTrackTimelineSlots({
                 infer: true,
-                preserveStored: shouldRelayoutSlotsFromMeter,
+                preserveStored: false,
             });
         } else if (typeof refreshAllRegionMusicalMetaPresentation === 'function') {
             refreshAllRegionMusicalMetaPresentation();
         } else if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
             refreshAllRegionRehearsalMarkLabels();
         }
-        if (shouldRelayout && typeof flushPersistSessionNow === 'function') {
+        if (shouldRelayoutRegions && typeof flushPersistSessionNow === 'function') {
             return flushPersistSessionNow().catch((err) => {
                 if (typeof writeLog === 'function') {
                     writeLog(
-                        'Session save failed after Phrase relayout: ' +
+                        'Session save failed after musical region relayout: ' +
                             (err && err.message ? err.message : String(err)),
                     );
                 }
@@ -908,7 +925,21 @@
         clearMusicalGridPositionCache();
         let spec = parseMeterSpec(musicalGridMeterText);
         let nextText;
-        if (!spec) {
+        let caretEntryIndex = entryIndex;
+        let caretField = field;
+        if (input && phraseInputCaretAtEnd(input) && spec && spec.entries.length > 0) {
+            const defaultEntry = parseMeterToken(MUSICAL_GRID_DEFAULT_METER_TEXT);
+            if (defaultEntry) {
+                spec.entries.push({
+                    bpm: defaultEntry.bpm,
+                    sig: { num: defaultEntry.sig.num, den: defaultEntry.sig.den },
+                });
+                nextText = formatMeterSpec(spec);
+                caretEntryIndex = spec.entries.length - 1;
+                caretField = 'bpm';
+            }
+        }
+        if (!nextText && !spec) {
             const token = parseMeterToken(span.text);
             if (token) {
                 if (field === 'bpm') {
@@ -933,7 +964,7 @@
                 else den = clampMeterSigPart(den + step);
                 nextText = formatBpmForMeter(bpm) + '-' + num + '/' + den;
             }
-        } else {
+        } else if (!nextText) {
             const idx = Math.min(Math.max(0, entryIndex), spec.entries.length - 1);
             const entry = spec.entries[idx];
             if (field === 'bpm') {
@@ -946,7 +977,7 @@
             nextText = formatMeterSpec(spec);
         }
         musicalGridMeterText = nextText;
-        setMeterInputValuePreserveFieldCaret(input, nextText, entryIndex, field);
+        setMeterInputValuePreserveFieldCaret(input, nextText, caretEntryIndex, caretField);
         scheduleMusicalGridRedraw();
         scheduleMusicalGridAutosave();
     }
@@ -1841,7 +1872,7 @@
         const barBoundaries = collectBarBoundarySecs(meterSpec, master);
         if (!barBoundaries.length) return;
         const secToX = (sec) => (sec / master) * w;
-        const fontPx = Math.max(7, Math.min(9, h * 0.032));
+        const fontPx = Math.max(9, Math.min(11, h * 0.038));
         ctx.save();
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
@@ -1849,7 +1880,7 @@
         ctx.lineJoin = 'round';
         ctx.lineWidth = Math.max(1, fontPx * 0.1);
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
-        ctx.fillStyle = 'rgba(255, 100, 100, 0.92)';
+        ctx.fillStyle = 'rgba(255, 230, 80, 0.95)';
 
         function drawLabelAtSec(sec, label) {
             const x = secToX(sec);
@@ -3711,6 +3742,7 @@
     };
     window.resolvePhraseGroupIndexAtTransportSec = resolvePhraseGroupIndexAtTransportSec;
     window.formatPhraseSlotMusicalMetaText = formatPhraseSlotMusicalMetaText;
+    window.formatMeterTextForBarRange = formatMeterTextForBarRange;
     window.getMusicalGridMeterDisplayText = getMusicalGridMeterDisplayText;
     window.musicalGridDrawSettings = musicalGridDrawSettings;
     window.collectPhraseGroupRangesFromBarCounts = collectPhraseGroupRangesFromBarCounts;

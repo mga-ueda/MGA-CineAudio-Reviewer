@@ -935,7 +935,10 @@
 
     function applyPhraseCompositionToAllExtraTrackRegions(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        if (typeof window.clearPhraseGroupBarCountsOverride === 'function') {
+        if (
+            !o.preservePhraseBarCountsOverride &&
+            typeof window.clearPhraseGroupBarCountsOverride === 'function'
+        ) {
             window.clearPhraseGroupBarCountsOverride();
         }
         if (!phraseCompositionLayoutReady()) return 0;

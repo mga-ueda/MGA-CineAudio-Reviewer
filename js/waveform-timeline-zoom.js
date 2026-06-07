@@ -433,21 +433,12 @@
         return isWaveformTimelineInteractionReady();
     }
 
-    /** マーカーリスト上（フォーカスまたはホバー）では ↑/↓ ズームを無効にする */
+    /** マーカー一覧の TC・コメント編集中は ↑/↓ ズームを無効にする */
     function isWaveformTimelineZoomKeyboardBlocked(e) {
-        if (
-            typeof isMarkerAreaKeyboardActive === 'function' &&
-            isMarkerAreaKeyboardActive({ target: e && e.target })
-        ) {
-            return true;
-        }
-        if (
-            typeof markerPanelPointerInside !== 'undefined' &&
-            markerPanelPointerInside
-        ) {
-            return true;
-        }
-        return false;
+        return (
+            typeof isMarkerListEditableFieldActive === 'function' &&
+            isMarkerListEditableFieldActive({ target: e && e.target })
+        );
     }
 
     function resetWaveformTimelineZoom(opt) {
@@ -499,12 +490,6 @@
 
     function handleWaveformTimelineKeydown(e) {
         if (!isWaveformTimelineKeyboardReady()) return false;
-        if (
-            typeof isMarkerAreaKeyboardActive === 'function' &&
-            isMarkerAreaKeyboardActive({ target: e.target })
-        ) {
-            return false;
-        }
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
 
         if (!isWaveformTimelineZoomKeyboardBlocked(e)) {
