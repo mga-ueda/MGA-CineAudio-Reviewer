@@ -1573,7 +1573,7 @@
         .audio-waveform-composite__lanes--region-drag .audio-waveform-composite__region-cursor {
             display: none;
         }
-        /* リージョン付きレーン (z-index:5)・グリッド (6)・リージョンカーソル/マーカー (7)・プレイヘッド (8) */
+        /* リージョン付きレーン (5)・グリッド (6)・練習記号/リージョンカーソル/マーカー (7)・プレイヘッド (8) */
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers.seek-bar-markers {
             z-index: 7;
         }
@@ -2204,10 +2204,13 @@
             right: 0;
             bottom: var(--playback-lane-bottom-inset, 0px);
             left: 0;
-            z-index: 6;
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
+        }
+        /* 小節線グリッド (6) より前面 — lanes-inner 直下オーバーレイ */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-lane__rehearsal-marks {
+            z-index: 7;
         }
         .audio-waveform-lane__rehearsal-marks[hidden] {
             display: none !important;

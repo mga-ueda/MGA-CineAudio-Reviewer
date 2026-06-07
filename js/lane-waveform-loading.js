@@ -50,25 +50,39 @@
         return '';
     }
 
-    /** マーカー・ラベル（全行オーバーレイ）より前面に出すため lanes-inner 直下へ配置 */
-    function syncLoadingOverlayPlacement(lane, loadingEl) {
+    /** lanes-inner 直下オーバーレイの grid-row / column をレーン行に合わせる */
+    function syncLaneOverlayGridPlacement(lane, overlayEl) {
         const inner =
             typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
-        if (!inner || !lane || !loadingEl) return;
+        if (!inner || !lane || !overlayEl) return;
         if (typeof syncWaveformLanesViewportWidthCss === 'function') {
             syncWaveformLanesViewportWidthCss();
         }
-        if (loadingEl.parentElement !== inner) {
-            inner.appendChild(loadingEl);
+        if (overlayEl.parentElement !== inner) {
+            inner.appendChild(overlayEl);
         }
-        loadingEl.classList.add('audio-waveform-lane__loading--overlay');
         const row = resolveLaneGridRowStr(lane);
         if (row) {
-            loadingEl.style.gridRow = row;
-            loadingEl.style.gridColumn = '1';
+            overlayEl.style.gridRow = row;
+            overlayEl.style.gridColumn = '1';
         } else {
-            loadingEl.style.gridRow = '';
-            loadingEl.style.gridColumn = '';
+            overlayEl.style.gridRow = '';
+            overlayEl.style.gridColumn = '';
+        }
+    }
+
+    /** マーカー・ラベル（全行オーバーレイ）より前面に出すため lanes-inner 直下へ配置 */
+    function syncLoadingOverlayPlacement(lane, loadingEl) {
+        syncLaneOverlayGridPlacement(lane, loadingEl);
+        if (loadingEl) loadingEl.classList.add('audio-waveform-lane__loading--overlay');
+    }
+
+    function syncAllRehearsalMarksOverlayPlacement() {
+        const n = typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
+        for (let i = 0; i < n; i++) {
+            const el = document.getElementById('extraAudioRehearsalMarks' + i);
+            const lane = document.getElementById('extraAudioLane' + i);
+            if (el && lane) syncLaneOverlayGridPlacement(lane, el);
         }
     }
 
@@ -84,6 +98,7 @@
             const el = loadingElForLane(lane);
             if (el) syncLoadingOverlayPlacement(lane, el);
         }
+        syncAllRehearsalMarksOverlayPlacement();
     }
 
     function setLaneWaveformLoading(laneEl, visible) {
@@ -141,6 +156,11 @@
     };
 
     window.syncAllLoadingOverlayPlacement = syncAllLoadingOverlayPlacement;
+    window.syncLaneOverlayGridPlacement = syncLaneOverlayGridPlacement;
+    window.syncAllRehearsalMarksOverlayPlacement = syncAllRehearsalMarksOverlayPlacement;
 
     syncAllTrackWaveformLoading();
+    if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+        refreshAllRegionRehearsalMarkLabels();
+    }
 })();

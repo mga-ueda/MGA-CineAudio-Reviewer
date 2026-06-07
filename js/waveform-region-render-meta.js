@@ -28,18 +28,32 @@
         return formatRegionRehearsalMarkLabel(markIndex);
     }
 
+    function syncRehearsalMarksOverlayPlacement(track, container) {
+        if (!container) return;
+        const lane = document.getElementById('extraAudioLane' + track.slot);
+        if (!lane) return;
+        container.classList.add('audio-waveform-lane__rehearsal-marks--overlay');
+        if (typeof syncLaneOverlayGridPlacement === 'function') {
+            syncLaneOverlayGridPlacement(lane, container);
+        } else if (container.parentElement !== lane) {
+            lane.appendChild(container);
+        }
+    }
+
     function getRehearsalMarksContainerEl(track) {
         if (!isExtraTrackRef(track)) return null;
         const lane = document.getElementById('extraAudioLane' + track.slot);
         if (!lane) return null;
-        let el = lane.querySelector('.audio-waveform-lane__rehearsal-marks');
+        const containerId = 'extraAudioRehearsalMarks' + track.slot;
+        let el = document.getElementById(containerId);
         if (!el) {
             el = document.createElement('div');
+            el.id = containerId;
             el.className = 'audio-waveform-lane__rehearsal-marks';
             el.hidden = true;
             el.setAttribute('aria-hidden', 'true');
-            lane.appendChild(el);
         }
+        syncRehearsalMarksOverlayPlacement(track, el);
         return el;
     }
 
