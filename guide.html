@@ -369,7 +369,7 @@
                 <h3 class="docs-heading-box--sub" id="audio-phrase-overlay">Phrase 着色時のオーバーレイ（練習番号・無音スロット）</h3>
                 <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track のリージョンとリージョン間の<strong>無音スロット</strong>に、練習番号などのラベルが重なって表示されます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
                 <ul>
-                    <li><strong>練習番号（A / B / C …）</strong> — フレーズスロットごとの練習用番号。Phrase 着色 ON ではリージョン中央付近に大きく表示されます。</li>
+                    <li><strong>練習番号（A / B / C …）</strong> — フレーズスロットごとの練習用番号。Phrase 着色 ON ではリージョン中央付近に大きく表示されます。<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます。</li>
                     <li><strong>スロット番号（左下）</strong> — タイムライン上の内部スロット位置（A B …）。入れ替え前の由来を示すラベルと、Tempo/Sig・小節数のメタ情報（例: <code>140-4/4 8</code>）が併記されることがあります。</li>
                     <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。Phrase 着色 ON では練習番号と同様の表示が付き、<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
                     <li><strong>P. Offset</strong> — 上記の <strong>フレーズオフセット</strong>。先頭フレーズをアウフタクトとして番号なしにし、本編から A を始めます（詳細は「トランスポート」の P. Offset を参照）。</li>
@@ -410,8 +410,8 @@
                 <h3 class="docs-heading-box--sub" id="transport-options-top">波形直下（オプションバー上段）</h3>
                 <ul>
                     <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
-                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。</li>
-                    <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時も <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
+                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
+                    <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時は、カーソル位置の項目を <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。カンマ区切りの<strong>末尾</strong>（例: <code>1,8</code> の最後）にあるときは、上下どちらでも <code>,8</code> が追加されます（続けて8小節のフレーズを指定）。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
                     <li><strong>P. Offset</strong> — <strong>フレーズオフセット</strong>（Phrase Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。Import/Export Review（.mgacr）にのみ保存されます。</li>
                     <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Analyze / レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
                 </ul>
@@ -452,7 +452,9 @@
                     <li><kbd>Shift</kbd> + 矢印：1秒</li>
                     <li><kbd>Ctrl</kbd> + 矢印：5秒</li>
                     <li><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + 矢印：10秒</li>
-                    <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>：尺の0〜90% へジャンプ（Musical Grid フレーズ表示 <kbd>P</kbd> が ON でフレーズ番号があるときは、該当番号のフレーズ先頭へ）</li>
+                    <li><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
+                    <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>、または <kbd>Shift</kbd> + 上段 <kbd>0</kbd>〜<kbd>9</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。テンキーは <kbd>Shift</kbd> 不要（Windows ではテンキーに Shift が届かないため）。数字を続けて入力し、入力が途切れてから約 0.3 秒で確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。Tempo/Sig OFF 時にテンキーを押した場合は % ジャンプにフォールバック。再生中はシーク後に再生を再開</li>
+                    <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Phrase 着色（<kbd>P</kbd>）ON かつ Audio Track にリージョンがあるとき、練習番号（A / B / C …）の先頭へジャンプ</li>
                 </ul>
                 <p>シーク時には画面中央付近に大きなタイムコード表示（シークフラッシュ）が一瞬出ることがあります。</p>
             </section>

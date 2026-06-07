@@ -27,6 +27,26 @@
             typeof window.getNumpadSeekDigit === 'function'
                 ? window.getNumpadSeekDigit
                 : () => null;
+        const getRegionBarJumpDigit =
+            typeof window.getRegionBarJumpDigit === 'function'
+                ? window.getRegionBarJumpDigit
+                : typeof window.getShiftSeekDigit === 'function'
+                  ? window.getShiftSeekDigit
+                  : () => null;
+        const isBarJumpShiftHeld =
+            typeof window.isBarJumpShiftHeld === 'function'
+                ? window.isBarJumpShiftHeld
+                : typeof window.isShiftModifierActive === 'function'
+                  ? window.isShiftModifierActive
+                  : (ev) => !!(ev && ev.shiftKey);
+        const isTopRowDigitKeyCode =
+            typeof window.isTopRowDigitKeyCode === 'function'
+                ? window.isTopRowDigitKeyCode
+                : (code) => /^Digit[0-9]$/.test(code || '');
+        const isNumpadDigitKeyCode =
+            typeof window.isNumpadDigitKeyCode === 'function'
+                ? window.isNumpadDigitKeyCode
+                : (code) => /^Numpad[0-9]$/.test(code || '');
         if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
             if (
                 typeof isWebmExportActive === 'function' &&
@@ -247,8 +267,29 @@
             return;
         }
 
-        const numpadDigit = getNumpadSeekDigit(e.code);
-        if (numpadDigit != null) {
+        if (getRegionBarJumpDigit(e) != null) {
+            if (callWindowShortcut('handleRegionBarNumberJumpKeydown', e)) {
+                return;
+            }
+            // Shift + 上段数字は小節ジャンプ専用。条件未成立時は % ジャンプへフォールバックしない。
+            if (isTopRowDigitKeyCode(e.code) && isBarJumpShiftHeld(e)) {
+                e.preventDefault();
+                return;
+            }
+        }
+
+        const seekDigit = getNumpadSeekDigit(e.code);
+        const topRowDecileJump =
+            seekDigit != null &&
+            isTopRowDigitKeyCode(e.code) &&
+            !isBarJumpShiftHeld(e);
+        const numpadDecileFallback = seekDigit != null && isNumpadDigitKeyCode(e.code);
+        if (
+            (topRowDecileJump || numpadDecileFallback) &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+        ) {
             if (e.repeat) return;
             if (
                 typeof transportControlsReady !== 'function' ||
@@ -257,32 +298,14 @@
                 return;
             }
             e.preventDefault();
-            const d = numpadDigit;
+            const d = seekDigit;
             const dur =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
-            const phraseTintActive =
-                typeof getMusicalGridPhraseFillVisible === 'function' &&
-                getMusicalGridPhraseFillVisible() &&
-                typeof getPhraseGroupRangesSnapshot === 'function' &&
-                getPhraseGroupRangesSnapshot().length > 0;
-            let target = null;
-            let seekHintTitle = 'Jump ' + d + '/10';
-            let seekLogSuffix = ' (decile ' + d + '/10)';
-            if (phraseTintActive && typeof resolveMusicalGridNumpadSeekSec === 'function') {
-                const phraseSec = resolveMusicalGridNumpadSeekSec(d);
-                if (phraseSec == null || !Number.isFinite(phraseSec)) {
-                    return;
-                }
-                target = Math.max(0, Math.min(dur - 0.001, phraseSec));
-                seekHintTitle = 'Phrase ' + d;
-                seekLogSuffix = ' (phrase ' + d + ')';
-            } else if (!phraseTintActive) {
-                target = Math.max(0, Math.min(dur - 0.001, (d / 10) * dur));
-            } else {
-                return;
-            }
+            const target = Math.max(0, Math.min(dur - 0.001, (d / 10) * dur));
+            const seekHintTitle = 'Jump ' + d + '/10';
+            const seekLogSuffix = ' (decile ' + d + '/10)';
             const wasPlaying =
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
@@ -294,7 +317,7 @@
                     applyTimeToVideo(target);
                 }
                 writeLog(
-                    'Seek keyboard: Numpad ' +
+                    'Seek keyboard: ' +
                         d +
                         ' -> ' +
                         formatTimecodeForTransport(target) +

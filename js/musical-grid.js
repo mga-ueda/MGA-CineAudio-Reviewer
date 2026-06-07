@@ -1236,22 +1236,6 @@
         return seekToPhraseNavStop(stops[next], opt);
     }
 
-    /** Phrase 着色 ON 時、テンキー digit に対応するシーク位置（秒）。該当なしは null。 */
-    function resolveMusicalGridNumpadSeekSec(digit) {
-        if (!getMusicalGridPhraseFillVisible()) return null;
-        const d = digit | 0;
-        if (!(d >= 0 && d <= 9)) return null;
-        const ranges = getPhraseGroupRangesSnapshot();
-        if (!ranges.length) return null;
-        for (let i = 0; i < ranges.length; i++) {
-            const r = ranges[i];
-            if (r.paletteIndex === d) {
-                return Math.max(0, r.startSec);
-            }
-        }
-        return null;
-    }
-
     function collectPhraseGroupDrawRanges(settings, master) {
         if (!getMusicalGridPhraseFillVisible()) return [];
         if (
@@ -1394,7 +1378,500 @@
         }
     }
 
+    function collectPlaybackRegionSpansForBarLabels() {
+        const spans = [];
+        if (
+            typeof getExtraTrackCount !== 'function' ||
+            typeof isTrackRegionActive !== 'function' ||
+            typeof getSegmentCount !== 'function'
+        ) {
+            return spans;
+        }
+        const trackCount = getExtraTrackCount();
+        for (let slot = 0; slot < trackCount; slot++) {
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            const segCount = getSegmentCount(track);
+            for (let si = 0; si < segCount; si++) {
+                let startSec = null;
+                let endSec = null;
+                if (typeof getSegmentRegionTimelineInterval === 'function') {
+                    const iv = getSegmentRegionTimelineInterval(track, si);
+                    startSec = iv && Number.isFinite(iv.start) ? iv.start : null;
+                    endSec = iv && Number.isFinite(iv.end) ? iv.end : null;
+                } else if (
+                    typeof getSegmentRegionTimelineIn === 'function' &&
+                    typeof getSegmentRegionTimelineOut === 'function'
+                ) {
+                    startSec = getSegmentRegionTimelineIn(track, si);
+                    endSec = getSegmentRegionTimelineOut(track, si);
+                }
+                if (!Number.isFinite(startSec) || !Number.isFinite(endSec)) continue;
+                if (endSec <= startSec + 1e-9) continue;
+                spans.push({ slot, segmentIndex: si, startSec, endSec });
+            }
+        }
+        return spans;
+    }
 
+    function regionBarStartBoundarySec(regionInSec, barBoundaries) {
+        const idx = barIndexForBoundarySec(regionInSec, barBoundaries);
+        return barBoundaries[idx];
+    }
+
+    function barLineIndexForSec(sec, barBoundaries) {
+        const eps = 1e-4;
+        for (let i = 0; i < barBoundaries.length - 1; i++) {
+            if (Math.abs(sec - barBoundaries[i]) < eps) return i;
+        }
+        return -1;
+    }
+
+    function localBarNumberForRegionBarLine(regionInSec, barSec, barBoundaries) {
+        const lineIdx = barLineIndexForSec(barSec, barBoundaries);
+        if (lineIdx < 0) return null;
+        const regionBarStart = regionBarStartBoundarySec(regionInSec, barBoundaries);
+        const regionBarStartIdx = barLineIndexForSec(regionBarStart, barBoundaries);
+        if (regionBarStartIdx < 0) return null;
+        const localBar = lineIdx - regionBarStartIdx + 1;
+        return localBar >= 1 ? localBar : null;
+    }
+
+    function barLineBelongsToRegionSpan(span, barSec, barBoundaries, spans) {
+        const eps = 1e-4;
+        if (!Number.isFinite(barSec) || !span) return false;
+        if (barSec >= span.endSec - eps) return false;
+        if (spans) {
+            for (let i = 0; i < spans.length; i++) {
+                const other = spans[i];
+                if (other.slot !== span.slot) continue;
+                if (other.segmentIndex <= span.segmentIndex) continue;
+                if (barSec >= other.startSec - eps && barSec < other.endSec - eps) {
+                    return false;
+                }
+            }
+        }
+        if (barSec >= span.startSec - eps) return true;
+        const regionBarStart = regionBarStartBoundarySec(span.startSec, barBoundaries);
+        return (
+            Number.isFinite(regionBarStart) &&
+            Math.abs(barSec - regionBarStart) < eps &&
+            regionBarStart <= span.startSec + eps
+        );
+    }
+
+    function regionSpanHasBarOneLabelAtIn(span, barLines, barBoundaries, spans) {
+        const eps = 1e-4;
+        for (let i = 0; i < barLines.length; i++) {
+            const line = barLines[i];
+            if (!line || line.kind !== 'bar' || !Number.isFinite(line.sec)) continue;
+            if (!barLineBelongsToRegionSpan(span, line.sec, barBoundaries, spans)) continue;
+            if (localBarNumberForRegionBarLine(span.startSec, line.sec, barBoundaries) !== 1) {
+                continue;
+            }
+            if (Math.abs(line.sec - span.startSec) < eps) return true;
+            const regionBarStart = regionBarStartBoundarySec(span.startSec, barBoundaries);
+            if (Math.abs(line.sec - regionBarStart) < eps) return true;
+        }
+        return false;
+    }
+
+    function findPlaybackRegionSpanForBarLine(spans, barSec, barBoundaries) {
+        const activeSlot =
+            typeof getActiveMixExtraSlotFromDom === 'function'
+                ? getActiveMixExtraSlotFromDom()
+                : -1;
+        let best = null;
+        for (let i = 0; i < spans.length; i++) {
+            const span = spans[i];
+            if (!barLineBelongsToRegionSpan(span, barSec, barBoundaries, spans)) continue;
+            if (!best) {
+                best = span;
+                continue;
+            }
+            if (span.startSec > best.startSec + 1e-9) {
+                best = span;
+                continue;
+            }
+            if (Math.abs(span.startSec - best.startSec) <= 1e-9) {
+                if (activeSlot >= 0) {
+                    if (span.slot === activeSlot && best.slot !== activeSlot) {
+                        best = span;
+                        continue;
+                    }
+                    if (best.slot === activeSlot && span.slot !== activeSlot) {
+                        continue;
+                    }
+                }
+                if (span.slot === best.slot && span.segmentIndex > best.segmentIndex) {
+                    best = span;
+                }
+            }
+        }
+        return best;
+    }
+
+    function playbackRegionSpanContainsTransport(span, transportSec, barBoundaries, spans) {
+        const eps = 1e-4;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || !span) return false;
+        if (t >= span.endSec - eps) return false;
+        if (t >= span.startSec - eps) {
+            if (spans) {
+                for (let i = 0; i < spans.length; i++) {
+                    const other = spans[i];
+                    if (other.slot !== span.slot) continue;
+                    if (other.segmentIndex <= span.segmentIndex) continue;
+                    if (t >= other.startSec - eps && t < other.endSec - eps) return false;
+                }
+            }
+            return true;
+        }
+        const regionBarStart = regionBarStartBoundarySec(span.startSec, barBoundaries);
+        return (
+            Number.isFinite(regionBarStart) &&
+            t >= regionBarStart - eps &&
+            regionBarStart <= span.startSec + eps
+        );
+    }
+
+    function findPlaybackRegionSpanForTransportSec(spans, transportSec, barBoundaries) {
+        const activeSlot =
+            typeof getActiveMixExtraSlotFromDom === 'function'
+                ? getActiveMixExtraSlotFromDom()
+                : -1;
+        let best = null;
+        for (let i = 0; i < spans.length; i++) {
+            const span = spans[i];
+            if (!playbackRegionSpanContainsTransport(span, transportSec, barBoundaries, spans)) {
+                continue;
+            }
+            if (!best) {
+                best = span;
+                continue;
+            }
+            if (span.startSec > best.startSec + 1e-9) {
+                best = span;
+                continue;
+            }
+            if (Math.abs(span.startSec - best.startSec) <= 1e-9) {
+                if (activeSlot >= 0) {
+                    if (span.slot === activeSlot && best.slot !== activeSlot) {
+                        best = span;
+                        continue;
+                    }
+                    if (best.slot === activeSlot && span.slot !== activeSlot) continue;
+                }
+                if (span.slot === best.slot && span.segmentIndex > best.segmentIndex) {
+                    best = span;
+                }
+            }
+        }
+        return best;
+    }
+
+    function playbackRegionSpanForTrackSegment(spans, slot, segmentIndex, startSec, endSec) {
+        for (let i = 0; i < spans.length; i++) {
+            const span = spans[i];
+            if (span.slot === slot && span.segmentIndex === segmentIndex) return span;
+        }
+        return { slot, segmentIndex, startSec, endSec };
+    }
+
+    /** 指定トラック上で seek 秒が Region In〜Out 内にあるセグメント（後続セグメント優先） */
+    function resolveRegionSegmentAtTransportForTrack(track, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || !track) return null;
+        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) {
+            return null;
+        }
+        const segCount =
+            typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
+        let best = null;
+        const eps = 1e-4;
+        for (let si = 0; si < segCount; si++) {
+            let startSec = null;
+            let endSec = null;
+            if (typeof getSegmentRegionTimelineIn === 'function') {
+                startSec = getSegmentRegionTimelineIn(track, si);
+            }
+            if (typeof getSegmentRegionTimelineOut === 'function') {
+                endSec = getSegmentRegionTimelineOut(track, si);
+            }
+            if (!Number.isFinite(startSec) || !Number.isFinite(endSec)) continue;
+            if (endSec <= startSec + eps) continue;
+            if (t < startSec - eps || t >= endSec - eps) continue;
+            if (!best || si > best.segmentIndex) {
+                best = { slot: track.slot | 0, segmentIndex: si, startSec, endSec };
+            }
+        }
+        return best;
+    }
+
+    function collectRegionBarJumpSlotPriority() {
+        const slots = [];
+        const pushSlot = (slot) => {
+            const s = slot | 0;
+            if (s < 0 || slots.indexOf(s) >= 0) return;
+            slots.push(s);
+        };
+        if (typeof window.resolveTargetExtraSlot === 'function') {
+            pushSlot(window.resolveTargetExtraSlot());
+        }
+        if (typeof getActiveMixExtraSlotFromDom === 'function') {
+            pushSlot(getActiveMixExtraSlotFromDom());
+        }
+        if (typeof window.getLastActiveMixExtraSlot === 'function') {
+            pushSlot(window.getLastActiveMixExtraSlot());
+        }
+        const trackCount =
+            typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < trackCount; slot++) {
+            pushSlot(slot);
+        }
+        return slots;
+    }
+
+    /** シークバー現在地が属するリージョン（小節番号ラベルと同じ In〜Out 基準） */
+    function resolvePlaybackRegionSpanAtSeekbar(spans, transportSec, barBoundaries) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return null;
+        const slotOrder = collectRegionBarJumpSlotPriority();
+        for (let i = 0; i < slotOrder.length; i++) {
+            const slot = slotOrder[i];
+            const track = { type: 'extra', slot };
+            const hit = resolveRegionSegmentAtTransportForTrack(track, t);
+            if (!hit) continue;
+            return playbackRegionSpanForTrackSegment(
+                spans,
+                hit.slot,
+                hit.segmentIndex,
+                hit.startSec,
+                hit.endSec,
+            );
+        }
+        return findPlaybackRegionSpanForTransportSec(spans, t, barBoundaries);
+    }
+
+    function regionBarStartIndexForSpan(span, barBoundaries) {
+        const regionBarStart = regionBarStartBoundarySec(span.startSec, barBoundaries);
+        let idx = barLineIndexForSec(regionBarStart, barBoundaries);
+        if (idx < 0) {
+            idx = barIndexForBoundarySec(span.startSec, barBoundaries);
+        }
+        return idx;
+    }
+
+    function secForRegionLocalBarNumber(span, localBar, barBoundaries, spans) {
+        const n = localBar | 0;
+        if (!span || n < 1 || !barBoundaries || !barBoundaries.length) return null;
+        const regionBarStartIdx = regionBarStartIndexForSpan(span, barBoundaries);
+        if (n === 1) {
+            const sec = span.startSec;
+            return sec < span.endSec - 1e-4 ? sec : null;
+        }
+        const targetIdx = regionBarStartIdx + n - 1;
+        if (targetIdx < 0 || targetIdx >= barBoundaries.length - 1) return null;
+        const sec = barBoundaries[targetIdx];
+        if (!barLineBelongsToRegionSpan(span, sec, barBoundaries, spans)) return null;
+        if (sec >= span.endSec - 1e-4) return null;
+        return sec;
+    }
+
+    function seekToRegionLocalBarSec(targetSec, localBar, opt) {
+        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        let target = targetSec;
+        if (typeof clampTransportSec === 'function') {
+            target = clampTransportSec(target);
+        }
+        if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+            suppressRangeLoopSnapForExplicitSeek();
+        }
+        if (typeof applyTransportAtSec === 'function') {
+            applyTransportAtSec(target, { resumeAfter: resumeAfter });
+        } else if (typeof applyTimeToVideo === 'function') {
+            applyTimeToVideo(target);
+        }
+        if (typeof syncTransportSeekUi === 'function') {
+            syncTransportSeekUi(target);
+        } else if (typeof setTransportSec === 'function') {
+            setTransportSec(target);
+        }
+        if (typeof updateAllWaveformPlayheads === 'function') {
+            updateAllWaveformPlayheads();
+        }
+        const hintTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(target)
+                : String(target);
+        const hintTitle = 'Bar ' + (localBar | 0);
+        if (typeof writeLog === 'function') {
+            writeLog('Region bar: jump to ' + hintTitle + ' @ ' + hintTc);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(hintTitle, hintTc);
+        }
+        return true;
+    }
+
+    function jumpToRegionLocalBarNumber(localBar, opt) {
+        if (!getMusicalGridVisible()) return false;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return false;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return false;
+        const spans = collectPlaybackRegionSpansForBarLabels();
+        if (!spans.length) return false;
+        const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        if (!barBoundaries.length) return false;
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const span = resolvePlaybackRegionSpanAtSeekbar(spans, t, barBoundaries);
+        if (!span) return false;
+        const targetSec = secForRegionLocalBarNumber(span, localBar | 0, barBoundaries, spans);
+        if (!Number.isFinite(targetSec)) return false;
+        return seekToRegionLocalBarSec(targetSec, localBar | 0, opt);
+    }
+
+    let regionBarJumpDigitBuf = '';
+    let regionBarJumpDigitTimer = null;
+    const REGION_BAR_JUMP_DIGIT_TIMEOUT_MS = 300;
+    const REGION_BAR_JUMP_MAX_DIGITS = 3;
+
+    function flushRegionBarJumpDigitBuffer() {
+        const buf = regionBarJumpDigitBuf;
+        regionBarJumpDigitBuf = '';
+        regionBarJumpDigitTimer = null;
+        const barNum = parseInt(buf, 10);
+        if (!Number.isFinite(barNum) || barNum < 1) return;
+        const wasPlaying =
+            typeof isTransportPlaying === 'function'
+                ? isTransportPlaying()
+                : typeof videoMain !== 'undefined' && videoMain && !videoMain.paused;
+        if (!jumpToRegionLocalBarNumber(barNum, { resumeAfterSeek: wasPlaying })) {
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Region bar: jump skipped (bar ' +
+                        barNum +
+                        ' — Tempo/Sig OFF, or seekbar not in a region, or bar out of range)',
+                );
+            }
+        }
+    }
+
+    function scheduleRegionBarJumpFromBuffer() {
+        if (regionBarJumpDigitTimer != null) {
+            clearTimeout(regionBarJumpDigitTimer);
+        }
+        regionBarJumpDigitTimer = setTimeout(flushRegionBarJumpDigitBuffer, REGION_BAR_JUMP_DIGIT_TIMEOUT_MS);
+    }
+
+    function handleRegionBarNumberJumpKeydown(e) {
+        const digit =
+            typeof window.getRegionBarJumpDigit === 'function'
+                ? window.getRegionBarJumpDigit(e)
+                : typeof window.getShiftSeekDigit === 'function'
+                  ? window.getShiftSeekDigit(e)
+                  : null;
+        if (digit == null) return false;
+        if (e.repeat) return false;
+
+        if (
+            typeof transportControlsReady === 'function' &&
+            !transportControlsReady()
+        ) {
+            return false;
+        }
+        if (!getMusicalGridVisible()) return false;
+
+        if (regionBarJumpDigitBuf !== '' && regionBarJumpDigitTimer != null) {
+            const composed = regionBarJumpDigitBuf + String(digit);
+            if (composed.length > REGION_BAR_JUMP_MAX_DIGITS) {
+                regionBarJumpDigitBuf = String(digit);
+            } else {
+                regionBarJumpDigitBuf = composed;
+            }
+        } else {
+            regionBarJumpDigitBuf = String(digit);
+        }
+
+        const pendingBar = parseInt(regionBarJumpDigitBuf, 10);
+        if (!Number.isFinite(pendingBar) || pendingBar < 1) {
+            regionBarJumpDigitBuf = '';
+            if (regionBarJumpDigitTimer != null) {
+                clearTimeout(regionBarJumpDigitTimer);
+                regionBarJumpDigitTimer = null;
+            }
+            return false;
+        }
+
+        e.preventDefault();
+        scheduleRegionBarJumpFromBuffer();
+        return true;
+    }
+
+    /** Tempo/Sig ON 時 — 小節線（赤）の右に、リージョン内の 1 小節目からの番号を描画 */
+    function drawRegionBarNumberLabels(ctx, w, h, master, barLines, meterSpec) {
+        if (!getMusicalGridVisible() || !barLines.length || !meterSpec) return;
+        const spans = collectPlaybackRegionSpansForBarLabels();
+        if (!spans.length) return;
+        const barBoundaries = collectBarBoundarySecs(meterSpec, master);
+        if (!barBoundaries.length) return;
+        const secToX = (sec) => (sec / master) * w;
+        const fontPx = Math.max(7, Math.min(9, h * 0.032));
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = '400 ' + fontPx + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(1, fontPx * 0.1);
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillStyle = 'rgba(255, 100, 100, 0.92)';
+
+        function drawLabelAtSec(sec, label) {
+            const x = secToX(sec);
+            if (x < -0.5 || x > w + 0.5) return;
+            const xi = Math.round(x) + 0.5;
+            const labelX = xi + 3;
+            const labelY = Math.max(8, h * 0.055);
+            ctx.strokeText(label, labelX, labelY);
+            ctx.fillText(label, labelX, labelY);
+        }
+
+        for (let i = 0; i < barLines.length; i++) {
+            const line = barLines[i];
+            if (!line || line.kind !== 'bar' || !Number.isFinite(line.sec)) continue;
+            const span = findPlaybackRegionSpanForBarLine(spans, line.sec, barBoundaries);
+            if (!span) continue;
+            const localBar = localBarNumberForRegionBarLine(
+                span.startSec,
+                line.sec,
+                barBoundaries,
+            );
+            if (!localBar) continue;
+            drawLabelAtSec(line.sec, String(localBar));
+        }
+
+        for (let si = 0; si < spans.length; si++) {
+            const span = spans[si];
+            if (regionSpanHasBarOneLabelAtIn(span, barLines, barBoundaries, spans)) continue;
+            if (
+                span.startSec < span.endSec - 1e-6 &&
+                span.startSec >= 0 &&
+                span.startSec < master - 1e-6
+            ) {
+                drawLabelAtSec(span.startSec, '1');
+            }
+        }
+        ctx.restore();
+    }
 
     function drawMusicalGridOverlay() {
         const sized = ensureMusicalGridCanvasSized();
@@ -1442,6 +1919,7 @@
                 ctx.lineTo(xi, h);
                 ctx.stroke();
             }
+            drawRegionBarNumberLabels(ctx, w, h, master, lines, settings.meterSpec);
             ctx.restore();
         }
         drawPhraseGroupLabels(ctx, w, h, master, settings);
@@ -3031,7 +3509,6 @@
     window.parseTimeSignatureSpec = parseTimeSignatureSpec;
     window.parseMusicalGridTempoBpm = parseMusicalGridTempoBpm;
     window.parsePhraseGroupingSpec = parsePhraseGroupingSpec;
-    window.resolveMusicalGridNumpadSeekSec = resolveMusicalGridNumpadSeekSec;
     window.getPhraseGroupRangesSnapshot = getPhraseGroupRangesSnapshot;
     window.getPhraseGroupRangesForRegionRehearsalMarks =
         getPhraseGroupRangesForRegionRehearsalMarks;
@@ -3044,6 +3521,9 @@
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
     window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;
+    window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
+    window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;
+    window.resolvePlaybackRegionSpanAtSeekbar = resolvePlaybackRegionSpanAtSeekbar;
     window.handleMusicalGridPhraseSplitKeydown = handleMusicalGridPhraseSplitKeydown;
     window.handleMusicalGridPhraseDeleteKeydown = handleMusicalGridPhraseDeleteKeydown;
     window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;

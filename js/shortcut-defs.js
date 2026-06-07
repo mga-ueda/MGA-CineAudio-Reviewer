@@ -193,8 +193,18 @@
     const INTERNAL_SHORTCUTS = {};
     const SHORTCUTS = Object.freeze({ ...USER_SHORTCUTS, ...INTERNAL_SHORTCUTS });
 
-    // 補助マップ: Numpad 0-9 は「全体を10分割した位置」へジャンプ。
+    // 補助マップ: 0-9（テンキー／数字キー）は「全体を10分割した位置」へジャンプ。
     const NUMPAD_SEEK_DIGITS = Object.freeze({
+        Digit0: 0,
+        Digit1: 1,
+        Digit2: 2,
+        Digit3: 3,
+        Digit4: 4,
+        Digit5: 5,
+        Digit6: 6,
+        Digit7: 7,
+        Digit8: 8,
+        Digit9: 9,
         Numpad0: 0,
         Numpad1: 1,
         Numpad2: 2,
@@ -274,12 +284,123 @@
             : null;
     }
 
+    /** OS の Shift 状態（テンキー等で event.shiftKey が false になる環境向け） */
+    let keyboardShiftHeld = false;
+    let shiftPhysicalDownCount = 0;
+
+    function isNumpadDigitKeyCode(code) {
+        return /^Numpad[0-9]$/.test(code || '');
+    }
+
+    function isTopRowDigitKeyCode(code) {
+        return /^Digit[0-9]$/.test(code || '');
+    }
+
+    function readShiftModifierFromEvent(event) {
+        if (!event) return false;
+        if (event.shiftKey) return true;
+        if (typeof event.getModifierState === 'function') {
+            return event.getModifierState('Shift');
+        }
+        return false;
+    }
+
+    function syncShiftModifierFromEvent(event) {
+        if (!event) return keyboardShiftHeld;
+        const isShiftKey = event.code === 'ShiftLeft' || event.code === 'ShiftRight';
+        if (isShiftKey) {
+            if (event.type === 'keydown') {
+                if (!event.repeat) shiftPhysicalDownCount += 1;
+                keyboardShiftHeld = true;
+            } else if (event.type === 'keyup') {
+                shiftPhysicalDownCount = Math.max(0, shiftPhysicalDownCount - 1);
+                keyboardShiftHeld = shiftPhysicalDownCount > 0;
+            }
+            return keyboardShiftHeld;
+        }
+        if (event.type === 'keydown' && readShiftModifierFromEvent(event)) {
+            keyboardShiftHeld = true;
+        }
+        return keyboardShiftHeld;
+    }
+
+    function isShiftModifierActive(event) {
+        if (shiftPhysicalDownCount > 0) return true;
+        if (!event) return keyboardShiftHeld;
+        syncShiftModifierFromEvent(event);
+        if (event.shiftKey) return true;
+        return keyboardShiftHeld;
+    }
+
+    /** 小節ジャンプ用 Shift 判定（テンキーは shiftKey が付かないことがある） */
+    function isBarJumpShiftHeld(event) {
+        if (shiftPhysicalDownCount > 0) return true;
+        if (keyboardShiftHeld) return true;
+        if (!event) return false;
+        if (event.shiftKey) return true;
+        if (typeof event.getModifierState === 'function' && event.getModifierState('Shift')) {
+            return true;
+        }
+        return isShiftModifierActive(event);
+    }
+
+    function resetShiftModifierTracking() {
+        keyboardShiftHeld = false;
+        shiftPhysicalDownCount = 0;
+    }
+
+    function initShiftModifierTracking() {
+        if (initShiftModifierTracking.done) return;
+        initShiftModifierTracking.done = true;
+        window.addEventListener(
+            'keydown',
+            (e) => {
+                syncShiftModifierFromEvent(e);
+            },
+            { capture: true },
+        );
+        window.addEventListener(
+            'keyup',
+            (e) => {
+                syncShiftModifierFromEvent(e);
+            },
+            { capture: true },
+        );
+        window.addEventListener('blur', resetShiftModifierTracking);
+    }
+
+    /**
+     * リージョン内小節ジャンプ用の数字。
+     * - テンキー: Shift 不要（OS が Shift を付与しないため）
+     * - 上段数字キー: Shift 必須（修飾なしは % ジャンプ）
+     */
+    function getRegionBarJumpDigit(event) {
+        if (!event || event.ctrlKey || event.metaKey || event.altKey) return null;
+        const digit = getNumpadSeekDigit(event.code);
+        if (digit == null) return null;
+        if (isNumpadDigitKeyCode(event.code)) return digit;
+        if (isTopRowDigitKeyCode(event.code) && isBarJumpShiftHeld(event)) return digit;
+        return null;
+    }
+
+    /** Shift + 0–9 — getRegionBarJumpDigit のエイリアス（後方互換） */
+    function getShiftSeekDigit(event) {
+        return getRegionBarJumpDigit(event);
+    }
+
+    initShiftModifierTracking();
+
     function isShortcutCodeInGroup(code, groupName) {
         if (!code || !groupName) return false;
         const group = SHORTCUT_GROUPS[groupName];
         if (!group) return false;
         if (group.codes && group.codes.includes(code)) return true;
-        if (groupName === 'scrubStopCodes' && /^Numpad[0-9]$/.test(code)) return true;
+        if (
+            groupName === 'scrubStopCodes' &&
+            (/^Numpad[0-9]$/.test(code) || /^Digit[0-9]$/.test(code))
+        ) {
+            return true;
+        }
         return false;
     }
 
@@ -503,6 +624,12 @@
     window.matchMixLaneVolumeKey = matchMixLaneVolumeKey;
     window.getUserShortcut = getUserShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
+    window.getRegionBarJumpDigit = getRegionBarJumpDigit;
+    window.getShiftSeekDigit = getShiftSeekDigit;
+    window.isShiftModifierActive = isShiftModifierActive;
+    window.isBarJumpShiftHeld = isBarJumpShiftHeld;
+    window.isNumpadDigitKeyCode = isNumpadDigitKeyCode;
+    window.isTopRowDigitKeyCode = isTopRowDigitKeyCode;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;
     window.applyShortcutTooltips = applyShortcutTooltips;
 })();

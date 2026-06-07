@@ -93,8 +93,18 @@
                     </tr>
                     <tr>
                         <td>位置ジャンプ（尺の10分割）</td>
-                        <td>テンキー <kbd>0</kbd>〜<kbd>9</kbd></td>
-                        <td>通常は尺の0/10〜9/10へ（<kbd>9</kbd>は90%）。Musical Grid フレーズ表示（<kbd>P</kbd>）ONかつフレーズ番号があるときは、番号<kbd>0</kbd>〜<kbd>9</kbd>のフレーズ先頭へ（該当番号が無いキーは無効）。テンキーのみ</td>
+                        <td><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）</td>
+                        <td>尺の0/10〜9/10へ（<kbd>9</kbd>は90%）。テンキーは小節ジャンプ優先のため、Tempo/Sig OFF 時など小節ジャンプが無効なときのみ % 指定</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン内の小節へジャンプ</td>
+                        <td><kbd>0</kbd>〜<kbd>9</kbd>（<strong>テンキー</strong>）／<kbd>Shift</kbd>+<kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー）</td>
+                        <td>Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、表示されている小節番号（1 始まり）へジャンプ。テンキーは <kbd>Shift</kbd> 不要。数字を続けて入力し、約 0.3 秒待つと確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。再生中はシーク後に再生を再開</td>
+                    </tr>
+                    <tr>
+                        <td>練習番号へジャンプ</td>
+                        <td><kbd>Shift</kbd>+<kbd>A</kbd>〜<kbd>Z</kbd></td>
+                        <td>Phrase 着色（<kbd>P</kbd>）ON かつ Audio Track にリージョンがあるとき、練習番号 A/B/C… の先頭へ（<kbd>Shift</kbd>+<kbd>A</kbd>=A、<kbd>Shift</kbd>+<kbd>B</kbd>=B …）。該当番号が無いキーは無効</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">トランスポート・表示（動画読込後）</th>
@@ -251,7 +261,7 @@
                     <tr>
                         <td>Musical Grid フレーズ表示のオン/オフ</td>
                         <td><kbd>P</kbd></td>
-                        <td>フレーズ表示を切り替え（テンキー <kbd>0</kbd>〜<kbd>9</kbd> のジャンプ先も変わる）</td>
+                        <td>フレーズ表示を切り替え（練習番号ラベルの表示／非表示）</td>
                     </tr>
                     <tr>
                         <td>Tempo/Sig 入力欄へフォーカス</td>
@@ -319,12 +329,12 @@
                     <tr>
                         <td>フレーズ長の ±1（フレーズ欄）</td>
                         <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>フレーズ長入力欄にフォーカスがあるとき</td>
+                        <td>フレーズ長入力欄にフォーカスがあるとき。カンマ区切りの<strong>末尾</strong>では ±1 の代わりに <code>,8</code> を追加（上下どちらも）</td>
                     </tr>
                     <tr>
                         <td>フレーズ長の±10（フレーズ欄）</td>
                         <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>同上</td>
+                        <td>同上。末尾では ±10 の代わりに <code>,8</code> を追加</td>
                     </tr>
                     <tr>
                         <td>入力確定（メーター/フレーズ欄）</td>
