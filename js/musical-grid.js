@@ -950,19 +950,28 @@
         scheduleMusicalGridRedraw();
         scheduleMusicalGridAutosave();
     }
+    function phraseInputCaretAtEnd(input) {
+        if (!input || typeof input.selectionStart !== 'number') return false;
+        const len = input.value.length;
+        return input.selectionStart === len && input.selectionEnd === len;
+    }
     function bumpPhraseSizeBy(delta) {
         const input = musicalGridPhraseInput;
         const raw = input ? input.value : musicalGridPhraseText;
         const caret = input ? input.selectionStart : 0;
-        const entryIndex = commaListEntryIndexAtCaret(raw, caret);
         requestPhraseUndoCapture();
         phraseInputFocusSnapshot = null;
         readMusicalGridFromInputs();
         clearPhraseGroupBarCountsOverride();
         clearMusicalGridPositionCache();
         let spec = parsePhraseGroupingSpec(musicalGridPhraseText);
+        let entryIndex = commaListEntryIndexAtCaret(raw, caret);
         let nextText;
-        if (!spec) {
+        if (input && phraseInputCaretAtEnd(input) && spec && spec.sizes.length > 0) {
+            spec.sizes.push(8);
+            nextText = spec.sizes.join(',');
+            entryIndex = spec.sizes.length - 1;
+        } else if (!spec) {
             const cur = parseInt(normalizeMusicalGridPhraseText(musicalGridPhraseText), 10);
             const base = Number.isFinite(cur) && cur > 0 ? cur : 8;
             const next = Math.max(1, Math.min(999, base + delta));
