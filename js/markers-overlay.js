@@ -674,7 +674,11 @@
     function tcLabelForSec(transportSec) {
         if (!Number.isFinite(transportSec)) return '';
         if (markerTransportSecIsBeyondVideoEnd(transportSec)) {
-            return formatTimecodeForTransport(transportSec);
+            const fps = masterFpsFloatForTransport();
+            return formatTimecodeFromFrameIndex(
+                linearFrameIndexFromSec(transportSec, fps),
+                fps,
+            );
         }
         return formatTimecodeForSide(markerVideoSecForTransportSec(transportSec), 'main');
     }
