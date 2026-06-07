@@ -826,9 +826,16 @@
         if (typeof setTransportSec === 'function') setTransportSec(x);
         /* 動画終端以降へシークしても映像はパーク位置のまま（上記仕様コメント参照）。 */
         if (!keyboardLite) {
-            applyVideoTimeForTransportSec(x, { force: true });
+            const videoTimeApplied = applyVideoTimeForTransportSec(x, { force: true });
             if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
             if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
+            if (
+                videoTimeApplied &&
+                !(opt && opt.scrubbing) &&
+                typeof applyReviewMixVideoGain === 'function'
+            ) {
+                applyReviewMixVideoGain({ forceRecapture: true });
+            }
         }
         if (!(opt && opt.scrubbing) && typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });

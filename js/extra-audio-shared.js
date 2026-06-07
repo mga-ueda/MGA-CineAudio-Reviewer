@@ -35,6 +35,12 @@
     var videoMonitorSinkGain = null;
     /** 明示シーク後に captureStream タップを一度だけ張り直す */
     var reviewMixVideoMonitorTapStale = false;
+    /** captureStream に音声トラックがまだ無いときのモニタータップ再試行 */
+    var reviewMixVideoMonitorTapRetryTimer = 0;
+    var reviewMixVideoMonitorTapRetryCount = 0;
+    var reviewMixVideoMonitorTapMediaRetryArmed = false;
+    /** 再生開始時 captureStream を張り直した URL（未設定なら playing で再取得） */
+    var reviewMixVideoMonitorTapPrimedUrl = '';
     var nativeVideoMixModeLogged = false;
     var extraMixScheduleCtxTime = 0;
     var videoAudioSoloBtn = null;

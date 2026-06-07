@@ -50,6 +50,7 @@
     let sessionLkfsScratchR = null;
     let sessionLkfsScratchV = null;
     let sessionLkfsScratchLen = 0;
+    let sessionLkfsScratchVLen = 0;
     /** 再生開始からのインテグレーテッド LKFS（停止後も最後の値を保持）。 */
     let sessionIntegratedLkfs = null;
     /** 可聴コンテンツ終端を過ぎたらサンプル取り込みを止める（同一再生セッション内）。 */
@@ -116,46 +117,130 @@
         return true;
     }
 
-    function mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, vScratch) {
+    function scratchBufferPeak(buf, count) {
+        let peak = 0;
+        const n = Math.min(count | 0, buf.length);
+        for (let i = 0; i < n; i++) {
+            const v = Math.abs(buf[i]);
+            if (v > peak) peak = v;
+        }
+        return peak;
+    }
+
+    function ensureSessionLkfsVideoScratch(vAna) {
+        const need = vAna ? vAna.fftSize | 0 : 0;
+        if (need <= 0) return null;
+        if (!sessionLkfsScratchV || sessionLkfsScratchVLen < need) {
+            sessionLkfsScratchVLen = need;
+            sessionLkfsScratchV = new Float32Array(need);
+        }
+        return sessionLkfsScratchV;
+    }
+
+    function ensureSessionLkfsAudioScratch(len) {
+        if (len <= 0) return false;
+        if (!sessionLkfsScratchL || sessionLkfsScratchLen !== len) {
+            sessionLkfsScratchLen = len;
+            sessionLkfsScratchL = new Float32Array(len);
+            sessionLkfsScratchR = new Float32Array(len);
+        }
+        return true;
+    }
+
+    function fillSessionLkfsScratchFromVideoAnalyser(lBuf, rBuf, len, vAna, vScratch) {
+        const vLen = vAna.fftSize | 0;
+        if (vLen <= 0 || !vScratch || vScratch.length < vLen) return false;
+        vAna.getFloatTimeDomainData(vScratch.subarray(0, vLen));
+        if (vLen === len) {
+            for (let i = 0; i < len; i++) {
+                const vl = vScratch[i];
+                lBuf[i] = vl;
+                rBuf[i] = vl;
+            }
+            return true;
+        }
+        const outDenom = len > 1 ? len - 1 : 1;
+        const vDenom = vLen > 1 ? vLen - 1 : 1;
+        for (let i = 0; i < len; i++) {
+            const vi = Math.min(vLen - 1, Math.round((i * vDenom) / outDenom));
+            const vl = vScratch[vi];
+            lBuf[i] = vl;
+            rBuf[i] = vl;
+        }
+        return true;
+    }
+
+    function mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, vAna, vScratch) {
         if (
             typeof isVideoAudioPlaybackViaNativeElement !== 'function' ||
             !isVideoAudioPlaybackViaNativeElement() ||
-            typeof getVideoTrackAnalyser !== 'function'
+            !vAna ||
+            !vScratch
         ) {
             return;
         }
-        const vAna = getVideoTrackAnalyser();
-        if (!vAna) return;
-        vAna.getFloatTimeDomainData(vScratch);
-        const vLen = vScratch.length;
-        if (vLen < 1) return;
-        const mergeLen = Math.min(len, vLen);
-        for (let i = 0; i < mergeLen; i++) {
-            const vl = vScratch[i];
+        const vLen = vAna.fftSize | 0;
+        if (vLen <= 0 || vScratch.length < vLen) return;
+        const masterPeak = Math.max(scratchBufferPeak(lBuf, len), scratchBufferPeak(rBuf, len));
+        if (masterPeak < 1e-7) {
+            fillSessionLkfsScratchFromVideoAnalyser(lBuf, rBuf, len, vAna, vScratch);
+            return;
+        }
+        vAna.getFloatTimeDomainData(vScratch.subarray(0, vLen));
+        const outDenom = len > 1 ? len - 1 : 1;
+        const vDenom = vLen > 1 ? vLen - 1 : 1;
+        for (let i = 0; i < len; i++) {
+            const vi = Math.min(vLen - 1, Math.round((i * vDenom) / outDenom));
+            const vl = vScratch[vi];
             if (Math.abs(vl) > Math.abs(lBuf[i])) lBuf[i] = vl;
             if (Math.abs(vl) > Math.abs(rBuf[i])) rBuf[i] = vl;
         }
     }
 
     function updateSessionIntegratedLkfsFromAnalysers(ctx) {
-        if (!monitorTransportActive || !ctx || !anaL || !anaR) return;
+        if (!monitorTransportActive || !ctx) return;
         if (!shouldIngestSessionLkfsSamples()) return;
         const meter = ensureSessionIntegratedLkfsMeter(ctx);
         if (!meter) return;
 
-        const len = anaL.fftSize | 0;
-        if (len <= 0) return;
-        if (!sessionLkfsScratchL || sessionLkfsScratchLen !== len) {
-            sessionLkfsScratchLen = len;
-            sessionLkfsScratchL = new Float32Array(len);
-            sessionLkfsScratchR = new Float32Array(len);
-            sessionLkfsScratchV = new Float32Array(len);
+        const nativeVideoLkfs =
+            typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
+            isVideoAudioPlaybackViaNativeElement() &&
+            typeof getVideoTrackAnalyser === 'function';
+        const vAna = nativeVideoLkfs ? getVideoTrackAnalyser() : null;
+
+        let len;
+        let lBuf;
+        let rBuf;
+
+        if (vAna && (!anaL || !anaR)) {
+            len = vAna.fftSize | 0;
+            if (len <= 0) return;
+            if (!ensureSessionLkfsAudioScratch(len)) return;
+            const vScratch = ensureSessionLkfsVideoScratch(vAna);
+            if (!vScratch) return;
+            lBuf = sessionLkfsScratchL;
+            rBuf = sessionLkfsScratchR;
+            if (!fillSessionLkfsScratchFromVideoAnalyser(lBuf, rBuf, len, vAna, vScratch)) {
+                return;
+            }
+        } else if (!anaL || !anaR) {
+            return;
+        } else {
+            len = anaL.fftSize | 0;
+            if (len <= 0) return;
+            if (!ensureSessionLkfsAudioScratch(len)) return;
+            lBuf = sessionLkfsScratchL;
+            rBuf = sessionLkfsScratchR;
+            anaL.getFloatTimeDomainData(lBuf);
+            anaR.getFloatTimeDomainData(rBuf);
+            if (vAna) {
+                const vScratch = ensureSessionLkfsVideoScratch(vAna);
+                if (vScratch) {
+                    mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, vAna, vScratch);
+                }
+            }
         }
-        const lBuf = sessionLkfsScratchL;
-        const rBuf = sessionLkfsScratchR;
-        anaL.getFloatTimeDomainData(lBuf);
-        anaR.getFloatTimeDomainData(rBuf);
-        mergeNativeVideoIntoSessionLkfsScratch(lBuf, rBuf, len, sessionLkfsScratchV);
 
         const ctxNow = ctx.currentTime;
         const sr = ctx.sampleRate | 0;
@@ -590,6 +675,13 @@
     function setReviewMixMonitorTransportActive(active) {
         const wasActive = monitorTransportActive;
         monitorTransportActive = !!active;
+        if (typeof window.videoAnalyzerDiagLog === 'function' && monitorTransportActive !== wasActive) {
+            window.videoAnalyzerDiagLog('monitor/transport', {
+                active: monitorTransportActive,
+                wasActive,
+                analyzeOn,
+            });
+        }
         if (monitorTransportActive) {
             if (!wasActive) beginSessionIntegratedLkfsMeasurement();
             const ctx = getReviewMixAudioCtx();

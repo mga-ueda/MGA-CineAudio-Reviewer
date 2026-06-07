@@ -179,6 +179,9 @@
     function prepareReviewMixForNewVideoLoad() {
         reviewMixVideoWireFailed = false;
         reviewMixVideoBoostLogged = false;
+        if (typeof window.videoAnalyzerDiagReset === 'function') {
+            window.videoAnalyzerDiagReset();
+        }
         releaseReviewMixVideoMonitorTap();
         const hadLoadedVideo = typeof fileMain !== 'undefined' && !!fileMain;
         if (videoMediaSrc) {

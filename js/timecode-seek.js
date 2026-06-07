@@ -236,8 +236,23 @@
         }
         firstFramePrimedForUrl = urlMain || '';
         const restore = () => {
+            const wireAfterPrime = () => {
+                if (typeof applyReviewMixVideoGain === 'function') {
+                    applyReviewMixVideoGain({ forceRecapture: true });
+                } else if (typeof tryWireReviewMixVideoAudioWhenReady === 'function') {
+                    tryWireReviewMixVideoAudioWhenReady();
+                }
+            };
             if (Math.abs((videoMain.currentTime || 0) - kick) < 0.05) {
-                videoMain.currentTime = t0;
+                const ct = videoMain.currentTime || 0;
+                if (Math.abs(ct - t0) >= 0.0001) {
+                    videoMain.addEventListener('seeked', wireAfterPrime, { once: true });
+                    videoMain.currentTime = t0;
+                } else {
+                    wireAfterPrime();
+                }
+            } else {
+                wireAfterPrime();
             }
         };
         videoMain.addEventListener('seeked', restore, { once: true });

@@ -395,8 +395,10 @@
         if (!ctx) return null;
         if (!videoAnalyser) {
             videoAnalyser = ctx.createAnalyser();
-            videoAnalyser.fftSize = 256;
+            videoAnalyser.fftSize = 1024;
             videoAnalyser.smoothingTimeConstant = 0.65;
+        } else if ((videoAnalyser.fftSize | 0) !== 1024) {
+            videoAnalyser.fftSize = 1024;
         }
         return videoAnalyser;
     }

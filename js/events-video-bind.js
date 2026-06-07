@@ -171,9 +171,23 @@
             'playing',
             () => {
                 if (typeof applyReviewMixVideoGain === 'function') {
-                    const forceRecapture =
+                    const stale =
                         typeof consumeReviewMixVideoMonitorTapStale === 'function' &&
                         consumeReviewMixVideoMonitorTapStale();
+                    const needsPlayRecapture =
+                        typeof needsReviewMixVideoMonitorPlayRecapture === 'function' &&
+                        needsReviewMixVideoMonitorPlayRecapture();
+                    const forceRecapture = stale || needsPlayRecapture;
+                    if (typeof window.videoAnalyzerDiagLog === 'function') {
+                        window.videoAnalyzerDiagLog('transport/playing', {
+                            stale,
+                            needsPlayRecapture,
+                            nativeTap:
+                                typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
+                                isVideoAudioPlaybackViaNativeElement(),
+                            forceRecapture,
+                        });
+                    }
                     applyReviewMixVideoGain(
                         forceRecapture ? { forceRecapture: true } : undefined,
                     );

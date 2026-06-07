@@ -1,6 +1,88 @@
 /**
  * extra-audio-review-mix.js — Review mix WebAudio routing
  */
+    function videoAnalyzerDiag(stage, detail) {
+        if (typeof window.videoAnalyzerDiagLog !== 'function') return;
+        if (stage === 'monitor/skip') {
+            const reason = detail && detail.reason;
+            const snap = detail && detail.snap;
+            if (
+                reason === 'cannot-bind' &&
+                snap &&
+                (!snap.videoReady || !snap.url)
+            ) {
+                return;
+            }
+        }
+        if (
+            stage === 'monitor/connected' &&
+            detail &&
+            !detail.forceRecapture &&
+            detail.snap &&
+            detail.snap.monitorSrc
+        ) {
+            if (typeof window.videoAnalyzerDiagShouldLogConnected === 'function') {
+                if (!window.videoAnalyzerDiagShouldLogConnected(detail)) return;
+            }
+        }
+        window.videoAnalyzerDiagLog(stage, detail);
+    }
+
+    function markReviewMixVideoMonitorPlayPrimed() {
+        reviewMixVideoMonitorTapPrimedUrl = urlMain || '';
+        videoAnalyzerDiag('monitor/primed', { url: reviewMixVideoMonitorTapPrimedUrl });
+    }
+
+    function needsReviewMixVideoMonitorPlayRecapture() {
+        if (!urlMain || !videoMain) return false;
+        if (reviewMixVideoWired || reviewMixVideoBoostPlayback) return false;
+        if (shouldPlayVideoAudioViaWebAudio() || shouldPlayVideoAudioViaCaptureBoost()) {
+            return false;
+        }
+        if (containerHasAudio.main === false) return false;
+        return reviewMixVideoMonitorTapPrimedUrl !== urlMain;
+    }
+
+    function getVideoMonitorTapDiagSnapshot() {
+        const snap = {
+            url: urlMain || '',
+            primedUrl: reviewMixVideoMonitorTapPrimedUrl || '',
+            containerHasAudio: containerHasAudio.main,
+            wired: !!reviewMixVideoWired,
+            boost: !!reviewMixVideoBoostPlayback,
+            monitorSrc: !!videoMonitorStreamSrc,
+            native: isVideoAudioPlaybackViaNativeElement(),
+            videoReady: typeof videoReady === 'function' ? videoReady() : false,
+            rs: videoMain ? videoMain.readyState : null,
+            paused: videoMain ? videoMain.paused : null,
+            t: videoMain ? videoMain.currentTime : null,
+            muted: videoMain ? videoMain.muted : null,
+            vol: videoMain ? videoMain.volume : null,
+            retryCount: reviewMixVideoMonitorTapRetryCount,
+        };
+        if (typeof window.isDebugLogEnabled !== 'function' || !window.isDebugLogEnabled()) {
+            return snap;
+        }
+        if (videoMonitorStream) {
+            snap.captureAudioTracks = videoMonitorStream.getAudioTracks().length;
+            snap.captureProbeOk = snap.captureAudioTracks > 0;
+            return snap;
+        }
+        try {
+            const fn = getVideoCaptureStreamFn();
+            if (fn && videoMain) {
+                const s = fn();
+                if (s) {
+                    snap.captureAudioTracks = s.getAudioTracks().length;
+                    snap.captureProbeOk = snap.captureAudioTracks > 0;
+                    for (const track of s.getTracks()) {
+                        track.stop();
+                    }
+                }
+            }
+        } catch (_) {}
+        return snap;
+    }
     function getVideoTransportDurationSecForMix() {
         if (typeof getVideoPlaybackEndSec === 'function') {
             return getVideoPlaybackEndSec();
@@ -193,6 +275,90 @@
         } catch (_) {}
     }
 
+    const REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MAX = 16;
+    const REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MS = 200;
+
+    function stopReviewMixVideoMonitorTapRetryOnly() {
+        if (reviewMixVideoMonitorTapRetryTimer) {
+            clearTimeout(reviewMixVideoMonitorTapRetryTimer);
+            reviewMixVideoMonitorTapRetryTimer = 0;
+        }
+        reviewMixVideoMonitorTapRetryCount = 0;
+        reviewMixVideoMonitorTapMediaRetryArmed = false;
+    }
+
+    function resetReviewMixVideoMonitorTapSession() {
+        stopReviewMixVideoMonitorTapRetryOnly();
+        reviewMixVideoMonitorTapPrimedUrl = '';
+    }
+
+    function cancelReviewMixVideoMonitorTapRetry() {
+        stopReviewMixVideoMonitorTapRetryOnly();
+    }
+
+    function shouldRetryReviewMixVideoMonitorTap() {
+        if (videoMonitorStreamSrc) return false;
+        if (shouldPlayVideoAudioViaWebAudio() || shouldPlayVideoAudioViaCaptureBoost()) {
+            return false;
+        }
+        if (containerHasAudio.main === false) return false;
+        if (!videoMain || !urlMain) return false;
+        if (typeof canBindReviewMixVideoMediaSource === 'function' && !canBindReviewMixVideoMediaSource()) {
+            return false;
+        }
+        return true;
+    }
+
+    function armReviewMixVideoMonitorTapMediaRetry() {
+        if (!shouldRetryReviewMixVideoMonitorTap() || reviewMixVideoMonitorTapMediaRetryArmed) {
+            return;
+        }
+        reviewMixVideoMonitorTapMediaRetryArmed = true;
+        const onMediaReady = () => {
+            if (!videoMain) return;
+            videoMain.removeEventListener('canplay', onMediaReady);
+            videoMain.removeEventListener('loadeddata', onMediaReady);
+            videoMain.removeEventListener('seeked', onMediaReady);
+            if (!shouldRetryReviewMixVideoMonitorTap()) return;
+            applyReviewMixVideoGain();
+            if (videoMonitorStreamSrc) {
+                reviewMixVideoMonitorTapMediaRetryArmed = false;
+            }
+        };
+        videoMain.addEventListener('canplay', onMediaReady, { once: true });
+        videoMain.addEventListener('loadeddata', onMediaReady, { once: true });
+        videoMain.addEventListener('seeked', onMediaReady, { once: true });
+    }
+
+    function scheduleReviewMixVideoMonitorTapRetry() {
+        if (!shouldRetryReviewMixVideoMonitorTap()) return;
+        armReviewMixVideoMonitorTapMediaRetry();
+        if (reviewMixVideoMonitorTapRetryTimer) return;
+        if (reviewMixVideoMonitorTapRetryCount >= REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MAX) {
+            return;
+        }
+        const attempt = () => {
+            reviewMixVideoMonitorTapRetryTimer = 0;
+            if (!shouldRetryReviewMixVideoMonitorTap()) return;
+            reviewMixVideoMonitorTapRetryCount += 1;
+            applyReviewMixVideoGain();
+            if (videoMonitorStreamSrc) {
+                stopReviewMixVideoMonitorTapRetryOnly();
+                return;
+            }
+            if (reviewMixVideoMonitorTapRetryCount < REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MAX) {
+                reviewMixVideoMonitorTapRetryTimer = setTimeout(
+                    attempt,
+                    REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MS,
+                );
+            }
+        };
+        reviewMixVideoMonitorTapRetryTimer = setTimeout(
+            attempt,
+            REVIEW_MIX_VIDEO_MONITOR_TAP_RETRY_MS,
+        );
+    }
+
     function markReviewMixVideoMonitorTapStale() {
         reviewMixVideoMonitorTapStale = true;
     }
@@ -204,6 +370,7 @@
     }
 
     function releaseReviewMixVideoCaptureGraph() {
+        resetReviewMixVideoMonitorTapSession();
         reviewMixVideoBoostPlayback = false;
         if (videoMonitorStreamSrc) {
             try {
@@ -277,33 +444,67 @@
      * Analyser は destination へ gain=0 で接続しないとグラフが進まないブラウザがある。
      */
     function ensureReviewMixVideoMonitorTap(opt) {
+        const forceRecapture = !!(opt && opt.forceRecapture);
         if (
             !videoMain ||
             shouldPlayVideoAudioViaWebAudio() ||
             shouldPlayVideoAudioViaCaptureBoost()
         ) {
+            videoAnalyzerDiag('monitor/skip', {
+                reason: !videoMain
+                    ? 'no-video'
+                    : shouldPlayVideoAudioViaWebAudio()
+                      ? 'web-audio-route'
+                      : 'capture-boost',
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
             return false;
         }
         if (containerHasAudio.main === false) {
             releaseReviewMixVideoCaptureGraph();
+            videoAnalyzerDiag('monitor/skip', {
+                reason: 'container-no-audio',
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
             return false;
         }
         if (typeof canBindReviewMixVideoMediaSource === 'function' && !canBindReviewMixVideoMediaSource()) {
+            videoAnalyzerDiag('monitor/skip', {
+                reason: 'cannot-bind',
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
             return false;
         }
         const captureFn = getVideoCaptureStreamFn();
-        if (!captureFn) return false;
+        if (!captureFn) {
+            videoAnalyzerDiag('monitor/skip', {
+                reason: 'no-capture-fn',
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
+            return false;
+        }
         const ctx = ensureReviewMixCtx();
-        if (!ctx) return false;
+        if (!ctx) {
+            videoAnalyzerDiag('monitor/skip', {
+                reason: 'no-audio-ctx',
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
+            return false;
+        }
         if (!videoGainNode) videoGainNode = ctx.createGain();
         if (!videoMonitorSinkGain) {
             videoMonitorSinkGain = ctx.createGain();
             videoMonitorSinkGain.gain.value = 0;
         }
         const vMeter = ensureVideoTrackAnalyser(ctx);
-        const forceRecapture = !!(opt && opt.forceRecapture);
         try {
             if (videoMonitorStreamSrc && forceRecapture) {
+                videoAnalyzerDiag('monitor/recapture', getVideoMonitorTapDiagSnapshot());
                 try {
                     videoMonitorStreamSrc.disconnect();
                 } catch (_) {}
@@ -313,9 +514,18 @@
             }
             if (!videoMonitorStreamSrc) {
                 videoMonitorStream = captureFn();
-                if (!videoMonitorStream || !videoMonitorStream.getAudioTracks().length) {
+                const trackCount = videoMonitorStream
+                    ? videoMonitorStream.getAudioTracks().length
+                    : 0;
+                if (!videoMonitorStream || !trackCount) {
                     stopVideoMonitorStreamTracks();
                     videoMonitorStream = null;
+                    videoAnalyzerDiag('monitor/no-audio-tracks', {
+                        forceRecapture,
+                        trackCount,
+                        snap: getVideoMonitorTapDiagSnapshot(),
+                    });
+                    scheduleReviewMixVideoMonitorTapRetry();
                     return false;
                 }
                 videoMonitorStreamSrc = ctx.createMediaStreamSource(videoMonitorStream);
@@ -342,7 +552,17 @@
                 videoMonitorSinkGain.connect(ctx.destination);
             }
             reviewMixVideoBoostPlayback = false;
+            stopReviewMixVideoMonitorTapRetryOnly();
             applyReviewMixVideoMonitorTapGain();
+            if (forceRecapture) {
+                markReviewMixVideoMonitorPlayPrimed();
+            }
+            videoAnalyzerDiag('monitor/connected', {
+                forceRecapture,
+                tapGain: getVideoMonitorTapGainLinear(),
+                ctxState: ctx.state,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
             return true;
         } catch (err) {
             releaseReviewMixVideoCaptureGraph();
@@ -350,6 +570,11 @@
                 'Review mix: video monitor tap failed — ' +
                     (err && err.message ? err.message : String(err)),
             );
+            videoAnalyzerDiag('monitor/error', {
+                forceRecapture,
+                err: err && err.message ? err.message : String(err),
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
             return false;
         }
     }
@@ -444,6 +669,12 @@
             reviewMixVideoWireFailed = false;
         }
         const forceRecapture = !!(opt && opt.forceRecapture);
+        if (forceRecapture) {
+            videoAnalyzerDiag('gain/apply', {
+                forceRecapture,
+                snap: getVideoMonitorTapDiagSnapshot(),
+            });
+        }
 
         if (shouldPlayVideoAudioViaCaptureBoost()) {
             if (ensureReviewMixVideoBoostPlayback({ forceRecapture })) {

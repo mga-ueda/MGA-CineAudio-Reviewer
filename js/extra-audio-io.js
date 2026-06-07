@@ -47,6 +47,7 @@
     window.applyReviewMixVideoMonitorTapGain = applyReviewMixVideoMonitorTapGain;
     window.markReviewMixVideoMonitorTapStale = markReviewMixVideoMonitorTapStale;
     window.consumeReviewMixVideoMonitorTapStale = consumeReviewMixVideoMonitorTapStale;
+    window.needsReviewMixVideoMonitorPlayRecapture = needsReviewMixVideoMonitorPlayRecapture;
     window.isVideoAudioPlaybackViaNativeElement = isVideoAudioPlaybackViaNativeElement;
 
     window.getExtraTrackClipBuffer = getExtraTrackClipBuffer;
