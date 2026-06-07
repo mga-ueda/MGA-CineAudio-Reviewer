@@ -120,7 +120,6 @@
             const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
             if (
                 zone &&
-                zone.fadeIn > 0.0005 &&
                 t >= zone.startSec - 0.0005 &&
                 t <= zone.endSec + 0.0005
             ) {
@@ -132,7 +131,6 @@
             const zone = getManualJoinedBoundaryFadeZone(track, boundaryIndex);
             if (
                 zone &&
-                zone.fadeOut > 0.0005 &&
                 t >= zone.startSec - 0.0005 &&
                 t <= zone.endSec + 0.0005
             ) {
@@ -156,16 +154,16 @@
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return null;
         if (role === 'left') {
-            if (!(zone.fadeOut > 0.0005)) return null;
             if (t >= zone.boundaryT - 0.0005) return 0;
+            if (!(zone.fadeOut > 0.0005)) return null;
             const p = Math.max(
                 0,
                 Math.min(1, (t - zone.startSec) / zone.fadeOut),
             );
             return manualJoinedBoundaryFadeOutGain(p);
         }
-        if (!(zone.fadeIn > 0.0005)) return null;
         if (t < zone.boundaryT - 0.0005) return 0;
+        if (!(zone.fadeIn > 0.0005)) return null;
         const p = Math.max(
             0,
             Math.min(1, (t - zone.boundaryT) / zone.fadeIn),
