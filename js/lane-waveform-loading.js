@@ -78,12 +78,16 @@
     }
 
     function syncAllRehearsalMarksOverlayPlacement() {
-        const n = typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
-        for (let i = 0; i < n; i++) {
-            const el = document.getElementById('extraAudioRehearsalMarks' + i);
-            const lane = document.getElementById('extraAudioLane' + i);
-            if (el && lane) syncLaneOverlayGridPlacement(lane, el);
+        if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+            refreshAllRegionRehearsalMarkLabels();
+            return;
         }
+        const sync =
+            typeof syncRehearsalMarksOverlayGridPlacement === 'function'
+                ? syncRehearsalMarksOverlayGridPlacement
+                : null;
+        const el = document.getElementById('extraAudioRehearsalMarksOverlay');
+        if (sync && el) sync(el);
     }
 
     function syncAllLoadingOverlayPlacement() {

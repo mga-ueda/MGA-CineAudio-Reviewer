@@ -28,33 +28,95 @@
         return formatRegionRehearsalMarkLabel(markIndex);
     }
 
-    function syncRehearsalMarksOverlayPlacement(track, container) {
-        if (!container) return;
-        const lane = document.getElementById('extraAudioLane' + track.slot);
-        if (!lane) return;
-        container.classList.add('audio-waveform-lane__rehearsal-marks--overlay');
-        if (typeof syncLaneOverlayGridPlacement === 'function') {
-            syncLaneOverlayGridPlacement(lane, container);
-        } else if (container.parentElement !== lane) {
-            lane.appendChild(container);
+    const REHEARSAL_MARKS_OVERLAY_ID = 'extraAudioRehearsalMarksOverlay';
+
+    function purgeStaleLaneRehearsalMarks(lane) {
+        if (!lane || typeof lane.querySelectorAll !== 'function') return;
+        const stale = lane.querySelectorAll(':scope > .audio-waveform-lane__rehearsal-marks');
+        for (let i = 0; i < stale.length; i++) {
+            if (stale[i].parentElement === lane) stale[i].remove();
         }
     }
 
-    function getRehearsalMarksContainerEl(track) {
-        if (!isExtraTrackRef(track)) return null;
-        const lane = document.getElementById('extraAudioLane' + track.slot);
-        if (!lane) return null;
-        const containerId = 'extraAudioRehearsalMarks' + track.slot;
-        let el = document.getElementById(containerId);
+    function visibleWaveformLaneCount() {
+        let count = 0;
+        const videoMeta =
+            typeof audioWaveformPanel !== 'undefined' ? audioWaveformPanel : null;
+        if (videoMeta && !videoMeta.hidden) count += 1;
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            const meta = document.getElementById('extraAudioMeta' + slot);
+            if (meta && !meta.hidden) count += 1;
+        }
+        return Math.max(1, count);
+    }
+
+    function purgeLegacyRehearsalMarkContainers() {
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            const legacy = document.getElementById('extraAudioRehearsalMarks' + slot);
+            if (legacy) legacy.remove();
+            purgeStaleLaneRehearsalMarks(document.getElementById('extraAudioLane' + slot));
+        }
+    }
+
+    function syncRehearsalMarksOverlayGridPlacement(overlayEl) {
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+        if (!inner || !overlayEl) return;
+        if (typeof syncWaveformLanesViewportWidthCss === 'function') {
+            syncWaveformLanesViewportWidthCss();
+        }
+        if (overlayEl.parentElement !== inner) {
+            inner.appendChild(overlayEl);
+        }
+        const span = '1 / ' + (visibleWaveformLaneCount() + 1);
+        overlayEl.style.gridRow = span;
+        overlayEl.style.gridColumn = '1';
+    }
+
+    function getRehearsalMarksOverlayEl() {
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+        if (!inner) return null;
+        let el = document.getElementById(REHEARSAL_MARKS_OVERLAY_ID);
         if (!el) {
             el = document.createElement('div');
-            el.id = containerId;
-            el.className = 'audio-waveform-lane__rehearsal-marks';
+            el.id = REHEARSAL_MARKS_OVERLAY_ID;
+            el.className =
+                'audio-waveform-lane__rehearsal-marks audio-waveform-lane__rehearsal-marks--lanes-overlay';
             el.hidden = true;
             el.setAttribute('aria-hidden', 'true');
         }
-        syncRehearsalMarksOverlayPlacement(track, el);
+        syncRehearsalMarksOverlayGridPlacement(el);
         return el;
+    }
+
+    function rehearsalMarksRowTopPx(lane) {
+        if (!lane) return 0;
+        if (typeof lane.offsetTop === 'number' && Number.isFinite(lane.offsetTop)) {
+            return Math.max(0, lane.offsetTop);
+        }
+        const row = parseInt(String(lane.style.gridRow || '1'), 10);
+        const laneH =
+            typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite
+                ? parseFloat(
+                      getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
+                  ) || 92
+                : 92;
+        return (Math.max(1, row) - 1) * laneH;
+    }
+
+    function rehearsalMarksRowHeightPx(lane) {
+        if (lane && lane.offsetHeight > 0) return lane.offsetHeight;
+        if (typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite) {
+            return (
+                parseFloat(
+                    getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
+                ) || 92
+            );
+        }
+        return 92;
     }
 
     function positionRehearsalMarkEl(el, startSec, endSec, master) {
@@ -115,40 +177,7 @@
         appendPhraseMusicalMetaLabelEl(el, metaText);
     }
 
-    function syncTrackPhraseRehearsalMarks(track) {
-        const container = getRehearsalMarksContainerEl(track);
-        if (!container) return;
-        if (!isTrackRegionActive(track)) {
-            container.replaceChildren();
-            container.hidden = true;
-            return;
-        }
-        const ranges =
-            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
-                ? getPhraseGroupRangesForRegionRehearsalMarks()
-                : [];
-        if (!ranges.length) {
-            container.replaceChildren();
-            container.hidden = true;
-            return;
-        }
-        const master =
-            typeof getMasterTransportDurationSec === 'function'
-                ? getMasterTransportDurationSec()
-                : 0;
-        if (!(master > 0)) {
-            container.replaceChildren();
-            container.hidden = true;
-            return;
-        }
-        const phraseFillOn = isMusicalGridPhraseFillVisibleSafe();
-        if (!phraseFillOn) {
-            container.replaceChildren();
-            container.hidden = true;
-            return;
-        }
-        container.hidden = false;
-        container.replaceChildren();
+    function appendPhraseRehearsalMarkEls(rowEl, ranges, master) {
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
             if (!r || !Number.isFinite(r.startSec) || !Number.isFinite(r.endSec)) continue;
@@ -173,15 +202,61 @@
             }
             if (!slotEl.childElementCount) continue;
             positionRehearsalMarkEl(slotEl, r.startSec, r.endSec, master);
-            container.appendChild(slotEl);
+            rowEl.appendChild(slotEl);
         }
     }
 
+    function buildRehearsalMarksRowEl(track, lane, ranges, master) {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'audio-waveform-lane__rehearsal-marks-row';
+        rowEl.dataset.extraSlot = String(track.slot);
+        rowEl.style.top = rehearsalMarksRowTopPx(lane) + 'px';
+        rowEl.style.height = rehearsalMarksRowHeightPx(lane) + 'px';
+        appendPhraseRehearsalMarkEls(rowEl, ranges, master);
+        return rowEl.childElementCount ? rowEl : null;
+    }
+
+    function syncTrackPhraseRehearsalMarks(_track) {
+        refreshAllRegionRehearsalMarkLabels();
+    }
+
     function refreshAllRegionRehearsalMarkLabels() {
-        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
-        for (let slot = 0; slot < n; slot++) {
-            syncTrackPhraseRehearsalMarks({ type: 'extra', slot });
+        purgeLegacyRehearsalMarkContainers();
+        const overlay = getRehearsalMarksOverlayEl();
+        if (!overlay) return;
+
+        const ranges =
+            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
+                ? getPhraseGroupRangesForRegionRehearsalMarks()
+                : [];
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const phraseFillOn = isMusicalGridPhraseFillVisibleSafe();
+
+        overlay.replaceChildren();
+        if (!phraseFillOn || !(master > 0) || !ranges.length) {
+            overlay.hidden = true;
+            return;
         }
+
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        let anyVisible = false;
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const lane = document.getElementById('extraAudioLane' + slot);
+            const meta = document.getElementById('extraAudioMeta' + slot);
+            if (!lane || lane.hidden || (meta && meta.hidden)) continue;
+            if (typeof isTrackRegionActive === 'function' && !isTrackRegionActive(track)) {
+                continue;
+            }
+            const rowEl = buildRehearsalMarksRowEl(track, lane, ranges, master);
+            if (!rowEl) continue;
+            overlay.appendChild(rowEl);
+            anyVisible = true;
+        }
+        overlay.hidden = !anyVisible;
     }
 
     function refreshAllRegionMusicalMetaPresentation() {
@@ -200,6 +275,7 @@
     window.formatRehearsalMarkForPhraseSlot = formatRehearsalMarkForPhraseSlot;
     window.formatRegionRehearsalMarkLabel = formatRegionRehearsalMarkLabel;
     window.refreshAllRegionRehearsalMarkLabels = refreshAllRegionRehearsalMarkLabels;
+    window.syncRehearsalMarksOverlayGridPlacement = syncRehearsalMarksOverlayGridPlacement;
     window.refreshAllRegionMusicalMetaPresentation = refreshAllRegionMusicalMetaPresentation;
     const REGION_BOUNDARY_CLUSTER_PX = 12;
     const REGION_FADE_TRIANGLE_PX = 8;

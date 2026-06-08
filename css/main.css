@@ -1556,7 +1556,9 @@
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__playhead-wrap,
-        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead {
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead,
+        .audio-waveform-composite__lanes-inner
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
             grid-row: 1 / -1;
             grid-column: 1;
         }
@@ -2211,9 +2213,27 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        /* 小節線グリッド (6) より前面 — lanes-inner 直下オーバーレイ */
-        .audio-waveform-composite__lanes-inner > .audio-waveform-lane__rehearsal-marks {
+        /* 小節線グリッド (6) より前面 — マーカーと同様の全行オーバーレイ + 行バンド */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
             z-index: 7;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            height: 100%;
+            pointer-events: none;
+        }
+        .audio-waveform-lane__rehearsal-marks-row {
+            position: absolute;
+            left: 0;
+            right: 0;
+            box-sizing: border-box;
+            pointer-events: none;
+            --playback-lane-bottom-inset: 1px;
+        }
+        .audio-waveform-lane__rehearsal-marks-row .audio-waveform-lane__rehearsal-mark {
+            bottom: var(--playback-lane-bottom-inset, 0px);
         }
         .audio-waveform-lane__rehearsal-marks[hidden] {
             display: none !important;

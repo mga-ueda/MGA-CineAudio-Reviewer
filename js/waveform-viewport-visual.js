@@ -327,6 +327,9 @@
         drawWaveformChromeOverlays();
         if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
         scheduleRegionBoundaryPresentationRefresh({ sync: true });
+        if (typeof syncAllRehearsalMarksOverlayPlacement === 'function') {
+            syncAllRehearsalMarksOverlayPlacement();
+        }
         scheduleWaveformVisualRefresh();
     }
 
