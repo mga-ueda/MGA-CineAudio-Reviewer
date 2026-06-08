@@ -110,6 +110,9 @@
             if (markerPanelPointerInside && markerPanelHoverId) {
                 return markerPanelHoverId;
             }
+            if (activeMarkerId && currentMarkers.some((x) => x.id === activeMarkerId)) {
+                return activeMarkerId;
+            }
             if (isWaveformMarkerHighlightEnabled()) {
                 if (waveformMarkerHoverId) {
                     return waveformMarkerHoverId;
@@ -140,11 +143,11 @@
         if (markerPanelPointerInside && markerPanelHoverId) {
             return markerPanelHoverId;
         }
+        if (activeMarkerId && currentMarkers.some((x) => x.id === activeMarkerId)) {
+            return activeMarkerId;
+        }
         if (transportMarkerHighlightId && isWaveformMarkerHighlightEnabled()) {
             return transportMarkerHighlightId;
-        }
-        if (markerPanelPointerInside && activeMarkerId) {
-            return activeMarkerId;
         }
         return null;
     }
@@ -964,6 +967,11 @@
         else target = m.timeSec;
         const t = commitMarkerTransportSeek(target, { resumeAfter: resumeAfter });
         syncMarkerSeekTransportUi(t);
+        markerPanelHoverId = null;
+        waveformMarkerHoverId = null;
+        transportMarkerHighlightId = m.id;
+        lastTransportSecForMarkerHighlight = t;
+        resetMarkerHighlightCrossQueue();
         activeMarkerId = m.id;
         updateMarkerListRowClasses();
         renderSeekBarMarkers();
