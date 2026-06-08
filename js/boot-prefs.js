@@ -12,6 +12,9 @@
             if (typeof applyDebugLogFromPrefs === 'function') {
                 applyDebugLogFromPrefs(p);
             }
+            if (typeof applyUserWaveformLaneHeightFromStorage === 'function') {
+                applyUserWaveformLaneHeightFromStorage(p);
+            }
         } catch (_) {}
     }
 

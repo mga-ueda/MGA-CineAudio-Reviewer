@@ -524,13 +524,19 @@
 
     function syncExtraCanvasSize(ui) {
         if (!ui || !ui.canvas || !ui.track) return null;
+        if (typeof applyWaveformLaneHeightScaleToDom === 'function') {
+            applyWaveformLaneHeightScaleToDom();
+        }
         const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
                   ? masterTimelineWidthCss()
                   : Math.max(1, ui.track.clientWidth | 0);
-        const hCss = Math.max(1, ui.track.clientHeight | 0);
+        const hCss =
+            typeof getWaveformLaneHeightCss === 'function'
+                ? getWaveformLaneHeightCss()
+                : Math.max(1, ui.track.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         let backingW =
             typeof getWaveformCanvasBackingWidthCss === 'function'

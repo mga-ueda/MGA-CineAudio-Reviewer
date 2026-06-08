@@ -22,6 +22,11 @@
     }
 
     function prepareLayoutBeforeWaveformRestoreWait() {
+        if (typeof applyWaveformLaneHeightScaleToDom === 'function') {
+            applyWaveformLaneHeightScaleToDom();
+        } else if (typeof reapplyUserWaveformLaneHeightFromStorage === 'function') {
+            reapplyUserWaveformLaneHeightFromStorage();
+        }
         if (typeof syncExtraLaneVisibilityAfterSessionRestore === 'function') {
             syncExtraLaneVisibilityAfterSessionRestore();
         }

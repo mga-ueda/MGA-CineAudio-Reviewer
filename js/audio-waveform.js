@@ -473,9 +473,118 @@
         }
     }
 
+    /** 波形レーンの基準高さ（100% = 92px） */
+    const WAVEFORM_LANE_HEIGHT_BASE_PX = 92;
+    const WAVEFORM_LANE_HEIGHT_SCALE_MIN = 1;
+    const WAVEFORM_LANE_HEIGHT_SCALE_MAX = 4;
+    const WAVEFORM_LANE_HEIGHT_SCALE_STEP = 0.25;
+    let waveformLaneHeightScale = 1;
+
+    function clampWaveformLaneHeightScale(scale) {
+        const n = Number(scale);
+        if (!Number.isFinite(n)) return WAVEFORM_LANE_HEIGHT_SCALE_MIN;
+        return Math.max(
+            WAVEFORM_LANE_HEIGHT_SCALE_MIN,
+            Math.min(WAVEFORM_LANE_HEIGHT_SCALE_MAX, n),
+        );
+    }
+
+    function snapWaveformLaneHeightScale(scale) {
+        const c = clampWaveformLaneHeightScale(scale);
+        const steps = Math.round((c - WAVEFORM_LANE_HEIGHT_SCALE_MIN) / WAVEFORM_LANE_HEIGHT_SCALE_STEP);
+        return clampWaveformLaneHeightScale(
+            WAVEFORM_LANE_HEIGHT_SCALE_MIN + steps * WAVEFORM_LANE_HEIGHT_SCALE_STEP,
+        );
+    }
+
+    function getWaveformLaneHeightScale() {
+        return waveformLaneHeightScale;
+    }
+
+    function waveformLaneHeightScaleHintLabel(scale) {
+        return Math.round(snapWaveformLaneHeightScale(scale) * 100) + '%';
+    }
+
+    function getWaveformLaneHeightCss() {
+        return Math.max(1, Math.round(WAVEFORM_LANE_HEIGHT_BASE_PX * waveformLaneHeightScale));
+    }
+
+    function resolveWaveformTrackHeightCss() {
+        return getWaveformLaneHeightCss();
+    }
+
+    function applyWaveformLaneHeightScaleToDom() {
+        const val = String(waveformLaneHeightScale);
+        document.documentElement.style.setProperty('--wave-lane-height-scale', val);
+        document.documentElement.style.removeProperty('--wave-lane-h');
+        if (typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite) {
+            audioWaveformComposite.style.setProperty('--wave-lane-height-scale', val);
+            audioWaveformComposite.style.removeProperty('--wave-lane-h');
+        }
+    }
+
+    function refreshWaveformLaneHeightLayout() {
+        applyWaveformLaneHeightScaleToDom();
+        if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+            refreshWaveformCompositeLaneLayout();
+        }
+    }
+
+    function flashWaveformLaneHeightScaleHint(scale, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.silent) return;
+        if (typeof flashSeekHint !== 'function') return;
+        flashSeekHint('Track-H', waveformLaneHeightScaleHintLabel(scale), 'notice');
+    }
+
+    function setWaveformLaneHeightScale(nextScale, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const z = snapWaveformLaneHeightScale(nextScale);
+        const changed = Math.abs(z - waveformLaneHeightScale) >= 0.001;
+        waveformLaneHeightScale = z;
+        if (changed && o.persist !== false && typeof writePrefs === 'function') {
+            writePrefs();
+        }
+        refreshWaveformLaneHeightLayout();
+        if (changed) {
+            flashWaveformLaneHeightScaleHint(z, o);
+        } else if (!o.silent) {
+            flashWaveformLaneHeightScaleHint(z, o);
+        }
+        return true;
+    }
+
+    function stepWaveformLaneHeightScale(dir) {
+        const d = dir > 0 ? 1 : dir < 0 ? -1 : 0;
+        if (!d) return waveformLaneHeightScale;
+        return snapWaveformLaneHeightScale(
+            waveformLaneHeightScale + d * WAVEFORM_LANE_HEIGHT_SCALE_STEP,
+        );
+    }
+
+    function applyUserWaveformLaneHeightFromStorage(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        const scale =
+            typeof p.waveformLaneHeightScale === 'number'
+                ? p.waveformLaneHeightScale
+                : WAVEFORM_LANE_HEIGHT_SCALE_MIN;
+        waveformLaneHeightScale = snapWaveformLaneHeightScale(scale);
+        applyWaveformLaneHeightScaleToDom();
+    }
+
+    /** セッション復元・波形再描画時に prefs と DOM の倍率を同期（レイアウト全体は走らせない） */
+    function reapplyUserWaveformLaneHeightFromStorage() {
+        if (typeof readPrefs === 'function') {
+            applyUserWaveformLaneHeightFromStorage(readPrefs());
+        } else {
+            applyWaveformLaneHeightScaleToDom();
+        }
+    }
+
     /** 表示中のレーン数に合わせてグリッド高さとコメントラベル帯位置を更新 */
     function refreshWaveformCompositeLaneLayout() {
         if (!audioWaveformComposite) return;
+        applyWaveformLaneHeightScaleToDom();
         if (typeof syncWaveformLanesViewportWidthCss === 'function') {
             syncWaveformLanesViewportWidthCss();
         }
@@ -494,10 +603,7 @@
         syncTimelineOverlayGridPlacement(laneCount);
 
         requestAnimationFrame(() => {
-            const laneH =
-                parseFloat(
-                    getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
-                ) || 92;
+            const laneH = getWaveformLaneHeightCss();
             const laneIds = ['audioWaveformLaneVideo'];
             for (let i = 0; i < extraTrackSlotCount(); i++) {
                 laneIds.push('extraAudioLane' + i);
@@ -568,6 +674,13 @@
     window.refreshVideoAudioLaneVisibility = refreshVideoAudioLaneVisibility;
     window.notifyVideoAudioLoadSettledIfNoVideoAudio = notifyVideoAudioLoadSettledIfNoVideoAudio;
     window.refreshWaveformCompositeLaneLayout = refreshWaveformCompositeLaneLayout;
+    window.getWaveformLaneHeightScale = getWaveformLaneHeightScale;
+    window.getWaveformLaneHeightCss = getWaveformLaneHeightCss;
+    window.setWaveformLaneHeightScale = setWaveformLaneHeightScale;
+    window.stepWaveformLaneHeightScale = stepWaveformLaneHeightScale;
+    window.applyUserWaveformLaneHeightFromStorage = applyUserWaveformLaneHeightFromStorage;
+    window.applyWaveformLaneHeightScaleToDom = applyWaveformLaneHeightScaleToDom;
+    window.reapplyUserWaveformLaneHeightFromStorage = reapplyUserWaveformLaneHeightFromStorage;
 
     function getWaveformAudioDurationSec() {
         if (waveformAudioBuffer && waveformAudioBuffer.duration > 0) {
@@ -1280,13 +1393,14 @@
 
     function syncAudioWaveformCanvasSize() {
         if (!audioWaveformCanvas || !audioWaveformTrack) return null;
+        applyWaveformLaneHeightScaleToDom();
         const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
                   ? masterTimelineWidthCss()
                   : Math.max(1, audioWaveformTrack.clientWidth | 0);
-        const hCss = Math.max(1, audioWaveformTrack.clientHeight | 0);
+        const hCss = resolveWaveformTrackHeightCss();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         let backingW =
             typeof getWaveformCanvasBackingWidthCss === 'function'

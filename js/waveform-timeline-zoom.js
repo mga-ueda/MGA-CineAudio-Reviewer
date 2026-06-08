@@ -594,9 +594,24 @@
                 setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(-1), true);
                 return true;
             }
-            if (matchUserShortcut(e, 'waveformVerticalZoomReset')) {
+            if (matchUserShortcut(e, 'waveformLaneHeightExpand', { allowRepeat: true })) {
                 e.preventDefault();
-                resetWaveformVerticalZoom();
+                if (
+                    typeof stepWaveformLaneHeightScale === 'function' &&
+                    typeof setWaveformLaneHeightScale === 'function'
+                ) {
+                    setWaveformLaneHeightScale(stepWaveformLaneHeightScale(1));
+                }
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformLaneHeightShrink', { allowRepeat: true })) {
+                e.preventDefault();
+                if (
+                    typeof stepWaveformLaneHeightScale === 'function' &&
+                    typeof setWaveformLaneHeightScale === 'function'
+                ) {
+                    setWaveformLaneHeightScale(stepWaveformLaneHeightScale(-1));
+                }
                 return true;
             }
             if (matchUserShortcut(e, 'waveformVerticalZoomIn', { allowRepeat: true })) {

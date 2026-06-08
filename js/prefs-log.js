@@ -368,6 +368,11 @@
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }
             payload.debugLogEnabled = isDebugLogEnabled();
+            if (typeof getWaveformLaneHeightScale === 'function') {
+                payload.waveformLaneHeightScale = getWaveformLaneHeightScale();
+            } else if (typeof prev.waveformLaneHeightScale === 'number') {
+                payload.waveformLaneHeightScale = prev.waveformLaneHeightScale;
+            }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
         } catch (_) {}
     }

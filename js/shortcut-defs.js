@@ -263,8 +263,14 @@
             alt: false,
             shift: true,
         },
-        waveformVerticalZoomReset: {
+        waveformLaneHeightExpand: {
             code: 'ArrowDown',
+            primary: true,
+            alt: false,
+            shift: true,
+        },
+        waveformLaneHeightShrink: {
+            code: 'ArrowUp',
             primary: true,
             alt: false,
             shift: true,
@@ -618,7 +624,7 @@
             waveformZoom: chordWithArrows([], 'ArrowUp', 'ArrowDown'),
             waveformZoomExtreme: chordWithArrows(['Ctrl'], 'ArrowUp', 'ArrowDown'),
             waveformVerticalZoom: chordWithArrows(['Shift'], 'ArrowUp', 'ArrowDown'),
-            waveformVerticalZoomReset: formatShortcutDef(s.waveformVerticalZoomReset),
+            waveformLaneHeight: chordWithArrows(['Shift', 'Ctrl'], 'ArrowUp', 'ArrowDown'),
             markerStopJump: chordWithArrows(['Ctrl'], 'ArrowLeft', 'ArrowRight'),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
@@ -685,7 +691,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} で横倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、${h.waveformVerticalZoom} で縦倍率変更（${h.waveformVerticalZoomReset} で等倍にリセット）、Shift+ホイールで横スクロール。`,
+            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} で横倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
