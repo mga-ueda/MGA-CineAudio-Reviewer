@@ -53,6 +53,8 @@
             --marker-orange-pale: #d88830;
             --marker-orange-bg: rgba(184, 101, 16, 0.42);
             --marker-orange-border: rgba(200, 120, 28, 0.9);
+            /** ヘッダー・プレイヤー・波形・トランスポート・モニター・ログ・マニュアル等、主要ブロック間の縦／横隙間 */
+            --layout-section-gap: 7px;
         }
         body {
             font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -137,7 +139,7 @@
         }
 
         .app-header-note {
-            margin: 0 0 14px;
+            margin: 0 0 var(--layout-section-gap);
             font-size: 0.6em;
             font-weight: 500;
             color: #8e96a8;
@@ -230,7 +232,7 @@
                     var(--marker-table-row-h) * var(--marker-table-visible-rows) +
                     calc(1.35em * 5 + 12px + 2.5rem)
             );
-            margin: 0 auto 18px;
+            margin: 0 auto var(--layout-section-gap);
             width: 100%;
             max-width: none;
             box-sizing: border-box;
@@ -238,7 +240,7 @@
             display: flex;
             flex-direction: row;
             align-items: stretch;
-            gap: 10px;
+            gap: var(--layout-section-gap);
             min-height: 0;
         }
         .player-stage__main {
@@ -919,7 +921,7 @@
         }
 
         .compare-stage {
-            margin: 0 auto 18px;
+            margin: 0 auto var(--layout-section-gap);
             width: 100%;
             max-width: none;
             box-sizing: border-box;
@@ -932,7 +934,7 @@
         .compare-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 18px;
+            gap: var(--layout-section-gap);
             margin: 0;
             width: 100%;
             max-width: none;
@@ -1438,7 +1440,7 @@
         .audio-waveform-composite {
             width: 100%;
             max-width: none;
-            margin: 0 auto 14px;
+            margin: 0 auto var(--layout-section-gap);
             box-sizing: border-box;
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
             padding: 8px;
@@ -3059,7 +3061,7 @@
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
             padding: var(--transport-bar-inset-y) 14px var(--transport-bar-inset-bottom) 14px;
             border-radius: 14px;
-            margin-bottom: 14px;
+            margin-bottom: var(--layout-section-gap);
             display: flex;
             flex-direction: column;
             gap: var(--transport-bar-row-gap);
@@ -3109,7 +3111,7 @@
         .player-stage__main .transport-bar--playback {
             flex: 0 0 auto;
             width: 100%;
-            margin-top: 8px;
+            margin-top: var(--layout-section-gap);
             margin-bottom: 0;
             box-sizing: border-box;
         }
@@ -4469,7 +4471,7 @@
             flex-shrink: 0;
         }
         .app-doc-fold {
-            margin-top: 16px;
+            margin-top: var(--layout-section-gap);
             margin-left: auto;
             margin-right: auto;
             max-width: none;
@@ -4605,7 +4607,7 @@
         }
 
         .app-site-footer {
-            margin-top: 22px;
+            margin-top: var(--layout-section-gap);
             margin-bottom: 10px;
             padding: 12px 14px 14px;
             text-align: center;
@@ -4634,7 +4636,7 @@
             display: flex;
             flex-direction: column;
             gap: 15px;
-            margin-top: 15px;
+            margin-top: 0;
             align-items: stretch;
             width: 100%;
         }
@@ -4891,7 +4893,7 @@
         .review-mix-monitor {
             width: 100%;
             max-width: none;
-            margin: 0 auto 14px;
+            margin: 0 auto var(--layout-section-gap);
             box-sizing: border-box;
         }
         .review-mix-monitor .monitor-layout {
