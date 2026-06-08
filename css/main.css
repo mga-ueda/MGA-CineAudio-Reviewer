@@ -2522,9 +2522,9 @@
             position: absolute;
             top: 0;
             box-sizing: border-box;
-            overflow: hidden;
+            overflow: visible;
             pointer-events: none;
-            will-change: transform;
+            will-change: transform, filter;
             transform-origin: left center;
             box-shadow: 0 0 0 1px rgba(120, 230, 255, 0.45);
         }

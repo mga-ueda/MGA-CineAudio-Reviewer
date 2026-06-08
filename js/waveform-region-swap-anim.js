@@ -2,8 +2,13 @@
  * waveform-region-swap-anim.js — リージョン入れ替えアニメーション
  */
     const REGION_SWAP_ANIM_MS = 500;
+    const REGION_SWAP_MOTION_BLUR_GAIN = 0.022;
+    const REGION_SWAP_MOTION_BLUR_MAX = 12;
     let playbackRegionSwapAnimActive = false;
     let playbackRegionSwapAnimPending = false;
+    let regionSwapMotionBlurSvg = null;
+    let regionSwapMotionBlurDefs = null;
+    let regionSwapMotionBlurFilterSeq = 0;
 
     function normalizeRegionSwapSegmentPair(swapLo, swapHi) {
         const a = swapLo | 0;
@@ -340,8 +345,71 @@
         return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     }
 
+    function easeInOutCubicDerivative(t) {
+        const x = Math.max(0, Math.min(1, t));
+        if (x < 0.5) return 12 * x * x;
+        const u = 1 - x;
+        return 6 * u * u;
+    }
+
+    function ensureRegionSwapMotionBlurSvg() {
+        if (regionSwapMotionBlurDefs) return regionSwapMotionBlurDefs;
+        const NS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(NS, 'svg');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.setAttribute('width', '0');
+        svg.setAttribute('height', '0');
+        svg.style.position = 'absolute';
+        svg.style.overflow = 'hidden';
+        const defs = document.createElementNS(NS, 'defs');
+        svg.appendChild(defs);
+        document.body.appendChild(svg);
+        regionSwapMotionBlurSvg = svg;
+        regionSwapMotionBlurDefs = defs;
+        return defs;
+    }
+
+    function createRegionSwapGhostMotionBlurFilter() {
+        const NS = 'http://www.w3.org/2000/svg';
+        const defs = ensureRegionSwapMotionBlurSvg();
+        const id = 'region-swap-hblur-' + ++regionSwapMotionBlurFilterSeq;
+        const filter = document.createElementNS(NS, 'filter');
+        filter.setAttribute('id', id);
+        filter.setAttribute('x', '-30%');
+        filter.setAttribute('y', '-10%');
+        filter.setAttribute('width', '160%');
+        filter.setAttribute('height', '120%');
+        filter.setAttribute('color-interpolation-filters', 'sRGB');
+        const blur = document.createElementNS(NS, 'feGaussianBlur');
+        blur.setAttribute('in', 'SourceGraphic');
+        blur.setAttribute('stdDeviation', '0 0');
+        filter.appendChild(blur);
+        defs.appendChild(filter);
+        return { id: id, blurEl: blur, filterEl: filter };
+    }
+
+    function regionSwapMotionBlurStdX(progress, from, to) {
+        const dist = Math.abs((to.left || 0) - (from.left || 0));
+        if (!(dist > 0.5)) return 0;
+        const speed = easeInOutCubicDerivative(progress) * dist;
+        return Math.min(REGION_SWAP_MOTION_BLUR_MAX, speed * REGION_SWAP_MOTION_BLUR_GAIN);
+    }
+
+    function releaseRegionSwapGhostMotionBlur(ghostEl) {
+        if (!ghostEl) return;
+        ghostEl.style.filter = 'none';
+        const filterEl = ghostEl._motionBlurFilter;
+        if (filterEl && filterEl.parentNode) filterEl.remove();
+        ghostEl._motionBlurFilter = null;
+    }
+
     function removePlaybackRegionSwapLayer(layer) {
-        if (layer && layer.parentNode) layer.remove();
+        if (!layer) return;
+        const anims = layer.querySelectorAll('.audio-waveform-lane__region-swap-anim');
+        for (let i = 0; i < anims.length; i++) {
+            releaseRegionSwapGhostMotionBlur(anims[i]);
+        }
+        if (layer.parentNode) layer.remove();
     }
 
     function revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, opt) {
@@ -381,6 +449,8 @@
         if (item.move.zIndex > 0) {
             ghost.style.zIndex = String(item.move.zIndex);
         }
+        const motionBlur = createRegionSwapGhostMotionBlurFilter();
+        ghost._motionBlurFilter = motionBlur.filterEl;
         if (item.bitmap) {
             const snap = document.createElement('canvas');
             snap.width = item.bitmap.width;
@@ -390,7 +460,12 @@
             snapCtx.drawImage(item.bitmap, 0, 0);
             ghost.appendChild(snap);
         }
-        return { el: ghost, from: item.move.from, to: item.move.to };
+        return {
+            el: ghost,
+            from: item.move.from,
+            to: item.move.to,
+            motionBlur: motionBlur,
+        };
     }
 
     function paintPlaybackRegionSwapGhosts(ghosts, progress) {
@@ -404,6 +479,15 @@
             const width = from.width + (to.width - from.width) * e;
             const scaleX = from.width > 0 ? width / from.width : 1;
             g.el.style.transform = 'translate3d(' + dx + 'px, 0, 0) scaleX(' + scaleX + ')';
+            if (g.motionBlur) {
+                const blurX = regionSwapMotionBlurStdX(t, from, to);
+                if (blurX > 0.2) {
+                    g.motionBlur.blurEl.setAttribute('stdDeviation', blurX.toFixed(2) + ' 0');
+                    g.el.style.filter = 'url(#' + g.motionBlur.id + ')';
+                } else {
+                    g.el.style.filter = 'none';
+                }
+            }
         }
     }
 
