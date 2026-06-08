@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.06';
+    const APP_VERSION = '0.07';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.07',
+            date: '2026年6月8日',
+            items: [
+                'トランスポート・Markers・S/M など主要ボタンをフラットデザインに統一（暗い内側＋色付き枠、Solo/Mute・Hide の ON 状態は塗りつぶし）。Hide/View の配色を表示状態と一致するよう入れ替え。± 音量ショートカット時にファイル名付きトーストを表示。',
+            ],
+        },
         {
             version: '0.06',
             date: '2026年6月8日',

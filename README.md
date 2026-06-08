@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.06 |
+| **バージョン** | v0.07 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,10 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.07 - 2026年6月8日
+
+- トランスポート・Markers・S/M など主要ボタンをフラットデザインに統一（暗い内側＋色付き枠、Solo/Mute・Hide の ON 状態は塗りつぶし）。Hide/View の配色を表示状態と一致するよう入れ替え。± 音量ショートカット時にファイル名付きトーストを表示。
 
 ### v0.06 - 2026年6月8日
 

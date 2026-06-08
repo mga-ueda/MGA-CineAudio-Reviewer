@@ -1050,6 +1050,37 @@
         return currentDb + deltaDb;
     }
 
+    function mixLaneVolumeToastFileName(t) {
+        if (!t) return '';
+        if (t.kind === 'video') {
+            if (typeof nameMain !== 'undefined' && nameMain) {
+                const n = String(nameMain.textContent || '').trim();
+                if (n && n !== 'Not Loaded') return n;
+            }
+            return 'Video';
+        }
+        if (typeof getExtraTrackFileName === 'function' && typeof extraTrackBySlot === 'function') {
+            const name = getExtraTrackFileName(extraTrackBySlot(t.slot));
+            if (name) return name;
+        }
+        return 'Ex ' + (t.slot + 1);
+    }
+
+    function formatMixLaneVolumeToastDb(db) {
+        if (typeof trackLaneFormatDbValue === 'function') {
+            return trackLaneFormatDbValue(db) + ' dB';
+        }
+        const digits = Math.abs(db) >= 10 ? 0 : 1;
+        const s = db.toFixed(digits);
+        return (db > 0 ? '+' : '') + s + ' dB';
+    }
+
+    function flashMixLaneVolumeToast(t, db) {
+        if (typeof flashSeekHint !== 'function') return;
+        const fileName = mixLaneVolumeToastFileName(t);
+        flashSeekHint(fileName, formatMixLaneVolumeToastDb(db), 'notice');
+    }
+
     function resolveActiveMixLaneDisplayIndex(clientX, clientY) {
         const targets = getVisibleMixLaneTargets();
         if (!targets.length) return -1;
@@ -1157,6 +1188,7 @@
             syncTrackLaneFaderUi(t.kind === 'video' ? 'video' : t.slot);
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        flashMixLaneVolumeToast(t, nextDb);
         const stoppedAtUnity =
             isMixLaneDbAtUnity(nextDb) &&
             !atUnityBefore &&
