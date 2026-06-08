@@ -8,7 +8,10 @@
     const WAVEFORM_TIMELINE_ZOOM_LEVELS = Object.freeze([1, 4, 8, 16, 32]);
     /** MARKERS の In/Out TC 編集（+/-）中の波形倍率 */
     const MARKER_TC_EDIT_WAVEFORM_ZOOM = WAVEFORM_TIMELINE_ZOOM_MAX;
+    /** 波形の縦方向表示倍率（振幅スケール） */
+    const WAVEFORM_VERTICAL_ZOOM_LEVELS = Object.freeze([1, 2, 4, 8, 16]);
     let waveformTimelineZoom = 1;
+    let waveformVerticalZoom = 1;
     let markerTcEditWaveformZoomActive = false;
 
     /** ブラウザ canvas backing store の実効上限（device px） */
@@ -69,6 +72,74 @@
         const idx = waveformTimelineZoomLevelIndex(waveformTimelineZoom);
         const next = Math.max(0, Math.min(WAVEFORM_TIMELINE_ZOOM_LEVELS.length - 1, idx + d));
         return WAVEFORM_TIMELINE_ZOOM_LEVELS[next];
+    }
+
+    function snapWaveformVerticalZoom(z) {
+        const n = Number(z);
+        if (!Number.isFinite(n)) return 1;
+        let best = WAVEFORM_VERTICAL_ZOOM_LEVELS[0];
+        let bestDist = Math.abs(n - best);
+        for (let i = 1; i < WAVEFORM_VERTICAL_ZOOM_LEVELS.length; i++) {
+            const level = WAVEFORM_VERTICAL_ZOOM_LEVELS[i];
+            const dist = Math.abs(n - level);
+            if (dist < bestDist) {
+                best = level;
+                bestDist = dist;
+            }
+        }
+        return best;
+    }
+
+    function waveformVerticalZoomLevelIndex(z) {
+        const snapped = snapWaveformVerticalZoom(z);
+        const idx = WAVEFORM_VERTICAL_ZOOM_LEVELS.findIndex(
+            (level) => Math.abs(level - snapped) < 0.001,
+        );
+        return idx >= 0 ? idx : 0;
+    }
+
+    function stepWaveformVerticalZoomLevel(dir) {
+        const d = dir > 0 ? 1 : dir < 0 ? -1 : 0;
+        if (!d) return waveformVerticalZoom;
+        const idx = waveformVerticalZoomLevelIndex(waveformVerticalZoom);
+        const next = Math.max(
+            0,
+            Math.min(WAVEFORM_VERTICAL_ZOOM_LEVELS.length - 1, idx + d),
+        );
+        return WAVEFORM_VERTICAL_ZOOM_LEVELS[next];
+    }
+
+    function getWaveformVerticalZoom() {
+        return waveformVerticalZoom;
+    }
+
+    function waveformVerticalZoomHintLabel(zoom) {
+        const z = snapWaveformVerticalZoom(zoom);
+        if (Math.abs(z - 1) < 0.001) return '1×';
+        return z + '×';
+    }
+
+    function flashWaveformVerticalZoomHint(zoom, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.silent) return;
+        if (typeof flashSeekHint !== 'function') return;
+        flashSeekHint('V-Zoom', waveformVerticalZoomHintLabel(zoom), 'notice');
+    }
+
+    function setWaveformVerticalZoom(nextZoom, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const z = snapWaveformVerticalZoom(nextZoom);
+        if (Math.abs(z - waveformVerticalZoom) < 0.001) return true;
+        waveformVerticalZoom = z;
+        if (typeof scheduleWaveformVisualRefresh === 'function') {
+            scheduleWaveformVisualRefresh({ sync: true });
+        }
+        flashWaveformVerticalZoomHint(z, o);
+        return true;
+    }
+
+    function resetWaveformVerticalZoom(opt) {
+        return setWaveformVerticalZoom(1, opt);
     }
 
     function isWaveformTimelineAtFitZoom() {
@@ -166,7 +237,7 @@
         const o = opt && typeof opt === 'object' ? opt : {};
         if (o.silent) return;
         if (typeof flashSeekHint !== 'function') return;
-        flashSeekHint('Zoom', waveformTimelineZoomHintLabel(zoom), 'notice');
+        flashSeekHint('H-Zoom', waveformTimelineZoomHintLabel(zoom), 'notice');
     }
 
     function waveformTimelineInnerEl() {
@@ -523,6 +594,21 @@
                 setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(-1), true);
                 return true;
             }
+            if (matchUserShortcut(e, 'waveformVerticalZoomReset')) {
+                e.preventDefault();
+                resetWaveformVerticalZoom();
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformVerticalZoomIn', { allowRepeat: true })) {
+                e.preventDefault();
+                setWaveformVerticalZoom(stepWaveformVerticalZoomLevel(1));
+                return true;
+            }
+            if (matchUserShortcut(e, 'waveformVerticalZoomOut', { allowRepeat: true })) {
+                e.preventDefault();
+                setWaveformVerticalZoom(stepWaveformVerticalZoomLevel(-1));
+                return true;
+            }
         }
 
         return false;
@@ -721,7 +807,10 @@
     window.initWaveformTimelineZoomUi = initWaveformTimelineZoomUi;
 
     window.getWaveformTimelineZoom = getWaveformTimelineZoom;
+    window.getWaveformVerticalZoom = getWaveformVerticalZoom;
     window.setWaveformTimelineZoom = setWaveformTimelineZoom;
+    window.setWaveformVerticalZoom = setWaveformVerticalZoom;
+    window.resetWaveformVerticalZoom = resetWaveformVerticalZoom;
     window.isWaveformTimelineAtFitZoom = isWaveformTimelineAtFitZoom;
     window.isWaveformTimelineAtMaxZoom = isWaveformTimelineAtMaxZoom;
     window.isWaveformTimelineZoomKeyboardBlocked = isWaveformTimelineZoomKeyboardBlocked;

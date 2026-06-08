@@ -531,8 +531,11 @@
 
     function fillWaveformBarFromPeak(ctx, x, barW, mid, pk, gainScale) {
         const g = Number.isFinite(gainScale) ? gainScale : 1;
-        const top = mid - Math.max(0.5, pk.max * g * (mid - 2));
-        const bot = mid - Math.min(-0.5, pk.min * g * (mid - 2));
+        const vScale =
+            typeof getWaveformVerticalZoom === 'function' ? getWaveformVerticalZoom() : 1;
+        const scale = g * (Number.isFinite(vScale) ? vScale : 1);
+        const top = mid - Math.max(0.5, pk.max * scale * (mid - 2));
+        const bot = mid - Math.min(-0.5, pk.min * scale * (mid - 2));
         ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
     }
 

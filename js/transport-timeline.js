@@ -1439,6 +1439,9 @@
         if (!peaks || peaks.length === 0 || !(drawW > 0)) return;
         const mid = hCss * 0.5;
         const barW = drawW / peaks.length;
+        const vScale =
+            typeof getWaveformVerticalZoom === 'function' ? getWaveformVerticalZoom() : 1;
+        const scale = Number.isFinite(vScale) ? vScale : 1;
         const hasSkip =
             Number.isFinite(skipX0) && Number.isFinite(skipX1) && skipX1 > skipX0 + 0.5;
         ctx.fillStyle = fillStyle || '#ffffff';
@@ -1447,8 +1450,8 @@
             const x = x0 + i * barW;
             const w = Math.max(1, barW + 0.5);
             if (hasSkip && x + w > skipX0 && x < skipX1) continue;
-            const top = mid - Math.max(0.5, p.max * (mid - 2));
-            const bot = mid - Math.min(-0.5, p.min * (mid - 2));
+            const top = mid - Math.max(0.5, p.max * scale * (mid - 2));
+            const bot = mid - Math.min(-0.5, p.min * scale * (mid - 2));
             const h = Math.max(1, bot - top);
             ctx.fillRect(x, top, w, h);
         }
