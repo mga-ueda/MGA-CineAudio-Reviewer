@@ -325,7 +325,7 @@
                 <h3 class="docs-heading-box--sub" id="audio-sidebar">左サイドバー（各レーン）</h3>
                 <ul>
                     <li>上段：トラック名（Video Audio / Audio Track 1 など）。</li>
-                    <li><strong>S</strong>（Solo）— そのトラックだけを聴く。他トラックはミュート相当。</li>
+                    <li><strong>S</strong>（Solo）— そのトラックだけを聴く（他トラックはミュート相当）。すでにソロ中なら再度押すとソロを解除します。</li>
                     <li><strong>M</strong>（Mute）— そのトラックを消音。</li>
                     <li><strong>×</strong> — Audio Track は非表示＋クリア。Video Audio は非表示にできません（動画内音声がある場合）。</li>
                     <li>縦長のレベルメーターと dB 表示 — そのトラック単体のレベル。</li>
@@ -383,7 +383,7 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="audio-mix-keys">波形上からのミックス操作</h3>
-                <p>ポインタを置いたレーン（Video Audio/Audio Track）では <kbd>S</kbd>（ソロ）・<kbd>M</kbd>（ミュート）・<kbd>+</kbd>/<kbd>−</kbd>（±1dB、テンキー可）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。<kbd>Alt</kbd>+<kbd>S</kbd> は対象トラックだけをソロにし他トラックのソロを解除、<kbd>Alt</kbd>+<kbd>M</kbd> は読み込み済み全トラックのミュートを解除します。</p>
+                <p>ポインタを置いたレーン（Video Audio/Audio Track）では <kbd>S</kbd>（ソロ）・<kbd>M</kbd>（ミュート）・<kbd>+</kbd>/<kbd>−</kbd>（±1dB、テンキー可）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。<kbd>S</kbd> は対象トラックだけをソロにし他トラックのソロを解除します（対象がミュート中なら自動で解除）。すでにソロ中のトラックで再度押すとソロを解除します。<kbd>Alt</kbd>+<kbd>M</kbd> は読み込み済み全トラックのミュートを解除します。</p>
                 <p>波形レーンは <kbd>Tab</kbd> でフォーカスできます。フォーカス中は <kbd>Home</kbd>/<kbd>End</kbd> で先頭/末尾へ、<kbd>←</kbd>/<kbd>→</kbd> で1フレームシークできます。次の Audio Track 枠を出すショートカット <kbd>Ctrl</kbd>+<kbd>N</kbd> も使えます（<strong>+ Add Track</strong> ボタンと同じ）。</p>
                 <p>表示されているレーンの数に合わせて波形パネルの高さが変わります。空の Audio Track 枠は非表示にできます。</p>
             </section>

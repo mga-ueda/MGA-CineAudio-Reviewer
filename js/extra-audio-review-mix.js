@@ -880,13 +880,74 @@
         return applyVideoMixFromSessionRestore();
     }
 
-    function toggleVideoSolo() {
-        if (typeof videoReady !== 'function' || !videoReady()) return;
-        videoMix.solo = !videoMix.solo;
+    function isMixTargetSolo(target) {
+        if (!target) return false;
+        if (target.kind === 'video') {
+            return typeof videoReady === 'function' && videoReady() && videoMix.solo;
+        }
+        const tr = extraTrackBySlot(target.slot);
+        return !!(tr && tr.buffer && tr.solo);
+    }
+
+    function clearAllMixSolo() {
+        let changed = false;
+        if (typeof videoReady === 'function' && videoReady() && videoMix.solo) {
+            videoMix.solo = false;
+            changed = true;
+        }
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const tr = extraTrackBySlot(slot);
+            if (!tr || !tr.buffer || !tr.solo) continue;
+            tr.solo = false;
+            changed = true;
+        }
+        if (!changed) return false;
         refreshReviewMixUi();
         syncExtraAudioToTransport();
-        writeLog('Video audio: ' + (videoMix.solo ? 'solo on' : 'solo off'));
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        return true;
+    }
+
+    function applyExclusiveMixSolo(target) {
+        if (!target) return false;
+
+        if (typeof videoReady === 'function' && videoReady()) {
+            videoMix.solo = target.kind === 'video';
+            if (target.kind === 'video') {
+                videoMix.muted = false;
+            }
+        }
+
+        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
+            const tr = extraTrackBySlot(slot);
+            if (!tr || !tr.buffer) continue;
+            const isTarget = target.kind === 'extra' && target.slot === slot;
+            tr.solo = isTarget;
+            if (isTarget) {
+                tr.muted = false;
+            }
+        }
+
+        refreshReviewMixUi();
+        syncExtraAudioToTransport();
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        return true;
+    }
+
+    function toggleExclusiveMixSolo(target) {
+        if (!target) return false;
+        if (isMixTargetSolo(target)) {
+            return clearAllMixSolo();
+        }
+        return applyExclusiveMixSolo(target);
+    }
+
+    function toggleVideoSolo() {
+        if (typeof videoReady !== 'function' || !videoReady()) return;
+        const target = { kind: 'video' };
+        const wasSolo = isMixTargetSolo(target);
+        if (!toggleExclusiveMixSolo(target)) return;
+        writeLog('Video audio: ' + (wasSolo ? 'solo off' : 'solo'));
     }
 
     function toggleVideoMute() {
@@ -901,11 +962,10 @@
     function toggleExtraSolo(slot) {
         const tr = extraTrackBySlot(slot);
         if (!tr || !tr.buffer) return;
-        tr.solo = !tr.solo;
-        refreshReviewMixUi();
-        syncExtraAudioToTransport();
-        writeLog('Extra audio ' + (slot + 1) + ': ' + (tr.solo ? 'solo on' : 'solo off'));
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const target = { kind: 'extra', slot: slot };
+        const wasSolo = isMixTargetSolo(target);
+        if (!toggleExclusiveMixSolo(target)) return;
+        writeLog('Extra audio ' + (slot + 1) + ': ' + (wasSolo ? 'solo off' : 'solo'));
     }
 
     function toggleExtraMute(slot) {
@@ -933,39 +993,17 @@
     }
 
     function toggleMixSoloByDisplayIndex(displayIndex) {
-        const targets = getVisibleMixLaneTargets();
-        const t = targets[displayIndex];
-        if (!t) return;
-        if (t.kind === 'video') toggleVideoSolo();
-        else toggleExtraSolo(t.slot);
+        return soloOnlyMixByDisplayIndex(displayIndex);
     }
 
     function soloOnlyMixByDisplayIndex(displayIndex) {
         const targets = getVisibleMixLaneTargets();
         const t = targets[displayIndex];
         if (!t) return false;
-
-        if (typeof videoReady === 'function' && videoReady()) {
-            videoMix.solo = t.kind === 'video';
-            if (t.kind === 'video') {
-                videoMix.muted = false;
-            }
-        }
-
-        for (let slot = 0; slot < EXTRA_TRACK_COUNT; slot++) {
-            const tr = extraTrackBySlot(slot);
-            if (!tr || !tr.buffer) continue;
-            const isTarget = t.kind === 'extra' && t.slot === slot;
-            tr.solo = isTarget;
-            if (isTarget) {
-                tr.muted = false;
-            }
-        }
-
-        refreshReviewMixUi();
-        syncExtraAudioToTransport();
-        writeLog('Mix solo only: ' + (t.kind === 'video' ? 'Video' : 'Extra audio ' + (t.slot + 1)));
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        const wasSolo = isMixTargetSolo(t);
+        if (!toggleExclusiveMixSolo(t)) return false;
+        const label = t.kind === 'video' ? 'Video' : 'Extra audio ' + (t.slot + 1);
+        writeLog('Mix solo' + (wasSolo ? ' off: ' : ': ') + label);
         return true;
     }
 

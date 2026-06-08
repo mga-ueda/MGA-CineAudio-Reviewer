@@ -129,7 +129,6 @@
 
         // ---------- ミックス ----------
         mixLaneSoloToggle: { code: 'KeyS', ctrl: false, alt: false, meta: false, shift: false },
-        mixLaneSoloExclusive: { code: 'KeyS', ctrl: false, alt: true, meta: false, shift: false },
         mixLaneMuteToggle: { code: 'KeyM', ctrl: false, alt: false, meta: false, shift: false },
         mixLaneMuteClearAll: { code: 'KeyM', ctrl: false, alt: true, meta: false, shift: false },
         mixLaneVolumeUp: {
@@ -502,7 +501,6 @@
             replayFromStart: formatShortcutDef(s.replayFromPlaybackStart),
             loop: formatShortcutDef(s.loopToggle),
             solo: formatShortcutDef(s.mixLaneSoloToggle),
-            soloExclusive: formatShortcutDef(s.mixLaneSoloExclusive),
             mute: formatShortcutDef(s.mixLaneMuteToggle),
             muteClearAll: formatShortcutDef(s.mixLaneMuteClearAll),
             laneVolume: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
@@ -554,7 +552,7 @@
             `セッション全体の追加メモを入力（${h.cancelEdit} でフォーカス解除）`,
         );
 
-        const soloTitle = `Solo（このレーンのみ再生・${h.solo}、${h.soloExclusive} で対象のみソロ）`;
+        const soloTitle = `Solo（このレーンのみ再生・${h.solo}。ソロ中に再度押すと解除）`;
         const muteTitle = `Mute（このレーンをミュート・${h.mute}、${h.muteClearAll} で全ミュート解除）`;
         const volTitle = `音量を調整（レーン上で ${h.laneVolume} は ±1 dB）`;
         const addTrackTitle = `次の extra audio track を表示（${h.addExtraTrack}）`;

@@ -778,10 +778,9 @@
 
     function handlePlaybackRegionMixKeydown(e) {
         const isSolo = matchUserShortcut(e, 'mixLaneSoloToggle');
-        const isSoloExclusive = matchUserShortcut(e, 'mixLaneSoloExclusive');
         const isMute = matchUserShortcut(e, 'mixLaneMuteToggle');
         const isMuteClearAll = matchUserShortcut(e, 'mixLaneMuteClearAll');
-        const isSoloMute = isSolo || isSoloExclusive || isMute || isMuteClearAll;
+        const isSoloMute = isSolo || isMute || isMuteClearAll;
         if (!isSoloMute) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
@@ -817,16 +816,9 @@
         if (idx < 0) return false;
 
         e.preventDefault();
-        if (isSoloExclusive) {
+        if (isSolo) {
             if (typeof window.soloOnlyMixByDisplayIndex === 'function') {
                 window.soloOnlyMixByDisplayIndex(idx);
-                return true;
-            }
-            return false;
-        }
-        if (isSolo) {
-            if (typeof window.toggleMixSoloByDisplayIndex === 'function') {
-                window.toggleMixSoloByDisplayIndex(idx);
                 return true;
             }
             return false;

@@ -23,7 +23,7 @@
             '<div class="track-mix-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--solo" id="extraAudioSoloBtn' +
             slot +
-            '" disabled title="Solo（S / Alt+S）" aria-pressed="false">S</button>' +
+            '" disabled title="Solo（S。ソロ中に再度押すと解除）" aria-pressed="false">S</button>' +
             '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
             slot +
             '" disabled title="Mute（M / Alt+M）" aria-pressed="false">M</button>' +
