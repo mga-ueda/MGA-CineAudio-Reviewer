@@ -836,11 +836,11 @@
         return best;
     }
 
-    function markerNavStopIndexForCurrent(stops, dir) {
+    function markerNavStopIndexForCurrent(stops, dir, fromSec) {
         if (!stops || stops.length === 0) return -1;
-        const t = currentTransportSec();
+        const t = Number.isFinite(fromSec) ? fromSec : currentTransportSec();
         const eps = markerNavStopEpsilonSec();
-        if (activeMarkerId) {
+        if (!Number.isFinite(fromSec) && activeMarkerId) {
             const m = currentMarkers.find((x) => x.id === activeMarkerId);
             if (m) {
                 if (m.type === 'range' && markerHasOutTc(m)) {
@@ -1371,6 +1371,29 @@
         return true;
     }
 
+    function resolveAdjacentMarkerStopSec(dir, fromSec) {
+        const stops = buildMarkerNavStops();
+        const n = stops.length;
+        if (n === 0) return null;
+        const idx = markerNavStopIndexForCurrent(stops, dir, fromSec);
+        const t = Number.isFinite(fromSec) ? fromSec : currentTransportSec();
+        const eps = markerNavStopEpsilonSec();
+        let next;
+        if (idx < 0) {
+            if (dir <= 0) return null;
+            next = 0;
+        } else if (dir < 0 && t > stops[idx].sec + eps) {
+            next = idx;
+        } else if (dir > 0 && t < stops[idx].sec - eps) {
+            next = idx;
+        } else {
+            next = idx + dir;
+            if (next < 0 || next >= n) return null;
+        }
+        const sec = stops[next].sec;
+        return Number.isFinite(sec) ? sec : null;
+    }
+
     function jumpToAdjacentMarkerStop(dir, opt) {
         const stops = buildMarkerNavStops();
         const n = stops.length;
@@ -1383,10 +1406,8 @@
             if (dir <= 0) return false;
             next = 0;
         } else if (dir < 0 && t > stops[idx].sec + eps) {
-            // 通過済みの手前停止点へ（単一マーカーで再生位置が後ろのとき等）
             next = idx;
         } else if (dir > 0 && t < stops[idx].sec - eps) {
-            // 未到達の次の停止点へ
             next = idx;
         } else {
             next = idx + dir;
@@ -1400,6 +1421,31 @@
         });
         return true;
     }
+
+    function resolveAdjacentStopNavigationTargetSec(dir, fromSec) {
+        const markerNavActive = !markersDisplayHidden && currentMarkers.length > 0;
+        const musicalNavActive =
+            typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops();
+        if (markerNavActive) {
+            return resolveAdjacentMarkerStopSec(dir, fromSec);
+        }
+        if (
+            musicalNavActive &&
+            typeof resolveAdjacentMusicalGridStopSec === 'function'
+        ) {
+            const sec = resolveAdjacentMusicalGridStopSec(dir, fromSec);
+            if (sec != null) return sec;
+        }
+        if (musicalNavActive) {
+            return null;
+        }
+        if (typeof resolveAdjacentRegionStopSec === 'function') {
+            return resolveAdjacentRegionStopSec(dir, fromSec);
+        }
+        return null;
+    }
+
+    window.resolveAdjacentStopNavigationTargetSec = resolveAdjacentStopNavigationTargetSec;
 
     /** Alt+↑↓: 一覧行ナビ（Comment / In / Out 列。テキスト入力中も有効） */
     function isMarkerFeedbackRowNavKeydown(e) {

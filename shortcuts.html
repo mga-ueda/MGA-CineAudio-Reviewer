@@ -78,13 +78,23 @@
                     </tr>
                     <tr>
                         <td>1秒</td>
-                        <td><kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td>再生中でもシーク後に再生を再開</td>
+                        <td><kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
+                        <td>キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開</td>
                     </tr>
                     <tr>
                         <td>10秒</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td>再生中でもシーク後に再生を再開</td>
+                        <td><kbd>Shift</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
+                        <td>同上</td>
+                    </tr>
+                    <tr>
+                        <td>冒頭へ</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>PgUp</kbd></td>
+                        <td>タイムライン先頭（0）。再生中はシーク後に再生を再開</td>
+                    </tr>
+                    <tr>
+                        <td>末尾へ</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd></td>
+                        <td>タイムライン末尾。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>タイムライン上の停止点へ移動</td>
@@ -399,14 +409,29 @@
                         <td>指定区間のみループ再生。全体ループ（<kbd>L</kbd>）とは別</td>
                     </tr>
                     <tr>
+                        <td>範囲指定</td>
+                        <td><kbd>Shift</kbd> 長押し（<strong>再生中のみ</strong>）</td>
+                        <td>押下位置を In、離した位置を Out として確定。押下中はプレビュー表示。他キーでキャンセル</td>
+                    </tr>
+                    <tr>
+                        <td>範囲指定（1秒）</td>
+                        <td><kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
+                        <td><kbd>→</kbd>＝現在地〜+1秒、<kbd>←</kbd>＝−1秒〜現在地。押すたびに同方向へ1秒ずつ拡張（キーリピート可）</td>
+                    </tr>
+                    <tr>
+                        <td>範囲指定（停止点まで）</td>
+                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
+                        <td>現在地から <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の次ジャンプ先まで。押すたびに同方向へ停止点を追加（キーリピート可）</td>
+                    </tr>
+                    <tr>
                         <td>解除</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>ドラッグ中・範囲ループ再生中</td>
+                        <td>Shift 長押しプレビュー中・右ドラッグ中・範囲ループ再生中</td>
                     </tr>
                     <tr>
                         <td>解除</td>
                         <td>右クリック（波形上）</td>
-                        <td>ドラッグ中・範囲ループ再生中</td>
+                        <td>Shift 長押しプレビュー中・右ドラッグ中・範囲ループ再生中</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生リージョン（Audio Track のみ）</th>
@@ -525,7 +550,7 @@
                     <tr>
                         <td>2. 範囲ループの解除</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>右ドラッグ中・範囲ループ再生中</td>
+                        <td>Shift 長押しプレビュー中・右ドラッグ中・範囲ループ再生中</td>
                     </tr>
                     <tr>
                         <td>3. 再生リージョン</td>

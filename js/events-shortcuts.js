@@ -18,37 +18,138 @@
         return false;
     }
 
-    function transportArrowSeekStepSec(e) {
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey) return 10;
-        if (e.shiftKey) return 1;
+    function isTransportSeekArrowEvent(e) {
+        return (
+            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
+        );
+    }
+
+    function isTransportSeekPageEvent(e) {
+        return (
+            matchUserShortcut(e, 'transportSeekPageUp', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekPageDown', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekPageUp10', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekPageDown10', { allowRepeat: true })
+        );
+    }
+
+    function isTransportSeekStepEvent(e) {
+        return isTransportSeekArrowEvent(e) || isTransportSeekPageEvent(e);
+    }
+
+    function transportSeekDirection(e) {
+        if (
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekPageDown', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekPageDown10', { allowRepeat: true })
+        ) {
+            return 1;
+        }
+        return -1;
+    }
+
+    function transportSeekStepSec(e) {
+        if (isTransportSeekPageEvent(e)) {
+            if (
+                matchUserShortcut(e, 'transportSeekPageUp10', { allowRepeat: true }) ||
+                matchUserShortcut(e, 'transportSeekPageDown10', { allowRepeat: true })
+            ) {
+                return 10;
+            }
+            return 1;
+        }
         return masterFrameSec;
     }
 
-    function transportArrowSeekStepLabel(e) {
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey) return 'Ctrl+Shift ±10s';
-        if (e.shiftKey) return 'Shift ±1s';
+    function transportSeekStepLabel(e) {
+        if (isTransportSeekPageEvent(e)) {
+            if (
+                matchUserShortcut(e, 'transportSeekPageUp10', { allowRepeat: true }) ||
+                matchUserShortcut(e, 'transportSeekPageDown10', { allowRepeat: true })
+            ) {
+                return 'Shift PgUp/PgDn ±10s';
+            }
+            return 'PgUp/PgDn ±1s';
+        }
         return 'Frame ±1f';
     }
 
-    function transportArrowSeekResumeAfter(e) {
-        if (!e.shiftKey) return false;
+    function transportSeekResumeAfter(e) {
+        if (!isTransportSeekPageEvent(e)) return false;
         return typeof isTransportPlaying === 'function'
             ? isTransportPlaying()
             : !videoMain.paused;
     }
 
-    function flashTransportArrowSeekHint(dir, e) {
+    function transportSeekKeyLabel(e) {
+        if (matchUserShortcut(e, 'transportSeekPageUp10', { allowRepeat: true })) return 'PgUp';
+        if (matchUserShortcut(e, 'transportSeekPageDown10', { allowRepeat: true })) return 'PgDn';
+        if (matchUserShortcut(e, 'transportSeekPageUp', { allowRepeat: true })) return 'PgUp';
+        if (matchUserShortcut(e, 'transportSeekPageDown', { allowRepeat: true })) return 'PgDn';
+        return transportSeekDirection(e) > 0
+            ? (getUserShortcut('transportSeekArrowRight') || {}).code
+            : (getUserShortcut('transportSeekArrowLeft') || {}).code;
+    }
+
+    function flashTransportSeekHint(dir, e) {
         if (typeof flashSeekHint !== 'function') return;
         const sym = dir > 0 ? '→' : '←';
         let deltaTxt;
-        if ((e.ctrlKey || e.metaKey) && e.shiftKey) {
-            deltaTxt = dir > 0 ? '+10s' : '−10s';
-        } else if (e.shiftKey) {
-            deltaTxt = dir > 0 ? '+1s' : '−1s';
+        if (isTransportSeekPageEvent(e)) {
+            const sec = transportSeekStepSec(e);
+            deltaTxt = dir > 0 ? '+' + sec + 's' : '−' + sec + 's';
         } else {
             deltaTxt = dir > 0 ? '+1f' : '−1f';
         }
         flashSeekHint(sym, deltaTxt);
+    }
+
+    function isTransportSeekPageExtremeEvent(e) {
+        return (
+            matchUserShortcut(e, 'transportSeekPageStart') ||
+            matchUserShortcut(e, 'transportSeekPageEnd')
+        );
+    }
+
+    function handleTransportSeekPageExtremeKeydown(e) {
+        if (!isTransportSeekPageExtremeEvent(e)) return false;
+        if (e.repeat) return true;
+        if (
+            typeof transportControlsReady !== 'function' ||
+            !transportControlsReady()
+        ) {
+            return true;
+        }
+        e.preventDefault();
+        const dur =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : getDuration(videoMain);
+        const toStart = matchUserShortcut(e, 'transportSeekPageStart');
+        const target = toStart ? 0 : Math.max(0, dur - 0.001);
+        const seekHintTitle = toStart ? 'Start' : 'End';
+        const keyLabel = toStart ? 'Ctrl+PgUp' : 'Ctrl+PgDn';
+        const wasPlaying =
+            typeof isTransportPlaying === 'function'
+                ? isTransportPlaying()
+                : !videoMain.paused;
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
+        }
+        void (async () => {
+            if (typeof seekTransportToAndWait === 'function') {
+                await seekTransportToAndWait(target, { resumeAfter: wasPlaying });
+            } else {
+                applyTimeToVideo(target);
+                currentTimeEl.textContent = formatTimecodeForTransport(target);
+                updateTimecodeOverlay();
+            }
+            writeLog(
+                'Seek keyboard: ' + keyLabel + ' -> ' + formatTimecodeForTransport(target),
+            );
+        })();
+        return true;
     }
 
     window.addEventListener('keydown', (e) => {
@@ -287,10 +388,9 @@
             return;
         }
 
-        const isArrowKey =
-            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
-            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true });
-        if (e.repeat && !isArrowKey) return;
+        const isArrowKey = isTransportSeekArrowEvent(e);
+        const isPageSeekKey = isTransportSeekPageEvent(e);
+        if (e.repeat && !isArrowKey && !isPageSeekKey) return;
 
         if (matchUserShortcut(e, 'loopToggle')) {
             if (!loopPlaybackCheckbox) return;
@@ -436,17 +536,20 @@
             return;
         }
 
-        if (
-            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
-            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
-        ) {
-            if (e.altKey) return;
-            if ((e.ctrlKey || e.metaKey) && !e.shiftKey) return;
-            const lanesEl =
-                typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
-            // 波形レーンにフォーカスがあるときは ±1f をレーン側で処理する。
-            // Shift+←/→（±1s）と Ctrl+Shift+←/→（±10s）はグローバル側で処理する。
-            if (lanesEl && document.activeElement === lanesEl && !e.shiftKey) return;
+        if (handleTransportSeekPageExtremeKeydown(e)) {
+            return;
+        }
+
+        if (isTransportSeekStepEvent(e)) {
+            if (isArrowKey) {
+                if (e.altKey || e.shiftKey) return;
+                if (e.ctrlKey || e.metaKey) return;
+                const lanesEl =
+                    typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+                if (lanesEl && document.activeElement === lanesEl) return;
+            } else if (isPageSeekKey) {
+                if (e.altKey || e.ctrlKey || e.metaKey) return;
+            }
             if (
                 typeof transportControlsReady !== 'function' ||
                 !transportControlsReady()
@@ -454,16 +557,18 @@
                 return;
             }
             e.preventDefault();
-            const oneFrameStep = !e.shiftKey && !e.ctrlKey && !e.metaKey;
+            const oneFrameStep = isArrowKey;
+            const pageSeekStep = isPageSeekKey;
             const playingBeforeStep =
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
                     : !videoMain.paused;
-            // 再生中の ±1f は1回だけ（キーリピート無効・keyup 確定も不要）
             if (oneFrameStep && playingBeforeStep && e.repeat) return;
-            const useKeyboardScrubSession = !(oneFrameStep && playingBeforeStep);
+            const useKeyboardScrubSession =
+                pageSeekStep || (isArrowKey && !(oneFrameStep && playingBeforeStep));
             if (
                 useKeyboardScrubSession &&
+                !e.repeat &&
                 typeof noteKeyboardTransportScrubBegin === 'function'
             ) {
                 noteKeyboardTransportScrubBegin(e);
@@ -472,10 +577,16 @@
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
                     : getDuration(videoMain);
-            const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
-            const stepSec = transportArrowSeekStepSec(e);
-            const resumeAfter = transportArrowSeekResumeAfter(e);
-            let t = (parseFloat(seekBar.value) || 0) + dir * stepSec;
+            const dir = transportSeekDirection(e);
+            const stepSec = transportSeekStepSec(e);
+            const resumeAfter = pageSeekStep
+                ? false
+                : transportSeekResumeAfter(e);
+            const baseSec =
+                typeof getTransportSec === 'function'
+                    ? getTransportSec()
+                    : parseFloat(seekBar.value) || 0;
+            let t = baseSec + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
             if (
                 e.repeat &&
@@ -485,23 +596,22 @@
                 applyKeyboardTransportScrubStep(t, {
                     keyboardScrub: true,
                     fromRepeat: true,
-                    resumeAfter: resumeAfter && !oneFrameStep,
-                    pauseAfterSeek: oneFrameStep,
+                    resumeAfter: false,
+                    pauseAfterSeek: false,
                 });
                 return;
             }
             if (!e.repeat) {
-                flashTransportArrowSeekHint(dir, e);
+                flashTransportSeekHint(dir, e);
             }
-            const stepLabel = transportArrowSeekStepLabel(e);
-            const arrow =
-                dir > 0
-                    ? (getUserShortcut('transportSeekArrowRight') || {}).code
-                    : (getUserShortcut('transportSeekArrowLeft') || {}).code;
+            const stepLabel = transportSeekStepLabel(e);
+            const keyLabel = transportSeekKeyLabel(e);
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {
                     await seekTransportToAndWait(t, {
-                        resumeAfter: resumeAfter && !oneFrameStep,
+                        resumeAfter: pageSeekStep
+                            ? false
+                            : resumeAfter && !oneFrameStep,
                         pauseAfterSeek: oneFrameStep,
                         keyboardScrub: useKeyboardScrubSession,
                         fromRepeat: e.repeat,
@@ -513,7 +623,7 @@
                 }
                 const line =
                     'Seek keyboard: ' +
-                    arrow +
+                    keyLabel +
                     ' (' +
                     stepLabel +
                     ') -> ' +
@@ -525,21 +635,21 @@
                     logArrowSeekDebounced(line);
                 }
             })();
+            return;
         }
     });
 
-    function isTransportSeekArrowKeyup(e) {
-        return (
-            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
-            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
-        );
+    function isTransportSeekStepKeyup(e) {
+        return isTransportSeekStepEvent(e);
     }
 
     window.addEventListener('keyup', (e) => {
-        if (!isTransportSeekArrowKeyup(e)) return;
-        const lanesEl =
-            typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
-        if (lanesEl && document.activeElement === lanesEl && !e.shiftKey) return;
+        if (!isTransportSeekStepKeyup(e)) return;
+        if (isTransportSeekArrowEvent(e)) {
+            const lanesEl =
+                typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+            if (lanesEl && document.activeElement === lanesEl) return;
+        }
         if (typeof flushKeyboardTransportScrubIfActive === 'function') {
             flushKeyboardTransportScrubIfActive();
         }

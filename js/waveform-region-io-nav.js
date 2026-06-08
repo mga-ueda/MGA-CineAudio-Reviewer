@@ -63,14 +63,15 @@
         return regionSnapThresholdSec();
     }
 
-    function regionNavStopIndexForCurrent(stops, dir) {
+    function regionNavStopIndexForCurrent(stops, dir, fromSec) {
         if (!stops || stops.length === 0) return -1;
-        const t =
-            typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : typeof videoMain !== 'undefined' && videoMain
-                  ? videoMain.currentTime || 0
-                  : 0;
+        const t = Number.isFinite(fromSec)
+            ? fromSec
+            : typeof getTransportSec === 'function'
+              ? getTransportSec()
+              : typeof videoMain !== 'undefined' && videoMain
+                ? videoMain.currentTime || 0
+                : 0;
         const eps = regionNavStopEpsilonSec();
         if (dir < 0) {
             for (let i = 0; i < stops.length; i++) {
@@ -343,21 +344,22 @@
 
     initRehearsalMarkOffsetUi();
 
-    function jumpToAdjacentRegionStop(dir, opt) {
+    function resolveAdjacentRegionStopSec(dir, fromSec) {
         const stops = buildRegionNavStops();
         const n = stops.length;
-        if (n === 0) return false;
-        const idx = regionNavStopIndexForCurrent(stops, dir);
-        const t =
-            typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : typeof videoMain !== 'undefined' && videoMain
-                  ? videoMain.currentTime || 0
-                  : 0;
+        if (n === 0) return null;
+        const idx = regionNavStopIndexForCurrent(stops, dir, fromSec);
+        const t = Number.isFinite(fromSec)
+            ? fromSec
+            : typeof getTransportSec === 'function'
+              ? getTransportSec()
+              : typeof videoMain !== 'undefined' && videoMain
+                ? videoMain.currentTime || 0
+                : 0;
         const eps = regionNavStopEpsilonSec();
         let next;
         if (idx < 0) {
-            if (dir <= 0) return false;
+            if (dir <= 0) return null;
             next = 0;
         } else if (dir < 0 && t > stops[idx].sec + eps) {
             next = idx;
@@ -365,12 +367,24 @@
             next = idx;
         } else {
             next = idx + dir;
-            if (next < 0 || next >= n) return false;
+            if (next < 0 || next >= n) return null;
         }
-        return seekToRegionNavStop(stops[next], opt);
+        const sec = stops[next].sec;
+        return Number.isFinite(sec) ? sec : null;
+    }
+
+    function jumpToAdjacentRegionStop(dir, opt) {
+        const targetSec = resolveAdjacentRegionStopSec(dir);
+        if (targetSec == null) return false;
+        const stops = buildRegionNavStops();
+        const eps = regionNavStopEpsilonSec();
+        const stop = stops.find((s) => Math.abs(s.sec - targetSec) <= eps);
+        if (!stop) return false;
+        return seekToRegionNavStop(stop, opt);
     }
 
     window.buildRegionNavStops = buildRegionNavStops;
+    window.resolveAdjacentRegionStopSec = resolveAdjacentRegionStopSec;
     window.jumpToAdjacentRegionStop = jumpToAdjacentRegionStop;
     window.getTrackSegmentCount = function (slot) {
         return getSegmentCount({ type: 'extra', slot });

@@ -2983,14 +2983,15 @@
         }
         return 0.05;
     }
-    function musicalGridNavStopIndexForCurrent(stops) {
+    function musicalGridNavStopIndexForCurrent(stops, fromSec) {
         if (!stops || !stops.length) return -1;
-        const t =
-            typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : typeof videoMain !== 'undefined' && videoMain
-                  ? videoMain.currentTime || 0
-                  : 0;
+        const t = Number.isFinite(fromSec)
+            ? fromSec
+            : typeof getTransportSec === 'function'
+              ? getTransportSec()
+              : typeof videoMain !== 'undefined' && videoMain
+                ? videoMain.currentTime || 0
+                : 0;
         const eps = musicalGridNavStopEpsilonSec();
         let best = -1;
         for (let i = 0; i < stops.length; i++) {
@@ -3126,21 +3127,22 @@
         flashMusicalGridSeekHint(target, hintTc);
         return true;
     }
-    function jumpToAdjacentMusicalGridStop(dir, opt) {
+    function resolveAdjacentMusicalGridStopSec(dir, fromSec) {
         const stops = collectMusicalGridSnapStops();
         const n = stops.length;
-        if (!n) return false;
-        const idx = musicalGridNavStopIndexForCurrent(stops);
-        const t =
-            typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : typeof videoMain !== 'undefined' && videoMain
-                  ? videoMain.currentTime || 0
-                  : 0;
+        if (!n) return null;
+        const idx = musicalGridNavStopIndexForCurrent(stops, fromSec);
+        const t = Number.isFinite(fromSec)
+            ? fromSec
+            : typeof getTransportSec === 'function'
+              ? getTransportSec()
+              : typeof videoMain !== 'undefined' && videoMain
+                ? videoMain.currentTime || 0
+                : 0;
         const eps = musicalGridNavStopEpsilonSec();
         let next;
         if (idx < 0) {
-            if (dir <= 0) return false;
+            if (dir <= 0) return null;
             next = 0;
         } else if (dir < 0 && t > stops[idx] + eps) {
             next = idx;
@@ -3148,9 +3150,16 @@
             next = idx;
         } else {
             next = idx + dir;
-            if (next < 0 || next >= n) return false;
+            if (next < 0 || next >= n) return null;
         }
-        return seekToMusicalGridNavStop(stops[next], opt);
+        const sec = stops[next];
+        return Number.isFinite(sec) ? sec : null;
+    }
+
+    function jumpToAdjacentMusicalGridStop(dir, opt) {
+        const targetSec = resolveAdjacentMusicalGridStopSec(dir);
+        if (targetSec == null) return false;
+        return seekToMusicalGridNavStop(targetSec, opt);
     }
     function snapSecToMusicalGridStops(sec, opt) {
         const n = Number(sec);
@@ -3667,6 +3676,7 @@
     window.collectMusicalGridSnapStops = collectMusicalGridSnapStops;
     window.snapSecToMusicalGridStops = snapSecToMusicalGridStops;
     window.jumpToAdjacentMusicalGridStop = jumpToAdjacentMusicalGridStop;
+    window.resolveAdjacentMusicalGridStopSec = resolveAdjacentMusicalGridStopSec;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
     window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;

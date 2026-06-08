@@ -8,8 +8,23 @@
     let keyboardScrubResumeAfter = false;
     let keyboardScrubPauseAfter = false;
 
+    function isPageTransportSeek(ev) {
+        if (typeof matchUserShortcut !== 'function') return false;
+        return (
+            matchUserShortcut(ev, 'transportSeekPageUp', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekPageDown', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekPageUp10', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekPageDown10', { allowRepeat: true })
+        );
+    }
+
     function isOneFrameTransportArrowSeek(ev) {
-        return !!(ev && !ev.shiftKey && !ev.ctrlKey && !ev.metaKey);
+        if (!ev || ev.shiftKey || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+        if (typeof matchUserShortcut !== 'function') return false;
+        return (
+            matchUserShortcut(ev, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekArrowRight', { allowRepeat: true })
+        );
     }
 
     function isKeyboardTransportScrubActive() {
@@ -35,6 +50,8 @@
     function isKeyboardScrubLightweight(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!(o.keyboardScrub || keyboardTransportScrubActive)) return false;
+        // セッション中は flush まで UI のみ更新（coalesce 確定と競合しない）
+        if (keyboardTransportScrubActive) return true;
         return !!(o.fromRepeat || isKeyboardScrubZoomed());
     }
 
@@ -49,9 +66,10 @@
             typeof captureTransportWasActive === 'function' &&
             captureTransportWasActive();
         const oneFrame = isOneFrameTransportArrowSeek(ev);
+        const pageSeek = isPageTransportSeek(ev);
         if (wasActive && oneFrame) {
             keyboardScrubPauseAfter = true;
-        } else if (wasActive) {
+        } else if (wasActive && (pageSeek || !oneFrame)) {
             keyboardScrubResumeAfter = true;
             transportExplicitSeekResumeIntent = true;
             if (typeof pauseTransportBeforeSeek === 'function') {
@@ -143,6 +161,12 @@
         if (transportExplicitSeekFinalizeTimer) {
             clearTimeout(transportExplicitSeekFinalizeTimer);
             transportExplicitSeekFinalizeTimer = 0;
+        }
+        if (typeof rejectExplicitSeekWaiters === 'function') {
+            rejectExplicitSeekWaiters();
+        }
+        if (typeof transportExplicitSeekSerial === 'number') {
+            transportExplicitSeekSerial += 1;
         }
         const shouldResume = keyboardScrubResumeAfter || transportExplicitSeekResumeIntent;
         const pauseAfter = keyboardScrubPauseAfter;

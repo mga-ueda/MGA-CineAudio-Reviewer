@@ -379,6 +379,9 @@
                 <h3 class="docs-heading-box--sub" id="audio-range-loop">範囲ループ（波形上）</h3>
                 <ul>
                     <li>波形エリアで<strong>右ドラッグ</strong>すると、指定した区間だけをループ再生します（ハイライト表示）。</li>
+                    <li><strong>再生中</strong>に <kbd>Shift</kbd> を押し続けると、押した位置を In・離した位置（現在位置）を Out として範囲指定できます（プレビュー表示）。<kbd>Shift</kbd> を離すと確定します。他のキーを押すとキャンセルされます。</li>
+                    <li><kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：1秒の範囲を指定（<kbd>→</kbd>＝現在地から1秒先、<kbd>←</kbd>＝1秒前から現在地）。同じキーを繰り返すとその方向へ1秒ずつ範囲を拡張（キーリピート可）。</li>
+                    <li><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：現在地から <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の次ジャンプ先まで。繰り返すと同方向の停止点を追加（キーリピート可。ジャンプ先は状況により異なる）。</li>
                     <li>解除：<kbd>Esc</kbd>、右クリック、または別の操作でキャンセル（ショートカット表の Esc 優先順位を参照）。</li>
                 </ul>
 
@@ -449,8 +452,10 @@
                 <h3 class="docs-heading-box--sub" id="transport-seek">シーク・ジャンプ（動画読み込み後）</h3>
                 <ul>
                     <li><kbd>←</kbd>/<kbd>→</kbd>：1フレーム（再生中の ±1フレームは一度停止してから）</li>
-                    <li><kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：1秒（再生中でもシーク後に再生を再開）</li>
-                    <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：10秒（再生中でもシーク後に再生を再開）</li>
+                    <li><kbd>PgUp</kbd>/<kbd>PgDn</kbd>：1秒（キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開）</li>
+                    <li><kbd>Shift</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd>：10秒（同上）</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>PgUp</kbd>：冒頭へ（再生中でもシーク後に再生を再開）</li>
+                    <li><kbd>Ctrl</kbd>+<kbd>PgDn</kbd>：末尾へ（再生中でもシーク後に再生を再開）</li>
                     <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：タイムライン上の停止点へ移動（マーカー＞小節/拍/フレーズ＞リージョンの優先順。再生中はシーク後に再生を再開）</li>
                     <li><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
                     <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>、または <kbd>Shift</kbd> + 上段 <kbd>0</kbd>〜<kbd>9</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。テンキーは <kbd>Shift</kbd> 不要（Windows ではテンキーに Shift が届かないため）。数字を続けて入力し、入力が途切れてから約 0.3 秒で確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。Tempo/Sig OFF 時にテンキーを押した場合は % ジャンプにフォールバック。再生中はシーク後に再生を再開</li>

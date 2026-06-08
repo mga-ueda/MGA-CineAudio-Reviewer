@@ -15,6 +15,11 @@
     let loopRangeRightPressStartX = 0;
     let loopRangeRightPressStartY = 0;
     let loopRangeRightPressDidDrag = false;
+    let loopRangeShiftHoldActive = false;
+    let loopRangeShiftHoldStartSec = 0;
+    let loopRangeShiftHoldRafId = 0;
+    /** 再生中 Shift 長押しプレビュー前の確定ループ（Esc 等で復元） */
+    let loopRangeShiftHoldRestore = null;
     /** 右ドラッグ確定直後の contextmenu（lanes / composite 両方）で解除しない */
     const RANGE_LOOP_CONTEXT_MENU_SUPPRESS_MS = 600;
     let suppressRangeLoopContextMenuUntil = 0;
@@ -42,10 +47,296 @@
 
     function isRangeLoopEscapeRelevant() {
         return (
+            loopRangeShiftHoldActive ||
             loopRangeDragActive ||
             loopRangeRightPressActive ||
             isRangeLoopPlaybackActive()
         );
+    }
+
+    function isShiftRangeLoopKey(e) {
+        return !!(e && (e.code === 'ShiftLeft' || e.code === 'ShiftRight'));
+    }
+
+    function isMediaReadyForRangeLoop() {
+        return (
+            (typeof videoReady === 'function' && videoReady()) ||
+            (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded())
+        );
+    }
+
+    function getTransportSecForRangeLoop() {
+        if (typeof getTransportSecForDisplay === 'function') {
+            return getTransportSecForDisplay();
+        }
+        if (typeof getTransportSec === 'function') {
+            return getTransportSec();
+        }
+        if (typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)) {
+            return transportPlaybackSec;
+        }
+        return 0;
+    }
+
+    function isAnyShiftPhysicallyHeld(e) {
+        if (typeof isShiftModifierActive === 'function') {
+            return isShiftModifierActive(e);
+        }
+        return !!(
+            e &&
+            (e.shiftKey || (typeof e.getModifierState === 'function' && e.getModifierState('Shift')))
+        );
+    }
+
+    function stopRangeLoopShiftHoldRaf() {
+        if (loopRangeShiftHoldRafId) {
+            cancelAnimationFrame(loopRangeShiftHoldRafId);
+            loopRangeShiftHoldRafId = 0;
+        }
+    }
+
+    function tickRangeLoopShiftHoldPreview() {
+        loopRangeShiftHoldRafId = 0;
+        if (!loopRangeShiftHoldActive) return;
+        if (typeof isTransportPlaying === 'function' && !isTransportPlaying()) {
+            cancelRangeLoopShiftHold();
+            return;
+        }
+        setRangeLoopDragPreview(
+            loopRangeShiftHoldStartSec,
+            getTransportSecForRangeLoop(),
+        );
+        loopRangeShiftHoldRafId = requestAnimationFrame(tickRangeLoopShiftHoldPreview);
+    }
+
+    function beginRangeLoopShiftHold() {
+        if (loopRangeShiftHoldActive) return;
+        if (typeof isTransportPlaying !== 'function' || !isTransportPlaying()) return;
+        if (!isMediaReadyForRangeLoop()) return;
+        if (loopRangeDragActive || loopRangeRightPressActive) return;
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
+            return;
+        }
+        loopRangeShiftHoldActive = true;
+        loopRangeShiftHoldStartSec = getTransportSecForRangeLoop();
+        if (isRangeLoopPlaybackActive()) {
+            loopRangeShiftHoldRestore = {
+                inSec: loopRangeInSec,
+                outSec: loopRangeOutSec,
+            };
+            loopRangeActive = false;
+        } else {
+            loopRangeShiftHoldRestore = null;
+        }
+        beginRangeLoopDragVisual();
+        setRangeLoopDragPreview(
+            loopRangeShiftHoldStartSec,
+            loopRangeShiftHoldStartSec,
+        );
+        stopRangeLoopShiftHoldRaf();
+        loopRangeShiftHoldRafId = requestAnimationFrame(tickRangeLoopShiftHoldPreview);
+    }
+
+    function cancelRangeLoopShiftHold() {
+        if (!loopRangeShiftHoldActive) return;
+        loopRangeShiftHoldActive = false;
+        stopRangeLoopShiftHoldRaf();
+        if (loopRangeDragActive) {
+            endRangeLoopDrag();
+        }
+        if (loopRangeShiftHoldRestore) {
+            loopRangeInSec = loopRangeShiftHoldRestore.inSec;
+            loopRangeOutSec = loopRangeShiftHoldRestore.outSec;
+            loopRangeActive = true;
+            loopRangeShiftHoldRestore = null;
+            updateRangeLoopOverlay();
+            return;
+        }
+        loopRangeShiftHoldRestore = null;
+        if (!isRangeLoopPlaybackActive()) {
+            loopRangeInSec = 0;
+            loopRangeOutSec = 0;
+            updateRangeLoopOverlay();
+        }
+    }
+
+    function commitRangeLoopShiftHold() {
+        if (!loopRangeShiftHoldActive) return;
+        const startSec = loopRangeShiftHoldStartSec;
+        const endSec = getTransportSecForRangeLoop();
+        const restore = loopRangeShiftHoldRestore;
+        loopRangeShiftHoldActive = false;
+        loopRangeShiftHoldRestore = null;
+        stopRangeLoopShiftHoldRaf();
+        endRangeLoopDrag();
+        if (activateRangeLoopPlayback(startSec, endSec)) {
+            return;
+        }
+        if (restore) {
+            loopRangeInSec = restore.inSec;
+            loopRangeOutSec = restore.outSec;
+            loopRangeActive = true;
+        } else {
+            loopRangeInSec = 0;
+            loopRangeOutSec = 0;
+        }
+        updateRangeLoopOverlay();
+    }
+
+    function onRangeLoopShiftHoldKeydown(e) {
+        if (!isShiftRangeLoopKey(e) || e.repeat) return;
+        if (e.ctrlKey || e.metaKey || e.altKey) return;
+        if (typeof isTypingTarget === 'function') {
+            if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+        }
+        beginRangeLoopShiftHold();
+    }
+
+    function onRangeLoopShiftHoldKeyup(e) {
+        if (!isShiftRangeLoopKey(e) || !loopRangeShiftHoldActive) return;
+        if (isAnyShiftPhysicallyHeld(e)) return;
+        commitRangeLoopShiftHold();
+    }
+
+    function onRangeLoopShiftHoldOtherKeydown(e) {
+        if (!loopRangeShiftHoldActive || isShiftRangeLoopKey(e)) return;
+        cancelRangeLoopShiftHold();
+    }
+
+    function isRangeLoopShiftArrowKeydown(e) {
+        if (!e || !e.shiftKey || e.altKey) return false;
+        if (typeof matchUserShortcut !== 'function') return false;
+        return (
+            matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
+        );
+    }
+
+    function logRangeLoopShiftArrowDebounced(line) {
+        if (typeof logArrowSeekDebounced === 'function') {
+            logArrowSeekDebounced(line);
+            return;
+        }
+        writeLog(line);
+    }
+
+    function flashRangeLoopShiftArrowHint(inSec, outSec, fromRepeat) {
+        if (fromRepeat) return;
+        if (typeof flashSeekHint !== 'function') return;
+        flashSeekHint(
+            'Range loop',
+            formatTimecodeForTransport(inSec) +
+                ' – ' +
+                formatTimecodeForTransport(outSec),
+            'notice',
+        );
+    }
+
+    function setRangeLoopBounds(inSec, outSec, opt) {
+        const bounds = normalizeRangeLoopBounds(inSec, outSec);
+        if (!bounds) return false;
+        const wasActive = isRangeLoopPlaybackActive();
+        if (
+            wasActive &&
+            Math.abs(bounds.inSec - loopRangeInSec) < 0.0005 &&
+            Math.abs(bounds.outSec - loopRangeOutSec) < 0.0005
+        ) {
+            return false;
+        }
+        loopRangeInSec = bounds.inSec;
+        loopRangeOutSec = bounds.outSec;
+        loopRangeActive = true;
+        updateRangeLoopOverlay();
+        const skipJump = !!(opt && opt.skipJumpToIn);
+        if (!wasActive || !skipJump) {
+            jumpToRangeLoopInSec();
+        } else if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+            suppressRangeLoopSnapForExplicitSeek(200);
+        }
+        const line =
+            'Range loop: ' +
+            formatTimecodeForTransport(loopRangeInSec) +
+            ' – ' +
+            formatTimecodeForTransport(loopRangeOutSec) +
+            (opt && opt.fromRepeat ? ' (repeat)' : '');
+        if (opt && opt.fromRepeat) {
+            logRangeLoopShiftArrowDebounced(line);
+        } else {
+            writeLog(line);
+        }
+        flashRangeLoopShiftArrowHint(loopRangeInSec, loopRangeOutSec, !!(opt && opt.fromRepeat));
+        return true;
+    }
+
+    function extendRangeLoopViaShiftArrow(dir, useStopMode, fromRepeat) {
+        const cur = getTransportSecForRangeLoop();
+        let inSec;
+        let outSec;
+        if (isRangeLoopPlaybackActive()) {
+            inSec = loopRangeInSec;
+            outSec = loopRangeOutSec;
+            if (useStopMode) {
+                if (typeof resolveAdjacentStopNavigationTargetSec !== 'function') return false;
+                if (dir > 0) {
+                    const next = resolveAdjacentStopNavigationTargetSec(1, outSec);
+                    if (!Number.isFinite(next)) return false;
+                    outSec = next;
+                } else {
+                    const prev = resolveAdjacentStopNavigationTargetSec(-1, inSec);
+                    if (!Number.isFinite(prev)) return false;
+                    inSec = prev;
+                }
+            } else if (dir > 0) {
+                outSec += 1;
+            } else {
+                inSec -= 1;
+            }
+            return setRangeLoopBounds(inSec, outSec, {
+                skipJumpToIn: true,
+                fromRepeat: fromRepeat,
+            });
+        }
+        if (useStopMode) {
+            if (typeof resolveAdjacentStopNavigationTargetSec !== 'function') return false;
+            const stopSec = resolveAdjacentStopNavigationTargetSec(dir, cur);
+            if (!Number.isFinite(stopSec)) return false;
+            if (dir > 0) {
+                inSec = cur;
+                outSec = stopSec;
+            } else {
+                inSec = stopSec;
+                outSec = cur;
+            }
+        } else if (dir > 0) {
+            inSec = cur;
+            outSec = cur + 1;
+        } else {
+            inSec = cur - 1;
+            outSec = cur;
+        }
+        return setRangeLoopBounds(inSec, outSec, { fromRepeat: fromRepeat });
+    }
+
+    function handleRangeLoopShiftArrowKeydown(e) {
+        if (!isRangeLoopShiftArrowKeydown(e)) return;
+        if (typeof isTypingTarget === 'function') {
+            if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+        }
+        if (!isMediaReadyForRangeLoop()) return;
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
+            return;
+        }
+        if (loopRangeShiftHoldActive) {
+            cancelRangeLoopShiftHold();
+        }
+        const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
+        const useStopMode = !!(e.ctrlKey || e.metaKey);
+        if (useStopMode && typeof markerTimelineReady === 'function' && !markerTimelineReady()) {
+            return;
+        }
+        if (!extendRangeLoopViaShiftArrow(dir, useStopMode, e.repeat)) return;
+        e.preventDefault();
+        e.stopPropagation();
     }
 
     function getRangeLoopInSec() {
@@ -84,7 +375,9 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         const show =
-            (loopRangeDragActive || isRangeLoopPlaybackActive()) &&
+            (loopRangeShiftHoldActive ||
+                loopRangeDragActive ||
+                isRangeLoopPlaybackActive()) &&
             master > 0 &&
             Number.isFinite(loopRangeInSec) &&
             Number.isFinite(loopRangeOutSec) &&
@@ -110,6 +403,9 @@
     function clearRangeLoopPlayback(opt) {
         const was = isRangeLoopPlaybackActive();
         rangeLoopSnapInFlight = null;
+        loopRangeShiftHoldActive = false;
+        loopRangeShiftHoldRestore = null;
+        stopRangeLoopShiftHoldRaf();
         loopRangeActive = false;
         loopRangeInSec = 0;
         loopRangeOutSec = 0;
@@ -124,6 +420,10 @@
 
     /** Escape / 右クリック contextmenu と同じ解除 */
     function dismissRangeLoopLikeEscape() {
+        if (loopRangeShiftHoldActive) {
+            cancelRangeLoopShiftHold();
+            return true;
+        }
         if (loopRangeDragActive || loopRangeRightPressActive) {
             endRangeLoopDrag();
             if (!isRangeLoopPlaybackActive()) {
@@ -148,6 +448,7 @@
 
     function onRangeLoopContextMenu(ev) {
         if (
+            !loopRangeShiftHoldActive &&
             !loopRangeDragActive &&
             !loopRangeRightPressActive &&
             !isRangeLoopPlaybackActive()
@@ -231,27 +532,7 @@
     }
 
     function activateRangeLoopPlayback(inSec, outSec) {
-        const bounds = normalizeRangeLoopBounds(inSec, outSec);
-        if (!bounds) return false;
-        loopRangeInSec = bounds.inSec;
-        loopRangeOutSec = bounds.outSec;
-        loopRangeActive = true;
-        updateRangeLoopOverlay();
-        jumpToRangeLoopInSec();
-        writeLog(
-            'Range loop: ' +
-                formatTimecodeForTransport(loopRangeInSec) +
-                ' – ' +
-                formatTimecodeForTransport(loopRangeOutSec),
-        );
-        flashSeekHint(
-            'Range loop',
-            formatTimecodeForTransport(loopRangeInSec) +
-                ' – ' +
-                formatTimecodeForTransport(loopRangeOutSec),
-            'notice',
-        );
-        return true;
+        return setRangeLoopBounds(inSec, outSec);
     }
 
     /** @returns {boolean} true if transport was wrapped to range In */
@@ -450,13 +731,19 @@
     function initRangeLoopUi() {
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
-        if (!lanes) return;
-        lanes.addEventListener('pointerdown', onRangeLoopPointerDown);
-        lanes.addEventListener('contextmenu', onRangeLoopContextMenu);
+        if (lanes) {
+            lanes.addEventListener('pointerdown', onRangeLoopPointerDown);
+            lanes.addEventListener('contextmenu', onRangeLoopContextMenu);
+        }
         const composite = document.getElementById('audioWaveformComposite');
         if (composite) {
             composite.addEventListener('contextmenu', onRangeLoopContextMenu);
         }
+        window.addEventListener('keydown', onRangeLoopShiftHoldKeydown, true);
+        window.addEventListener('keyup', onRangeLoopShiftHoldKeyup, true);
+        window.addEventListener('keydown', onRangeLoopShiftHoldOtherKeydown, true);
+        window.addEventListener('keydown', handleRangeLoopShiftArrowKeydown, true);
+        window.addEventListener('blur', cancelRangeLoopShiftHold);
     }
 
     window.isRangeLoopEscapeRelevant = isRangeLoopEscapeRelevant;
