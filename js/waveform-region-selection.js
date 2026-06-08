@@ -324,6 +324,29 @@
         return regionSelectionEntries.length;
     }
 
+    /** 選択中セグメント + regionGroupId グループメンバーを重複排除して列挙 */
+    function expandRegionSegmentEditTargetsFromSelection() {
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (!segEntries.length) return [];
+        const seen = new Set();
+        const out = [];
+        for (let i = 0; i < segEntries.length; i++) {
+            const e = segEntries[i];
+            const track = { type: 'extra', slot: e.slot };
+            const members = collectRegionGroupMembers(track, e.segmentIndex);
+            for (let j = 0; j < members.length; j++) {
+                const m = members[j];
+                const key = regionGroupMemberKey(m.slot, m.segmentIndex);
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const mTrack = { type: 'extra', slot: m.slot };
+                if (!isTrackRegionActive(mTrack)) continue;
+                out.push({ slot: m.slot, segmentIndex: m.segmentIndex });
+            }
+        }
+        return out;
+    }
+
     function selectionHasGroupedRegions() {
         for (let i = 0; i < regionSelectionEntries.length; i++) {
             const e = regionSelectionEntries[i];

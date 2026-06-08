@@ -1218,21 +1218,8 @@
     }
 
     function resolveRegionFadeTargets() {
-        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
-        if (segEntries.length) {
-            const seen = new Set();
-            const out = [];
-            for (let i = 0; i < segEntries.length; i++) {
-                const e = segEntries[i];
-                const key = e.slot + ':' + e.segmentIndex;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                const track = { type: 'extra', slot: e.slot };
-                if (!isTrackRegionActive(track)) continue;
-                out.push({ slot: e.slot, segmentIndex: e.segmentIndex });
-            }
-            return out;
-        }
+        const fromSelection = expandRegionSegmentEditTargetsFromSelection();
+        if (fromSelection.length) return fromSelection;
 
         const slot = resolveSplitTargetExtraSlot();
         if (slot < 0 || !isExtraSlotUsableForRegion(slot)) return [];
@@ -1247,7 +1234,20 @@
             if (mapHit) segmentIndex = mapHit.segmentIndex;
         }
         if (segmentIndex < 0) return [];
-        return [{ slot, segmentIndex }];
+
+        const members = collectRegionGroupMembers(track, segmentIndex);
+        const seen = new Set();
+        const out = [];
+        for (let i = 0; i < members.length; i++) {
+            const m = members[i];
+            const key = regionGroupMemberKey(m.slot, m.segmentIndex);
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const mTrack = { type: 'extra', slot: m.slot };
+            if (!isTrackRegionActive(mTrack)) continue;
+            out.push({ slot: m.slot, segmentIndex: m.segmentIndex });
+        }
+        return out;
     }
 
     function applyRegionFadeAtSeekbar(kind) {

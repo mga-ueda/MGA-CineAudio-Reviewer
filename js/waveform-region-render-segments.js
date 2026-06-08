@@ -559,17 +559,33 @@
         );
     }
 
-    function getRegionSplitTargetTransportSec(track, clientX, clientY) {
+    function resolveRegionSplitPointerLaneSlot(clientX, clientY) {
+        if (Number.isFinite(clientY) && typeof extraLaneSlotFromClientY === 'function') {
+            const laneSlot = extraLaneSlotFromClientY(clientY);
+            if (laneSlot >= 0) return laneSlot;
+        }
+        const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
+        if (regionEl) {
+            const slot = extraSlotFromPlaybackRegionEl(regionEl);
+            if (slot >= 0) return slot;
+        }
+        return -1;
+    }
+
+    function getRegionSplitTargetTransportSec(track, clientX, clientY, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         let pointerSec = null;
         if (Number.isFinite(clientX)) {
-            const laneSlot =
-                Number.isFinite(clientY) && typeof extraLaneSlotFromClientY === 'function'
-                    ? extraLaneSlotFromClientY(clientY)
-                    : -1;
-            const canUsePointer =
-                laneSlot === track.slot ||
-                (!Number.isFinite(clientY) &&
-                    !!findPlaybackRegionElAtPointer(clientX, clientY));
+            let canUsePointer = false;
+            if (o.pointerOverAnyExLane) {
+                canUsePointer = resolveRegionSplitPointerLaneSlot(clientX, clientY) >= 0;
+            } else {
+                const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
+                canUsePointer =
+                    laneSlot === track.slot ||
+                    (!Number.isFinite(clientY) &&
+                        !!findPlaybackRegionElAtPointer(clientX, clientY));
+            }
             if (canUsePointer) {
                 pointerSec = transportSecAtClientX(clientX);
             }
@@ -598,7 +614,14 @@
                     altKey: altSuppressed,
                 });
             }
-            const clamped = clampRegionEditTransportSec(track, snapped);
+            let clampTrack = track;
+            if (o.pointerOverAnyExLane) {
+                const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
+                if (laneSlot >= 0) {
+                    clampTrack = { type: 'extra', slot: laneSlot };
+                }
+            }
+            const clamped = clampRegionEditTransportSec(clampTrack, snapped);
             writeLog(
                 'Playback region split target: pointer sec=' +
                     pointerSec.toFixed(3) +
@@ -620,8 +643,117 @@
         return clamped;
     }
 
+    function trySplitTrackAtTransportSec(track, splitTransport, opt) {
+        const segments = getTrackSegments(track);
+        if (
+            segments.length &&
+            isPlaybackRegionSplitForbiddenAtTransport(track, splitTransport)
+        ) {
+            return false;
+        }
+        if (!mapTransportToSegment(track, splitTransport) && segments.length) {
+            return false;
+        }
+        if (
+            getTrackSegments(track).length &&
+            isPlaybackRegionSplitForbiddenAtTransport(track, splitTransport)
+        ) {
+            return false;
+        }
+        if (splitPlaybackRegionAtTransportSec(track, splitTransport, opt)) {
+            return true;
+        }
+        const frameStep =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0 ? masterFrameSec : 1 / 60;
+        const retryOffsets = [1, -1, 2, -2, 3, -3];
+        for (let i = 0; i < retryOffsets.length; i++) {
+            const tRetry = splitTransport + retryOffsets[i] * frameStep;
+            if (isPlaybackRegionSplitForbiddenAtTransport(track, tRetry)) {
+                continue;
+            }
+            if (splitPlaybackRegionAtTransportSec(track, tRetry, opt)) {
+                writeLog(
+                    'Playback region: split retried at ±' +
+                        Math.abs(retryOffsets[i]) +
+                        ' frame(s)',
+                );
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function splitPlaybackRegionAtTargetSecForSelection(targets, clientX, clientY) {
+        if (!targets || !targets.length) return false;
+
+        const selectedBySlot = new Map();
+        for (let i = 0; i < targets.length; i++) {
+            const t = targets[i];
+            if (!selectedBySlot.has(t.slot)) selectedBySlot.set(t.slot, new Set());
+            selectedBySlot.get(t.slot).add(t.segmentIndex);
+        }
+
+        const refTrack = { type: 'extra', slot: targets[0].slot };
+        const splitTransport = getRegionSplitTargetTransportSec(
+            refTrack,
+            clientX,
+            clientY,
+            { pointerOverAnyExLane: true },
+        );
+
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        let successCount = 0;
+        const slotKeys = Array.from(selectedBySlot.keys()).sort((a, b) => a - b);
+        for (let s = 0; s < slotKeys.length; s++) {
+            const slot = slotKeys[s];
+            const track = { type: 'extra', slot };
+            if (!isExtraSlotUsableForRegion(slot) || !isTrackRegionActive(track)) continue;
+
+            const hit = mapTransportToSegment(track, splitTransport);
+            const selectedIndices = selectedBySlot.get(slot);
+            if (!hit || !selectedIndices.has(hit.segmentIndex)) continue;
+
+            if (trySplitTrackAtTransportSec(track, splitTransport, { skipUndo: true })) {
+                successCount++;
+            }
+        }
+
+        if (!successCount) {
+            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog(
+                    'Playback region: split at boundary or no selected region at cursor/seekbar',
+                );
+                flashSeekHint('Region', "Can't split here", 'error');
+            }
+            return false;
+        }
+
+        writeLog(
+            'Playback region split at ' +
+                splitTransport.toFixed(3) +
+                's (' +
+                successCount +
+                ' track' +
+                (successCount === 1 ? '' : 's') +
+                ')',
+        );
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Split', 'notice');
+        }
+        return true;
+    }
+
     function splitPlaybackRegionAtTargetSec() {
         const { clientX, clientY } = waveformPointerClientXY();
+        const selectionTargets = expandRegionSegmentEditTargetsFromSelection();
+        if (selectionTargets.length) {
+            return splitPlaybackRegionAtTargetSecForSelection(
+                selectionTargets,
+                clientX,
+                clientY,
+            );
+        }
+
         const slot = resolveSplitTargetExtraSlot();
         if (slot < 0) {
             if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
@@ -641,6 +773,22 @@
         const track = { type: 'extra', slot };
 
         const splitTransport = getRegionSplitTargetTransportSec(track, clientX, clientY);
+        let segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
+        if (segmentIndex < 0) {
+            const mapHit = mapTransportToSegment(track, splitTransport);
+            if (mapHit) segmentIndex = mapHit.segmentIndex;
+        }
+        if (segmentIndex >= 0 && getSegmentRegionGroupId(track, segmentIndex)) {
+            const members = collectRegionGroupMembers(track, segmentIndex);
+            if (members.length > 1) {
+                return splitPlaybackRegionAtTargetSecForSelection(
+                    members,
+                    clientX,
+                    clientY,
+                );
+            }
+        }
+
         const segments = getTrackSegments(track);
         if (
             segments.length &&
@@ -693,25 +841,8 @@
             flashSeekHint('Region', "Can't split here", 'error');
             return false;
         }
-        if (splitPlaybackRegionAtTransportSec(track, splitTransport)) {
+        if (trySplitTrackAtTransportSec(track, splitTransport)) {
             return true;
-        }
-        const frameStep =
-            typeof masterFrameSec === 'number' && masterFrameSec > 0 ? masterFrameSec : 1 / 60;
-        const retryOffsets = [1, -1, 2, -2, 3, -3];
-        for (let i = 0; i < retryOffsets.length; i++) {
-            const tRetry = splitTransport + retryOffsets[i] * frameStep;
-            if (isPlaybackRegionSplitForbiddenAtTransport(track, tRetry)) {
-                continue;
-            }
-            if (splitPlaybackRegionAtTransportSec(track, tRetry)) {
-                writeLog(
-                    'Playback region: split retried at ±' +
-                        Math.abs(retryOffsets[i]) +
-                        ' frame(s)',
-                );
-                return true;
-            }
         }
         if (
             segments.length &&

@@ -32,6 +32,7 @@
             --waveform-seek-cyan: #00e8ff;
             --waveform-seek-cyan-border: rgba(0, 232, 255, 0.92);
             --waveform-seek-cyan-inset: rgba(0, 232, 255, 0.9);
+            --waveform-selection-border-width: 1px;
             --font-mono: 'Consolas', 'Monaco', 'Cascadia Mono', 'Courier New', monospace;
             /*
              * 文字色の役割…sample.html と同じ分担。サンプルのシアン #7dd8ff は --app-accent に相当。
@@ -2773,7 +2774,8 @@
         .audio-waveform-lane__playback-region--selected,
         .audio-waveform-lane__playback-region--selected.audio-waveform-lane__playback-region--hover {
             z-index: 10;
-            box-shadow: inset 0 0 0 2px var(--waveform-seek-cyan-border);
+            box-shadow: inset 0 0 0 var(--waveform-selection-border-width)
+                var(--waveform-seek-cyan-border);
         }
         .audio-waveform-lane__playback-region--selected:not(
                 .audio-waveform-lane__playback-region--grouped
@@ -2796,10 +2798,14 @@
         }
         .audio-waveform-lane__playback-silent-gap--selected {
             z-index: 6;
-            border-top: 2px solid var(--waveform-seek-cyan-border);
-            border-bottom: 2px solid var(--waveform-seek-cyan-border);
-            border-left: 2px solid var(--waveform-seek-cyan-border);
-            border-right: 2px solid var(--waveform-seek-cyan-border);
+            border-top: var(--waveform-selection-border-width) solid
+                var(--waveform-seek-cyan-border);
+            border-bottom: var(--waveform-selection-border-width) solid
+                var(--waveform-seek-cyan-border);
+            border-left: var(--waveform-selection-border-width) solid
+                var(--waveform-seek-cyan-border);
+            border-right: var(--waveform-selection-border-width) solid
+                var(--waveform-seek-cyan-border);
             box-shadow: inset 0 0 0 1px rgba(0, 232, 255, 0.25);
         }
         .audio-waveform-lane__playback-region__cursor-line {
