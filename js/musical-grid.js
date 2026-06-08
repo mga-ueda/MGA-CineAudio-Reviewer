@@ -72,14 +72,18 @@
         phraseUndoStack.push(snap);
         clearPhraseRedoStack();
     }
-    function restorePhraseUndoSnapshot(phrase) {
+    function restorePhraseUndoSnapshot(phrase, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         phraseUndoPaused = true;
         clearPhraseGroupBarCountsOverride();
         musicalGridPhraseText = normalizeMusicalGridPhraseText(phrase);
         if (musicalGridPhraseInput) {
             musicalGridPhraseInput.value = musicalGridPhraseText;
         }
-        persistMusicalGridAndRedraw({ skipUndo: true });
+        persistMusicalGridAndRedraw({
+            skipUndo: true,
+            skipTimelineSlotRebuild: !!o.skipTimelineSlotRebuild,
+        });
         updatePhraseBoundaryOverlay();
         phraseUndoPaused = false;
     }
@@ -775,16 +779,23 @@
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
                 preservePhraseBarCountsOverride: shouldRelayoutFromMeter,
+                skipUndo: !!o.skipUndo,
             });
         }
-        if (typeof rebuildAllTrackTimelineSlots === 'function') {
+        if (!o.skipTimelineSlotRebuild && typeof rebuildAllTrackTimelineSlots === 'function') {
             rebuildAllTrackTimelineSlots({
                 infer: true,
                 preserveStored: false,
             });
-        } else if (typeof refreshAllRegionMusicalMetaPresentation === 'function') {
+        } else if (
+            !o.skipTimelineSlotRebuild &&
+            typeof refreshAllRegionMusicalMetaPresentation === 'function'
+        ) {
             refreshAllRegionMusicalMetaPresentation();
-        } else if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+        } else if (
+            !o.skipTimelineSlotRebuild &&
+            typeof refreshAllRegionRehearsalMarkLabels === 'function'
+        ) {
             refreshAllRegionRehearsalMarkLabels();
         }
         if (shouldRelayoutRegions && typeof flushPersistSessionNow === 'function') {
@@ -2771,6 +2782,153 @@
         return next;
     }
     /**
+     * リージョン結合境界が Phrase スロット境界とどう対応するかを返す。
+     * @returns {{ boundaryIndex: number, counts: number[]|null, relayoutOnly?: boolean }|null}
+     */
+    function resolvePhraseBoundaryJoinAtRegionBoundary(track, boundaryIndex) {
+        if (!getMusicalGridPhraseFillVisible()) return null;
+        if (!canCommitPhraseCompositionLayout()) return null;
+        const b = boundaryIndex | 0;
+        if (b < 0) return null;
+
+        const counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        if (!counts || counts.length < 2) return null;
+
+        if (
+            typeof window.getSegmentRegionTimelineIn === 'function' &&
+            typeof window.phraseSlotIndexAtRegionInSec === 'function'
+        ) {
+            const leftIn = window.getSegmentRegionTimelineIn(track, b);
+            const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
+            const leftSlot = window.phraseSlotIndexAtRegionInSec(leftIn);
+            const rightSlot = window.phraseSlotIndexAtRegionInSec(rightIn);
+            if (leftSlot != null && rightSlot != null) {
+                if (rightSlot === leftSlot + 1) {
+                    const next = mergePhraseGroupsAtBoundaryIndex(counts, leftSlot);
+                    if (next) {
+                        return {
+                            boundaryIndex: leftSlot,
+                            counts: next,
+                        };
+                    }
+                }
+                if (leftSlot === rightSlot) {
+                    return {
+                        boundaryIndex: leftSlot,
+                        counts: null,
+                        relayoutOnly: true,
+                    };
+                }
+            }
+        }
+
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+        const ranges = collectPhraseGroupRangesFromBarCounts(
+            settings.meterSpec,
+            master,
+            counts,
+        );
+        if (ranges.length < 2) return null;
+        let boundarySec = null;
+        if (typeof window.getSegmentRegionTimelineIn === 'function') {
+            const leftIn = window.getSegmentRegionTimelineIn(track, b);
+            const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
+            if (Number.isFinite(leftIn) && Number.isFinite(rightIn)) {
+                boundarySec = (leftIn + rightIn) * 0.5;
+            }
+        }
+        if (boundarySec == null) return null;
+        const eps =
+            typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                ? window.segmentBoundaryJoinEpsilonSec()
+                : musicalGridBarLineSnapThresholdSec();
+        for (let i = 0; i < ranges.length - 1; i++) {
+            const sec = ranges[i].endSec;
+            if (!Number.isFinite(sec)) continue;
+            if (Math.abs(sec - boundarySec) <= eps) {
+                const next = mergePhraseGroupsAtBoundaryIndex(counts, i);
+                if (next) {
+                    return {
+                        boundaryIndex: i,
+                        counts: next,
+                    };
+                }
+            }
+        }
+        return null;
+    }
+    /** Phrase 着色 ON — リージョン境界ボンドで counts 更新＋構成どおりに切り直し */
+    function joinPhraseAtRegionBoundary(track, boundaryIndex, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const hit = resolvePhraseBoundaryJoinAtRegionBoundary(track, boundaryIndex);
+        if (!hit) return false;
+
+        if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
+            window.requestRegionUndoCapture({ includePhrase: true });
+        }
+
+        const phraseBefore = musicalGridPhraseText;
+        if (hit.counts) {
+            applyExplicitPhraseGroupBarCounts(hit.counts, { skipUndo: true });
+        }
+        persistPhraseWaveformEditAndRedraw({
+            skipUndo: true,
+            relayoutSilent: o.relayoutSilent !== false,
+        });
+
+        phraseSwapDiagLog('region-bond/applied', {
+            ex: (track.slot | 0) + 1,
+            regionBoundary: (boundaryIndex | 0) + 1,
+            phraseBoundary: hit.boundaryIndex + 1,
+            relayoutOnly: !!hit.relayoutOnly,
+            before: phraseBefore,
+            after: musicalGridPhraseText,
+        });
+
+        if (!(o.silent) && typeof writeLog === 'function') {
+            if (hit.relayoutOnly) {
+                writeLog(
+                    'Ex ' +
+                        ((track.slot | 0) + 1) +
+                        ': regions joined at boundary ' +
+                        ((boundaryIndex | 0) + 1) +
+                        ' (phrase relayout)',
+                );
+            } else {
+                const left = phraseGroupLabelForIndex(hit.boundaryIndex);
+                const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
+                writeLog(
+                    'Phrase ' +
+                        left +
+                        '/' +
+                        right +
+                        ' joined at region boundary: ' +
+                        musicalGridPhraseText,
+                );
+            }
+        }
+        if (!(o.silent) && typeof flashSeekHint === 'function') {
+            if (hit.relayoutOnly) {
+                flashSeekHint(
+                    'Ex ' + ((track.slot | 0) + 1),
+                    'Regions joined',
+                    'notice',
+                );
+            } else {
+                const left = phraseGroupLabelForIndex(hit.boundaryIndex);
+                const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
+                flashSeekHint('Phrase', 'Joined ' + left + '/' + right, 'notice');
+            }
+        }
+        return true;
+    }
+    /**
      * transport 秒がフレーズ境界に近いとき、その境界で連結候補を返す。
      * 連結は常にスナップ閾値内の境界のみ。
      */
@@ -2859,6 +3017,14 @@
         if (!matchUserShortcut(e, 'regionJoin')) return false;
         if (e.repeat) return false;
         if (!getMusicalGridVisible()) return false;
+        if (
+            getMusicalGridPhraseFillVisible() &&
+            typeof window.joinPlaybackRegionAtPointer === 'function' &&
+            window.joinPlaybackRegionAtPointer({ silent: true })
+        ) {
+            e.preventDefault();
+            return true;
+        }
         joinPhraseAtTarget();
         e.preventDefault();
         return true;
@@ -3687,6 +3853,7 @@
     window.handleMusicalGridPhraseDeleteKeydown = handleMusicalGridPhraseDeleteKeydown;
     window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;
     window.joinPhraseAtTarget = joinPhraseAtTarget;
+    window.joinPhraseAtRegionBoundary = joinPhraseAtRegionBoundary;
     window.handleMusicalGridPhraseUndoKeydown = handleMusicalGridPhraseUndoKeydown;
     window.handleMusicalGridPhraseRedoKeydown = handleMusicalGridPhraseRedoKeydown;
     window.undoPhraseDefinition = undoPhraseDefinition;

@@ -680,7 +680,7 @@
             `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
         );
 
-        const offsetTitle = `P. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review のみ保存。`;
+        const offsetTitle = `P. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review およびセッション復元に保存。`;
         setElementTitle(document.getElementById('rehearsalMarkOffsetWrap'), offsetTitle);
         const offsetChk = document.getElementById('rehearsalMarkOffsetCheckbox');
         setElementTitle(offsetChk, offsetTitle);

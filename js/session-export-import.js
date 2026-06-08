@@ -724,6 +724,10 @@
             playbackRegion: sess.playbackRegion,
             mix: sess.mix,
             extraTracks: [],
+            rehearsalMark:
+                sess.rehearsalMark && typeof sess.rehearsalMark === 'object'
+                    ? { offset: !!sess.rehearsalMark.offset }
+                    : { offset: false },
         };
         if (sess.videoBlobKey && blobs[sess.videoBlobKey]) {
             row.mBlob = new Blob([blobs[sess.videoBlobKey]]);

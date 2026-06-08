@@ -153,6 +153,15 @@
             }
             return false;
         }
+        if (
+            !(opt && opt.skipPhraseRelayout) &&
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible() &&
+            typeof window.joinPhraseAtRegionBoundary === 'function' &&
+            window.joinPhraseAtRegionBoundary(track, boundaryIndex, opt)
+        ) {
+            return true;
+        }
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         const left = segments[boundaryIndex];
         const right = segments[boundaryIndex + 1];
@@ -1296,10 +1305,11 @@
         return anyChanged;
     }
 
-    function joinPlaybackRegionAtPointer() {
+    function joinPlaybackRegionAtPointer(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const slot = resolveSplitTargetExtraSlot();
         if (slot < 0) {
-            if (!suppressInvalidRegionOpNoticeForVideoAudio()) {
+            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
                 writeLog(
                     'Playback region: hover an Ex lane (1–' +
                         getExtraTrackCount() +
@@ -1312,14 +1322,18 @@
             return false;
         }
         if (!isExtraSlotUsableForRegion(slot)) {
-            writeLog('Playback region: load an extra audio track first');
+            if (!o.silent) {
+                writeLog('Playback region: load an extra audio track first');
+            }
             return false;
         }
         const track = { type: 'extra', slot };
         if (!isTrackRegionActive(track)) {
-            writeLog('Playback region: no active regions on Ex ' + (slot + 1));
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'No regions', 'notice');
+            if (!o.silent) {
+                writeLog('Playback region: no active regions on Ex ' + (slot + 1));
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'No regions', 'notice');
+                }
             }
             return false;
         }
@@ -1339,7 +1353,7 @@
             );
         }
         if (boundaryIndex >= 0) {
-            return joinSegmentBoundaryAt(track, boundaryIndex);
+            return joinSegmentBoundaryAt(track, boundaryIndex, o);
         }
         let blockedBoundaryIndex = resolveSegmentBoundaryIndexAtPointer(
             track,
@@ -1356,12 +1370,16 @@
             );
         }
         if (blockedBoundaryIndex >= 0) {
-            notifyCannotJoinSegmentBoundary(track, blockedBoundaryIndex);
+            if (!o.silent) {
+                notifyCannotJoinSegmentBoundary(track, blockedBoundaryIndex);
+            }
             return false;
         }
-        writeLog('Playback region: hover a joinable boundary or seek to boundary, then press B');
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Hover/seek joinable boundary', 'notice');
+        if (!o.silent) {
+            writeLog('Playback region: hover a joinable boundary or seek to boundary, then press B');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Hover/seek joinable boundary', 'notice');
+            }
         }
         return false;
     }

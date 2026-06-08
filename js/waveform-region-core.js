@@ -69,12 +69,63 @@
     }
     function normalizeRegionUndoSnapshot(snap) {
         if (Array.isArray(snap)) {
-            return { tracks: snap, phrase: null };
+            return { tracks: snap, phrase: null, phraseExpandedCounts: null };
         }
         if (snap && Array.isArray(snap.tracks)) {
-            return { tracks: snap.tracks, phrase: snap.phrase != null ? snap.phrase : null };
+            return {
+                tracks: snap.tracks,
+                phrase: snap.phrase != null ? snap.phrase : null,
+                phraseExpandedCounts:
+                    snap.phraseExpandedCounts && snap.phraseExpandedCounts.length
+                        ? snap.phraseExpandedCounts.slice()
+                        : null,
+            };
         }
-        return { tracks: [], phrase: null };
+        return { tracks: [], phrase: null, phraseExpandedCounts: null };
+    }
+    function restoredPlaybackHasUsableTimelineSlots(playbackRegions) {
+        const slots =
+            playbackRegions && Array.isArray(playbackRegions.timelineSlots)
+                ? playbackRegions.timelineSlots
+                : null;
+        return (
+            typeof window.persistedTimelineSlotsAreUsable === 'function' &&
+            window.persistedTimelineSlotsAreUsable(slots)
+        );
+    }
+    function trackNeedsTimelineSlotRebuildAfterRestore(entry, track) {
+        if (
+            typeof window.isTrackRegionActive === 'function' &&
+            !window.isTrackRegionActive(track)
+        ) {
+            return false;
+        }
+        if (!entry || !entry.playbackRegions) return true;
+        const segs = Array.isArray(entry.playbackRegions.segments)
+            ? entry.playbackRegions.segments.length
+            : 0;
+        const slots = entry.playbackRegions.timelineSlots;
+        if (!restoredPlaybackHasUsableTimelineSlots(entry.playbackRegions)) return true;
+        if (!Array.isArray(slots) || !segs) return true;
+        let audioSlots = 0;
+        for (let i = 0; i < slots.length; i++) {
+            if (slots[i] && slots[i].kind !== 'silent') audioSlots++;
+        }
+        return audioSlots < segs;
+    }
+    /** Undo スナップショット用 — 計算位置を raw segment へ書き戻してから clone する */
+    function materializePlaybackRegionTimelineAnchorsForSnapshot(track) {
+        if (!isExtraTrackRef(track)) return;
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.active || !state.segments || !state.segments.length) {
+            return;
+        }
+        for (let i = 0; i < state.segments.length; i++) {
+            const raw = state.segments[i];
+            if (!raw) continue;
+            raw.timelineStartSec = getSegmentTimelineStart(track, i);
+            raw.regionTimelineInSec = getSegmentRegionTimelineIn(track, i);
+        }
     }
     function captureRegionUndoSnapshot(opt) {
         const tracks = [];
@@ -84,6 +135,10 @@
                 typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
             let playbackRegions = emptyPlaybackRegionsState();
             if (tr && tr.playbackRegions) {
+                materializePlaybackRegionTimelineAnchorsForSnapshot({
+                    type: 'extra',
+                    slot: i,
+                });
                 playbackRegions = deepCloneJson(tr.playbackRegions);
             }
             const timelineStartSec =
@@ -93,10 +148,17 @@
             tracks.push({ slot: i, playbackRegions, timelineStartSec });
         }
         let phrase = null;
+        let phraseExpandedCounts = null;
         if (regionUndoSnapshotIncludePhrase(opt)) {
             phrase = capturePhraseUndoSnapshot();
+            if (typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function') {
+                const counts = window.getExpandedPhraseGroupBarCountsSnapshot();
+                if (counts && counts.length) {
+                    phraseExpandedCounts = counts.slice();
+                }
+            }
         }
-        return { tracks, phrase };
+        return { tracks, phrase, phraseExpandedCounts };
     }
     function regionUndoSnapshotsEqual(a, b) {
         return (
@@ -128,6 +190,7 @@
             if (!tr) continue;
             if (entry) {
                 tr.playbackRegions = deepCloneJson(entry.playbackRegions);
+                bumpRegionPersistEpoch(i);
                 if (typeof setExtraTrackTimelineStartSec === 'function') {
                     setExtraTrackTimelineStartSec(entry.slot, entry.timelineStartSec, {
                         skipPersist: true,
@@ -135,7 +198,47 @@
                 }
             } else {
                 tr.playbackRegions = emptyPlaybackRegionsState();
+                bumpRegionPersistEpoch(i);
             }
+        }
+        if (typeof window.invalidateTrackTimelineSlotsReadCache === 'function') {
+            window.invalidateTrackTimelineSlotsReadCache();
+        }
+        if (
+            normalized.phraseExpandedCounts &&
+            normalized.phraseExpandedCounts.length &&
+            typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function'
+        ) {
+            window.applyPhraseGroupBarCountsForRegionSwap(normalized.phraseExpandedCounts, {
+                skipUndo: true,
+                relayoutRegions: false,
+            });
+        } else if (
+            normalized.phrase != null &&
+            typeof restorePhraseUndoSnapshot === 'function'
+        ) {
+            restorePhraseUndoSnapshot(normalized.phrase, { skipTimelineSlotRebuild: true });
+        }
+        let needsSlotRebuild = false;
+        for (let i = 0; i < n; i++) {
+            const entry = normalized.tracks.find((e) => e.slot === i);
+            if (trackNeedsTimelineSlotRebuildAfterRestore(entry, { type: 'extra', slot: i })) {
+                needsSlotRebuild = true;
+                break;
+            }
+        }
+        if (needsSlotRebuild) {
+            if (typeof window.rebuildAllTrackTimelineSlots === 'function') {
+                window.rebuildAllTrackTimelineSlots({
+                    infer: false,
+                    skipPresentationRefresh: true,
+                });
+            }
+        }
+        for (let i = 0; i < n; i++) {
+            const tr =
+                typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
+            if (!tr) continue;
             updateTrackRegionOverlays({ type: 'extra', slot: i });
             redrawAfterRegionChange(i);
         }
@@ -144,15 +247,6 @@
             syncExtraAudioToTransport({ force: true });
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
-        if (
-            normalized.phrase != null &&
-            typeof restorePhraseUndoSnapshot === 'function'
-        ) {
-            restorePhraseUndoSnapshot(normalized.phrase);
-        }
-        if (typeof window.rebuildAllTrackTimelineSlots === 'function') {
-            window.rebuildAllTrackTimelineSlots({ infer: true });
-        }
         regionUndoPaused = false;
     }
     function captureRegionUndoSnapshotForHistory() {

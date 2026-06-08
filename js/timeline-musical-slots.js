@@ -1737,7 +1737,7 @@
         window.musicalSlotDiagLog('rebuild/all', { tracks: rebuilt, infer: !!o.infer });
         if (
             rebuilt > 0 &&
-            !o.skipPresentationRefresh &&
+            o.skipPresentationRefresh !== true &&
             typeof window.refreshAllRegionMusicalMetaPresentation === 'function'
         ) {
             window.refreshAllRegionMusicalMetaPresentation();
@@ -1782,6 +1782,7 @@
     window.swapTimelineSlotsAtIndices = swapTimelineSlotsAtIndices;
     window.swapSelectedTimelineSlots = swapSelectedTimelineSlots;
     window.rebuildAllTrackTimelineSlots = rebuildAllTrackTimelineSlots;
+    window.invalidateTrackTimelineSlotsReadCache = invalidateTrackTimelineSlotsReadCache;
     window.relayoutTrackFromTimelineSlots = relayoutTrackFromTimelineSlots;
     window.relayoutAllTracksFromTimelineSlots = relayoutAllTracksFromTimelineSlots;
     window.swapUnitIdentityKey = swapUnitIdentityKey;
