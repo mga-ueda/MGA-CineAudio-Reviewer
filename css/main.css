@@ -4035,23 +4035,15 @@
             gap: 7px;
             transition: box-shadow 0.2s ease, border-color 0.2s ease;
         }
-        .transport-bar .master-vol-container.gain-reduce-glow {
-            border-color: rgba(255, 120, 120, 0.72);
-            box-shadow:
-                0 0 0 1px rgba(220, 40, 40, 0.55),
-                0 0 18px rgba(255, 50, 50, 0.55),
-                0 0 38px rgba(200, 30, 40, 0.42);
+        .transport-bar .master-vol-container.transport-opt-chip.gain-reduce-glow {
             transition: none;
             animation: gainReduceGlowPulse 0.85s ease-in-out 1;
         }
         @keyframes gainReduceGlowPulse {
             0%,
             100% {
-                border-color: rgba(255, 100, 100, 0.55);
-                box-shadow:
-                    0 0 0 1px rgba(180, 30, 35, 0.5),
-                    0 0 14px rgba(255, 60, 60, 0.42),
-                    0 0 26px rgba(160, 25, 30, 0.28);
+                border-color: rgba(255, 255, 255, 0.08);
+                box-shadow: none;
             }
             50% {
                 border-color: rgba(255, 170, 170, 0.92);
@@ -4078,13 +4070,8 @@
                     0 0 52px rgba(255, 100, 25, 0.45);
             }
         }
-        .transport-opt-box.transport-opt-box--glow,
-        .transport-opt-chip.transport-opt-chip--glow {
-            border-color: rgba(255, 140, 60, 0.72);
-            box-shadow:
-                0 0 0 1px rgba(255, 120, 40, 0.55),
-                0 0 18px rgba(255, 130, 40, 0.55),
-                0 0 38px rgba(255, 95, 20, 0.42);
+        .transport-bar .transport-opt-box.transport-opt-box--glow,
+        .transport-bar .transport-opt-chip.transport-opt-chip--glow {
             transition: none;
             animation: transportOptGlowPulse 0.85s ease-in-out 1;
         }

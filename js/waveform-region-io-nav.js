@@ -308,7 +308,13 @@
             refreshAllRegionRehearsalMarkLabels();
         }
         if (!o.silent && typeof writeLog === 'function') {
-            writeLog('P. Offset: ' + (rehearsalMarkOffsetEnabled ? 'ON' : 'OFF'));
+            writeLog('Phrase Offset: ' + (rehearsalMarkOffsetEnabled ? 'ON' : 'OFF'));
+        }
+        if (!o.silent && typeof flashSeekHint === 'function') {
+            flashSeekHint('Phrase Offset', rehearsalMarkOffsetEnabled ? 'ON' : 'OFF', 'notice');
+        }
+        if (!o.silent && typeof flashTransportOptBox === 'function') {
+            flashTransportOptBox('rehearsalMarkOffset');
         }
         if (!o.silent && !o.skipPersist && typeof schedulePersistSession === 'function') {
             schedulePersistSession();

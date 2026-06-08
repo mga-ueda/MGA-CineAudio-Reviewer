@@ -1,7 +1,7 @@
 /**
  * ui-helpers.js — UI 補助（トランスポートオプションの glow、レーンステータス文言、シークヒント）。
  */
-    const transportOptGlowClearTimers = { playback: 0, analyze: 0 };
+    const transportOptGlowClearTimers = { playback: 0, analyze: 0, masterVol: 0, rehearsalMarkOffset: 0 };
     let videoPanelDriftGlowTimer = 0;
 
     const LANE_STATUS_HIDE_RE =
@@ -41,6 +41,10 @@
             '.transport-bar--playback .transport-opt-box--playback, .transport-opt-box--playback',
         analyze:
             '.transport-bar #analyzeToggleWrap.transport-opt-chip, #analyzeToggleWrap.transport-opt-chip',
+        masterVol:
+            '.transport-bar .master-vol-container, #masterVolWrap',
+        rehearsalMarkOffset:
+            '.transport-bar #rehearsalMarkOffsetWrap.transport-opt-chip, #rehearsalMarkOffsetWrap',
     };
 
     function flashVideoPanelDrift() {

@@ -639,10 +639,17 @@
         }
     }
 
+    function flashMasterVolResetGlow() {
+        if (typeof flashTransportOptBox === 'function') {
+            flashTransportOptBox('masterVol');
+        }
+    }
+
     function resetReviewMixMonitorGain() {
         applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, true);
         const mvWrap = document.querySelector('.master-vol-container');
         if (mvWrap) mvWrap.classList.remove('gain-reduce-glow');
+        flashMasterVolResetGlow();
     }
 
     function bindMasterVolSlider() {
@@ -658,6 +665,7 @@
             ev.preventDefault();
             applyMasterVolToMix(DEFAULT_MASTER_VOL_LINEAR, true);
             saveUiPrefsToLocalStorage();
+            flashMasterVolResetGlow();
         });
     }
     bindMasterVolSlider();
@@ -2025,6 +2033,7 @@ window.addEventListener('resize', () => {
         applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, false);
         resetSessionIntegratedLkfsDisplay();
         saveUiPrefsToLocalStorage();
+        flashMasterVolResetGlow();
     }
 
     function handleMasterVolShortcutKeydown(e) {
@@ -2034,6 +2043,7 @@ window.addEventListener('resize', () => {
         e.preventDefault();
         applyMasterVolToMix(MASTER_VOL_UNITY_LINEAR, true);
         saveUiPrefsToLocalStorage();
+        flashMasterVolResetGlow();
         return true;
     }
 
