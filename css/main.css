@@ -351,13 +351,13 @@
             transition: background 0.15s ease, border-color 0.15s ease;
         }
         .marker-panel__hide-view-btn {
-            background: #c87820;
-            border: 1px solid #f0a040;
-            color: #1a1408;
+            background: #5b3a1c;
+            border: 1px solid var(--marker-orange-light);
+            color: var(--app-doc-text);
         }
         .marker-panel__hide-view-btn:hover:not(:disabled) {
-            background: #d88830;
-            border-color: #ffc050;
+            background: #684220;
+            border-color: var(--marker-orange-pale);
         }
         .marker-panel__hide-view-btn[aria-pressed='true'] {
             background: #221a10;
