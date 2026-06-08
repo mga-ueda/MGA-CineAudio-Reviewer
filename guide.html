@@ -415,7 +415,7 @@
                     <li><strong>現在地（小節・拍）</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
                     <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
                     <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時は、カーソル位置の項目を <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。カンマ区切りの<strong>末尾</strong>（例: <code>1,8</code> の最後）にあるときは、上下どちらでも <code>,8</code> が追加されます（続けて8小節のフレーズを指定）。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
-                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Tempo/Sig・Phrase / Analyze・P. Offset・レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
+                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Tempo/Sig・Phrase / Analyze・P. Offset・レビュー入出力 / Master Vol 等）とログ欄、およびページ下部のマニュアル（特記事項・使い方等）をまとめて表示/非表示。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-phrase-edit">フレーズの編集（Tempo/Sig 表示中）</h3>
@@ -512,7 +512,7 @@
 
             <section class="guide-section" id="log">
                 <h2 class="docs-heading-box">ログ</h2>
-                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
+                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄・波形直下のオプションバー全体・ページ下部のマニュアル（特記事項・使い方等）をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -522,7 +522,7 @@
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>.</kbd>（<strong>P. Offset</strong>/フレーズオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプションとログの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
+                <p>最近追加した主なキーとして、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>.</kbd>（<strong>P. Offset</strong>/フレーズオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプション・ログ・マニュアルの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>

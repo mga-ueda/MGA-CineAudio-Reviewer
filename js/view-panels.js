@@ -23,7 +23,6 @@
         if (markerPanel) {
             markerPanel.setAttribute('aria-hidden', videoMarkersPanelsHidden ? 'true' : 'false');
         }
-        applyManualDocFoldsHidden(videoMarkersPanelsHidden);
         if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
             scheduleMarkersUiRefreshAfterLayout();
         }
@@ -34,10 +33,10 @@
         const hidden = applyVideoMarkersPanelsHidden(!videoMarkersPanelsHidden);
         writeLog(
             hidden
-                ? 'Video, Markers, and manual doc panels: hidden (F)'
-                : 'Video, Markers, and manual doc panels: shown (F)',
+                ? 'Video and Markers panels: hidden (F)'
+                : 'Video and Markers panels: shown (F)',
         );
-        flashSeekHint('Video + Markers + Docs', hidden ? 'Hidden' : 'Shown', 'notice');
+        flashSeekHint('Video + Markers', hidden ? 'Hidden' : 'Shown', 'notice');
         return hidden;
     }
 
@@ -61,5 +60,6 @@
     }
 
     window.revealManualDocFold = revealManualDocFold;
+    window.applyManualDocFoldsHidden = applyManualDocFoldsHidden;
 
     window.handleVideoMarkersPanelsToggleKeydown = handleVideoMarkersPanelsToggleKeydown;

@@ -233,10 +233,13 @@
             const willHide = !transportOptionsSection.hidden;
             transportOptionsSection.hidden = willHide;
             if (logSection) logSection.hidden = willHide;
+            if (typeof applyManualDocFoldsHidden === 'function') {
+                applyManualDocFoldsHidden(willHide);
+            }
             writeLog(
                 willHide
-                    ? 'Transport options and log: hidden (O)'
-                    : 'Transport options and log: shown (O)'
+                    ? 'Transport options, log, and manual docs: hidden (O)'
+                    : 'Transport options, log, and manual docs: shown (O)'
             );
             if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
                 scheduleMarkersUiRefreshAfterLayout();

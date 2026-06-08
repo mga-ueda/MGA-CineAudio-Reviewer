@@ -66,7 +66,7 @@
         }
 
         .layout-narrow {
-            max-width: 1300px;
+            max-width: none;
             margin-left: auto;
             margin-right: auto;
             width: 100%;
@@ -220,7 +220,7 @@
             outline: 2px dashed rgba(196, 30, 58, 0.5);
             outline-offset: -2px;
         }
-        /** ブラウザ幅に追加（layout-narrow の外に配置） */
+        /** 動画＋マーカー横並びステージ */
         .player-stage {
             --marker-table-visible-rows: 10;
             --marker-table-row-h: 1.85rem;
@@ -232,7 +232,7 @@
             );
             margin: 0 auto 18px;
             width: 100%;
-            max-width: 1300px;
+            max-width: none;
             box-sizing: border-box;
             scroll-margin-top: 12px;
             display: flex;
@@ -1437,7 +1437,7 @@
 
         .audio-waveform-composite {
             width: 100%;
-            max-width: 1300px;
+            max-width: none;
             margin: 0 auto 14px;
             box-sizing: border-box;
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
@@ -4471,7 +4471,7 @@
             margin-top: 16px;
             margin-left: auto;
             margin-right: auto;
-            max-width: 1300px;
+            max-width: none;
             width: 100%;
             box-sizing: border-box;
             scroll-margin-top: 16px;
@@ -4889,7 +4889,7 @@
         /* Spectrum + level meters (controls live in transport bar) */
         .review-mix-monitor {
             width: 100%;
-            max-width: 1300px;
+            max-width: none;
             margin: 0 auto 14px;
             box-sizing: border-box;
         }
