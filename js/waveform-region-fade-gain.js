@@ -216,6 +216,7 @@
         }
         if (
             Math.abs(next) < 0.0005 &&
+            !(opt && opt.skipVolumeBoundaryJoin) &&
             typeof tryRejoinVolumeSplitBoundariesAtSegment === 'function'
         ) {
             tryRejoinVolumeSplitBoundariesAtSegment(track, segmentIndex, {
