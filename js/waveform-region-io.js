@@ -140,6 +140,7 @@
     };
     window.splitPlaybackRegionAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.joinPlaybackRegionAtPointer = joinPlaybackRegionAtPointer;
+    window.applyRegionFadeAtSeekbar = applyRegionFadeAtSeekbar;
     window.tryRejoinVolumeSplitBoundariesAtSegment =
         tryRejoinVolumeSplitBoundariesAtSegment;
     window.getPlaybackRegionPersistSnapshot = getPlaybackRegionPersistSnapshot;
@@ -152,6 +153,8 @@
     window.handlePlaybackRegionDeleteKeydown = handlePlaybackRegionDeleteKeydown;
     window.handlePlaybackRegionCopyKeydown = handlePlaybackRegionCopyKeydown;
     window.handlePlaybackRegionPasteKeydown = handlePlaybackRegionPasteKeydown;
+    window.handlePlaybackRegionFadeInKeydown = handlePlaybackRegionFadeInKeydown;
+    window.handlePlaybackRegionFadeOutKeydown = handlePlaybackRegionFadeOutKeydown;
     window.beginRegionUndoGesture = beginRegionUndoGesture;
     window.commitRegionUndoGesture = commitRegionUndoGesture;
     window.clearRegionUndoStack = clearRegionUndoStack;

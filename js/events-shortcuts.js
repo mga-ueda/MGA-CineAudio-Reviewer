@@ -218,6 +218,15 @@
         // （例: Musical Grid の meter/phrase 入力で Del/Backspace や O/T/P が横取りされないようにする）
         if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
 
+        if (
+            dispatchShortcutHandlers(
+                ['handlePlaybackRegionFadeInKeydown', 'handlePlaybackRegionFadeOutKeydown'],
+                e,
+            )
+        ) {
+            return;
+        }
+
         if (matchUserShortcut(e, 'transportOptionsToggle')) {
             if (!transportOptionsSection) return;
             e.preventDefault();
@@ -276,6 +285,8 @@
                     'handlePlaybackRegionRedoKeydown',
                     'handlePlaybackRegionCopyKeydown',
                     'handlePlaybackRegionPasteKeydown',
+                    'handlePlaybackRegionFadeInKeydown',
+                    'handlePlaybackRegionFadeOutKeydown',
                     'handleMarkerBracketKeydown',
                     (ev) =>
                         callWindowShortcut('handleMusicalGridPhraseSplitKeydown', ev) ||

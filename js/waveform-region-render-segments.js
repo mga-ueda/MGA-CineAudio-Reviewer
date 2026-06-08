@@ -1024,6 +1024,19 @@
         fadeOutHandle.title = 'Fade Out（内側へドラッグ）';
         el.appendChild(fadeOutHandle);
 
+        const fadeInMarkerLine = document.createElement('div');
+        fadeInMarkerLine.className =
+            'audio-waveform-lane__playback-region__fade-marker-line audio-waveform-lane__playback-region__fade-marker-line--in';
+        fadeInMarkerLine.hidden = true;
+        fadeInMarkerLine.setAttribute('aria-hidden', 'true');
+        el.appendChild(fadeInMarkerLine);
+        const fadeOutMarkerLine = document.createElement('div');
+        fadeOutMarkerLine.className =
+            'audio-waveform-lane__playback-region__fade-marker-line audio-waveform-lane__playback-region__fade-marker-line--out';
+        fadeOutMarkerLine.hidden = true;
+        fadeOutMarkerLine.setAttribute('aria-hidden', 'true');
+        el.appendChild(fadeOutMarkerLine);
+
         const gainDb = getSegmentGainDb(track, segmentIndex);
         const gainLabel = document.createElement('span');
         gainLabel.className = 'audio-waveform-lane__playback-region__gain-db';

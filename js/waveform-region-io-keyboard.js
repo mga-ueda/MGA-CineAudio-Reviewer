@@ -82,6 +82,26 @@
         return true;
     }
 
+    function handlePlaybackRegionFadeInKeydown(e) {
+        if (!matchUserShortcut(e, 'regionFadeIn')) return false;
+        if (e.repeat) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
+        e.preventDefault();
+        applyRegionFadeAtSeekbar('fade-in');
+        return true;
+    }
+
+    function handlePlaybackRegionFadeOutKeydown(e) {
+        if (!matchUserShortcut(e, 'regionFadeOut')) return false;
+        if (e.repeat) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
+        e.preventDefault();
+        applyRegionFadeAtSeekbar('fade-out');
+        return true;
+    }
+
     function handlePlaybackRegionEscapeKeydown(e) {
         if (!matchUserShortcut(e, 'regionEscape')) return false;
         if (regionHandleDragActive) {

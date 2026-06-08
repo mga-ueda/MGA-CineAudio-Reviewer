@@ -551,6 +551,8 @@
         return {
             fadeInAxisRatio,
             fadeOutAxisRatio,
+            fadeInSec,
+            fadeOutSec,
             showIn,
             showOut,
             spanIn,
@@ -624,6 +626,30 @@
         }
     }
 
+    function applySegmentFadeMarkerLinesToRegionEl(regionEl, marker) {
+        if (!regionEl || !marker) return;
+        const inLine = regionEl.querySelector(
+            '.audio-waveform-lane__playback-region__fade-marker-line--in',
+        );
+        const outLine = regionEl.querySelector(
+            '.audio-waveform-lane__playback-region__fade-marker-line--out',
+        );
+        if (inLine) {
+            const active = marker.fadeInSec > 0.0005;
+            inLine.hidden = !active;
+            if (active) {
+                inLine.style.left = marker.fadeInAxisRatio * 100 + '%';
+            }
+        }
+        if (outLine) {
+            const active = marker.fadeOutSec > 0.0005;
+            outLine.hidden = !active;
+            if (active) {
+                outLine.style.left = marker.fadeOutAxisRatio * 100 + '%';
+            }
+        }
+    }
+
     function applySegmentFadeTriangleLayoutToRegionEl(regionEl, layout) {
         const fadeInHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-in',
@@ -641,6 +667,7 @@
             fadeOutHandle.style.right = 'auto';
             fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(layout.showOut);
         }
+        applySegmentFadeMarkerLinesToRegionEl(regionEl, layout);
     }
 
     function applyRegionFadeHandlesDefault(track, segmentIndex, regionEl) {
@@ -680,6 +707,12 @@
             fadeOutHandle.style.right = 'auto';
             fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(fadeOutMax > 0.0005);
         }
+        applySegmentFadeMarkerLinesToRegionEl(regionEl, {
+            fadeInAxisRatio,
+            fadeOutAxisRatio,
+            fadeInSec,
+            fadeOutSec,
+        });
     }
 
     function refreshTrackFadeTriangleVisibility(track, container) {

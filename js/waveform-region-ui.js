@@ -408,8 +408,9 @@
             const maxDur = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
             if (!(maxDur > 0.0005)) return;
             const t = Math.max(playbackStart, Math.min(playbackStart + maxDur, Number(transportSec) || 0));
+            const skipUndo = !opt || opt.skipUndo !== false;
             setSegmentFadeDurationSec(track, segmentIndex, 'in', t - playbackStart, {
-                skipUndo: true,
+                skipUndo,
                 geometryOnly: !!(opt && opt.geometryOnly),
             });
             return;
@@ -420,8 +421,9 @@
             if (!(maxDur > 0.0005)) return;
             const minT = playbackEnd - maxDur;
             const t = Math.max(minT, Math.min(playbackEnd, Number(transportSec) || 0));
+            const skipUndo = !opt || opt.skipUndo !== false;
             setSegmentFadeDurationSec(track, segmentIndex, 'out', playbackEnd - t, {
-                skipUndo: true,
+                skipUndo,
                 geometryOnly: !!(opt && opt.geometryOnly),
             });
             return;
@@ -1204,6 +1206,94 @@
         document.addEventListener('pointermove', regionHandleDragDocMove);
         document.addEventListener('pointerup', regionHandleDragDocUp);
         document.addEventListener('pointercancel', regionHandleDragDocUp);
+    }
+
+    function resolveRegionFadeTargets() {
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (segEntries.length) {
+            const seen = new Set();
+            const out = [];
+            for (let i = 0; i < segEntries.length; i++) {
+                const e = segEntries[i];
+                const key = e.slot + ':' + e.segmentIndex;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const track = { type: 'extra', slot: e.slot };
+                if (!isTrackRegionActive(track)) continue;
+                out.push({ slot: e.slot, segmentIndex: e.segmentIndex });
+            }
+            return out;
+        }
+
+        const slot = resolveSplitTargetExtraSlot();
+        if (slot < 0 || !isExtraSlotUsableForRegion(slot)) return [];
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) return [];
+
+        const { clientX, clientY } = waveformPointerClientXY();
+        let segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
+        if (segmentIndex < 0) {
+            const seekSec = transportSecFromSeekbar();
+            const mapHit = mapTransportToSegment(track, seekSec);
+            if (mapHit) segmentIndex = mapHit.segmentIndex;
+        }
+        if (segmentIndex < 0) return [];
+        return [{ slot, segmentIndex }];
+    }
+
+    function applyRegionFadeAtSeekbar(kind) {
+        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
+        const targets = resolveRegionFadeTargets();
+        if (!targets.length) {
+            writeLog(
+                'Playback region fade: hover/select a region, then Alt+' +
+                    (kind === 'fade-in' ? 'I' : 'O'),
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint(
+                    'Region',
+                    kind === 'fade-in' ? 'Fade In' : 'Fade Out',
+                    'notice',
+                );
+            }
+            return false;
+        }
+
+        const transportSec = transportSecFromSeekbar();
+        let anyChanged = false;
+        if (!regionUndoPaused) requestRegionUndoCapture();
+
+        for (let i = 0; i < targets.length; i++) {
+            const { slot, segmentIndex } = targets[i];
+            const track = { type: 'extra', slot };
+            const fadeKind = kind === 'fade-in' ? 'in' : 'out';
+            const before = getSegmentFadeDurationSec(track, segmentIndex, fadeKind);
+            setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec, {
+                skipUndo: true,
+            });
+            const after = getSegmentFadeDurationSec(track, segmentIndex, fadeKind);
+            if (Math.abs(after - before) >= 0.0005) anyChanged = true;
+        }
+
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+
+        const label = kind === 'fade-in' ? 'Fade In' : 'Fade Out';
+        writeLog(
+            'Playback region ' +
+                label +
+                ' at seekbar ' +
+                transportSec.toFixed(3) +
+                's (' +
+                targets.length +
+                ' region' +
+                (targets.length === 1 ? '' : 's') +
+                (anyChanged ? '' : ', unchanged') +
+                ')',
+        );
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', label, anyChanged ? 'notice' : 'error');
+        }
+        return anyChanged;
     }
 
     function joinPlaybackRegionAtPointer() {

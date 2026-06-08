@@ -2845,6 +2845,18 @@
             transform: translateX(-100%);
             clip-path: polygon(0 0, 100% 0, 100% 100%);
         }
+        .audio-waveform-lane__playback-region__fade-marker-line {
+            position: absolute;
+            top: 8px;
+            bottom: 0;
+            width: 1px;
+            pointer-events: none;
+            z-index: 7;
+            background: rgba(150, 156, 168, 0.88);
+        }
+        .audio-waveform-lane__playback-region__fade-marker-line--out {
+            transform: translateX(-100%);
+        }
         .audio-waveform-lane__playback-region__fade-curve {
             position: absolute;
             inset: 0;

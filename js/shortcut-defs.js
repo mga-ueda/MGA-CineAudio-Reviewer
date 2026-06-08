@@ -28,7 +28,14 @@
 
     const USER_SHORTCUTS = {
         // ---------- 再生・移動 ----------
-        transportOptionsToggle: { code: 'KeyO' }, // オプション表示切替
+        transportOptionsToggle: {
+            code: 'KeyO',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        }, // オプション表示切替
         transportToggle: { code: 'Space' }, // 再生/停止
         prerollPlay: { code: 'Space', primary: true, alt: false, shift: false }, // Ctrl/Cmd + Space
         replayFromPlaybackStart: { codes: ['Enter', 'NumpadEnter'], alt: true, ctrl: false, meta: false, shift: false }, // Alt + Enter
@@ -177,6 +184,8 @@
         regionDelete: { codes: ['Delete', 'Backspace'] },
         regionCopy: { code: 'KeyC', primary: true, shift: false, alt: false },
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
+        regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
+        regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
         regionEscape: { code: 'Escape', ctrl: false, alt: false, meta: false },
 
         // ---------- ミックス ----------
@@ -331,6 +340,15 @@
         return Object.prototype.hasOwnProperty.call(def, key) ? def[key] : fallback;
     }
 
+    function readAltModifierFromEvent(event) {
+        if (!event) return false;
+        if (event.altKey) return true;
+        if (typeof event.getModifierState === 'function') {
+            return event.getModifierState('Alt');
+        }
+        return false;
+    }
+
     function matchesShortcut(event, def, opt) {
         if (!event || !def) return false;
         if (!valueOr(opt || {}, 'allowRepeat', false) && event.repeat) return false;
@@ -350,8 +368,9 @@
         if (Object.prototype.hasOwnProperty.call(def, 'meta') && event.metaKey !== !!def.meta) {
             return false;
         }
-        if (Object.prototype.hasOwnProperty.call(def, 'alt') && event.altKey !== !!def.alt) {
-            return false;
+        if (Object.prototype.hasOwnProperty.call(def, 'alt')) {
+            const hasAlt = readAltModifierFromEvent(event);
+            if (hasAlt !== !!def.alt) return false;
         }
         if (Object.prototype.hasOwnProperty.call(def, 'shift') && event.shiftKey !== !!def.shift) {
             return false;
