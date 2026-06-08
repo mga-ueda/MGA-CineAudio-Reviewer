@@ -273,9 +273,11 @@
             if (zoomed) {
                 inner.style.width = contentW + 'px';
                 inner.style.minWidth = contentW + 'px';
+                inner.style.maxWidth = '';
             } else {
                 inner.style.width = '';
                 inner.style.minWidth = '';
+                inner.style.maxWidth = '';
             }
         }
         if (zoomed) {

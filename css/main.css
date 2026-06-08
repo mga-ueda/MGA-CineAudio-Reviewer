@@ -55,6 +55,8 @@
             --marker-orange-border: rgba(200, 120, 28, 0.9);
             /** ヘッダー・プレイヤー・波形・トランスポート・モニター・ログ・マニュアル等、主要ブロック間の縦／横隙間 */
             --layout-section-gap: 7px;
+            /** 波形トラック以外の主要ブロックの最大幅 */
+            --layout-content-max-w: 1300px;
         }
         body {
             font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -68,7 +70,7 @@
         }
 
         .layout-narrow {
-            max-width: none;
+            max-width: var(--layout-content-max-w);
             margin-left: auto;
             margin-right: auto;
             width: 100%;
@@ -234,7 +236,6 @@
             );
             margin: 0 auto var(--layout-section-gap);
             width: 100%;
-            max-width: none;
             box-sizing: border-box;
             scroll-margin-top: 12px;
             display: flex;
@@ -4474,7 +4475,7 @@
             margin-top: var(--layout-section-gap);
             margin-left: auto;
             margin-right: auto;
-            max-width: none;
+            max-width: var(--layout-content-max-w);
             width: 100%;
             box-sizing: border-box;
             scroll-margin-top: 16px;
@@ -4611,7 +4612,7 @@
             margin-bottom: 10px;
             padding: 12px 14px 14px;
             text-align: center;
-            max-width: 52rem;
+            max-width: var(--layout-content-max-w);
             margin-left: auto;
             margin-right: auto;
             color: #8a92a4;
@@ -4892,7 +4893,6 @@
         /* Spectrum + level meters (controls live in transport bar) */
         .review-mix-monitor {
             width: 100%;
-            max-width: none;
             margin: 0 auto var(--layout-section-gap);
             box-sizing: border-box;
         }
