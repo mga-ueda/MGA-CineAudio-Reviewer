@@ -89,7 +89,7 @@
                     <p class="video-panel-label">Video</p>
                     <div class="video-panel__head-actions">
                         <button type="button" id="videoTcHideViewBtn" class="marker-panel__hide-view-btn" disabled title="動画または追加音声を読み込むと TC Hide / TC View が使えます">TC Hide</button>
-                        <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="動画をアンロード">Clear</button>
+                        <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="動画だけをアンロード（追加音声・マーカーは残る場合あり）">Clear</button>
                     </div>
                 </div>
                 <span class="file-name" id="nameMain">Not Loaded</span>
@@ -139,8 +139,8 @@
                         class="transport-shortcuts-link transport-opt-chip"
                         title="Shortcut 一覧を新しいウィンドウで開く"
                     >Shortcut</a>
-                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="動画・追加音声・マーカー・保存済みセッションをアンロード（Alt+Shift+Ctrl+Del）">All Clear</button>
-                    <button type="button" id="playStopBtn" disabled title="再生／停止">Play</button>
+                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="動画・追加音声・マーカー・保存済みセッションをアンロード（Ctrl+Shift+Alt+Del）">All Clear</button>
+                    <button type="button" id="playStopBtn" disabled title="再生/停止">Play</button>
                 </div>
             </div>
         </div>
@@ -175,7 +175,7 @@
                 </div>
                 <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます<br><kbd>Ins</kbd> ポイント、<kbd>Ins</kbd> 長押しでレンジ、<kbd>[</kbd> <kbd>]</kbd> レンジ</p>
                 <div class="marker-panel__memo">
-                    <label class="marker-panel__memo-label" for="markerMemoTextarea">Additional Comments</label>
+                    <label class="marker-panel__memo-label" for="markerMemoTextarea" title="セッション全体の追加メモ（Esc でフォーカス解除）">Additional Comments</label>
                     <textarea
                         id="markerMemoTextarea"
                         class="marker-panel__memo-textarea"
@@ -200,7 +200,7 @@
                         <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
                         <div class="track-mix-actions">
                             <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo（S。ソロ中に再度押すと解除）" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（M / Alt+M）" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（M。Alt+M で全トラックのミュート解除）" aria-pressed="false">M</button>
                         </div>
                     </div>
                     <div class="track-lane-controls">
@@ -211,14 +211,14 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDbVideo" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="828" disabled aria-label="Video audio volume" title="Video audio volume を調整">
+                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="828" disabled aria-label="Video Audio volume" title="Video Audio の音量を調整（レーン上で +/- は ±1 dB）">
                             <span class="track-lane-fader-db" id="trackLaneFaderDbVideo">0.0 dB</span>
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
                     <div class="track-lane-bottom-actions track-lane-bottom-actions--compact">
                         <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません（最後の1トラック）">×</button>
-                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の extra audio track を表示（Ctrl+N）">+ Add Track</button>
+                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の Audio Track を表示（Ctrl+N）">+ Add Track</button>
                     </div>
                 </div>
                 <div id="extraLaneMetaMount"></div>
@@ -226,7 +226,7 @@
             <div
                 class="audio-waveform-composite__lanes"
                 id="audioWaveformLanesTracks"
-                title="クリック／ドラッグでシーク。↑/↓ で横倍率変更（Ctrl+↑/↓ で最大/全体表示）、Shift+↑/↓ で縦倍率変更（Shift+Ctrl+↓ で等倍にリセット）、Shift+ホイールで横スクロール。"
+                title="クリック/ドラッグでシーク。レーン上で S/M/+/- はミックス。↑/↓ で横倍率変更（Ctrl+↑/↓ で最大/全体表示）、Shift+↑/↓ で縦倍率変更（Shift+Ctrl+↓ で等倍にリセット）、Shift+ホイールで横スクロール。"
                 tabindex="0"
                 role="presentation"
             >
@@ -276,7 +276,7 @@
                 </div>
                 <div class="audio-waveform-composite__hover-playhead" id="audioWaveformHoverPlayhead" hidden aria-hidden="true"></div>
                 </div>
-                <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position" title="playhead 位置をシーク">
+                <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position" title="再生ヘッド位置をシーク">
             </div>
         </div>
     </section>
@@ -352,24 +352,24 @@
             <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
                     <span class="transport-opt-label">Include in export</span>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export に Video を含める">
-                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export に Video を含める">
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に Video を含める">
+                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export Review に Video を含める">
                         <span>Video</span>
                     </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export に追加音声（全 Ex トラック）を含める">
-                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export に追加音声（全 Ex トラック）を含める">
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
+                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
                         <span>Audio</span>
                     </label>
                 </div>
             </div>
             <div class="session-io-actions" role="group" aria-label="Import and export review">
                 <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title=".mgacr を Import Review で復元（ドロップ可・Ctrl+Shift+Alt+I）">Import Review</button>
-                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled title="選択中のメディア・markers・mix・表示設定を1ファイルに保存（Ctrl+Shift+Alt+E）">Export Review</button>
-                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" disabled title="タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間）">Export WebM</button>
+                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled title="選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（Ctrl+Shift+Alt+E）">Export Review</button>
+                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" disabled title="タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）">Export WebM</button>
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
-            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master volume（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。">
+            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master Vol — ミックス後のマスター音量（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。クリップ時は CLIP PROTECT で自動減衰。">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
                 <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="ダブルクリックまたは Ctrl+Shift+V で 100%">
                 <span class="transport-opt-value" id="masterVolDisp" aria-live="polite">0.0 dB / ----- LKFS</span>
@@ -465,12 +465,12 @@
         <div class="log-wrap">
             <div id="log">&gt; System Ready.</div>
             <div class="log-actions" aria-label="Log actions">
-                <label class="log-debug-toggle" title="診断用の詳細ログ（[RegionRestore] / [MusicalSlot] 等）を出力">
+                <label class="log-debug-toggle" title="診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）">
                     <input type="checkbox" id="logDebugCheckbox" />
                     <span>Debug Log</span>
                 </label>
-                <button id="logCopyBtn" type="button" class="log-action-btn">Copy</button>
-                <button id="logClearBtn" type="button" class="log-action-btn">Clear</button>
+                <button id="logCopyBtn" type="button" class="log-action-btn" title="ログ全文をクリップボードへコピー">Copy</button>
+                <button id="logClearBtn" type="button" class="log-action-btn" title="ログを消去">Clear</button>
             </div>
         </div>
     </div>

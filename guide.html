@@ -47,7 +47,7 @@
                 <li class="guide-nav__group" data-section="markers">
                     <a href="#markers" class="guide-nav__chapter">マーカー</a>
                     <ol class="guide-nav__sublist">
-                        <li><a href="#markers-time">位置の管理（秒）</a></li>
+                        <li><a href="#markers-time">位置の表し方（秒とフレーム）</a></li>
                         <li><a href="#markers-buttons">パネル上部のボタン</a></li>
                         <li><a href="#markers-point">ポイントマーカー</a></li>
                         <li><a href="#markers-range">範囲マーカー</a></li>
@@ -102,7 +102,7 @@
                     <strong>プライバシー：</strong>動画・音声は<strong>このブラウザ内だけ</strong>でデコード・再生され、サーバーへアップロードされません。<strong>Google Chrome</strong> の利用を推奨します。
                 </p>
                 <p>
-                    本ページはアプリ画面の<strong>上から下</strong>の並びに沿って説明します。トランスポート行の <strong>How To</strong> リンクからいつでも開けます。スクリーンショットは使わず、各エリアの位置と操作を文章で記しています。
+                    本ページはアプリ画面の<strong>上から下</strong>の並びに沿って説明します。再生バーの <strong>How To</strong> リンクからいつでも開けます。スクリーンショットは使わず、各エリアの位置と操作を文章で記しています。
                 </p>
                 <p>
                     以降の章は、<strong>ユーザー体験の順番</strong>（読み込み → 再生 → 調整 → コメント → 保存/共有）と、<strong>UI の並び順</strong>（画面の上から下）をそろえて構成しています。初めて使う場合は、目次の上から順に読むと実際の操作順と一致します。
@@ -139,7 +139,7 @@
 
             <section class="guide-section" id="overview">
                 <h2 class="docs-heading-box">画面の構成</h2>
-                <p>画面は縦に5つの大きなブロックに分かれています。上から順に触ると、読み込みから再生・マーカー・保存まで自然に進められます。</p>
+                <p>画面は縦に6つの大きなブロックに分かれています。上から順に触ると、読み込みから再生・マーカー・保存まで自然に進められます。</p>
 
                 <div class="guide-layout-map" role="doc-example">
                     <p class="guide-layout-map__title docs-heading-box--sub">画面上部 → 下部（左から右の配置も記載）</p>
@@ -162,7 +162,7 @@
                             </ul>
                         </li>
                         <li>
-                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（Musical Grid / P. Offset / Analyze / レビュー入出力 / Master Vol）。
+                            <strong>再生・トランスポート操作</strong> — 2か所に分かれます。<strong>映像パネル直下</strong>の再生バー（Loop / How To / Shortcut / All Clear / Play）と、<strong>波形直下</strong>のオプションバー（上段: Tempo/Sig・Phrase / 中段: Analyze・P. Offset・レビュー入出力 / 下段: Master Vol）。
                         </li>
                         <li>
                             <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
@@ -196,7 +196,7 @@
                 <h3 class="docs-heading-box--sub" id="load-bulk">まとめて読み込む</h3>
                 <ul>
                     <li>ページ内の任意の場所へ、動画と追加音声（WAV / FLAC / MP3 等）を<strong>一度に</strong>ドロップします。</li>
-                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（まとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て。波形エリア全体へ複数ファイルをドロップした場合も同様に<strong>1 ファイルずつ</strong>空き Ex へ順に入ります）。</li>
+                    <li>種類ごとに自動判別され、動画は<strong>左の Video パネル</strong>へ、音声は空いている <strong>Audio Track</strong>へ順に割り当てられます（まとめドロップでは、追加音声は<strong>ファイルごとに別トラック</strong>へ割り当て。波形エリア全体へ複数ファイルをドロップした場合も同様に<strong>1 ファイルずつ</strong>空いている Audio Track へ順に入ります）。</li>
                     <li>映像フレームが空のときは、フレームを<strong>クリック</strong>してファイル選択ダイアログを開けます。</li>
                 </ul>
 
@@ -209,7 +209,7 @@
 
                 <h3 class="docs-heading-box--sub" id="load-mgacr">レビューファイル（.mgacr）の読み込み</h3>
                 <ul>
-                    <li>受け取った <strong>.mgacr</strong> は、トランスポート中段の <strong>Import Review</strong> ボタン（<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd>）に加え、ページ内の<strong>どこへでも</strong>（入力欄以外）<strong>ドロップ</strong>して読み込めます（Import Review と同じ処理）。</li>
+                    <li>受け取った <strong>.mgacr</strong> は、オプションバー中段の <strong>Import Review</strong> ボタン（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd>）に加え、ページ内の<strong>どこへでも</strong>（入力欄以外）<strong>ドロップ</strong>して読み込めます（Import Review と同じ処理）。</li>
                     <li>複数の .mgacr を同時にドロップした場合は、<strong>先頭の1件</strong>だけがインポートされます。</li>
                     <li>動画・追加音声などと<strong>混在</strong>してドロップした場合も、<strong>.mgacr のみ</strong>が Import Review として読み込まれ、他のファイルは無視されます。</li>
                     <li>復元内容の詳細は「<a href="#export">レビューの保存・共有（.mgacr）</a>」の Import Review を参照してください。</li>
@@ -252,7 +252,7 @@
                 <h3 class="docs-heading-box--sub" id="video-sync">同期の考え方</h3>
                 <ul>
                     <li>再生位置の基準は<strong>音声（マスター）</strong>です。波形上の赤い再生ヘッドと、トランスポートの現在時刻が一致します。映像は通常は自然再生に任せ、大きくズレたときだけ補正します（カクつき防止）。</li>
-                    <li>トランスポート上段の <strong>Playback Drift</strong> で映像と音声のズレ（フレーム数）を確認できます。色は安全（通常）/注意（オレンジ）/危険（赤）で変わります。動画読み込み後に表示されます。</li>
+                    <li>映像パネル内の <strong>Playback Drift</strong> で映像と音声のズレ（フレーム数）を確認できます。色は安全（通常）/注意（オレンジ）/危険（赤）で変わります。動画読み込み後に表示されます。</li>
                     <li>追加音声のタイミングずれは、波形上のリージョン移動で合わせます（通常のレビュー作業）。</li>
                 </ul>
 
@@ -264,16 +264,16 @@
                 <h2 class="docs-heading-box">マーカー（Markers）</h2>
                 <p><strong>右列</strong>が Markers パネルです。動画または追加音声を読み込んだあと、レビュー用の印とコメントを付けられます。同じマーカーは<strong>波形タイムライン</strong>上にも縦線・範囲・ラベルとして表示されます。</p>
 
-                <h3 class="docs-heading-box--sub" id="markers-time">内部的な位置の管理（秒）</h3>
-                <p>マーカーの位置は、内部的に<strong>フレーム番号ではなく秒（トランスポート上の秒）</strong>で保持されます。<strong>Export Review</strong>（<code>.mgacr</code>）やブラウザ内キャッシュも同じ形式です。画面上の In / Out 列や映像上のタイムコードは、保持している秒から<strong>現在の FPS に基づいてフレーム表記（<code>HH:MM:SS:FF</code>）へ変換して表示しているだけ</strong>です。</p>
+                <h3 class="docs-heading-box--sub" id="markers-time">位置の表し方（秒とフレーム）</h3>
+                <p>マーカーの位置は、<strong>フレーム番号ではなく秒（トランスポート上の秒）</strong>として記録されます。<strong>Export Review</strong>（<code>.mgacr</code>）やブラウザ内のセッション保存も同じ形式です。画面上の In / Out 列や映像上のタイムコードは、記録した秒から<strong>現在の FPS に基づいてフレーム表記（<code>HH:MM:SS:FF</code>）へ変換して表示しています</strong>。</p>
                 <ul>
-                    <li>表に見える TC と内部の秒は、常に同じ意味のフレーム境界を指すとは限りません。表示 TC は内部秒を最も近いフレームへ丸めた結果です。</li>
+                    <li>表に見える TC と記録した秒は、常に同じ意味のフレーム境界を指すとは限りません。表示 TC は記録秒を最も近いフレームへ丸めた結果です。</li>
                     <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、<strong>その時点の再生位置（秒）をそのまま記録</strong>します（フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>−</kbd> による ±1 フレーム調整を使ってください）。</li>
-                    <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）またはトランスポートのシークバー上のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>−</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
+                    <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）または波形上のシークバー付近のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>−</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
                     <li>TC 欄の ±1 フレーム微調整は、いったんフレーム位置へ変換してから<strong>再び秒として保存</strong>されます。</li>
-                    <li><strong>Copy</strong> は内部秒から求めた<strong>ミリ秒表記</strong>（<code>00:00:00.000</code>）を出力します。<strong>Paste</strong> はそのミリ秒 TC を読み取り、<strong>現在読み込まれている FPS</strong> で最も近いフレーム位置に合わせてから秒として配置します。DAW 側の TC と 1 フレームずれることがあります。</li>
-                    <li>素材の FPS が異なると、同じ内部秒でも画面上のフレーム TC や Length 列のフレーム数が変わることがあります。</li>
-                    <li><strong>Length</strong> 列の秒/フレーム表示は、内部秒から算出した<strong>参考値</strong>です（Copy には含まれません）。</li>
+                    <li><strong>Copy</strong> は記録秒から求めた<strong>ミリ秒表記</strong>（<code>00:00:00.000</code>）を出力します。<strong>Paste</strong> はそのミリ秒 TC を読み取り、<strong>現在読み込まれている FPS</strong> で最も近いフレーム位置に合わせてから秒として配置します。DAW 側の TC と 1 フレームずれることがあります。</li>
+                    <li>素材の FPS が異なると、同じ記録秒でも画面上のフレーム TC や Length 列のフレーム数が変わることがあります。</li>
+                    <li><strong>Length</strong> 列の秒/フレーム表示は、記録秒から算出した<strong>参考値</strong>です（Copy には含まれません）。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="markers-buttons">パネル上部のボタン</h3>
@@ -283,7 +283,7 @@
                         <strong>Copy</strong> — マーカー一覧をタブ区切りテキストでクリップボードにコピーします（Length 列は含めません）。<strong>Slack</strong>・Teams・メールなどへの貼り付けを想定しており、相手が同じ動画・音声を手元で再生できる前提で、<strong>タイムライン上のどの位置にどんなコメントか</strong>を返すやり取りに適しています。表の列は # / In / Out / Comment です。In/Out の時刻は <strong>00:00:00.000</strong> 形式（時・分・秒・ミリ秒。ミリ秒は常に3桁）で出力します。画面上のマーカー表はフレーム表記ですが、Copy では<strong>一般的な DAW のタイムラインで使われる秒表示</strong>（時:分:秒.ミリ秒）に合わせています。DAW 側の位置と照らし合わせやすくするためです。すべてのマーカーで「時」が 00 のときは、コピー時に先頭の <code>00:</code> を省略します（例: <code>01:23.456</code>）。<strong>Additional Comments</strong> に入力があるときは、表の末尾に In/Out が空の行として Feedback 列のみ付けてコピーします。スプレッドシートへ貼る用途にも使えます。
                     </li>
                     <li>
-                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Comment のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In/Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒3桁）を読み取ります。内部では秒で保持するため、貼り付け時は<strong>ミリ秒 TC を現在の FPS で最も近いフレーム位置に合わせてから秒として配置</strong>します（上記「内部的な位置の管理」を参照）。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。<strong>Additional Comments</strong> は表末尾の In/Out が空の行（Feedback 列のテキスト）、従来形式の <code>Additional Comments: …</code> 行、または <code>---MEMO---</code> 区切り以降のテキストから復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。クリップボードが空、またはブラウザから読み取れない場合は、テキストを直接貼れる<strong>貼り付けダイアログ</strong>が開きます（<kbd>Esc</kbd> でキャンセル）。動画または追加音声を読み込んだあとで利用できます。
+                        <strong>Paste</strong> — <strong>Copy</strong> と同じ形式（# / In / Out / Comment のタブ区切り、Length 列なし）のテキストをクリップボードから貼り付け、<strong>現在のマーカー一覧をすべて置き換え</strong>ます。In/Out は DAW などと同じ <strong>00:00:00.000</strong> 形式（ミリ秒3桁）を読み取ります。記録形式は秒のため、貼り付け時は<strong>ミリ秒 TC を現在の FPS で最も近いフレーム位置に合わせてから秒として配置</strong>します（上記「位置の表し方」を参照）。Copy で「時」を省略した表（<code>MM:SS.mmm</code>）を貼ると、先頭に <code>00:</code> を付けて復元します。<strong>Additional Comments</strong> は表末尾の In/Out が空の行（Feedback 列のテキスト）、従来形式の <code>Additional Comments: …</code> 行、または <code>---MEMO---</code> 区切り以降のテキストから復元します。形式が正しくない場合はダイアログで知らせます。貼り付け前に、マーカーが置き換わることを確認するダイアログが出ます。クリップボードが空、またはブラウザから読み取れない場合は、テキストを直接貼れる<strong>貼り付けダイアログ</strong>が開きます（<kbd>Esc</kbd> でキャンセル）。動画または追加音声を読み込んだあとで利用できます。
                     </li>
                     <li><strong>Clear</strong> — すべてのマーカーを削除。</li>
                 </ul>
@@ -351,7 +351,7 @@
                     <li>リージョンの<strong>上をクリック</strong>するとその位置へシークします。</li>
                     <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。他リージョン・動画終端・マーカーへスナップします。リージョン同士が重なると、重なり区間は等パワー・クロスフェードで再生されます。</li>
                     <li>リージョン端の<strong>ハンドル</strong>（ソース In/Out）をドラッグすると、クリップ内の再生範囲を調整できます。隣接リージョンがあるときは境界が1本のスプリットハンドルとして動き、離すと各リージョンに In/Out ハンドルが現れます。</li>
-                    <li>リージョン左上・右上の<strong>Fade In / Fade Out 三角</strong>を内側へドラッグすると、リージョン端のフェード長を調整できます（曲線表示付き）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）でも、<strong>シークバー（再生ヘッド）の位置</strong>までフェードを伸ばせます（In＝リージョン頭から、Out＝末尾から）。対象は選択中のリージョン、またはポインタ下／アクティブトラック上のシークバー位置のリージョンです。再生中も即座に反映されます。</li>
+                    <li>リージョン左上・右上の<strong>Fade In / Fade Out 三角</strong>を内側へドラッグすると、リージョン端のフェード長を調整できます（曲線表示付き）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）でも、<strong>シークバー（再生ヘッド）の位置</strong>までフェードを伸ばせます（In＝リージョン頭から、Out＝末尾から）。対象は選択中のリージョン、またはポインタ下/アクティブトラック上のシークバー位置のリージョンです。再生中も即座に反映されます。</li>
                     <li>リージョン上で <kbd>Alt</kbd>+ホイールすると ±1dB刻みでそのリージョンの音量補正（中央に赤いdB表示）。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動で付き、Markers パネルの<strong>Comment</strong>列に補正値と操作（例: <code>3.0dB 上げる</code>、<code>-1.0dB 下げる</code>）が入ります。<strong>0.0dB</strong>に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In/Out とコメント列を更新します。</li>
                     <li>リージョン情報（ソース In/Out・音量補正 dB など）は、<kbd>Ctrl</kbd>+クリックでリージョンを<strong>選択</strong>（シアン枠）したうえで <kbd>Ctrl</kbd>+<kbd>C</kbd> でコピーし、<kbd>Ctrl</kbd>+<kbd>V</kbd> で同じ Audio Track の<strong>コピー元リージョンの直後</strong>にペーストできます。直後にちょうど収まる隙間があればそこへ配置し、足りなければ後続リージョンを後ろへずらします。</li>
                     <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> のときは、リージョン間の<strong>無音スロット</strong>も <kbd>Ctrl</kbd>+クリックで選択でき、無音スロット 1 つ＋リージョン 1 つの組み合わせで <kbd>E</kbd> による入れ替えが可能です。<kbd>Ctrl</kbd> なしでリージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>のやや太い枠で示されます。</li>
@@ -367,10 +367,10 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="audio-phrase-overlay">Phrase 着色時のオーバーレイ（練習番号・無音スロット）</h3>
-                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track レーン上にフレーズ枠ごとの<strong>練習番号</strong>が重なって表示されます。各リージョン・無音スロットの左下には、その SwapUnit が記憶している <strong>Tempo/Sig・小節数</strong>（例: <code>140-4/4 · 8</code>）が併記されることがあります。リージョン間の<strong>無音スロット</strong>は <kbd>Ctrl</kbd>+クリックで選択できます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
+                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track レーン上にフレーズ枠ごとの<strong>練習番号</strong>が重なって表示されます。各リージョン・無音スロットの左下には、その枠が保持する <strong>Tempo/Sig・小節数</strong>（例: <code>140-4/4 · 8</code>）が併記されることがあります。リージョン間の<strong>無音スロット</strong>は <kbd>Ctrl</kbd>+クリックで選択できます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、オプションバー中段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
                 <ul>
-                    <li><strong>練習番号（A / B / C …）</strong> — フレーズ枠ごとの練習用番号。Phrase 着色 ON では各枠の中央付近に大きく表示されます（入れ替え後は現在の枠位置に合わせて更新されます）。<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます。</li>
-                    <li><strong>Tempo/Sig メタ（左下）</strong> — 各 SwapUnit が保持する Tempo/Sig と小節数（音源小節数と枠小節数が異なるときは <code>16→8</code> のように表示）。</li>
+                    <li><strong>練習番号（A / B / C …）</strong> — フレーズ枠ごとの練習用番号。Phrase 着色 ON では各枠の中央付近に大きく表示されます（入れ替え後は現在の枠位置に合わせて更新されます）。Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます（Phrase 着色の表示は不要）。</li>
+                    <li><strong>Tempo/Sig メタ（左下）</strong> — 各リージョン・無音スロットが保持する Tempo/Sig と小節数（音源小節数と枠小節数が異なるときは <code>16→8</code> のように表示）。</li>
                     <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
                     <li><strong>P. Offset</strong> — 上記の <strong>フレーズオフセット</strong>。先頭フレーズをアウフタクトとして番号なしにし、本編から A を始めます（詳細は「トランスポート」の P. Offset を参照）。</li>
                 </ul>
@@ -396,7 +396,7 @@
                 <p><strong>再生・トランスポート操作</strong>は、現在の UI では次の2ブロックに分かれています。</p>
                 <ul>
                     <li><strong>映像パネル直下の再生バー</strong> — Loop / How To / Shortcut / All Clear / Play。</li>
-                    <li><strong>波形直下のオプションバー</strong> — Musical Grid、Analyze、レビュー入出力、Master Vol など。</li>
+                    <li><strong>波形直下のオプションバー</strong> — 上段: Tempo/Sig・Phrase / 中段: Analyze・P. Offset・レビュー入出力 / 下段: Master Vol など。</li>
                 </ul>
                 <p>また、<strong>現在時刻・総尺・Playback Drift</strong> は再生バーではなく、<strong>映像パネル内のステータス行</strong>に表示されます。</p>
 
@@ -404,7 +404,7 @@
                 <ul>
                     <li><strong>Loop</strong> — 全体のループ再生のオン/オフ（<kbd>L</kbd>）。設定は次回起動時に復元されます。</li>
                     <li><strong>How To</strong>/<strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
-                    <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Del</kbd>、Mac では <kbd>Cmd</kbd> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
+                    <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd>、Mac では <kbd>Cmd</kbd> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生/停止（<kbd>Space</kbd>）。<kbd>Ctrl</kbd>+<kbd>Space</kbd> はシークバー位置の1秒前から<strong>プリロール再生</strong>（1秒未満の場合は現在位置から）。<kbd>Alt</kbd>+<kbd>Enter</kbd> は直近の再生開始位置から再生し直します（一度も再生していない場合は無効）。右端。初回再生時は Video/Markers 行が見える位置へ自動スクロールします。</li>
                     <li><kbd>F</kbd> — Video パネルと Markers パネルをまとめて隠す/表示（再生バーは残る。リロード時は常に表示）。</li>
                 </ul>
@@ -412,11 +412,10 @@
 
                 <h3 class="docs-heading-box--sub" id="transport-options-top">波形直下（オプションバー上段）</h3>
                 <ul>
-                    <li><strong>Musical Grid 現在地</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
+                    <li><strong>現在地（小節・拍）</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
                     <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
                     <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時は、カーソル位置の項目を <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。カンマ区切りの<strong>末尾</strong>（例: <code>1,8</code> の最後）にあるときは、上下どちらでも <code>,8</code> が追加されます（続けて8小節のフレーズを指定）。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
-                    <li><strong>P. Offset</strong> — <strong>フレーズオフセット</strong>（Phrase Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>.</kbd> で切り替え。Import/Export Review（.mgacr）にのみ保存されます。</li>
-                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Musical Grid / Analyze / レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
+                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Tempo/Sig・Phrase / Analyze・P. Offset・レビュー入出力 / Master Vol 等）とログ欄をまとめて表示/非表示。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-phrase-edit">フレーズの編集（Tempo/Sig 表示中）</h3>
@@ -425,7 +424,7 @@
                     <li><strong>分割</strong>（<kbd>X</kbd>）— 小節線でフレーズを2つに分けます。波形上ではポインタ近くの小節線、<strong>波形トラック外</strong>（再生中も同様）では<strong>シークバー</strong>に最も近い小節線を使います。既存のフレーズ境界上では分割できません。</li>
                     <li><strong>連結</strong>（<kbd>B</kbd> — <strong>B</strong>ond の頭文字）— 隣接する2フレーズを1つにします。波形上ではポインタ近くの<strong>フレーズ境界</strong>、波形トラック外ではシークバーが<strong>フレーズ境界上</strong>にあるときのみ（フレーズ途中では不可）。</li>
                     <li><strong>削除</strong>（<kbd>Del</kbd>）— 対象フレーズを隣接フレーズへ吸収して消します。波形上ではポインタ下のフレーズ、波形トラック外ではシークバー位置のフレーズ。残り1フレーズのときは削除できません。</li>
-                    <li><strong>境界ドラッグ</strong> — 上記キーとは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。着色帯上の境界ハンドルをドラッグして隣接フレーズ間の小節数を調整できます。左へドラッグで左フレーズを短く／右フレーズを長くし、さらに左端で左フレーズを右へ吸収。右へドラッグで逆方向の再分配・結合ができます。</li>
+                    <li><strong>境界ドラッグ</strong> — 上記キーとは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。着色帯上の境界ハンドルをドラッグして隣接フレーズ間の小節数を調整できます。左へドラッグで左フレーズを短く/右フレーズを長くし、さらに左端で左フレーズを右へ吸収。右へドラッグで逆方向の再分配・結合ができます。</li>
                     <li><strong>リージョン入れ替え</strong> — 上記とは別操作で、<strong>Phrase 着色（<kbd>P</kbd>）が ON のときだけ</strong>使えます。同一 Audio Track 上で 2 リージョン、または無音スロット 1 つ＋リージョン 1 つを <kbd>Ctrl</kbd>+クリックで選択し <kbd>E</kbd>（<strong>E</strong>xchange の頭文字）でフレーズの並びを入れ替えます（<strong>隣接していなくても可</strong>。元の長さを保ち、必要なら後続をずらして空け、余りは詰め）。</li>
                     <li><strong>元に戻す/やり直し</strong> — 上記および Phrase 入力欄の変更は <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> で履歴をさかのぼれます。フレーズの履歴が空のときは、従来どおりリージョン編集の Undo/Redo になります。</li>
                 </ul>
@@ -436,6 +435,7 @@
                         <strong>保存インジケーター（SAVED / SAVING）</strong> — オプションバー左端の赤い LED 表示です。作業内容がブラウザ内（IndexedDB）へ<strong>自動保存</strong>されているかを示します（押すボタンではありません）。<strong>SAVED</strong> は保存完了、<strong>SAVING</strong> は保存中です。マーカー・リージョン・トラック順などを編集したあと、<strong>リロードやタブを閉じる前に SAVED になるのを待つ</strong>と安全です。<strong>SAVING の最中にリロード</strong>すると、保存の途中だった変更は失われ、<strong>前回までに保存が完了した状態</strong>に戻ることがあります。編集直後でまだ LED が光っていないときも、書き込み前の変更は残らないことがあります。
                     </li>
                     <li><strong>Analyze</strong> — スペクトラム/メーター表示のオン/オフ（<kbd>A</kbd>）。オフでも CLIP PROTECT は動作します。</li>
+                    <li><strong>P. Offset</strong> — <strong>フレーズオフセット</strong>（Phrase Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>.</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
                     <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
                     <li><strong>Export WebM</strong> — タイムコードとマーカーコメントを焼き込んだ WebM を実時間で書き出し。</li>
@@ -459,7 +459,7 @@
                     <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：タイムライン上の停止点へ移動（マーカー＞小節/拍/フレーズ＞リージョンの優先順。再生中はシーク後に再生を再開）</li>
                     <li><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
                     <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>、または <kbd>Shift</kbd> + 上段 <kbd>0</kbd>〜<kbd>9</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。テンキーは <kbd>Shift</kbd> 不要（Windows ではテンキーに Shift が届かないため）。数字を続けて入力し、入力が途切れてから約 0.3 秒で確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。Tempo/Sig OFF 時にテンキーを押した場合は % ジャンプにフォールバック。再生中はシーク後に再生を再開</li>
-                    <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Phrase 着色（<kbd>P</kbd>）ON かつ Audio Track にリージョンがあるとき、練習番号（A / B / C …）の先頭へジャンプ</li>
+                    <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、練習番号（A / B / C …）の先頭へジャンプ（Phrase 着色の表示は不要）</li>
                 </ul>
                 <p>シーク時には画面中央付近に大きなタイムコード表示（シークフラッシュ）が一瞬出ることがあります。</p>
             </section>
@@ -467,18 +467,18 @@
             <section class="guide-section" id="export">
                 <h2 class="docs-heading-box">レビューの保存・共有（.mgacr）</h2>
                 <p>
-                    トランスポート<strong>中段</strong>の <strong>Import Review</strong>/<strong>Export Review</strong> で、レビュー状態を1ファイルにまとめます。マーカーの <strong>Copy</strong> が「同じ素材を既に持つ相手へコメントだけ渡す」方法なら、<strong>.mgacr</strong> は「動画・追加音声ごと渡して、相手の環境を問わず同じ聴き比べとマーカーを再現する」方法です。
+                    オプションバー<strong>中段</strong>の <strong>Import Review</strong>/<strong>Export Review</strong> で、レビュー状態を1ファイルにまとめます。マーカーの <strong>Copy</strong> が「同じ素材を既に持つ相手へコメントだけ渡す」方法なら、<strong>.mgacr</strong> は「動画・追加音声ごと渡して、相手の環境を問わず同じ聴き比べとマーカーを再現する」方法です。
                 </p>
                 <p>
                     <strong>Include in export</strong> 設定に基づいてメディアを同梱するため、受け取り側に Nuendo / Pro Tools など<strong>同じ DAW がなくても</strong>、ブラウザと本アプリだけで映像・音声付きのフィードバックが可能です。作曲家・監督・クライアントなど、制作パイプラインの外側のメンバーへ渡すときに有効です。
                 </p>
-                <p>ショートカットは <kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd>（インポート）/<kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>（エクスポート）です（Mac では <kbd>Cmd</kbd> を <kbd>Ctrl</kbd> の代わりに使えます）。</p>
+                <p>ショートカットは <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>I</kbd>（インポート）/<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>（エクスポート）です（Mac では <kbd>Cmd</kbd> を <kbd>Ctrl</kbd> の代わりに使えます）。</p>
 
                 <h3 class="docs-heading-box--sub" id="export-review">Export Review</h3>
                 <ul>
                     <li><strong>Include in export</strong> の <strong>Video</strong> がオンなら、動画は <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
                     <li><strong>Audio</strong> がオンなら、追加音声（読み込み済みの全 Audio Track）を<strong>すべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
-                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、<strong>P. Offset</strong>（フレーズオフセット／アウフタクト設定）、再生位置、表示設定など。</li>
+                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、<strong>P. Offset</strong>（フレーズオフセット/アウフタクト設定）、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 
@@ -512,7 +512,7 @@
 
             <section class="guide-section" id="log">
                 <h2 class="docs-heading-box">ログ</h2>
-                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログ（<code>[RegionRestore]</code> / <code>[MusicalSlot]</code> など）も出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
+                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄と波形直下のオプションバー全体をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -521,8 +521,8 @@
                 <p class="guide-link-row">
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
-                <p>トランスポート上段の <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>.</kbd>（<strong>P. Offset</strong>／フレーズオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプションとログの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Musical Grid 表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
+                <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
+                <p>最近追加した主なキーとして、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>.</kbd>（<strong>P. Offset</strong>/フレーズオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプションとログの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>
@@ -531,7 +531,7 @@
                 <h2 class="docs-heading-box">データの保存と復元</h2>
                 <ul>
                     <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
-                    <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。トランスポートの <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
+                    <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。オプションバー中段の <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
                     <li>Loop のオン/オフ、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには、ページ内のどこへでも再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>

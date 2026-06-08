@@ -1956,10 +1956,10 @@
             const m = opt.marker;
             const handleIn = document.createElement('div');
             handleIn.className = 'seek-bar-marker__handle seek-bar-marker__handle--in';
-            handleIn.title = 'In をドラッグ';
+            handleIn.title = 'In をドラッグ（Alt 押下中は他要素へのスナップを抑制）';
             const handleOut = document.createElement('div');
             handleOut.className = 'seek-bar-marker__handle seek-bar-marker__handle--out';
-            handleOut.title = 'Out をドラッグ';
+            handleOut.title = 'Out をドラッグ（Alt 押下中は他要素へのスナップを抑制）';
             el.appendChild(handleIn);
             el.appendChild(handleOut);
             bindSeekBarMarkerDrag(el, m, 'move', { bandEl: el });
@@ -1980,7 +1980,7 @@
         if (opt && opt.title) el.title = opt.title;
         if (opt && opt.marker) {
             const m = opt.marker;
-            el.title = (opt.title || '') + ' — drag to move';
+            el.title = (opt.title || '') + ' — ドラッグで移動';
             bindSeekBarMarkerDrag(el, m, 'point');
             bindSeekBarMarkerListHighlight(el, opt.id);
         }
@@ -2222,7 +2222,7 @@
             const feedbackNav = th.feedbackRowNav || 'Alt+↑/↓';
             const cancelEdit = th.cancelEdit || 'Esc';
             comment.title =
-                'Feedback を編集（' +
+                'Comment を編集（' +
                 feedbackNav +
                 ' で前後の行、' +
                 cancelEdit +

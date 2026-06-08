@@ -196,7 +196,8 @@
                 const labelEl = document.createElement('span');
                 labelEl.className = 'audio-waveform-lane__rehearsal-mark__label';
                 labelEl.textContent = markDisplay;
-                labelEl.title = 'Region ' + markDisplay + '（Shift+' + markDisplay + ' でジャンプ）';
+                labelEl.title =
+                    '練習番号 ' + markDisplay + '（Shift+' + markDisplay + ' で先頭へジャンプ）';
                 labelEl.setAttribute('aria-hidden', 'true');
                 slotEl.appendChild(labelEl);
             }

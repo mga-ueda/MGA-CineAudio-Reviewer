@@ -623,6 +623,10 @@
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
+            regionFadeIn: formatShortcutDef(s.regionFadeIn),
+            regionFadeOut: formatShortcutDef(s.regionFadeOut),
+            transportOptionsToggle: formatShortcutDef(s.transportOptionsToggle),
+            videoMarkersPanelsToggle: formatShortcutDef(s.videoMarkersPanelsToggle),
         });
     }
 
@@ -634,7 +638,7 @@
 
     function applyShortcutTooltips() {
         const h = SHORTCUT_HINTS;
-        const playTitle = `再生／停止（${h.playStop}、${h.preroll} でプリロール、${h.replayFromStart} で再生開始位置から再生し直し）`;
+        const playTitle = `再生/停止（${h.playStop}、${h.preroll} でプリロール、${h.replayFromStart} で再生開始位置から再生し直し）`;
         setElementTitle(document.getElementById('playStopBtn'), playTitle);
 
         const loopTitle = `再生をループ（${h.loop}）`;
@@ -645,15 +649,23 @@
             setElementTitle(loopLbl, loopTitle);
         }
 
+        const memoTitle = `Additional Comments — セッション全体の追加メモ（${h.cancelEdit} でフォーカス解除）`;
+        setElementTitle(document.getElementById('markerMemoTextarea'), memoTitle);
+        const memoLbl = document.querySelector('label[for="markerMemoTextarea"]');
+        setElementTitle(memoLbl, memoTitle);
         setElementTitle(
-            document.getElementById('markerMemoTextarea'),
-            `セッション全体の追加メモを入力（${h.cancelEdit} でフォーカス解除）`,
+            document.getElementById('markerCopyBtn'),
+            'マーカー一覧をタブ区切りでコピー（時刻は 00:00:00.000 形式・Length 列なし）',
+        );
+        setElementTitle(
+            document.getElementById('markerPasteBtn'),
+            'マーカー一覧を貼り付けて全置換（Copy と同形式・ms TC を FPS で最寄りフレームへ合わせて秒として配置）',
         );
 
         const soloTitle = `Solo（このレーンのみ再生・${h.solo}。ソロ中に再度押すと解除）`;
         const muteTitle = `Mute（このレーンをミュート・${h.mute}、${h.muteClearAll} で全ミュート解除）`;
         const volTitle = `音量を調整（レーン上で ${h.laneVolume} は ±1 dB）`;
-        const addTrackTitle = `次の extra audio track を表示（${h.addExtraTrack}）`;
+        const addTrackTitle = `次の Audio Track を表示（${h.addExtraTrack}）`;
 
         setElementTitle(document.getElementById('videoAudioSoloBtn'), soloTitle);
         setElementTitle(document.getElementById('videoAudioMuteBtn'), muteTitle);
@@ -673,7 +685,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック／ドラッグでシーク。${h.waveformZoom} で横倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、${h.waveformVerticalZoom} で縦倍率変更（${h.waveformVerticalZoomReset} で等倍にリセット）、Shift+ホイールで横スクロール。`,
+            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} で横倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、${h.waveformVerticalZoom} で縦倍率変更（${h.waveformVerticalZoomReset} で等倍にリセット）、Shift+ホイールで横スクロール。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
@@ -692,9 +704,9 @@
             setElementTitle(phraseLbl, phraseTitle);
         }
 
-        const meterInputTitle = `Tempo/Sig（${h.musicalGridMeterFocus} で編集、Enter/Esc で確定）`;
+        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4）。${h.musicalGridMeterFocus} で編集、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
-        const phraseInputTitle = `Phrase 小節数（${h.musicalGridPhraseFocus} で編集、Enter/Esc で確定）`;
+        const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
 
         const analyzeTitle = `スペクトラムとレベルメーターを表示（${h.analyze} で切替）`;
@@ -719,8 +731,60 @@
         );
         setElementTitle(
             document.getElementById('masterVolWrap'),
-            `Master volume（ダブルクリックまたは ${h.masterVolReset} で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。`,
+            `Master Vol — ミックス後のマスター音量（ダブルクリックまたは ${h.masterVolReset} で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。クリップ時は CLIP PROTECT で自動減衰。`,
         );
+
+        setElementTitle(
+            document.getElementById('sessionAllClearBtn'),
+            `動画・追加音声・マーカー・保存済みセッションをアンロード（${h.sessionAllClear}）`,
+        );
+        setElementTitle(
+            document.getElementById('sessionImportBtn'),
+            `.mgacr を Import Review で復元（ドロップ可・${h.sessionImport}）`,
+        );
+        setElementTitle(
+            document.getElementById('sessionExportBtn'),
+            `選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（${h.sessionExport}）`,
+        );
+        setElementTitle(
+            document.getElementById('sessionExportVideoBtn'),
+            'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）',
+        );
+
+        const exportVideoChk = document.getElementById('sessionExportIncludeVideo');
+        const exportAudioChk = document.getElementById('sessionExportIncludeAudio');
+        const exportVideoTitle = 'Export Review に Video を含める';
+        const exportAudioTitle = 'Export Review に追加音声（読み込み済みの全 Audio Track）を含める';
+        setElementTitle(exportVideoChk, exportVideoTitle);
+        setElementTitle(exportAudioChk, exportAudioTitle);
+        if (exportVideoChk) setElementTitle(exportVideoChk.closest('label'), exportVideoTitle);
+        if (exportAudioChk) setElementTitle(exportAudioChk.closest('label'), exportAudioTitle);
+
+        setElementTitle(document.getElementById('videoClearBtn'), '動画だけをアンロード（追加音声・マーカーは残る場合あり）');
+        setElementTitle(
+            document.getElementById('videoAudioClearBtn'),
+            'Video Audio レーンは非表示にできません（最後の1トラック）',
+        );
+        setElementTitle(document.getElementById('markerClearAllBtn'), 'すべてのマーカーを削除');
+        setElementTitle(document.getElementById('seekBar'), '再生ヘッド位置をシーク');
+
+        setElementTitle(document.getElementById('logCopyBtn'), 'ログ全文をクリップボードへコピー');
+        setElementTitle(document.getElementById('logClearBtn'), 'ログを消去');
+        const logDebugTitle =
+            '診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）';
+        const logDebugCb = document.getElementById('logDebugCheckbox');
+        setElementTitle(logDebugCb, logDebugTitle);
+        if (logDebugCb) {
+            const logDebugLbl = logDebugCb.closest('label');
+            setElementTitle(logDebugLbl, logDebugTitle);
+        }
+
+        const moveUpTitle = '直上の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）';
+        const moveDownTitle = '直下の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）';
+        for (let slot = 0; slot < trackCount; slot++) {
+            setElementTitle(document.getElementById('extraAudioMoveUpBtn' + slot), moveUpTitle);
+            setElementTitle(document.getElementById('extraAudioMoveDownBtn' + slot), moveDownTitle);
+        }
     }
 
     function matchUserShortcut(event, shortcutName, opt) {

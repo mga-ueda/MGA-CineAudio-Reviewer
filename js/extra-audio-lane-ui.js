@@ -255,7 +255,7 @@
         btn.disabled = !canAdd;
     }
 
-    const EXTRA_CLEAR_TITLE_ENABLED = 'レーンを非表示';
+    const EXTRA_CLEAR_TITLE_ENABLED = 'この Audio Track を非表示にしてクリア';
     const EXTRA_CLEAR_TITLE_DISABLED = '最後の1トラックは非表示にできません';
 
     function refreshExtraTrackClearButtons() {

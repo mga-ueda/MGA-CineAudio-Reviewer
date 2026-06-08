@@ -1048,19 +1048,15 @@
         el.className = 'audio-waveform-lane__playback-silent-gap';
         el.dataset.silentGapIndex = String(gapIndex);
         el.setAttribute('aria-hidden', 'true');
-        let title = '無音リージョン';
+        let title = '無音スロット';
         if (Number.isFinite(gap.phraseIndex)) {
-            const slotNum = (gap.phraseIndex | 0) + 1;
-            title += ' — 頭から' + slotNum + '個目のフレーズスロット';
-            if (gap.partial) title += '（部分無音）';
             if (typeof phraseGroupLabelForIndex === 'function') {
-                title +=
-                    '（タイムライン着色 ' +
-                    phraseGroupLabelForIndex(gap.phraseIndex) +
-                    '）';
+                const mark = phraseGroupLabelForIndex(gap.phraseIndex);
+                if (mark) title += '（練習番号 ' + mark + ' 付近）';
             }
+            if (gap.partial) title += '（部分無音）';
         }
-        title += ' — Ctrl+クリックで選択';
+        title += ' — Ctrl+クリックで選択（Phrase 着色 ON 時は E で入れ替え可）';
         el.title = title;
         appendSwapUnitMusicalMetaToEl(track, el, { silentGapIndex: gapIndex | 0 }, slotsOpt);
         if (isSilentGapEntrySelected(track.slot, gapIndex)) {
@@ -1104,7 +1100,7 @@
             const handleIn = document.createElement('div');
             handleIn.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--in';
-            handleIn.title = 'Region ' + (segmentIndex + 1) + ' In（開始位置）';
+            handleIn.title = 'リージョン ' + (segmentIndex + 1) + ' の In（ソース開始位置）';
             el.appendChild(handleIn);
         }
         if (shouldShowSegmentOutHandle(track, segmentIndex)) {
@@ -1112,7 +1108,7 @@
             const handleOut = document.createElement('div');
             handleOut.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--out';
-            handleOut.title = 'Region ' + (segmentIndex + 1) + ' Out（終了位置）';
+            handleOut.title = 'リージョン ' + (segmentIndex + 1) + ' の Out（ソース終了位置）';
             el.appendChild(handleOut);
         }
         const fadeCurve = document.createElement('div');
@@ -1147,12 +1143,22 @@
         const fadeInHandle = document.createElement('div');
         fadeInHandle.className =
             'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--fade-in';
-        fadeInHandle.title = 'Fade In（内側へドラッグ）';
+        const fadeInKey =
+            typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionFadeIn
+                ? window.SHORTCUT_HINTS.regionFadeIn
+                : 'Alt+I';
+        const fadeOutKey =
+            typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionFadeOut
+                ? window.SHORTCUT_HINTS.regionFadeOut
+                : 'Alt+O';
+        fadeInHandle.title =
+            'Fade In（内側へドラッグ、' + fadeInKey + ' でシークバーまで）';
         el.appendChild(fadeInHandle);
         const fadeOutHandle = document.createElement('div');
         fadeOutHandle.className =
             'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--fade-out';
-        fadeOutHandle.title = 'Fade Out（内側へドラッグ）';
+        fadeOutHandle.title =
+            'Fade Out（内側へドラッグ、' + fadeOutKey + ' でシークバーまで）';
         el.appendChild(fadeOutHandle);
 
         const fadeInMarkerLine = document.createElement('div');
@@ -1201,7 +1207,7 @@
         el.className =
             'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--split';
         el.dataset.boundaryIndex = String(boundaryIndex);
-        el.title = 'Split point（ドラッグで移動）';
+        el.title = 'スプリット点（ドラッグで境界を移動）';
         return el;
     }
 

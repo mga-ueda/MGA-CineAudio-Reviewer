@@ -26,7 +26,7 @@
             '" disabled title="Solo（S。ソロ中に再度押すと解除）" aria-pressed="false">S</button>' +
             '<button type="button" class="track-mix-btn track-mix-btn--mute" id="extraAudioMuteBtn' +
             slot +
-            '" disabled title="Mute（M / Alt+M）" aria-pressed="false">M</button>' +
+            '" disabled title="Mute（M。Alt+M で全トラックのミュート解除）" aria-pressed="false">M</button>' +
             '</div></div>' +
             '<div class="track-lane-controls">' +
             '<div class="track-lane-meter-row">' +
@@ -40,11 +40,11 @@
             '<div class="track-lane-fader-row">' +
             '<input type="range" class="track-lane-fader" id="trackLaneFader' +
             slot +
-            '" min="0" max="1000" step="1" value="828" disabled aria-label="Extra audio ' +
+            '" min="0" max="1000" step="1" value="828" disabled aria-label="Audio Track ' +
             n +
-            ' volume" title="Ex ' +
+            ' volume" title="Audio Track ' +
             n +
-            ' volume を調整">' +
+            ' の音量を調整（レーン上で +/- は ±1 dB）">' +
             '<span class="track-lane-fader-db" id="trackLaneFaderDb' +
             slot +
             '">0.0 dB</span></div></div>' +
@@ -54,18 +54,18 @@
             '<div class="track-lane-bottom-actions">' +
             '<button type="button" class="track-mix-btn track-mix-btn--clear" id="extraAudioClearBtn' +
             slot +
-            '" title="レーンを非表示">×</button>' +
+            '" title="この Audio Track を非表示にしてクリア">×</button>' +
             '<button type="button" class="track-lane-add-btn" id="extraAudioAddTrackBtn' +
             slot +
-            '" title="次の extra audio track を表示（Ctrl+N）"' +
+            '" title="次の Audio Track を表示（Ctrl+N）"' +
             addAttrs +
             '>+ Add Track</button>' +
             '<button type="button" class="track-lane-move-btn" id="extraAudioMoveUpBtn' +
             slot +
-            '" title="このトラックを上へ移動" aria-label="Move this track up">▲</button>' +
+            '" title="直上の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）" aria-label="Move this track up">▲</button>' +
             '<button type="button" class="track-lane-move-btn" id="extraAudioMoveDownBtn' +
             slot +
-            '" title="このトラックを下へ移動" aria-label="Move this track down">▼</button>' +
+            '" title="直下の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）" aria-label="Move this track down">▼</button>' +
             '</div>';
         return wrap;
     }
