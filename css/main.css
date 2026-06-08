@@ -2567,9 +2567,18 @@
             box-sizing: border-box;
             pointer-events: none;
             z-index: 5;
-            background: rgba(72, 210, 255, 0.2);
-            border-left: 1px solid rgba(120, 230, 255, 0.92);
-            border-right: 1px solid rgba(120, 230, 255, 0.92);
+            background: transparent;
+            border-left: 1px solid rgba(160, 210, 255, 0.72);
+            border-right: 1px solid rgba(160, 210, 255, 0.72);
+        }
+        .audio-waveform-composite__range-loop::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            -webkit-backdrop-filter: invert(1) hue-rotate(198deg) contrast(1.5)
+                brightness(1.06);
+            backdrop-filter: invert(1) hue-rotate(198deg) contrast(1.5) brightness(0.8);
         }
         .audio-waveform-lane__playback-regions {
             position: absolute;
