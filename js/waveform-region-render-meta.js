@@ -87,7 +87,7 @@
         );
     }
 
-    function shouldShowOriginLabelOnSegment(track, segmentIndex) {
+    function shouldShowMusicalMetaOnSegment(track, segmentIndex) {
         if (!isMusicalGridPhraseFillVisibleSafe()) return false;
         if (typeof resolveRegionSwapUnitSegmentIndices === 'function') {
             const unit = resolveRegionSwapUnitSegmentIndices(track, segmentIndex);
@@ -97,36 +97,22 @@
         return true;
     }
 
-    function appendSwapUnitOriginLabelToEl(track, el, ref, slotsOpt) {
-        if (!isMusicalGridPhraseFillVisibleSafe()) return;
-        if (typeof formatSwapUnitOriginLabelText !== 'function') return;
-        const indexText = formatSwapUnitOriginLabelText(track, ref, slotsOpt);
-        if (!indexText) return;
-        let metaText = '';
-        if (typeof formatSwapUnitStoredMusicalMetaText === 'function') {
-            metaText = formatSwapUnitStoredMusicalMetaText(track, ref, { slots: slotsOpt });
-        }
-        appendPhraseIndexWithMetaRow(el, indexText, metaText);
+    function appendPhraseMusicalMetaLabelEl(parentEl, metaText) {
+        if (!parentEl || !metaText || !isMusicalGridPhraseFillVisibleSafe()) return null;
+        const metaEl = document.createElement('span');
+        metaEl.className = 'audio-waveform-lane__phrase-meta__label';
+        metaEl.textContent = metaText;
+        metaEl.title = metaText;
+        metaEl.setAttribute('aria-hidden', 'true');
+        parentEl.appendChild(metaEl);
+        return metaEl;
     }
 
-    function appendPhraseIndexWithMetaRow(parentEl, indexText, metaText) {
-        if (!parentEl || !indexText || !isMusicalGridPhraseFillVisibleSafe()) return null;
-        const row = document.createElement('span');
-        row.className = 'audio-waveform-lane__phrase-index-row';
-        row.setAttribute('aria-hidden', 'true');
-        const indexEl = document.createElement('span');
-        indexEl.className = 'audio-waveform-lane__phrase-index__label';
-        indexEl.textContent = indexText;
-        row.appendChild(indexEl);
-        if (metaText) {
-            const metaEl = document.createElement('span');
-            metaEl.className = 'audio-waveform-lane__phrase-meta__label';
-            metaEl.textContent = metaText;
-            metaEl.title = metaText;
-            row.appendChild(metaEl);
-        }
-        parentEl.appendChild(row);
-        return row;
+    function appendSwapUnitMusicalMetaToEl(track, el, ref, slotsOpt) {
+        if (!isMusicalGridPhraseFillVisibleSafe()) return;
+        if (typeof formatSwapUnitStoredMusicalMetaText !== 'function') return;
+        const metaText = formatSwapUnitStoredMusicalMetaText(track, ref, { slots: slotsOpt });
+        appendPhraseMusicalMetaLabelEl(el, metaText);
     }
 
     function syncTrackPhraseRehearsalMarks(track) {

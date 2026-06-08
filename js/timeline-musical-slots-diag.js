@@ -76,10 +76,6 @@
                     m.phraseSlotIndex >= 0
                         ? phraseSlotLabelForDiagnostics(m.phraseSlotIndex)
                         : null,
-                originIdx:
-                    m.originPhraseSlotIndex >= 0
-                        ? phraseSlotLabelForDiagnostics(m.originPhraseSlotIndex)
-                        : null,
                 meterBarStart: m.meterBarStart | 0,
             },
             timeline: {
@@ -206,22 +202,12 @@
         return String(i + 1);
     }
 
-    function originLabelForPhraseSlotIndex(idx) {
-        return phraseSlotLabelForDiagnostics(idx);
-    }
     function musicalSlotDiagSummarizeMusicalOrigin(m) {
         const binding = m && typeof m === 'object' ? m : {};
         const phraseIdx = binding.phraseSlotIndex | 0;
-        const originIdx =
-            Number.isFinite(binding.originPhraseSlotIndex) && binding.originPhraseSlotIndex >= 0
-                ? binding.originPhraseSlotIndex | 0
-                : null;
         return {
             phraseSlotIndex: phraseIdx >= 0 ? phraseIdx : null,
-            phraseLabel: phraseIdx >= 0 ? originLabelForPhraseSlotIndex(phraseIdx) : null,
-            originPhraseSlotIndex: originIdx,
-            originLabel: originIdx != null ? originLabelForPhraseSlotIndex(originIdx) : null,
-            moved: originIdx != null && phraseIdx >= 0 && originIdx !== phraseIdx,
+            phraseLabel: phraseIdx >= 0 ? phraseSlotLabelForDiagnostics(phraseIdx) : null,
         };
     }
 
@@ -255,10 +241,6 @@
                 : slot && slot.musical && typeof window.cloneMusicalBinding === 'function'
                   ? window.cloneMusicalBinding(slot.musical)
                   : null;
-        const originIdx =
-            typeof resolveSwapUnitOriginPhraseSlotIndex === 'function'
-                ? resolveSwapUnitOriginPhraseSlotIndex(track, r)
-                : null;
         const row = {
             label: label || null,
             ref: Number.isFinite(r.segmentIndex)
@@ -277,10 +259,6 @@
                     ? window.swapUnitIdentityKey(slot)
                     : null,
             musical: musicalSlotDiagSummarizeMusicalOrigin(binding),
-            displayLabel:
-                typeof formatSwapUnitOriginLabelText === 'function'
-                    ? formatSwapUnitOriginLabelText(track, r)
-                    : null,
             bindingResolved: !!binding,
         };
         if (!binding) row.resolveError = 'no musical binding';
@@ -330,11 +308,8 @@
         const m = row.musical || {};
         const parts = [
             row.label || '?',
-            '左下表示=' + (row.displayLabel || '—'),
-            '保持origin=' + (m.originLabel || '—'),
             '現在枠=' + (m.phraseLabel || '—'),
         ];
-        if (m.moved) parts.push('枠移動あり');
         if (!row.bindingResolved) parts.push('**musical未解決**');
         if (row.identity) parts.push('entity=' + row.identity);
         if (row.unitIdx != null) parts.push('swapUnit#' + row.unitIdx);
@@ -345,102 +320,14 @@
     function musicalSlotDiagAnalyzeOriginIssues(bindings) {
         const issues = [];
         if (!bindings || !bindings.length) {
-            issues.push('リージョン／無音の origin 行が 0 件');
+            issues.push('リージョン／無音の musical 行が 0 件');
             return issues;
         }
         for (let i = 0; i < bindings.length; i++) {
             const row = bindings[i];
             const label = row.label || 'item ' + (i + 1);
-            const m = row.musical || {};
             if (!row.bindingResolved) {
-                issues.push(label + ': SwapUnit musical 绑定が取れない → 左下ラベル不可');
-                continue;
-            }
-            if (!m.originLabel) {
-                issues.push(label + ': originPhraseSlotIndex 未設定');
-            }
-            if (!row.displayLabel) {
-                issues.push(label + ': 左下表示ラベルが空');
-            }
-            if (
-                row.displayLabel &&
-                m.originLabel &&
-                row.displayLabel !== m.originLabel
-            ) {
-                issues.push(
-                    label +
-                        ': 左下表示(' +
-                        row.displayLabel +
-                        ') ≠ 保持origin(' +
-                        m.originLabel +
-                        ')',
-                );
-            }
-            if (
-                row.displayLabel &&
-                m.phraseLabel &&
-                !m.moved &&
-                row.displayLabel !== m.phraseLabel &&
-                row.displayLabel === m.originLabel
-            ) {
-                issues.push(
-                    label +
-                        ': 未移動なのに左下(' +
-                        row.displayLabel +
-                        ') ≠ 現在枠(' +
-                        m.phraseLabel +
-                        ') — 要確認',
-                );
-            }
-            if (m.moved && row.displayLabel && row.displayLabel === m.phraseLabel) {
-                issues.push(
-                    label +
-                        ': 枠移動済みなのに左下が現在枠(' +
-                        m.phraseLabel +
-                        ')と同じ — origin(' +
-                        (m.originLabel || '?') +
-                        ')が表示されていない疑い',
-                );
-            }
-            if (Number.isFinite(row.entitySegmentIndex)) {
-                const entityLabel = originLabelForPhraseSlotIndex(row.entitySegmentIndex | 0);
-                if (
-                    entityLabel &&
-                    m.phraseLabel &&
-                    m.originLabel &&
-                    entityLabel !== m.phraseLabel &&
-                    m.originLabel === m.phraseLabel &&
-                    !m.moved
-                ) {
-                    issues.push(
-                        label +
-                            ': 初回番号が失われている — entity=' +
-                            entityLabel +
-                            ' だが origin=現在枠=' +
-                            m.phraseLabel +
-                            '（入替後は origin=' +
-                            entityLabel +
-                            ', 現在枠=' +
-                            m.phraseLabel +
-                            ' が正しい）',
-                    );
-                }
-                if (
-                    entityLabel &&
-                    m.originLabel &&
-                    m.phraseLabel &&
-                    entityLabel !== m.phraseLabel &&
-                    entityLabel === m.originLabel &&
-                    !m.moved
-                ) {
-                    issues.push(
-                        label +
-                            ': 枠移動ありだが moved=false — origin=' +
-                            m.originLabel +
-                            ', 現在枠=' +
-                            m.phraseLabel,
-                    );
-                }
+                issues.push(label + ': SwapUnit musical 紐付けが取れない');
             }
         }
         return issues;
@@ -476,7 +363,7 @@
                         stage +
                         ' Ex' +
                         ex +
-                        ': OK — 左下=保持origin、入替済みは origin≠現在枠',
+                        ': OK — 全 SwapUnit に musical 紐付けあり',
                 );
             }
         }
@@ -566,7 +453,7 @@
                     mismatchCount +
                     '/' +
                     units.length +
-                    ' — 別ユニットの origin が付いた可能性',
+                    ' — 別ユニットの musical が付いた可能性',
             );
             for (let i = 0; i < rows.length; i++) {
                 const r = rows[i];
@@ -581,10 +468,6 @@
                         (r.built.regions || '—') +
                         ') ← cache=' +
                         r.cached.identity +
-                        ' origin=' +
-                        (r.cached.musical && r.cached.musical.originLabel
-                            ? r.cached.musical.originLabel
-                            : '?') +
                         ' phrase=' +
                         (r.cached.musical && r.cached.musical.phraseLabel
                             ? r.cached.musical.phraseLabel
@@ -603,7 +486,7 @@
                 mismatchCount > 0
                     ? mergeByIdentity
                         ? 'rebuild entity が cache に無い、または identity 不一致'
-                        : 'cache index と rebuild 順が一致しない — origin が別ユニットに付く可能性'
+                        : 'cache index と rebuild 順が一致しない — musical が別ユニットに付く可能性'
                     : undefined,
             rows,
         });
@@ -641,8 +524,7 @@
                         : null,
                 musical: musicalSlotDiagSummarizeMusicalOrigin(s && s.musical),
             })),
-            legend:
-                '左下表示=波形左下ラベル | 保持origin=初回番号(不変) | 現在枠=タイムライン上の枠 | 枠移動あり=入れ替え後正常',
+            legend: '現在枠=タイムライン上の Phrase 枠',
         });
     }
     function logSessionRestoreMusicalSlotSnapshot() {
@@ -708,7 +590,7 @@
                     LOG_PREFIX +
                         ' session/restore === 完了 OK === ' +
                         reportedTracks +
-                        ' トラック — 全リージョンで左下=保持origin',
+                        ' トラック — 全 SwapUnit に musical 紐付けあり',
                 );
             }
         }

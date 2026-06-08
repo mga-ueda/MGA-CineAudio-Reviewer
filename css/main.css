@@ -2245,73 +2245,17 @@
             -webkit-user-select: none;
             white-space: nowrap;
         }
-        .audio-waveform-lane__phrase-index__label {
-            position: absolute;
-            left: 0.12rem;
-            bottom: 0.12rem;
-            top: auto;
-            transform: none;
-            z-index: 2;
-            font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.56rem;
-            font-weight: 700;
-            line-height: 1;
-            letter-spacing: 0.02em;
-            color: rgba(255, 255, 255, 0.88);
-            -webkit-text-fill-color: rgba(255, 255, 255, 0.88);
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-            white-space: nowrap;
-        }
-        /* Phrase 着色 OFF — スロット番号・練習番号（A B …）は非表示 */
+        /* Phrase 着色 OFF — 練習番号（A B …）・Tempo/Sig メタは非表示 */
         .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
-            .audio-waveform-lane__phrase-index-row,
+            .audio-waveform-lane__rehearsal-mark__label,
         .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
-            .audio-waveform-lane__phrase-index__label,
-        .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
-            .audio-waveform-lane__rehearsal-mark__label {
+            .audio-waveform-lane__phrase-meta__label {
             display: none !important;
-        }
-        .audio-waveform-lane__phrase-index-row {
-            position: absolute;
-            left: 0.12rem;
-            bottom: 0.12rem;
-            top: auto;
-            transform: none;
-            z-index: 2;
-            display: inline-flex;
-            align-items: baseline;
-            gap: 0.14rem;
-            max-width: calc(100% - 0.16rem);
-            overflow: hidden;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-        }
-        .audio-waveform-lane__phrase-index-row .audio-waveform-lane__phrase-index__label,
-        .audio-waveform-lane__phrase-index-row .audio-waveform-lane__phrase-meta__label {
-            position: static;
-            left: auto;
-            bottom: auto;
-            top: auto;
-            transform: none;
-            max-width: none;
-            overflow: visible;
-            text-overflow: clip;
-            flex: 0 1 auto;
-            min-width: 0;
-        }
-        .audio-waveform-lane__phrase-index-row .audio-waveform-lane__phrase-meta__label {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
         }
         .audio-waveform-lane__phrase-meta__label {
             position: absolute;
             left: 0.12rem;
-            bottom: 0.46rem;
+            bottom: 0.12rem;
             top: auto;
             transform: none;
             z-index: 2;
@@ -2331,59 +2275,24 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .audio-waveform-lane__playback-region__musical-meta {
-            position: absolute;
-            left: 0.12rem;
-            top: 0.12rem;
-            bottom: auto;
-            transform: none;
-            z-index: 4;
-            font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.34rem;
-            font-weight: 600;
-            line-height: 1.05;
-            letter-spacing: 0.01em;
-            color: rgba(190, 215, 255, 0.9);
-            -webkit-text-fill-color: rgba(190, 215, 255, 0.9);
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-            white-space: nowrap;
-            max-width: calc(100% - 0.16rem);
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .audio-waveform-lane__playback-region--narrow .audio-waveform-lane__playback-region__musical-meta,
-        .audio-waveform-lane__playback-region--phrase-narrow
-            .audio-waveform-lane__playback-region__musical-meta {
-            left: 0.08rem;
-            top: 0.08rem;
-            font-size: 0.3rem;
-        }
-        .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-index__label {
+        .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-meta__label {
             left: 0.08rem;
             bottom: 0.08rem;
-            font-size: 0.44rem;
+            font-size: 0.42rem;
         }
-        .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-index-row {
-            left: 0.08rem;
-            bottom: 0.08rem;
-            gap: 0.1rem;
+        .audio-waveform-composite--phrase-fill .audio-waveform-lane__phrase-meta__label {
+            font-size: 0.48rem;
         }
-        .audio-waveform-lane__rehearsal-mark--narrow
-            .audio-waveform-lane__phrase-index-row
-            .audio-waveform-lane__phrase-index__label {
-            font-size: 0.44rem;
-        }
-        .audio-waveform-lane__rehearsal-mark--narrow
-            .audio-waveform-lane__phrase-index-row
+        .audio-waveform-composite--phrase-fill
+            .audio-waveform-lane__rehearsal-mark--narrow
             .audio-waveform-lane__phrase-meta__label {
             font-size: 0.42rem;
         }
-        .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-meta__label {
+        .audio-waveform-lane__playback-region--narrow .audio-waveform-lane__phrase-meta__label,
+        .audio-waveform-lane__playback-region--phrase-narrow
+            .audio-waveform-lane__phrase-meta__label {
             left: 0.08rem;
-            bottom: 0.38rem;
+            bottom: 0.08rem;
             font-size: 0.42rem;
         }
         /* Phrase 着色 ON — 練習番号は中央大 */
@@ -2400,50 +2309,6 @@
             bottom: auto;
             transform: translate(-50%, -50%);
             font-size: 1.05rem;
-        }
-        /* 内部スロット番号（A B …）は Phrase 着色 ON でも左端のまま */
-        .audio-waveform-composite--phrase-fill .audio-waveform-lane__phrase-index__label {
-            left: 0.12rem;
-            bottom: 0.12rem;
-            top: auto;
-            transform: none;
-            font-size: 0.60rem;
-        }
-        .audio-waveform-composite--phrase-fill .audio-waveform-lane__phrase-index-row {
-            left: 0.12rem;
-            bottom: 0.12rem;
-            top: auto;
-            transform: none;
-            gap: 0.16rem;
-        }
-        .audio-waveform-composite--phrase-fill
-            .audio-waveform-lane__phrase-index-row
-            .audio-waveform-lane__phrase-index__label {
-            font-size: 0.60rem;
-        }
-        .audio-waveform-composite--phrase-fill
-            .audio-waveform-lane__phrase-index-row
-            .audio-waveform-lane__phrase-meta__label {
-            font-size: 0.48rem;
-        }
-        .audio-waveform-composite--phrase-fill
-            .audio-waveform-lane__rehearsal-mark--narrow
-            .audio-waveform-lane__phrase-index-row {
-            left: 0.08rem;
-            bottom: 0.08rem;
-            gap: 0.1rem;
-        }
-        .audio-waveform-composite--phrase-fill
-            .audio-waveform-lane__rehearsal-mark--narrow
-            .audio-waveform-lane__phrase-index-row
-            .audio-waveform-lane__phrase-index__label {
-            font-size: 0.48rem;
-        }
-        .audio-waveform-composite--phrase-fill
-            .audio-waveform-lane__rehearsal-mark--narrow
-            .audio-waveform-lane__phrase-index-row
-            .audio-waveform-lane__phrase-meta__label {
-            font-size: 0.42rem;
         }
         .audio-waveform-composite--phrase-fill
             .audio-waveform-lane__playback-region--narrow
@@ -2668,8 +2533,8 @@
         .audio-waveform-lane__playback-region--edge-out {
             border-right: 0.5px solid rgba(150, 156, 168, 0.88);
         }
-        .audio-waveform-lane__playback-region .audio-waveform-lane__phrase-index-row,
-        .audio-waveform-lane__playback-silent-gap .audio-waveform-lane__phrase-index-row {
+        .audio-waveform-lane__playback-region .audio-waveform-lane__phrase-meta__label,
+        .audio-waveform-lane__playback-silent-gap .audio-waveform-lane__phrase-meta__label {
             z-index: 6;
             pointer-events: none;
         }

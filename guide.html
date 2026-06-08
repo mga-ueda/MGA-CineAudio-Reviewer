@@ -367,14 +367,14 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="audio-phrase-overlay">Phrase 着色時のオーバーレイ（練習番号・無音スロット）</h3>
-                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track のリージョンとリージョン間の<strong>無音スロット</strong>に、練習番号などのラベルが重なって表示されます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
+                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track レーン上にフレーズ枠ごとの<strong>練習番号</strong>が重なって表示されます。各リージョン・無音スロットの左下には、その SwapUnit が記憶している <strong>Tempo/Sig・小節数</strong>（例: <code>140-4/4 · 8</code>）が併記されることがあります。リージョン間の<strong>無音スロット</strong>は <kbd>Ctrl</kbd>+クリックで選択できます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、トランスポート下段の <strong>P. Offset</strong>（フレーズオフセット）を ON にしてください。</p>
                 <ul>
-                    <li><strong>練習番号（A / B / C …）</strong> — フレーズスロットごとの練習用番号。Phrase 着色 ON ではリージョン中央付近に大きく表示されます。<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます。</li>
-                    <li><strong>スロット番号（左下）</strong> — タイムライン上の内部スロット位置（A B …）。入れ替え前の由来を示すラベルと、Tempo/Sig・小節数のメタ情報（例: <code>140-4/4 8</code>）が併記されることがあります。</li>
-                    <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。Phrase 着色 ON では練習番号と同様の表示が付き、<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
+                    <li><strong>練習番号（A / B / C …）</strong> — フレーズ枠ごとの練習用番号。Phrase 着色 ON では各枠の中央付近に大きく表示されます（入れ替え後は現在の枠位置に合わせて更新されます）。<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます。</li>
+                    <li><strong>Tempo/Sig メタ（左下）</strong> — 各 SwapUnit が保持する Tempo/Sig と小節数（音源小節数と枠小節数が異なるときは <code>16→8</code> のように表示）。</li>
+                    <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
                     <li><strong>P. Offset</strong> — 上記の <strong>フレーズオフセット</strong>。先頭フレーズをアウフタクトとして番号なしにし、本編から A を始めます（詳細は「トランスポート」の P. Offset を参照）。</li>
                 </ul>
-                <p>Phrase 着色 OFF のときは、練習番号・スロット番号・無音スロット上のラベルは非表示です（リージョン操作自体は従来どおり可能）。</p>
+                <p>Phrase 着色 OFF のときは、練習番号オーバーレイと Tempo/Sig メタは非表示です（リージョン操作自体は従来どおり可能）。</p>
 
                 <h3 class="docs-heading-box--sub" id="audio-range-loop">範囲ループ（波形上）</h3>
                 <ul>

@@ -62,52 +62,6 @@
         return 'audio:' + (segmentIndex | 0);
     }
 
-    /** セグメント entity の保持 origin（誤結合グループは leader index で修復） */
-    function segmentEntityOriginSlotIndex(track, segmentIndex) {
-        const idx = segmentIndex | 0;
-        const leaderKey = segmentLeaderPersistedIdentity(idx);
-        const state =
-            typeof window.getPlaybackRegionsState === 'function'
-                ? window.getPlaybackRegionsState(track)
-                : null;
-        const persisted =
-            state && Array.isArray(state.timelineSlots) ? state.timelineSlots : null;
-        if (persisted && persisted.length) {
-            for (let i = 0; i < persisted.length; i++) {
-                const p = persisted[i];
-                if (!p || !p.musical) continue;
-                if (swapUnitIdentityKey(p) === leaderKey) {
-                    const m = p.musical;
-                    if (
-                        Number.isFinite(m.originPhraseSlotIndex) &&
-                        m.originPhraseSlotIndex >= 0
-                    ) {
-                        return m.originPhraseSlotIndex | 0;
-                    }
-                }
-            }
-            for (let i = 0; i < persisted.length; i++) {
-                const p = persisted[i];
-                if (!p || !p.segmentRefs || !p.musical) continue;
-                const refs = p.segmentRefs;
-                for (let r = 0; r < refs.length; r++) {
-                    if ((refs[r].segmentIndex | 0) !== idx) continue;
-                    if (refs.length > 1 || p.kind === 'audio-group') {
-                        return idx;
-                    }
-                    const m = p.musical;
-                    if (
-                        Number.isFinite(m.originPhraseSlotIndex) &&
-                        m.originPhraseSlotIndex >= 0
-                    ) {
-                        return m.originPhraseSlotIndex | 0;
-                    }
-                }
-            }
-        }
-        return idx;
-    }
-
     function persistedMusicalBindingForSegmentLeader(track, segmentIndex) {
         const idx = segmentIndex | 0;
         const leaderKey = segmentLeaderPersistedIdentity(idx);
@@ -133,11 +87,7 @@
                 if ((p.segmentRefs[r].segmentIndex | 0) !== idx) continue;
                 const m = cloneMusicalBinding(p.musical);
                 if (p.segmentRefs.length > 1 || p.kind === 'audio-group') {
-                    m.originPhraseSlotIndex = idx;
                     if (m.phraseSlotIndex < 0) m.phraseSlotIndex = idx;
-                } else {
-                    ensureOriginPhraseSlotIndex(m, p);
-                    repairMusicalOriginBinding(m, p);
                 }
                 return m;
             }
@@ -171,11 +121,7 @@
             if (!s || s.kind === 'silent' || !s.musical) continue;
             audio++;
             const m = s.musical;
-            if (
-                Number.isFinite(m.originPhraseSlotIndex) &&
-                m.originPhraseSlotIndex >= 0 &&
-                (m.phraseBarCount | 0) > 0
-            ) {
+            if ((m.phraseBarCount | 0) > 0) {
                 valid++;
             }
         }
@@ -244,7 +190,6 @@
                 }
             }
             if (p.musical) built.musical = cloneMusicalBinding(p.musical);
-            if (built.musical) repairMusicalOriginBinding(built.musical, built);
         }
     }
 
@@ -260,89 +205,12 @@
 
     function cloneMusicalBinding(m) {
         if (!m || typeof m !== 'object') return null;
-        const out = {
+        return {
             contentBarCount: m.contentBarCount | 0,
             phraseBarCount: m.phraseBarCount | 0,
             meterBarStart: m.meterBarStart | 0,
             phraseSlotIndex: m.phraseSlotIndex | 0,
         };
-        if (Number.isFinite(m.originPhraseSlotIndex) && m.originPhraseSlotIndex >= 0) {
-            out.originPhraseSlotIndex = m.originPhraseSlotIndex | 0;
-        }
-        return out;
-    }
-
-    /** audio entity の初回練習番号（segment leader index = audio:N の N） */
-    function entityOriginPhraseSlotIndexForSlot(slot) {
-        if (!slot || slot.kind === 'silent') return null;
-        const refs = slot.segmentRefs;
-        if (!refs || !refs.length) return null;
-        let leader = refs[0].segmentIndex | 0;
-        for (let i = 1; i < refs.length; i++) {
-            const si = refs[i].segmentIndex | 0;
-            if (si < leader) leader = si;
-        }
-        return leader;
-    }
-
-    /**
-     * 入れ替えで phraseSlotIndex だけが変わり origin が phrase に追従してしまった古い保存を修復。
-     * 正常（未入替）: entity === phrase === origin。入替後: entity === origin !== phrase。
-     */
-    function repairMusicalOriginBinding(musical, slot) {
-        if (!musical || typeof musical !== 'object' || !slot) return;
-        const entityOrigin = entityOriginPhraseSlotIndexForSlot(slot);
-        if (entityOrigin == null) {
-            if (
-                slot.kind === 'silent' &&
-                Number.isFinite(musical.phraseSlotIndex) &&
-                musical.phraseSlotIndex >= 0 &&
-                (!Number.isFinite(musical.originPhraseSlotIndex) ||
-                    musical.originPhraseSlotIndex < 0)
-            ) {
-                musical.originPhraseSlotIndex = musical.phraseSlotIndex | 0;
-            }
-            return;
-        }
-        const phraseIdx = musical.phraseSlotIndex | 0;
-        const existing =
-            Number.isFinite(musical.originPhraseSlotIndex) &&
-            musical.originPhraseSlotIndex >= 0
-                ? musical.originPhraseSlotIndex | 0
-                : null;
-        if (existing == null) {
-            musical.originPhraseSlotIndex = entityOrigin;
-            return;
-        }
-        if (
-            slot.kind !== 'silent' &&
-            slot.segmentRefs &&
-            slot.segmentRefs.length === 1 &&
-            existing === phraseIdx &&
-            phraseIdx !== entityOrigin
-        ) {
-            musical.originPhraseSlotIndex = entityOrigin;
-        }
-    }
-
-    /** 入れ替え後も不変 — 初回割当時の練習番号（A/B/C…）用スロット index */
-    function ensureOriginPhraseSlotIndex(musical, slot) {
-        if (!musical || typeof musical !== 'object') return;
-        if (
-            Number.isFinite(musical.originPhraseSlotIndex) &&
-            musical.originPhraseSlotIndex >= 0
-        ) {
-            if (slot && slot.kind !== 'silent') {
-                repairMusicalOriginBinding(musical, slot);
-            }
-            return;
-        }
-        const entityOrigin = slot ? entityOriginPhraseSlotIndexForSlot(slot) : null;
-        if (entityOrigin != null) {
-            musical.originPhraseSlotIndex = entityOrigin;
-        } else if (musical.phraseSlotIndex >= 0) {
-            musical.originPhraseSlotIndex = musical.phraseSlotIndex | 0;
-        }
     }
 
     function cloneTimelineSlot(slot) {
@@ -968,8 +836,6 @@
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i];
             if (o.preserveStored && slot.musical && slot.musical.phraseBarCount > 0) {
-                ensureOriginPhraseSlotIndex(slot.musical, slot);
-                repairMusicalOriginBinding(slot.musical, slot);
                 continue;
             }
             const startSec = slot.timelineStartSec;
@@ -1015,32 +881,12 @@
                 phraseBarCount = slot.musical.phraseBarCount | 0;
             }
 
-            const entityOrigin = entityOriginPhraseSlotIndexForSlot(slot);
-            const priorOrigin =
-                slot.musical &&
-                Number.isFinite(slot.musical.originPhraseSlotIndex) &&
-                slot.musical.originPhraseSlotIndex >= 0
-                    ? slot.musical.originPhraseSlotIndex | 0
-                    : null;
-            let originIdx = priorOrigin;
-            if (originIdx == null && entityOrigin != null) originIdx = entityOrigin;
-            if (originIdx == null) originIdx = phraseIdx | 0;
-            if (
-                entityOrigin != null &&
-                originIdx === (phraseIdx | 0) &&
-                phraseIdx !== entityOrigin
-            ) {
-                originIdx = entityOrigin;
-            }
-
             slot.musical = {
                 contentBarCount,
                 phraseBarCount,
                 meterBarStart,
                 phraseSlotIndex: phraseIdx | 0,
-                originPhraseSlotIndex: originIdx,
             };
-            repairMusicalOriginBinding(slot.musical, slot);
         }
         return slots;
     }
@@ -1146,7 +992,7 @@
         return inferMusicalBindingsForTrack(track, slots, { preserveStored: false });
     }
 
-    /** セパレート／ボンド等で segment 列が変わった後 — musical 绑定を組み直し cache 更新 */
+    /** セパレート／ボンド等で segment 列が変わった後 — musical 紐付けを組み直し cache 更新 */
     function refreshTrackTimelineMusicalSlots(track, opt) {
         if (
             !track ||
@@ -1367,23 +1213,13 @@
         if (!slotA.musical) slotA.musical = {};
         if (!slotB.musical) slotB.musical = {};
 
-        const beforeReport = window.musicalSlotDiagLogOriginReport(track, 'origin/swap/before', {
-            writeLines: false,
-        });
-        window.musicalSlotDiagLog('origin/swap/before', {
+        window.musicalSlotDiagLog('swap/before', {
             ex: track.slot + 1,
             unitA: idxA + 1,
             unitB: idxB + 1,
-            selectionHint:
-                'unitA/ unitB は swapUnit 列 index。origin は segmentRefs に紐づき不変のはず',
-            unitAOrigin: window.musicalSlotDiagSummarizeMusicalOrigin(slotA.musical),
-            unitBOrigin: window.musicalSlotDiagSummarizeMusicalOrigin(slotB.musical),
             unitAIdentity: swapUnitIdentityKey(slotA),
             unitBIdentity: swapUnitIdentityKey(slotB),
-            bindings: beforeReport.bindings,
-            summary: beforeReport.summary,
         });
-        window.musicalSlotDiagWriteReadableLines('origin/swap/before Ex' + (track.slot + 1), beforeReport.summary);
 
         const counts =
             typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
@@ -1450,8 +1286,6 @@
                 destAudio = dest.destB;
             }
 
-            ensureOriginPhraseSlotIndex(silentSlot.musical, silentSlot);
-            ensureOriginPhraseSlotIndex(audioSlot.musical, audioSlot);
             silentSlot.musical.phraseSlotIndex = destSilent;
             audioSlot.musical.phraseSlotIndex = destAudio;
         } else {
@@ -1465,8 +1299,6 @@
                 const tmp = nextCounts[phraseIdxA];
                 nextCounts[phraseIdxA] = nextCounts[phraseIdxB];
                 nextCounts[phraseIdxB] = tmp;
-                ensureOriginPhraseSlotIndex(slotA.musical, slotA);
-                ensureOriginPhraseSlotIndex(slotB.musical, slotB);
                 slotA.musical.phraseSlotIndex = phraseIdxB;
                 slotB.musical.phraseSlotIndex = phraseIdxA;
             }
@@ -1567,7 +1399,7 @@
         }
 
         function runDeferredSwapUiAndDiagnostics() {
-            window.musicalSlotDiagLog('origin/swap/after-cache', {
+            window.musicalSlotDiagLog('swap/after-cache', {
                 ex: track.slot + 1,
                 cachedUnits: slots.map((s, i) => ({
                     index: i,
@@ -1576,40 +1408,6 @@
                     unit: window.musicalSlotDiagSummarizeSwapUnit(s, i),
                 })),
             });
-            const afterReport = window.musicalSlotDiagLogOriginReport(track, 'origin/swap/after', {
-                writeLines: true,
-            });
-            window.musicalSlotDiagDumpOriginBindings(track, 'swap/E-key');
-            if (
-                typeof window.isDebugLogEnabled === 'function' &&
-                window.isDebugLogEnabled() &&
-                typeof writeLog === 'function'
-            ) {
-                writeLog(
-                    LOG_PREFIX +
-                        ' origin/swap/after Ex' +
-                        (track.slot + 1) +
-                        ': unitA#' +
-                        (idxA + 1) +
-                        '(' +
-                        swapUnitIdentityKey(slotA) +
-                        ') ↔ unitB#' +
-                        (idxB + 1) +
-                        '(' +
-                        swapUnitIdentityKey(slotB) +
-                        ') — 左下は各 entity の保持origin のまま、現在枠だけ入れ替わる想定',
-                );
-                if (afterReport.issues.length) {
-                    writeLog(
-                        LOG_PREFIX +
-                            ' origin/swap/after Ex' +
-                            (track.slot + 1) +
-                            ': **問題 ' +
-                            afterReport.issues.length +
-                            ' 件**（上記サマリー参照）',
-                    );
-                }
-            }
             if (typeof writeLog === 'function') {
                 writeLog(
                     'Playback region: swapped SwapUnits on Ex ' +
@@ -1662,7 +1460,7 @@
             return { ok: true, slots, nextCounts };
         }
 
-        window.musicalSlotDiagLog('origin/swap/after-cache', {
+        window.musicalSlotDiagLog('swap/after-cache', {
             ex: track.slot + 1,
             cachedUnits: slots.map((s, i) => ({
                 index: i,
@@ -1671,40 +1469,6 @@
                 unit: window.musicalSlotDiagSummarizeSwapUnit(s, i),
             })),
         });
-        const afterReport = window.musicalSlotDiagLogOriginReport(track, 'origin/swap/after', {
-            writeLines: true,
-        });
-        window.musicalSlotDiagDumpOriginBindings(track, 'swap/E-key');
-        if (
-            typeof window.isDebugLogEnabled === 'function' &&
-            window.isDebugLogEnabled() &&
-            typeof writeLog === 'function'
-        ) {
-            writeLog(
-                LOG_PREFIX +
-                    ' origin/swap/after Ex' +
-                    (track.slot + 1) +
-                    ': unitA#' +
-                    (idxA + 1) +
-                    '(' +
-                    swapUnitIdentityKey(slotA) +
-                    ') ↔ unitB#' +
-                    (idxB + 1) +
-                    '(' +
-                    swapUnitIdentityKey(slotB) +
-                    ') — 左下は各 entity の保持origin のまま、現在枠だけ入れ替わる想定',
-            );
-            if (afterReport.issues.length) {
-                writeLog(
-                    LOG_PREFIX +
-                        ' origin/swap/after Ex' +
-                        (track.slot + 1) +
-                        ': **問題 ' +
-                        afterReport.issues.length +
-                        ' 件**（上記サマリー参照）',
-                );
-            }
-        }
 
         if (typeof window.scheduleMusicalGridRedraw === 'function') {
             window.scheduleMusicalGridRedraw();
@@ -1799,38 +1563,6 @@
         return swapTimelineSlotsAtIndices(track, idxA, idxB);
     }
 
-    function resolveSwapUnitOriginPhraseSlotIndex(track, ref, slotsOpt) {
-        const binding = resolveSwapUnitMusicalBinding(track, ref, slotsOpt);
-        if (!binding) return null;
-        if (
-            Number.isFinite(binding.originPhraseSlotIndex) &&
-            binding.originPhraseSlotIndex >= 0
-        ) {
-            return binding.originPhraseSlotIndex | 0;
-        }
-        const r = ref && typeof ref === 'object' ? ref : {};
-        if (Number.isFinite(r.segmentIndex) && (r.segmentIndex | 0) >= 0) {
-            return r.segmentIndex | 0;
-        }
-        if (binding.phraseSlotIndex >= 0) return binding.phraseSlotIndex | 0;
-        return null;
-    }
-
-    function formatSwapUnitOriginLabelText(track, ref, slotsOpt) {
-        const idx = resolveSwapUnitOriginPhraseSlotIndex(track, ref, slotsOpt);
-        if (idx == null) return '';
-        if (typeof window.rehearsalMarkLabelForPhraseSlotIndex === 'function') {
-            const internal = window.rehearsalMarkLabelForPhraseSlotIndex(idx);
-            if (typeof window.rehearsalMarkDisplayLabel === 'function') {
-                return window.rehearsalMarkDisplayLabel(internal);
-            }
-            return internal === window.REHEARSAL_MARK_UNLABELED ? '' : internal;
-        }
-        return typeof window.phraseGroupLabelForIndex === 'function'
-            ? window.phraseGroupLabelForIndex(idx)
-            : '';
-    }
-
     function resolveSwapUnitMusicalBinding(track, ref, slotsOpt) {
         const r = ref && typeof ref === 'object' ? ref : {};
         let slots =
@@ -1913,7 +1645,7 @@
             : '';
     }
 
-    /** Phase 5 — Tempo/Sig 変更時: musical 绑定を保ちつつ秒位置だけ再計算 */
+    /** Phase 5 — Tempo/Sig 変更時: musical 紐付けを保ちつつ秒位置だけ再計算 */
     function relayoutTrackFromTimelineSlots(track, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (
@@ -2036,11 +1768,7 @@
         }
         const state = window.getPlaybackRegionsState(track);
         if (!state) return false;
-        state.timelineSlots = persistedSlots.map((s) => {
-            const slot = cloneTimelineSlot(s);
-            if (slot && slot.musical) repairMusicalOriginBinding(slot.musical, slot);
-            return slot;
-        });
+        state.timelineSlots = persistedSlots.map((s) => cloneTimelineSlot(s));
         invalidateTrackTimelineSlotsReadCache();
         return true;
     }
@@ -2060,13 +1788,10 @@
     window.cloneMusicalBinding = cloneMusicalBinding;
     window.resolveTimelineSlotIndexForSelection = resolveTimelineSlotIndexForSelection;
     window.resolveSwapUnitMusicalBinding = resolveSwapUnitMusicalBinding;
-    window.resolveSwapUnitOriginPhraseSlotIndex = resolveSwapUnitOriginPhraseSlotIndex;
-    window.formatSwapUnitOriginLabelText = formatSwapUnitOriginLabelText;
     window.formatSwapUnitStoredMusicalMetaText = formatSwapUnitStoredMusicalMetaText;
     window.timelineSlotsPersistSlice = timelineSlotsPersistSlice;
     window.restoreTimelineSlotsForTrack = restoreTimelineSlotsForTrack;
     window.persistedTimelineSlotsAreUsable = persistedTimelineSlotsAreUsable;
-    window.segmentEntityOriginSlotIndex = segmentEntityOriginSlotIndex;
     window.isTimelineSlotRegionSwapEnabled = isTimelineSlotRegionSwapEnabled;
     window.useTimelineSlotRegionSwap =
         typeof window.useTimelineSlotRegionSwap === 'boolean'

@@ -931,7 +931,7 @@
         }
         title += ' — Ctrl+クリックで選択';
         el.title = title;
-        appendSwapUnitOriginLabelToEl(track, el, { silentGapIndex: gapIndex | 0 }, slotsOpt);
+        appendSwapUnitMusicalMetaToEl(track, el, { silentGapIndex: gapIndex | 0 }, slotsOpt);
         if (isSilentGapEntrySelected(track.slot, gapIndex)) {
             el.classList.add('audio-waveform-lane__playback-silent-gap--selected');
         }
@@ -1032,11 +1032,11 @@
         gainLabel.hidden = !gainText;
         gainLabel.setAttribute('aria-hidden', gainText ? 'false' : 'true');
         el.appendChild(gainLabel);
-        if (shouldShowOriginLabelOnSegment(track, segmentIndex)) {
+        if (shouldShowMusicalMetaOnSegment(track, segmentIndex)) {
             const restoreBusy =
                 typeof isSessionRestoreBusy === 'function' && isSessionRestoreBusy();
             if (!restoreBusy || (Array.isArray(slotsOpt) && slotsOpt.length)) {
-                appendSwapUnitOriginLabelToEl(
+                appendSwapUnitMusicalMetaToEl(
                     track,
                     el,
                     { segmentIndex: segmentIndex | 0 },
