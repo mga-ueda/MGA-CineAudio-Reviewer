@@ -1897,8 +1897,8 @@
         ctx.textBaseline = 'top';
         ctx.font = '400 ' + fontPx + 'px system-ui, "Segoe UI", sans-serif';
         ctx.lineJoin = 'round';
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
         ctx.fillStyle = 'rgba(255, 230, 80, 0.95)';
 
         function drawLabelAtSec(sec, label) {
