@@ -234,6 +234,14 @@
         }
 
         if (
+            matchUserShortcut(e, 'rehearsalMarkOffsetToggle') &&
+            callWindowShortcut('toggleRehearsalMarkOffset', e)
+        ) {
+            e.preventDefault();
+            return;
+        }
+
+        if (
             typeof handleMusicalGridPhraseDeleteKeydown === 'function' &&
             handleMusicalGridPhraseDeleteKeydown(e)
         ) {

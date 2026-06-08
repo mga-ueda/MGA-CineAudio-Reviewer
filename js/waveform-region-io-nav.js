@@ -320,6 +320,11 @@
         setRehearsalMarkOffsetEnabled(!!s.offset, { silent: true });
     }
 
+    function toggleRehearsalMarkOffset() {
+        setRehearsalMarkOffsetEnabled(!getRehearsalMarkOffsetEnabled());
+        return true;
+    }
+
     function initRehearsalMarkOffsetUi() {
         const el = document.getElementById('rehearsalMarkOffsetCheckbox');
         if (!el || el.dataset.bound === '1') return;
@@ -442,6 +447,7 @@
     window.phraseSlotIndexForRehearsalMarkKeyIndex = phraseSlotIndexForRehearsalMarkKeyIndex;
     window.getRehearsalMarkOffsetEnabled = getRehearsalMarkOffsetEnabled;
     window.setRehearsalMarkOffsetEnabled = setRehearsalMarkOffsetEnabled;
+    window.toggleRehearsalMarkOffset = toggleRehearsalMarkOffset;
     window.getRehearsalMarkPersistSnapshot = getRehearsalMarkPersistSnapshot;
     window.applyRehearsalMarkImportSnapshot = applyRehearsalMarkImportSnapshot;
 

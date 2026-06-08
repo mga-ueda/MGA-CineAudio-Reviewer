@@ -78,6 +78,14 @@
             shift: false,
         },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
+        rehearsalMarkOffsetToggle: {
+            key: '.',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -507,6 +515,7 @@
             addExtraTrack: formatShortcutDef(s.addExtraTrack),
             markerHide: formatShortcutDef(s.markerHideToggle),
             analyze: formatShortcutDef(s.analyzeToggle),
+            rehearsalMarkOffset: formatShortcutDef(s.rehearsalMarkOffsetToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
             musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
             musicalGridMeterFocus: formatShortcutDef(s.musicalGridMeterFocus),
@@ -605,6 +614,15 @@
             document.getElementById('analyzeToggleWrap'),
             `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
         );
+
+        const offsetTitle = `P. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review のみ保存。`;
+        setElementTitle(document.getElementById('rehearsalMarkOffsetWrap'), offsetTitle);
+        const offsetChk = document.getElementById('rehearsalMarkOffsetCheckbox');
+        setElementTitle(offsetChk, offsetTitle);
+        if (offsetChk) {
+            const offsetLbl = offsetChk.closest('label');
+            setElementTitle(offsetLbl, offsetTitle);
+        }
 
         setElementTitle(
             document.getElementById('masterVolSlider'),
