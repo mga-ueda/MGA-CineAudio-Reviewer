@@ -3450,18 +3450,18 @@
             gap: 0.12em;
             box-sizing: border-box;
             padding: 0.45em 0.8em 0.52em;
-            background: rgba(255, 255, 255, 0.52);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(24px) saturate(190%) brightness(1.12);
+            -webkit-backdrop-filter: blur(24px) saturate(190%) brightness(1.12);
             color: rgba(22, 24, 32, 0.88);
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
             font-size: clamp(0.88rem, 2.8vmin, 1.28rem);
             font-weight: 600;
             letter-spacing: 0.04em;
             line-height: 1.2;
-            border-radius: 10px;
-            box-shadow: 0 4px 22px rgba(0, 0, 0, 0.14);
-            border: 1px solid rgba(255, 255, 255, 0.45);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 22px rgba(0, 0, 0, 0.12);
             text-align: center;
             max-width: min(88vw, 18em);
         }
@@ -3481,9 +3481,11 @@
         }
 
         .seek-flash-overlay.seek-flash--error .seek-flash-overlay__box {
-            background: rgba(196, 42, 48, 0.52);
-            border-color: rgba(255, 120, 120, 0.45);
-            box-shadow: 0 4px 22px rgba(120, 16, 20, 0.14);
+            background: rgba(196, 42, 48, 0.4);
+            backdrop-filter: blur(24px) saturate(160%);
+            -webkit-backdrop-filter: blur(24px) saturate(160%);
+            border-color: rgba(255, 120, 120, 0.38);
+            box-shadow: 0 4px 22px rgba(120, 16, 20, 0.18);
             color: rgba(255, 248, 248, 0.88);
         }
         .seek-flash-overlay.seek-flash--error .seek-flash-overlay__primary {
