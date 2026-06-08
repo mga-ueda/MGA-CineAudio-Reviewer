@@ -1287,13 +1287,16 @@
             const rangeLoopBlocksVideo =
                 typeof shouldApplyVideoTimeDuringRangeLoopTick === 'function' &&
                 !shouldApplyVideoTimeDuringRangeLoopTick(t);
+            const zoomViewportBlocksVideo =
+                typeof shouldApplyVideoTimeDuringZoomViewportTick === 'function' &&
+                !shouldApplyVideoTimeDuringZoomViewportTick(t);
             const videoRolling = !videoMain.paused && !videoMain.ended && !videoMain.seeking;
             const mayApplyVideo =
                 typeof applyVideoTimeForTransportSec === 'function' &&
                 (inTailPark ||
                     pastVideoEnd ||
                     !videoRolling ||
-                    !rangeLoopBlocksVideo);
+                    (!rangeLoopBlocksVideo && !zoomViewportBlocksVideo));
             if (mayApplyVideo) {
                 applyVideoTimeForTransportSec(t);
             } else if (

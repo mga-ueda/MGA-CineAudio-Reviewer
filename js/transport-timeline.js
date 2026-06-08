@@ -322,17 +322,14 @@
     function setTransportSessionPlaying(playing) {
         const wasPlaying = transportSessionPlaying;
         transportSessionPlaying = !!playing;
-        if (
-            playing &&
-            !wasPlaying &&
-            typeof isWaveformTimelineAtFitZoom === 'function' &&
-            !isWaveformTimelineAtFitZoom() &&
-            typeof resetWaveformTimelineZoom === 'function'
-        ) {
-            resetWaveformTimelineZoom({
-                allowDuringPlayback: true,
-                silent: true,
-            });
+        if (playing && !wasPlaying) {
+            if (typeof armZoomViewportPlaybackOnPlayStart === 'function') {
+                armZoomViewportPlaybackOnPlayStart();
+            }
+        } else if (!playing && wasPlaying) {
+            if (typeof clearZoomViewportPlayback === 'function') {
+                clearZoomViewportPlayback();
+            }
         }
         // 再生中でもズーム/スクロール等で波形を追従させるため、
         // 再生開始で hires 再描画をキャンセルしない。
@@ -1029,6 +1026,13 @@
             (videoMain && videoMain.ended && hasMasterTransportTailBeyondVideo());
         if (inTail) {
             advanceTransportTailPlaybackClock(master);
+            syncReviewMixPlaybackIfNeeded();
+            return;
+        }
+        if (
+            typeof advanceZoomViewportPlaybackClock === 'function' &&
+            advanceZoomViewportPlaybackClock()
+        ) {
             syncReviewMixPlaybackIfNeeded();
             return;
         }

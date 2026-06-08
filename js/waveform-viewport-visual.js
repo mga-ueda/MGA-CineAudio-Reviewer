@@ -81,14 +81,15 @@
         return dt0 < timeThresh && dt1 < timeThresh && db <= 12;
     }
 
-    /** 再生中は毎フレーム viewport peaks を追従させる */
-    function shouldSyncScrollDuringPlayback() {
-        return isTransportPlaying();
-    }
-
-    /** peaks 再計算前に scrollLeft を transport に合わせる（描画と可視範囲のずれ防止） */
+    /** 再生中は viewport peaks 描画前に scroll を transport に合わせる（拡大中の再生時は除く） */
     function syncPlaybackScrollBeforeWaveformDraw() {
-        if (!shouldSyncScrollDuringPlayback()) return;
+        if (typeof isTransportPlaying !== 'function' || !isTransportPlaying()) return;
+        if (
+            typeof shouldSkipWaveformTimelineAutoCentering === 'function' &&
+            shouldSkipWaveformTimelineAutoCentering()
+        ) {
+            return;
+        }
         const lanes = waveformScrubTargetEl();
         if (
             !lanes ||
@@ -173,7 +174,6 @@
         if (!spec) return false;
         const peaksMissing = anyExtraTracksNeedViewportPeaksRebuild(opt);
         if (
-            !shouldSyncScrollDuringPlayback() &&
             !peaksMissing &&
             lastWaveformViewportHiresSpec &&
             waveformViewportSpecNearlyEqual(lastWaveformViewportHiresSpec, spec)
