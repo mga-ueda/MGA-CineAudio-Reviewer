@@ -857,11 +857,17 @@
     function applyJumpTransportSeek(sec, resumeAfter) {
         const resume = !!resumeAfter;
         if (typeof seekTransportToAndWait === 'function') {
-            void seekTransportToAndWait(sec, { resumeAfter: resume });
+            void seekTransportToAndWait(sec, {
+                resumeAfter: resume,
+                wasPlayingBeforeSeek: resume,
+            });
             return;
         }
         if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(sec, { resumeAfter: resume });
+            applyTransportAtSec(sec, {
+                resumeAfter: resume,
+                wasPlayingBeforeSeek: resume,
+            });
             return;
         }
         if (typeof applyTimeToVideo === 'function') {
@@ -886,7 +892,8 @@
             rejectExplicitSeekWaiters();
             return true;
         }
-        const playingBeforeSeek = captureTransportWasActive();
+        const playingBeforeSeek =
+            !!(o.wasPlayingBeforeSeek) || captureTransportWasActive();
         const pauseAfterSeek = !!(o.pauseAfterSeek && playingBeforeSeek);
         transportExplicitSeekResumeIntent =
             playingBeforeSeek && o.resumeAfter !== false && !pauseAfterSeek;

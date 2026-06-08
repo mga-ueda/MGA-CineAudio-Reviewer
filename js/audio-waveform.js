@@ -35,6 +35,8 @@
     let waveformPointerGestureRegionHit = null;
     let waveformPointerGestureDocMove = null;
     let waveformPointerGestureDocUp = null;
+    let waveformPointerGestureWasPlaying = false;
+    let seekBarScrubWasPlaying = false;
     const WAVEFORM_POINTER_GESTURE_DRAG_PX = 5;
     const WAVEFORM_LANES_DBLCLICK_MS = 450;
     const WAVEFORM_LANES_DBLCLICK_SLOP_PX = 12;
@@ -975,21 +977,40 @@
         waveformPointerGestureId = null;
         waveformPointerGestureRegionHit = null;
         waveformPointerGestureDidMove = false;
+        waveformPointerGestureWasPlaying = false;
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--scrubbing');
     }
 
     function beginWaveformPointerScrubTransport() {
-        if (
-            typeof captureTransportWasActive === 'function' &&
-            captureTransportWasActive() &&
-            typeof pauseTransportBeforeSeek === 'function'
-        ) {
-            pauseTransportBeforeSeek();
-        }
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--scrubbing');
         if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
+    }
+
+    function captureWaveformPointerScrubWasPlaying() {
+        waveformPointerGestureWasPlaying =
+            typeof captureTransportWasActive === 'function' && captureTransportWasActive();
+        if (waveformPointerGestureWasPlaying && typeof pauseTransportBeforeSeek === 'function') {
+            pauseTransportBeforeSeek();
+        }
+        return waveformPointerGestureWasPlaying;
+    }
+
+    function transportSecForWaveformPointer(clientX) {
+        if (!Number.isFinite(clientX) || typeof transportSecFromClientX !== 'function') {
+            return NaN;
+        }
+        let sec = transportSecFromClientX(clientX);
+        if (typeof snapTransportSecForWaveformSeek === 'function') {
+            const altSuppressed =
+                typeof isSnapSuppressedByAlt === 'function' ? isSnapSuppressedByAlt() : false;
+            sec = snapTransportSecForWaveformSeek(sec, { altKey: altSuppressed });
+        }
+        if (typeof clampTransportSec === 'function') {
+            sec = clampTransportSec(sec);
+        }
+        return sec;
     }
 
     function noteWaveformLanesPointerDownForDoubleClick(clientX, clientY) {
@@ -1112,26 +1133,33 @@
     function finishWaveformPointerSeek(ev) {
         if (!ev || !Number.isFinite(ev.clientX)) return;
         isSeeking = true;
-        seekFromWaveformPointer(ev.clientX, { logInput: true, flash: true });
-        const t =
-            typeof getTransportSec === 'function'
-                ? getTransportSec()
-                : parseFloat(seekBar.value) || 0;
-        if (typeof transportPlaybackSec !== 'undefined') {
-            transportPlaybackSec = t;
-            transportPlaybackLastTs = performance.now();
+        const wasPlayingBeforeSeek = waveformPointerGestureWasPlaying;
+        waveformPointerGestureWasPlaying = false;
+        const targetSec = transportSecForWaveformPointer(ev.clientX);
+        if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+            suppressRangeLoopSnapForExplicitSeek();
         }
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
+        if (Number.isFinite(targetSec) && typeof applyJumpTransportSeek === 'function') {
+            applyJumpTransportSeek(targetSec, wasPlayingBeforeSeek);
+        } else {
+            seekFromWaveformPointer(ev.clientX, {
+                logInput: true,
+                flash: true,
+                wasPlayingBeforeSeek,
+            });
         }
-        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+        const t = Number.isFinite(targetSec)
+            ? targetSec
+            : typeof getTransportSec === 'function'
+              ? getTransportSec()
+              : parseFloat(seekBar.value) || 0;
         setHoverPlayheadAtClientX(ev.clientX, ev.clientY);
         writeLog('Waveform: seek at ' + formatTimecodeForTransport(t));
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Seek', formatTimecodeForTransport(t));
         }
         isSeeking = false;
-        updateSeekUiFromVideo();
+        if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
     }
 
     function onWaveformLanesPointerDownCapture(ev) {
@@ -1194,6 +1222,8 @@
             canDragWaveformTrackTimelineStart(regionHit.slot)
                 ? regionHit
                 : null;
+
+        captureWaveformPointerScrubWasPlaying();
 
         if (!waveformPointerGestureRegionHit) {
             beginWaveformPointerScrubTransport();
@@ -2362,11 +2392,20 @@
                 if (seekBar.disabled) return;
                 const t = snapSeekBarTransportSec(parseFloat(seekBar.value));
                 if (!Number.isFinite(t)) return;
-                if (typeof applyTransportAtSec === 'function') {
-                    applyTransportAtSec(t, { logInput: true, flash: true, markers: true });
+                const wasPlayingBeforeSeek = seekBarScrubWasPlaying;
+                seekBarScrubWasPlaying = false;
+                if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
+                    suppressRangeLoopSnapForExplicitSeek();
                 }
-                if (typeof syncExtraAudioToTransport === 'function') {
-                    syncExtraAudioToTransport({ force: true });
+                if (typeof applyJumpTransportSeek === 'function') {
+                    applyJumpTransportSeek(t, wasPlayingBeforeSeek);
+                } else if (typeof applyTransportAtSec === 'function') {
+                    applyTransportAtSec(t, {
+                        logInput: true,
+                        flash: true,
+                        markers: true,
+                        wasPlayingBeforeSeek,
+                    });
                 }
                 isSeeking = false;
                 if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
@@ -2374,11 +2413,9 @@
             seekBar.addEventListener('pointerdown', (ev) => {
                 ev.stopPropagation();
                 if (ev.button !== 0) return;
-                if (
-                    typeof captureTransportWasActive === 'function' &&
-                    captureTransportWasActive() &&
-                    typeof pauseTransportBeforeSeek === 'function'
-                ) {
+                seekBarScrubWasPlaying =
+                    typeof captureTransportWasActive === 'function' && captureTransportWasActive();
+                if (seekBarScrubWasPlaying && typeof pauseTransportBeforeSeek === 'function') {
                     pauseTransportBeforeSeek();
                 }
                 if (noteWaveformLanesPointerDownForDoubleClick(ev.clientX, ev.clientY)) {

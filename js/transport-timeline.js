@@ -799,7 +799,8 @@
             typeof captureTransportWasActive === 'function' &&
             typeof pauseTransportBeforeSeek === 'function'
         ) {
-            wasActive = captureTransportWasActive();
+            wasActive =
+                !!(opt && opt.wasPlayingBeforeSeek) || captureTransportWasActive();
             if (wasActive || (videoMain && !videoMain.paused)) {
                 pauseTransportBeforeSeek();
             }
