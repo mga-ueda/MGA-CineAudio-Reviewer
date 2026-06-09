@@ -1193,6 +1193,449 @@
         return Number.isFinite(min) ? min : -1;
     }
 
+    function slotTimelineStartSec(slot) {
+        return Number.isFinite(slot && slot.timelineStartSec) ? slot.timelineStartSec : 0;
+    }
+
+    function previewSegmentTimelineStart(seg) {
+        if (!seg) return NaN;
+        if (Number.isFinite(seg.regionTimelineInSec)) return seg.regionTimelineInSec;
+        if (Number.isFinite(seg.timelineStartSec)) return seg.timelineStartSec;
+        return NaN;
+    }
+
+    /** 復元先 segment 列と現状態のタイムライン位置差から入れ替え spec を推定（slot 並び替え後も検出可） */
+    function findSwapAnimFromPreviewSegments(track, previewSegments) {
+        if (!previewSegments || !previewSegments.length) return null;
+        const eps = 0.001;
+        const n = previewSegments.length;
+        const unitMap = new Map();
+
+        function unitKey(indices) {
+            return indices.join(',');
+        }
+
+        for (let i = 0; i < n; i++) {
+            const tgtStart = previewSegmentTimelineStart(previewSegments[i]);
+            if (!Number.isFinite(tgtStart)) continue;
+            const curStart =
+                typeof window.getSegmentRegionTimelineIn === 'function'
+                    ? window.getSegmentRegionTimelineIn(track, i)
+                    : NaN;
+            if (!Number.isFinite(curStart) || Math.abs(curStart - tgtStart) <= eps) continue;
+
+            const unitIndices =
+                typeof window.resolveRegionSwapUnitSegmentIndices === 'function'
+                    ? window.resolveRegionSwapUnitSegmentIndices(track, i)
+                    : [i | 0];
+            const key = unitKey(unitIndices);
+            if (unitMap.has(key)) continue;
+            let leader = unitIndices[0] | 0;
+            for (let u = 0; u < unitIndices.length; u++) {
+                leader = Math.min(leader, unitIndices[u] | 0);
+            }
+            const curRegionIn =
+                typeof window.getSegmentRegionTimelineIn === 'function'
+                    ? window.getSegmentRegionTimelineIn(track, leader)
+                    : curStart;
+            const tgtRegionIn = previewSegmentTimelineStart(previewSegments[leader]);
+            unitMap.set(key, {
+                unitIndices: unitIndices.slice(),
+                leader,
+                curStart: Number.isFinite(curRegionIn) ? curRegionIn : curStart,
+                tgtStart: Number.isFinite(tgtRegionIn) ? tgtRegionIn : tgtStart,
+            });
+        }
+
+        const units = [];
+        unitMap.forEach((u) => units.push(u));
+        if (!units.length) return null;
+
+        for (let a = 0; a < units.length; a++) {
+            for (let b = a + 1; b < units.length; b++) {
+                const ua = units[a];
+                const ub = units[b];
+                if (
+                    Math.abs(ua.curStart - ub.tgtStart) < eps &&
+                    Math.abs(ub.curStart - ua.tgtStart) < eps &&
+                    Math.abs(ua.curStart - ua.tgtStart) > eps
+                ) {
+                    const segA = ua.leader | 0;
+                    const segB = ub.leader | 0;
+                    if (segA === segB) continue;
+                    return {
+                        swapLo: Math.min(segA, segB),
+                        swapHi: Math.max(segA, segB),
+                        swapUnitSegmentIndicesA: ua.unitIndices,
+                        swapUnitSegmentIndicesB: ub.unitIndices,
+                    };
+                }
+            }
+        }
+
+        if (units.length === 1) {
+            const u = units[0];
+            const slots = getTrackTimelineSlots(track, {
+                preserveStored: true,
+                writeCache: false,
+            });
+            if (slots && slots.length) {
+                for (let si = 0; si < slots.length; si++) {
+                    const slot = slots[si];
+                    if (!slot || slot.kind !== 'silent') continue;
+                    const gap = getSilentGapForSlot(track, slot);
+                    if (!gap || !u.unitIndices.length) continue;
+                    return {
+                        gap,
+                        segmentIndex: u.unitIndices[0] | 0,
+                        segmentIndices: u.unitIndices.slice(),
+                    };
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Undo/Redo 復元先と現状態の slot 配置から入れ替えアニメーション spec を推定 */
+    function findSwapAnimBetweenSlotLayouts(currentSlots, targetSlots, track) {
+        if (!currentSlots || !targetSlots || currentSlots.length !== targetSlots.length) {
+            return null;
+        }
+        const eps = 0.001;
+        const n = currentSlots.length;
+        let silentIdx = -1;
+        let audioIdx = -1;
+        for (let i = 0; i < n; i++) {
+            const changed =
+                Math.abs(slotTimelineStartSec(currentSlots[i]) - slotTimelineStartSec(targetSlots[i])) >
+                eps;
+            if (!changed) continue;
+            if (currentSlots[i].kind === 'silent') silentIdx = i;
+            else if (
+                currentSlots[i].segmentRefs &&
+                currentSlots[i].segmentRefs.length
+            ) {
+                audioIdx = i;
+            }
+        }
+        if (silentIdx >= 0 && audioIdx >= 0) {
+            const silentSlot = currentSlots[silentIdx];
+            const audioSlot = currentSlots[audioIdx];
+            const gap = getSilentGapForSlot(track, silentSlot);
+            const indices = (audioSlot.segmentRefs || []).map((r) => r.segmentIndex | 0);
+            if (gap && indices.length) {
+                return {
+                    gap,
+                    segmentIndex: indices[0] | 0,
+                    segmentIndices: indices,
+                };
+            }
+        }
+        for (let i = 0; i < n; i++) {
+            if (currentSlots[i].kind === 'silent') continue;
+            for (let j = i + 1; j < n; j++) {
+                if (currentSlots[j].kind === 'silent') continue;
+                const curI = slotTimelineStartSec(currentSlots[i]);
+                const curJ = slotTimelineStartSec(currentSlots[j]);
+                const tgtI = slotTimelineStartSec(targetSlots[i]);
+                const tgtJ = slotTimelineStartSec(targetSlots[j]);
+                if (
+                    Math.abs(curI - tgtJ) < eps &&
+                    Math.abs(curJ - tgtI) < eps &&
+                    Math.abs(curI - tgtI) > eps
+                ) {
+                    const slotA = currentSlots[i];
+                    const slotB = currentSlots[j];
+                    const segA = resolveSwapAnimLeaderSegmentIndex(slotA);
+                    const segB = resolveSwapAnimLeaderSegmentIndex(slotB);
+                    if (segA >= 0 && segB >= 0 && segA !== segB) {
+                        return {
+                            swapLo: Math.min(segA, segB),
+                            swapHi: Math.max(segA, segB),
+                            swapUnitSegmentIndicesA: (slotA.segmentRefs || []).map(
+                                (r) => r.segmentIndex | 0,
+                            ),
+                            swapUnitSegmentIndicesB: (slotB.segmentRefs || []).map(
+                                (r) => r.segmentIndex | 0,
+                            ),
+                        };
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    let regionSwapHistoryAnimHint = null;
+
+    function phraseCountsArraysEqual(a, b) {
+        if (!a || !b || a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if ((a[i] | 0) !== (b[i] | 0)) return false;
+        }
+        return true;
+    }
+
+    function cloneSwapAnimForHistoryHint(swapAnim) {
+        if (!swapAnim) return null;
+        if (swapAnim.gap || (swapAnim.segmentIndices && swapAnim.segmentIndices.length)) {
+            return {
+                silent: true,
+                segmentIndex: swapAnim.segmentIndex | 0,
+                segmentIndices: (swapAnim.segmentIndices || []).map((i) => i | 0),
+            };
+        }
+        return {
+            swapLo: swapAnim.swapLo | 0,
+            swapHi: swapAnim.swapHi | 0,
+            swapUnitSegmentIndicesA: (swapAnim.swapUnitSegmentIndicesA || []).map((i) => i | 0),
+            swapUnitSegmentIndicesB: (swapAnim.swapUnitSegmentIndicesB || []).map((i) => i | 0),
+        };
+    }
+
+    function setRegionSwapHistoryAnimHint(track, swapAnim, preSwapPhraseCounts, postSwapPhraseCounts) {
+        if (!track || !swapAnim) {
+            regionSwapHistoryAnimHint = null;
+            window.regionSwapHistoryAnimHint = null;
+            return;
+        }
+        regionSwapHistoryAnimHint = {
+            trackSlot: track.slot | 0,
+            swapAnim: cloneSwapAnimForHistoryHint(swapAnim),
+            preSwapPhraseCounts: preSwapPhraseCounts ? preSwapPhraseCounts.slice() : null,
+            postSwapPhraseCounts: postSwapPhraseCounts ? postSwapPhraseCounts.slice() : null,
+        };
+        window.regionSwapHistoryAnimHint = regionSwapHistoryAnimHint;
+    }
+
+    function clearRegionSwapHistoryAnimHint() {
+        regionSwapHistoryAnimHint = null;
+        window.regionSwapHistoryAnimHint = null;
+    }
+
+    function cloneRegionSwapHistoryAnimHint(hint) {
+        if (!hint || !hint.swapAnim) return null;
+        return {
+            trackSlot: hint.trackSlot | 0,
+            swapAnim: cloneSwapAnimForHistoryHint(hint.swapAnim),
+            preSwapPhraseCounts: hint.preSwapPhraseCounts
+                ? hint.preSwapPhraseCounts.slice()
+                : null,
+            postSwapPhraseCounts: hint.postSwapPhraseCounts
+                ? hint.postSwapPhraseCounts.slice()
+                : null,
+        };
+    }
+
+    function regionSwapHistoryAnimHintMatchesTarget(hint, normalizedTarget) {
+        if (!hint || !normalizedTarget) return false;
+        const counts = normalizedTarget.phraseExpandedCounts;
+        if (!counts || !counts.length) return false;
+        if (
+            hint.preSwapPhraseCounts &&
+            phraseCountsArraysEqual(hint.preSwapPhraseCounts, counts)
+        ) {
+            return true;
+        }
+        if (
+            hint.postSwapPhraseCounts &&
+            phraseCountsArraysEqual(hint.postSwapPhraseCounts, counts)
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    function resolveSwapAnimFromHistoryHint(track, hintSwapAnim, previewSegments) {
+        if (!hintSwapAnim) return null;
+        if (hintSwapAnim.silent) {
+            const indices =
+                hintSwapAnim.segmentIndices && hintSwapAnim.segmentIndices.length
+                    ? hintSwapAnim.segmentIndices.map((i) => i | 0)
+                    : [hintSwapAnim.segmentIndex | 0];
+            const slots = getTrackTimelineSlots(track, {
+                preserveStored: true,
+                writeCache: false,
+            });
+            if (!slots || !slots.length) return null;
+            for (let si = 0; si < slots.length; si++) {
+                if (slots[si].kind !== 'silent') continue;
+                const gap = getSilentGapForSlot(track, slots[si]);
+                if (!gap || !indices.length) continue;
+                const leader = indices[0] | 0;
+                const segRegionIn =
+                    typeof window.getSegmentRegionTimelineIn === 'function'
+                        ? window.getSegmentRegionTimelineIn(track, leader)
+                        : 0;
+                const previewSeg = previewSegments[leader];
+                let targetSec = segRegionIn;
+                if (previewSeg) {
+                    if (Number.isFinite(previewSeg.regionTimelineInSec)) {
+                        targetSec = previewSeg.regionTimelineInSec;
+                    } else if (Number.isFinite(previewSeg.timelineStartSec)) {
+                        targetSec = previewSeg.timelineStartSec;
+                    }
+                }
+                return {
+                    gap,
+                    segmentIndex: leader,
+                    segmentIndices: indices,
+                    swapPlan: {
+                        targetSec,
+                        delta: targetSec - segRegionIn,
+                    },
+                };
+            }
+            return null;
+        }
+        return {
+            swapLo: hintSwapAnim.swapLo | 0,
+            swapHi: hintSwapAnim.swapHi | 0,
+            swapUnitSegmentIndicesA: hintSwapAnim.swapUnitSegmentIndicesA,
+            swapUnitSegmentIndicesB: hintSwapAnim.swapUnitSegmentIndicesB,
+        };
+    }
+
+    function resolveHistoryRestorePhraseCounts(normalizedTarget, hint) {
+        if (
+            normalizedTarget.phraseExpandedCounts &&
+            normalizedTarget.phraseExpandedCounts.length
+        ) {
+            return normalizedTarget.phraseExpandedCounts;
+        }
+        if (hint && hint.preSwapPhraseCounts && hint.preSwapPhraseCounts.length) {
+            return hint.preSwapPhraseCounts;
+        }
+        if (hint && hint.postSwapPhraseCounts && hint.postSwapPhraseCounts.length) {
+            return hint.postSwapPhraseCounts;
+        }
+        return null;
+    }
+
+    function planRegionHistorySwapAnimationFromHint(normalizedTarget, slotIdx, hint) {
+        if (!hint || !hint.swapAnim) return null;
+        const track = { type: 'extra', slot: slotIdx | 0 };
+        const entry = normalizedTarget.tracks.find((e) => e.slot === slotIdx);
+        if (!entry || !entry.playbackRegions) return null;
+
+        const previewPhraseCounts = resolveHistoryRestorePhraseCounts(normalizedTarget, hint);
+        const previewSegments =
+            typeof window.previewTrackSegmentsFromUndoEntry === 'function'
+                ? window.previewTrackSegmentsFromUndoEntry(track, entry, {
+                      phraseExpandedCounts: previewPhraseCounts,
+                  })
+                : null;
+        if (!previewSegments || !previewSegments.length) return null;
+
+        const swapAnim = resolveSwapAnimFromHistoryHint(track, hint.swapAnim, previewSegments);
+        if (!swapAnim) return null;
+
+        const oldOverlayIntervals =
+            typeof window.captureTrackRegionOverlayIntervals === 'function'
+                ? window.captureTrackRegionOverlayIntervals(track, previewSegments.length)
+                : null;
+
+        function finalizeSwap() {
+            if (typeof window.scheduleMusicalGridRedraw === 'function') {
+                window.scheduleMusicalGridRedraw();
+            }
+            if (typeof window.notifyMasterTransportDurationChanged === 'function') {
+                window.notifyMasterTransportDurationChanged();
+            }
+        }
+
+        return {
+            track,
+            previewSegments,
+            oldOverlayIntervals,
+            swapAnim,
+            targetCounts: previewPhraseCounts,
+            finalizeSwap,
+        };
+    }
+
+    function planRegionHistorySwapAnimation(normalizedTarget, slotIdx) {
+        const track = { type: 'extra', slot: slotIdx | 0 };
+        const entry = normalizedTarget.tracks.find((e) => e.slot === slotIdx);
+        if (!entry || !entry.playbackRegions) return null;
+
+        const hint =
+            typeof window.regionSwapHistoryAnimHint !== 'undefined'
+                ? window.regionSwapHistoryAnimHint
+                : null;
+        const previewPhraseCounts = resolveHistoryRestorePhraseCounts(normalizedTarget, hint);
+        const previewSegments =
+            typeof window.previewTrackSegmentsFromUndoEntry === 'function'
+                ? window.previewTrackSegmentsFromUndoEntry(track, entry, {
+                      phraseExpandedCounts: previewPhraseCounts,
+                  })
+                : null;
+        if (!previewSegments || !previewSegments.length) return null;
+
+        let swapAnim = findSwapAnimFromPreviewSegments(track, previewSegments);
+        if (!swapAnim) {
+            const targetSlots = persistedTimelineSlotsAreUsable(entry.playbackRegions.timelineSlots)
+                ? entry.playbackRegions.timelineSlots.map((s) => cloneTimelineSlot(s))
+                : null;
+            const currentSlots = getTrackTimelineSlots(track, {
+                preserveStored: true,
+                writeCache: false,
+            });
+            if (
+                targetSlots &&
+                currentSlots &&
+                currentSlots.length === targetSlots.length
+            ) {
+                swapAnim = findSwapAnimBetweenSlotLayouts(currentSlots, targetSlots, track);
+            }
+        }
+        if (!swapAnim) return null;
+
+        if (swapAnim.gap) {
+            const leader = (swapAnim.segmentIndices && swapAnim.segmentIndices[0]) | 0;
+            const segRegionIn =
+                typeof window.getSegmentRegionTimelineIn === 'function'
+                    ? window.getSegmentRegionTimelineIn(track, leader)
+                    : 0;
+            const previewSeg = previewSegments[leader];
+            let targetSec = segRegionIn;
+            if (previewSeg) {
+                if (Number.isFinite(previewSeg.regionTimelineInSec)) {
+                    targetSec = previewSeg.regionTimelineInSec;
+                } else if (Number.isFinite(previewSeg.timelineStartSec)) {
+                    targetSec = previewSeg.timelineStartSec;
+                }
+            }
+            swapAnim.swapPlan = {
+                targetSec,
+                delta: targetSec - segRegionIn,
+            };
+        }
+
+        const oldOverlayIntervals =
+            typeof window.captureTrackRegionOverlayIntervals === 'function'
+                ? window.captureTrackRegionOverlayIntervals(track, previewSegments.length)
+                : null;
+
+        function finalizeSwap() {
+            if (typeof window.scheduleMusicalGridRedraw === 'function') {
+                window.scheduleMusicalGridRedraw();
+            }
+            if (typeof window.notifyMasterTransportDurationChanged === 'function') {
+                window.notifyMasterTransportDurationChanged();
+            }
+        }
+
+        return {
+            track,
+            previewSegments,
+            oldOverlayIntervals,
+            swapAnim,
+            targetCounts: previewPhraseCounts,
+            finalizeSwap,
+        };
+    }
+
     function swapTimelineSlotsAtIndices(track, indexA, indexB, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         let slots = getTrackTimelineSlots(track, { preserveStored: true, writeCache: false });
@@ -1438,6 +1881,15 @@
                 phraseText: phrase.text,
                 countsAfter: nextCounts.slice(0, 12),
             });
+        }
+
+        if (swapAnim) {
+            setRegionSwapHistoryAnimHint(track, swapAnim, counts, nextCounts);
+            if (typeof window.attachRegionSwapAnimHintToUndoStackTop === 'function') {
+                window.attachRegionSwapAnimHintToUndoStackTop(
+                    window.regionSwapHistoryAnimHint,
+                );
+            }
         }
 
         const deferPostSwapUi = !!(willAnimateSwap && swapAnim);
@@ -1794,6 +2246,12 @@
     window.restoreTimelineSlotsForTrack = restoreTimelineSlotsForTrack;
     window.persistedTimelineSlotsAreUsable = persistedTimelineSlotsAreUsable;
     window.isTimelineSlotRegionSwapEnabled = isTimelineSlotRegionSwapEnabled;
+    window.planRegionHistorySwapAnimation = planRegionHistorySwapAnimation;
+    window.planRegionHistorySwapAnimationFromHint = planRegionHistorySwapAnimationFromHint;
+    window.regionSwapHistoryAnimHintMatchesTarget = regionSwapHistoryAnimHintMatchesTarget;
+    window.cloneRegionSwapHistoryAnimHint = cloneRegionSwapHistoryAnimHint;
+    window.clearRegionSwapHistoryAnimHint = clearRegionSwapHistoryAnimHint;
+    window.regionSwapHistoryAnimHint = null;
     window.useTimelineSlotRegionSwap =
         typeof window.useTimelineSlotRegionSwap === 'boolean'
             ? window.useTimelineSlotRegionSwap

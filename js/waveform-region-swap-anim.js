@@ -2,6 +2,7 @@
  * waveform-region-swap-anim.js — リージョン入れ替えアニメーション
  */
     const REGION_SWAP_ANIM_MS = 500;
+    const REGION_SWAP_REVEAL_FADE_MS = 180;
     const REGION_SWAP_MOTION_BLUR_GAIN = 0.022;
     const REGION_SWAP_MOTION_BLUR_MAX = 12;
     let playbackRegionSwapAnimActive = false;
@@ -16,17 +17,27 @@
         return a <= b ? { lo: a, hi: b } : { lo: b, hi: a };
     }
 
+    function swapMoveHasVisibleDisplacement(move) {
+        if (!move || !move.from || !move.to) return false;
+        return (
+            Math.abs(move.from.left - move.to.left) > 0.5 ||
+            Math.abs(move.from.width - move.to.width) > 0.5
+        );
+    }
+
+    function filterVisibleRegionSwapMoves(moves) {
+        if (!moves || !moves.length) return [];
+        const out = [];
+        for (let i = 0; i < moves.length; i++) {
+            if (swapMoveHasVisibleDisplacement(moves[i])) out.push(moves[i]);
+        }
+        return out;
+    }
+
     function swapMovesHaveVisibleDisplacement(moves) {
         if (!moves || !moves.length) return false;
         for (let i = 0; i < moves.length; i++) {
-            const m = moves[i];
-            if (!m || !m.from || !m.to) continue;
-            if (
-                Math.abs(m.from.left - m.to.left) > 0.5 ||
-                Math.abs(m.from.width - m.to.width) > 0.5
-            ) {
-                return true;
-            }
+            if (swapMoveHasVisibleDisplacement(moves[i])) return true;
         }
         return false;
     }
@@ -323,22 +334,71 @@
         ];
     }
 
-    function captureLaneCanvasStrip(sourceCanvas, leftCss, widthCss, heightCss) {
+    function captureCanvasStrip(sourceCanvas, leftCss, topCss, widthCss, heightCss) {
         if (!sourceCanvas || !(widthCss > 0) || !(heightCss > 0)) return null;
         const clientW = Math.max(1, sourceCanvas.clientWidth);
         const clientH = Math.max(1, sourceCanvas.clientHeight);
         const scaleX = sourceCanvas.width / clientW;
         const scaleY = sourceCanvas.height / clientH;
         const sx = Math.max(0, Math.floor(leftCss * scaleX));
+        const sy = Math.max(0, Math.floor(topCss * scaleY));
         const sw = Math.max(1, Math.min(sourceCanvas.width - sx, Math.ceil(widthCss * scaleX)));
-        const sh = Math.max(1, Math.min(sourceCanvas.height, Math.ceil(heightCss * scaleY)));
+        const sh = Math.max(
+            1,
+            Math.min(sourceCanvas.height - sy, Math.ceil(heightCss * scaleY)),
+        );
         const off = document.createElement('canvas');
         off.width = sw;
         off.height = sh;
         const ctx = off.getContext('2d');
         if (!ctx) return null;
-        ctx.drawImage(sourceCanvas, sx, 0, sw, sh, 0, 0, sw, sh);
+        ctx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
         return off;
+    }
+
+    function isMusicalGridPhraseFillVisibleSafe() {
+        if (typeof getMusicalGridPhraseFillVisible === 'function') {
+            return getMusicalGridPhraseFillVisible();
+        }
+        if (typeof window.getMusicalGridPhraseFillVisible === 'function') {
+            return window.getMusicalGridPhraseFillVisible();
+        }
+        return false;
+    }
+
+    function resolveMusicalGridCanvasEl() {
+        if (typeof audioWaveformMusicalGrid !== 'undefined' && audioWaveformMusicalGrid) {
+            return audioWaveformMusicalGrid;
+        }
+        return document.getElementById('audioWaveformMusicalGrid');
+    }
+
+    function trackTopInLanesInnerCss(trackEl) {
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+        if (!inner || !trackEl) return 0;
+        const trackRect = trackEl.getBoundingClientRect();
+        const innerRect = inner.getBoundingClientRect();
+        return trackRect.top - innerRect.top;
+    }
+
+    /** 波形ストリップ + Phrase 着色（musical grid）を合成キャプチャ */
+    function captureRegionSwapStrip(waveCanvas, trackEl, leftCss, widthCss, heightCss) {
+        const wave = captureCanvasStrip(waveCanvas, leftCss, 0, widthCss, heightCss);
+        if (!wave) return null;
+        if (!isMusicalGridPhraseFillVisibleSafe()) return wave;
+
+        const gridCanvas = resolveMusicalGridCanvasEl();
+        if (!gridCanvas || !(gridCanvas.width > 0) || !(gridCanvas.height > 0)) return wave;
+
+        const laneTopCss = trackTopInLanesInnerCss(trackEl);
+        const grid = captureCanvasStrip(gridCanvas, leftCss, laneTopCss, widthCss, heightCss);
+        if (!grid) return wave;
+
+        const ctx = wave.getContext('2d');
+        if (!ctx) return wave;
+        ctx.drawImage(grid, 0, 0);
+        return wave;
     }
 
     function easeInOutCubic(t) {
@@ -412,20 +472,114 @@
         if (layer.parentNode) layer.remove();
     }
 
-    function revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
-        if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
+    function scheduleMusicalGridRedrawAfterRegionSwapAnim() {
+        if (typeof window.scheduleMusicalGridRedraw === 'function') {
+            window.scheduleMusicalGridRedraw();
+        }
+    }
+
+    function waveformLanesInnerEl() {
+        return typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+    }
+
+    function setRegionSwapCompositeActive(active) {
+        const inner = waveformLanesInnerEl();
+        if (!inner) return;
+        if (active) {
+            inner.classList.add('audio-waveform-composite--region-swap-active');
+        } else {
+            inner.classList.remove('audio-waveform-composite--region-swap-active');
+        }
+    }
+
+    function refreshRegionRehearsalMarksAfterSwap() {
+        if (typeof window.refreshAllRegionMusicalMetaPresentation === 'function') {
+            window.refreshAllRegionMusicalMetaPresentation();
+        } else if (typeof window.refreshAllRegionRehearsalMarkLabels === 'function') {
+            window.refreshAllRegionRehearsalMarkLabels();
+        }
+    }
+
+    function regionSwapRevealFadeAllowed() {
+        if (typeof window.matchMedia !== 'function') return true;
+        const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+        return !mq || !mq.matches;
+    }
+
+    function clearRegionSwapRevealFadeClasses(lane, lanesInner) {
+        if (lane) {
+            lane.classList.remove(
+                'audio-waveform-lane--region-swap-reveal',
+                'audio-waveform-lane--region-swap-reveal--active',
+            );
+        }
+        if (lanesInner) {
+            lanesInner.classList.remove(
+                'audio-waveform-composite--region-swap-reveal',
+                'audio-waveform-composite--region-swap-reveal--active',
+            );
+        }
+    }
+
+    function startRegionSwapRevealFade(lane, trackEl, swapLayer) {
         playbackRegionSwapAnimActive = false;
         playbackRegionSwapAnimPending = false;
-        if (o.skipRedraw) return;
+        scheduleMusicalGridRedrawAfterRegionSwapAnim();
+        refreshRegionRehearsalMarksAfterSwap();
+
+        if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
+        if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
+        setRegionSwapCompositeActive(false);
+
+        const lanesInner = waveformLanesInnerEl();
+        clearRegionSwapRevealFadeClasses(lane, lanesInner);
+        if (swapLayer) {
+            swapLayer.classList.remove(
+                'audio-waveform-lane__region-swap-layer--crossfade-out',
+                'audio-waveform-lane__region-swap-layer--crossfade-out--active',
+            );
+            swapLayer.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out');
+        }
+        if (lane) lane.classList.add('audio-waveform-lane--region-swap-reveal');
+        if (lanesInner) lanesInner.classList.add('audio-waveform-composite--region-swap-reveal');
+        if (lane) void lane.offsetHeight;
+        if (swapLayer) void swapLayer.offsetHeight;
+
+        requestAnimationFrame(() => {
+            if (lane) lane.classList.add('audio-waveform-lane--region-swap-reveal--active');
+            if (lanesInner) lanesInner.classList.add('audio-waveform-composite--region-swap-reveal--active');
+            if (swapLayer) {
+                swapLayer.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out--active');
+            }
+            setTimeout(() => {
+                if (swapLayer) removePlaybackRegionSwapLayer(swapLayer);
+                clearRegionSwapRevealFadeClasses(lane, lanesInner);
+            }, REGION_SWAP_REVEAL_FADE_MS + 48);
+        });
+    }
+
+    function revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const track = { type: 'extra', slot };
-        if (typeof updateTrackRegionOverlays === 'function') {
-            updateTrackRegionOverlays(track);
+        if (!o.skipRedraw) {
+            if (typeof updateTrackRegionOverlays === 'function') {
+                updateTrackRegionOverlays(track);
+            }
+            if (typeof redrawAfterRegionChange === 'function') {
+                redrawAfterRegionChange(slot, redrawOpt || { invalidatePeakCache: true });
+            }
         }
-        if (typeof redrawAfterRegionChange === 'function') {
-            redrawAfterRegionChange(slot, redrawOpt || { invalidatePeakCache: true });
+        if (o.fadeIn && lane && regionSwapRevealFadeAllowed()) {
+            startRegionSwapRevealFade(lane, trackEl, o.swapLayer || null);
+            return;
         }
+        if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
+        if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
+        setRegionSwapCompositeActive(false);
+        playbackRegionSwapAnimActive = false;
+        playbackRegionSwapAnimPending = false;
+        scheduleMusicalGridRedrawAfterRegionSwapAnim();
+        refreshRegionRehearsalMarksAfterSwap();
     }
 
     function endPlaybackRegionSwapAnimation(trackEl, layer, lane, slot, redrawOpt, opt) {
@@ -569,27 +723,29 @@
         }
         const slot = track.slot;
 
-        const moves = gapSwap
-            ? collectSilentGapSegmentSwapMoves(
-                  track,
-                  spec.gap,
-                  spec.segmentIndex | 0,
-                  spec.swapPlan,
-                  spec.segmentIndices,
-              )
-            : collectPlaybackRegionSwapMoves(
-                  track,
-                  previewSegments,
-                  normalizedPair.lo,
-                  normalizedPair.hi,
-                  {
-                      contentOnlySwap,
-                      forceTimelineSwap,
-                      oldOverlayIntervals,
-                      swapUnitSegmentIndicesA: spec.swapUnitSegmentIndicesA,
-                      swapUnitSegmentIndicesB: spec.swapUnitSegmentIndicesB,
-                  },
-              );
+        const moves = filterVisibleRegionSwapMoves(
+            gapSwap
+                ? collectSilentGapSegmentSwapMoves(
+                      track,
+                      spec.gap,
+                      spec.segmentIndex | 0,
+                      spec.swapPlan,
+                      spec.segmentIndices,
+                  )
+                : collectPlaybackRegionSwapMoves(
+                      track,
+                      previewSegments,
+                      normalizedPair.lo,
+                      normalizedPair.hi,
+                      {
+                          contentOnlySwap,
+                          forceTimelineSwap,
+                          oldOverlayIntervals,
+                          swapUnitSegmentIndicesA: spec.swapUnitSegmentIndicesA,
+                          swapUnitSegmentIndicesB: spec.swapUnitSegmentIndicesB,
+                      },
+                  ),
+        );
         if (moves.length < 2) {
             return regionSwapAnimReject('insufficient moves', { moveCount: moves.length });
         }
@@ -626,7 +782,7 @@
             }
         }
 
-        function runPostSwapHeavyWork(applyOk, onRedrawDone) {
+        function runPostSwapHeavyWork(applyOk, swapLayer, onRedrawDone) {
             const trackRef = { type: 'extra', slot };
             const runPersist = () => {
                 if (!applyOk) return;
@@ -662,6 +818,8 @@
                 }
                 revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, {
                     skipRedraw: true,
+                    fadeIn: true,
+                    swapLayer: swapLayer || null,
                 });
                 if (typeof onRedrawDone === 'function') onRedrawDone();
                 if (typeof requestIdleCallback === 'function') {
@@ -693,12 +851,12 @@
                     });
                 }
             }
-            removePlaybackRegionSwapLayer(layer);
             if (!applyOk) {
+                removePlaybackRegionSwapLayer(layer);
                 revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, { skipRedraw: false });
                 playbackRegionSwapAnimPending = false;
             } else {
-                runPostSwapHeavyWork(applyOk);
+                runPostSwapHeavyWork(applyOk, layer);
             }
             if (typeof window.regionSwapDiagLog === 'function') {
                 window.regionSwapDiagLog('swap/animation/done', {
@@ -711,9 +869,11 @@
         function recoverSwapWithoutAnimation(reason) {
             playbackRegionSwapAnimPending = false;
             playbackRegionSwapAnimActive = false;
+            scheduleMusicalGridRedrawAfterRegionSwapAnim();
             removePlaybackRegionSwapLayer(layer);
             if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
             if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
+            setRegionSwapCompositeActive(false);
             if (typeof window.regionSwapDiagLog === 'function') {
                 window.regionSwapDiagLog('swap/animation/recovered', { reason: reason || 'unknown' });
             }
@@ -742,8 +902,9 @@
                 const move = moves[i];
                 let bitmap = null;
                 if (move.kind !== 'silent-gap') {
-                    bitmap = captureLaneCanvasStrip(
+                    bitmap = captureRegionSwapStrip(
                         ui.canvas,
+                        trackEl,
                         move.from.left,
                         move.from.width,
                         hCss,
@@ -767,10 +928,17 @@
             const ghosts = prepared.ghosts;
             const captureMiss = prepared.captureMiss | 0;
             try {
-                trackEl.appendChild(layer);
+                layer.classList.add('audio-waveform-lane__region-swap-layer--lanes-overlay');
+                if (typeof window.syncLaneOverlayGridPlacement === 'function') {
+                    window.syncLaneOverlayGridPlacement(lane, layer);
+                } else {
+                    trackEl.appendChild(layer);
+                }
                 void layer.offsetHeight;
                 const animStartMs = performance.now();
                 playbackRegionSwapAnimActive = true;
+                scheduleMusicalGridRedrawAfterRegionSwapAnim();
+                setRegionSwapCompositeActive(true);
                 trackEl.classList.add('audio-waveform-lane--region-swap-active');
                 lane.classList.add('audio-waveform-lane--region-swap-active');
                 if (captureMiss > 0 && typeof window.regionSwapDiagLog === 'function') {
@@ -798,6 +966,8 @@
             } catch (err) {
                 playbackRegionSwapAnimActive = false;
                 playbackRegionSwapAnimPending = false;
+                scheduleMusicalGridRedrawAfterRegionSwapAnim();
+                setRegionSwapCompositeActive(false);
                 if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
                 if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
                 removePlaybackRegionSwapLayer(layer);
@@ -831,6 +1001,7 @@
             return 'started';
         } catch (err) {
             playbackRegionSwapAnimPending = false;
+            scheduleMusicalGridRedrawAfterRegionSwapAnim();
             return regionSwapAnimReject('animation setup failed');
         }
     }
@@ -839,5 +1010,11 @@
         return playbackRegionSwapAnimActive || playbackRegionSwapAnimPending;
     }
 
+    /** 背景の Phrase 着色のみ抑止（ゴーストキャプチャ前の pending では消さない） */
+    function isPlaybackRegionSwapPhraseFillSuppressed() {
+        return playbackRegionSwapAnimActive;
+    }
+
     window.playPlaybackRegionSwapAnimation = playPlaybackRegionSwapAnimation;
     window.isPlaybackRegionSwapAnimActive = isPlaybackRegionSwapAnimActive;
+    window.isPlaybackRegionSwapPhraseFillSuppressed = isPlaybackRegionSwapPhraseFillSuppressed;

@@ -1989,7 +1989,12 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return;
-        drawPhraseGroupFills(ctx, w, h, master, settings);
+        const suppressPhraseFillsDuringRegionSwap =
+            typeof window.isPlaybackRegionSwapPhraseFillSuppressed === 'function' &&
+            window.isPlaybackRegionSwapPhraseFillSuppressed();
+        if (!suppressPhraseFillsDuringRegionSwap) {
+            drawPhraseGroupFills(ctx, w, h, master, settings);
+        }
         if (getMusicalGridVisible()) {
             ctx.save();
             ctx.globalCompositeOperation = 'source-over';
@@ -3913,6 +3918,7 @@
     };
     window.clearMusicalGridPositionCache = clearMusicalGridPositionCache;
     window.clearPhraseGroupBarCountsOverride = clearPhraseGroupBarCountsOverride;
+    window.setPhraseGroupBarCountsOverride = setPhraseGroupBarCountsOverride;
     window.repairPhraseSpecToSizes = repairPhraseSpecToSizes;
     /** RegionSwap — 展開 counts から Phrase 欄テキストを再構成して反映 */
     window.applyPhraseGroupBarCountsForRegionSwap = function applyPhraseGroupBarCountsForRegionSwap(

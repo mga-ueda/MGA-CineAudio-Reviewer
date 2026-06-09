@@ -461,6 +461,9 @@
     };
     window.getPlaybackRegionsState = getPlaybackRegionsState;
     window.requestRegionUndoCapture = requestRegionUndoCapture;
+    window.attachRegionSwapAnimHintToUndoStackTop = attachRegionSwapAnimHintToUndoStackTop;
+    window.previewTrackSegmentsFromUndoEntry = previewTrackSegmentsFromUndoEntry;
+    window.captureTrackRegionOverlayIntervals = captureTrackRegionOverlayIntervals;
     window.redrawAfterRegionChange = redrawAfterRegionChange;
     window.REHEARSAL_MARK_UNLABELED = REHEARSAL_MARK_UNLABELED;
     window.rehearsalMarkLabelForPhraseSlotIndex = rehearsalMarkLabelForPhraseSlotIndex;

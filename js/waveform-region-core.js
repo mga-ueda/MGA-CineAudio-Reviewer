@@ -173,6 +173,9 @@
     }
     function requestRegionUndoCapture(opt) {
         if (regionUndoPaused) return;
+        if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
+            window.clearRegionSwapHistoryAnimHint();
+        }
         const snap = captureRegionUndoSnapshot(opt);
         const top = regionUndoStack.length
             ? regionUndoStack[regionUndoStack.length - 1]
@@ -181,7 +184,16 @@
         regionUndoStack.push(snap);
         clearRegionRedoStack();
     }
-    function restoreRegionUndoSnapshot(snap) {
+    function attachRegionSwapAnimHintToUndoStackTop(hint) {
+        if (regionUndoPaused || !hint || !hint.swapAnim) return;
+        if (!regionUndoStack.length) return;
+        const top = regionUndoStack[regionUndoStack.length - 1];
+        if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
+            top.regionSwapAnimHint = window.cloneRegionSwapHistoryAnimHint(hint);
+        }
+    }
+    function restoreRegionUndoSnapshot(snap, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         regionUndoPaused = true;
         const normalized = normalizeRegionUndoSnapshot(snap);
         const n = getExtraTrackCount();
@@ -237,19 +249,312 @@
                 });
             }
         }
+        if (!o.deferRedraw) {
+            for (let i = 0; i < n; i++) {
+                const tr =
+                    typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
+                if (!tr) continue;
+                updateTrackRegionOverlays({ type: 'extra', slot: i });
+                redrawAfterRegionChange(i);
+            }
+            updateAllPlaybackRegionOverlays();
+        }
+        if (
+            !o.deferRedraw &&
+            !o.skipSyncTransport &&
+            typeof syncExtraAudioToTransport === 'function'
+        ) {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (!o.deferRedraw && !o.skipPersist && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        regionUndoPaused = false;
+    }
+    function trackUndoEntryFingerprint(entry) {
+        if (!entry) {
+            return JSON.stringify({
+                playbackRegions: emptyPlaybackRegionsState(),
+                timelineStartSec: 0,
+            });
+        }
+        return JSON.stringify({
+            playbackRegions: entry.playbackRegions,
+            timelineStartSec: entry.timelineStartSec,
+        });
+    }
+    function findSingleChangedTrackSlotForHistoryRestore(normalizedTarget) {
+        const n = getExtraTrackCount();
+        const changed = [];
         for (let i = 0; i < n; i++) {
+            const entry = normalizedTarget.tracks.find((e) => e.slot === i);
             const tr =
                 typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
             if (!tr) continue;
-            updateTrackRegionOverlays({ type: 'extra', slot: i });
-            redrawAfterRegionChange(i);
+            materializePlaybackRegionTimelineAnchorsForSnapshot({ type: 'extra', slot: i });
+            const curFp = JSON.stringify({
+                playbackRegions: deepCloneJson(tr.playbackRegions),
+                timelineStartSec:
+                    typeof getExtraTrackTimelineStartSec === 'function'
+                        ? getExtraTrackTimelineStartSec(i)
+                        : 0,
+            });
+            if (curFp !== trackUndoEntryFingerprint(entry)) changed.push(i);
         }
-        updateAllPlaybackRegionOverlays();
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
+        return changed.length === 1 ? changed[0] : -1;
+    }
+    function clearTrackSegmentsMemoForSlot(slot) {
+        trackSegmentsMemoBySlot[slot] = undefined;
+    }
+    function previewTrackSegmentsFromUndoEntry(track, entry, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const phraseCounts =
+            o.phraseExpandedCounts && o.phraseExpandedCounts.length
+                ? o.phraseExpandedCounts
+                : null;
+        const slot = track.slot | 0;
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !entry) return null;
+
+        function previewWithPlaybackRegions() {
+            const savedRegions = deepCloneJson(tr.playbackRegions);
+            const savedTls =
+                typeof getExtraTrackTimelineStartSec === 'function'
+                    ? getExtraTrackTimelineStartSec(slot)
+                    : 0;
+            tr.playbackRegions = deepCloneJson(entry.playbackRegions);
+            if (typeof setExtraTrackTimelineStartSec === 'function') {
+                setExtraTrackTimelineStartSec(slot, entry.timelineStartSec, { skipPersist: true });
+            }
+            if (typeof window.invalidateTrackTimelineSlotsReadCache === 'function') {
+                window.invalidateTrackTimelineSlotsReadCache();
+            }
+            clearTrackSegmentsMemoForSlot(slot);
+            let segments = null;
+            try {
+                segments = getTrackSegments(track).map((s) => Object.assign({}, s));
+            } finally {
+                tr.playbackRegions = savedRegions;
+                if (typeof setExtraTrackTimelineStartSec === 'function') {
+                    setExtraTrackTimelineStartSec(slot, savedTls, { skipPersist: true });
+                }
+                if (typeof window.invalidateTrackTimelineSlotsReadCache === 'function') {
+                    window.invalidateTrackTimelineSlotsReadCache();
+                }
+                clearTrackSegmentsMemoForSlot(slot);
+            }
+            return segments;
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+
+        if (
+            phraseCounts &&
+            typeof window.setPhraseGroupBarCountsOverride === 'function' &&
+            typeof window.clearPhraseGroupBarCountsOverride === 'function'
+        ) {
+            try {
+                window.setPhraseGroupBarCountsOverride(phraseCounts);
+                if (typeof window.clearMusicalGridPositionCache === 'function') {
+                    window.clearMusicalGridPositionCache();
+                }
+                return previewWithPlaybackRegions();
+            } finally {
+                window.clearPhraseGroupBarCountsOverride();
+                if (typeof window.clearMusicalGridPositionCache === 'function') {
+                    window.clearMusicalGridPositionCache();
+                }
+            }
+        }
+        return previewWithPlaybackRegions();
+    }
+    function captureTrackRegionOverlayIntervals(track, segmentCount) {
+        const metrics =
+            typeof getRegionOverlayTimelineMetrics === 'function'
+                ? getRegionOverlayTimelineMetrics()
+                : null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (
+            !metrics ||
+            !(metrics.scrubW > 0) ||
+            !(master > 0) ||
+            typeof getSegmentRegionOverlayTimelineInterval !== 'function' ||
+            typeof transportSecToOverlayPx !== 'function'
+        ) {
+            return null;
+        }
+        const n = segmentCount | 0;
+        if (!(n > 0)) return null;
+        const intervals = [];
+        for (let si = 0; si < n; si++) {
+            const iv = getSegmentRegionOverlayTimelineInterval(track, si);
+            if (!iv) return null;
+            const left = transportSecToOverlayPx(iv.start, metrics, master);
+            const right = transportSecToOverlayPx(iv.end, metrics, master);
+            intervals.push({
+                left: Number.isFinite(left) ? left : 0,
+                width: Math.max(1, (Number.isFinite(right) ? right : 0) - left),
+            });
+        }
+        return intervals;
+    }
+    function finishDeferredRegionHistoryRestore(targetSnap, onDone) {
         regionUndoPaused = false;
+        restoreRegionUndoSnapshot(targetSnap);
+        if (typeof onDone === 'function') onDone();
+    }
+
+    function resolveHistoryRestoreTrackSlot(normalized, swapHint) {
+        if (swapHint && swapHint.swapAnim) {
+            return swapHint.trackSlot | 0;
+        }
+        const hint = swapHint || null;
+        if (
+            hint &&
+            typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
+            window.regionSwapHistoryAnimHintMatchesTarget(hint, normalized)
+        ) {
+            return hint.trackSlot | 0;
+        }
+        return findSingleChangedTrackSlotForHistoryRestore(normalized);
+    }
+
+    function resolveHistoryRestoreSwapHint(targetSnap, swapHint) {
+        if (swapHint && swapHint.swapAnim) return swapHint;
+        const normalized = normalizeRegionUndoSnapshot(targetSnap);
+        const globalHint =
+            typeof window.regionSwapHistoryAnimHint !== 'undefined'
+                ? window.regionSwapHistoryAnimHint
+                : null;
+        if (
+            globalHint &&
+            typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
+            window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalized)
+        ) {
+            return globalHint;
+        }
+        return null;
+    }
+
+    function tryAnimateRegionHistoryRestore(targetSnap, onDone, swapHint, animWaitRetries) {
+        if (typeof window.playPlaybackRegionSwapAnimation !== 'function') {
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
+        if (
+            typeof window.planRegionHistorySwapAnimation !== 'function' &&
+            typeof window.planRegionHistorySwapAnimationFromHint !== 'function'
+        ) {
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
+        if (
+            typeof window.isPlaybackRegionSwapAnimActive === 'function' &&
+            window.isPlaybackRegionSwapAnimActive()
+        ) {
+            const waits = animWaitRetries | 0;
+            if (waits < 20) {
+                setTimeout(() => {
+                    tryAnimateRegionHistoryRestore(targetSnap, onDone, swapHint, waits + 1);
+                }, 50);
+                return false;
+            }
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
+        const normalized = normalizeRegionUndoSnapshot(targetSnap);
+        const hint = resolveHistoryRestoreSwapHint(targetSnap, swapHint);
+        const slotIdx = resolveHistoryRestoreTrackSlot(normalized, hint);
+        if (slotIdx < 0) {
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
+
+        let plan = null;
+        if (
+            hint &&
+            (hint.trackSlot | 0) === slotIdx &&
+            typeof window.planRegionHistorySwapAnimationFromHint === 'function'
+        ) {
+            plan = window.planRegionHistorySwapAnimationFromHint(normalized, slotIdx, hint);
+        }
+        if (!plan && typeof window.planRegionHistorySwapAnimation === 'function') {
+            plan = window.planRegionHistorySwapAnimation(normalized, slotIdx);
+        }
+        if (!plan) {
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
+
+        if (
+            plan.targetCounts &&
+            plan.targetCounts.length &&
+            typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function'
+        ) {
+            window.applyPhraseGroupBarCountsForRegionSwap(plan.targetCounts, {
+                skipUndo: true,
+                relayoutRegions: false,
+                skipSessionPersist: true,
+                skipGridRedraw: true,
+            });
+        }
+        if (typeof window.clearMusicalGridPositionCache === 'function') {
+            window.clearMusicalGridPositionCache();
+        }
+
+        const planFinalize =
+            typeof plan.finalizeSwap === 'function' ? plan.finalizeSwap : function () {};
+        const animSpec = {
+            track: plan.track,
+            forceTimelineSwap: true,
+            previewSegments: plan.previewSegments,
+            redrawOpt: { invalidatePeakCache: true },
+            oldOverlayIntervals: plan.oldOverlayIntervals,
+            applySwap: (animOpt) => {
+                restoreRegionUndoSnapshot(targetSnap, {
+                    deferRedraw: !!(animOpt && animOpt.deferRedraw),
+                    skipPersist: !!(animOpt && animOpt.skipPersist),
+                    skipSyncTransport: !!(animOpt && animOpt.skipSyncTransport),
+                });
+                return true;
+            },
+            finalizeSwap: () => {
+                planFinalize();
+                if (typeof onDone === 'function') onDone();
+            },
+        };
+        const swapAnim = plan.swapAnim;
+        if (swapAnim && swapAnim.gap) {
+            animSpec.gap = swapAnim.gap;
+            animSpec.segmentIndex = swapAnim.segmentIndex | 0;
+            animSpec.segmentIndices = swapAnim.segmentIndices || [];
+            if (swapAnim.swapPlan) animSpec.swapPlan = swapAnim.swapPlan;
+        } else if (swapAnim) {
+            animSpec.swapLo = swapAnim.swapLo | 0;
+            animSpec.swapHi = swapAnim.swapHi | 0;
+            if (swapAnim.swapUnitSegmentIndicesA && swapAnim.swapUnitSegmentIndicesB) {
+                animSpec.swapUnitSegmentIndicesA = swapAnim.swapUnitSegmentIndicesA;
+                animSpec.swapUnitSegmentIndicesB = swapAnim.swapUnitSegmentIndicesB;
+            }
+        }
+
+        const animResult = window.playPlaybackRegionSwapAnimation(animSpec);
+        if (animResult === 'started' || animResult === 'applied-recovered') {
+            return true;
+        }
+        finishDeferredRegionHistoryRestore(targetSnap, onDone);
+        return false;
+    }
+
+    function beginDeferredRegionHistoryRestore(targetSnap, onDone, swapHint) {
+        regionUndoPaused = true;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                tryAnimateRegionHistoryRestore(targetSnap, onDone, swapHint);
+            });
+        });
     }
     function captureRegionUndoSnapshotForHistory() {
         return captureRegionUndoSnapshot({ includePhrase: true });
@@ -258,30 +563,84 @@
         if (!regionUndoStack.length) return false;
         const current = captureRegionUndoSnapshotForHistory();
         const prev = regionUndoStack.pop();
-        regionRedoStack.push(current);
-        restoreRegionUndoSnapshot(prev);
-        writeLog('Playback region: undo');
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Undo', 'notice');
+        const normalizedPrev = normalizeRegionUndoSnapshot(prev);
+        let swapHintForRestore = null;
+        if (prev.regionSwapAnimHint && prev.regionSwapAnimHint.swapAnim) {
+            swapHintForRestore = prev.regionSwapAnimHint;
+            if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
+                current.regionSwapAnimHint =
+                    window.cloneRegionSwapHistoryAnimHint(prev.regionSwapAnimHint);
+            }
+        } else {
+            const globalHint =
+                typeof window.regionSwapHistoryAnimHint !== 'undefined'
+                    ? window.regionSwapHistoryAnimHint
+                    : null;
+            if (
+                globalHint &&
+                typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
+                window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalizedPrev)
+            ) {
+                swapHintForRestore = globalHint;
+                if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
+                    current.regionSwapAnimHint =
+                        window.cloneRegionSwapHistoryAnimHint(globalHint);
+                }
+            }
         }
+        if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
+            window.clearRegionSwapHistoryAnimHint();
+        }
+        regionRedoStack.push(current);
+        beginDeferredRegionHistoryRestore(prev, () => {
+            writeLog('Playback region: undo');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Undo', 'notice');
+            }
+        }, swapHintForRestore);
         return true;
     }
     function redoPlaybackRegion() {
         if (!regionRedoStack.length) return false;
         const current = captureRegionUndoSnapshotForHistory();
         const next = regionRedoStack.pop();
-        regionUndoStack.push(current);
-        restoreRegionUndoSnapshot(next);
-        writeLog('Playback region: redo');
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Redo', 'notice');
+        let swapHintForRestore = null;
+        if (next.regionSwapAnimHint && next.regionSwapAnimHint.swapAnim) {
+            swapHintForRestore = next.regionSwapAnimHint;
+            delete next.regionSwapAnimHint;
+        } else {
+            const normalizedNext = normalizeRegionUndoSnapshot(next);
+            const globalHint =
+                typeof window.regionSwapHistoryAnimHint !== 'undefined'
+                    ? window.regionSwapHistoryAnimHint
+                    : null;
+            if (
+                globalHint &&
+                typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
+                window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalizedNext)
+            ) {
+                swapHintForRestore = globalHint;
+            }
         }
+        if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
+            window.clearRegionSwapHistoryAnimHint();
+        }
+        regionUndoStack.push(current);
+        beginDeferredRegionHistoryRestore(next, () => {
+            writeLog('Playback region: redo');
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Redo', 'notice');
+            }
+        }, swapHintForRestore);
         return true;
     }
     function clearRegionUndoStack() {
         regionUndoStack.length = 0;
         clearRegionRedoStack();
         regionUndoDragSnap = null;
+        if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
+            window.clearRegionSwapHistoryAnimHint();
+        }
     }
     function beginRegionUndoGesture() {
         if (regionUndoPaused) return;

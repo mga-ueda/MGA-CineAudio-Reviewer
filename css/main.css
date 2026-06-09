@@ -1589,12 +1589,28 @@
         .audio-waveform-composite__lanes--region-drag .audio-waveform-composite__region-cursor {
             display: none;
         }
-        /* リージョン付きレーン (5)・グリッド (6)・練習記号/リージョンカーソル/マーカー (7)・プレイヘッド (8) */
-        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers.seek-bar-markers {
+        /* リージョン付きレーン (5)・グリッド (6)・入れ替えアニメ (7)・練習記号/リージョンカーソル/マーカー (8)・プレイヘッド (9) */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-lane__region-swap-layer--lanes-overlay {
             z-index: 7;
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: var(--wave-lanes-viewport-w, 100%);
+            min-width: var(--wave-lanes-viewport-w, 100%);
+            height: 100%;
+            pointer-events: none;
+            grid-column: 1;
+            align-self: stretch;
+            box-sizing: border-box;
+            overflow: visible;
+        }
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__markers.seek-bar-markers {
+            z-index: 8;
         }
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor {
-            z-index: 7;
+            z-index: 8;
         }
         /* 波形ローディング文言: マーカー(7)・ラベル(10)・プレイヘッド(8)より前面 */
         .audio-waveform-composite__lanes-inner > .audio-waveform-lane__loading {
@@ -2250,7 +2266,7 @@
         }
         /* 小節線グリッド (6) より前面 — マーカーと同様の全行オーバーレイ + 行バンド */
         .audio-waveform-composite__lanes-inner > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
-            z-index: 7;
+            z-index: 8;
             position: absolute;
             left: 0;
             right: 0;
@@ -2534,15 +2550,18 @@
             user-select: none;
             -webkit-user-select: none;
         }
-        .audio-waveform-lane--region-swap-active .audio-waveform-lane__track {
-            z-index: 20;
-        }
         .audio-waveform-lane__region-swap-layer {
             position: absolute;
             inset: 0;
-            z-index: 12;
             pointer-events: none;
             overflow: visible;
+        }
+        .audio-waveform-lane__region-swap-layer--crossfade-out {
+            opacity: 1;
+        }
+        .audio-waveform-lane__region-swap-layer--crossfade-out--active {
+            opacity: 0;
+            transition: opacity 180ms ease-out;
         }
         .audio-waveform-lane__region-swap-anim {
             position: absolute;
@@ -2558,29 +2577,54 @@
             display: block;
             width: 100%;
             height: 100%;
+            opacity: 1;
         }
         .audio-waveform-lane__region-swap-anim--silent-gap {
-            background: rgba(22, 24, 32, 0.92);
-            box-shadow:
-                0 0 0 1px rgba(120, 230, 255, 0.35),
-                inset 0 0 24px rgba(0, 0, 0, 0.45);
-        }
-        .audio-waveform-lane__region-swap-anim--silent-gap canvas {
-            opacity: 0.55;
+            background: #161820;
+            box-shadow: 0 0 0 1px rgba(120, 230, 255, 0.45);
         }
         .audio-waveform-lane__region-swap-anim--no-capture {
-            background: linear-gradient(
-                180deg,
-                rgba(40, 48, 62, 0.92) 0%,
-                rgba(28, 32, 42, 0.88) 100%
-            );
-            box-shadow:
-                0 0 0 1px rgba(120, 230, 255, 0.35),
-                inset 0 0 18px rgba(0, 0, 0, 0.35);
+            background: #161820;
+            box-shadow: 0 0 0 1px rgba(120, 230, 255, 0.45);
         }
         .audio-waveform-lane--region-swap-active .audio-waveform-lane__canvas,
         .audio-waveform-lane--region-swap-active .audio-waveform-lane__playback-regions {
             visibility: hidden;
+        }
+        .audio-waveform-composite__lanes-inner.audio-waveform-composite--region-swap-active
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            visibility: hidden;
+            opacity: 0;
+        }
+        /* 入れ替え完了 — 波形・リージョン UI を高速フェードイン */
+        .audio-waveform-lane--region-swap-reveal .audio-waveform-lane__canvas,
+        .audio-waveform-lane--region-swap-reveal .audio-waveform-lane__playback-regions {
+            visibility: visible;
+            opacity: 0;
+        }
+        .audio-waveform-lane--region-swap-reveal--active .audio-waveform-lane__canvas,
+        .audio-waveform-lane--region-swap-reveal--active .audio-waveform-lane__playback-regions {
+            opacity: 1;
+            transition: opacity 180ms ease-out;
+        }
+        .audio-waveform-composite--region-swap-reveal
+            > .audio-waveform-composite__musical-grid {
+            opacity: 0;
+        }
+        .audio-waveform-composite--region-swap-reveal--active
+            > .audio-waveform-composite__musical-grid {
+            opacity: 1;
+            transition: opacity 180ms ease-out;
+        }
+        .audio-waveform-composite--region-swap-reveal
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            visibility: visible;
+            opacity: 0;
+        }
+        .audio-waveform-composite--region-swap-reveal--active
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            opacity: 1;
+            transition: opacity 180ms ease-out;
         }
         /* ミュート等で波形と同様に非可聴になったトラックのリージョン／フェード UI */
         .audio-waveform-lane--mix-muted .audio-waveform-lane__playback-regions {
