@@ -188,6 +188,9 @@
         if (Number.isFinite(left.gainDb)) {
             merged.gainDb = left.gainDb;
         }
+        if (Number.isFinite(left.pitchSemitones) && left.pitchSemitones !== 0) {
+            merged.pitchSemitones = left.pitchSemitones;
+        }
         if (Number.isFinite(left.fadeInSec)) {
             merged.fadeInSec = left.fadeInSec;
         }

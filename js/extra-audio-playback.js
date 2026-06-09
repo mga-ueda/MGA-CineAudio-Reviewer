@@ -4,7 +4,12 @@
     function ensureReviewMixCtx() {
         const Ctx = window.AudioContext || window.webkitAudioContext;
         if (!Ctx) return null;
-        if (!reviewMixCtx) reviewMixCtx = new Ctx();
+        if (!reviewMixCtx) {
+            reviewMixCtx = new Ctx();
+            if (typeof warmupPitchStretchWorklet === 'function') {
+                void warmupPitchStretchWorklet(reviewMixCtx);
+            }
+        }
         ensureReviewMixMasterBus(reviewMixCtx);
         if (reviewMixCtx.state === 'suspended') {
             void reviewMixCtx.resume();
@@ -333,6 +338,9 @@
             }
             const entry =
                 tr && tr.segmentSources ? tr.segmentSources[segHit.key] : null;
+            if (entry && entry.pendingLiveStretch && !entry.src) {
+                continue;
+            }
             if (!entry || !entry.src) return false;
         }
         return true;
@@ -548,6 +556,9 @@
                     gainT,
                 );
                 const existing = tr.segmentSources && tr.segmentSources[segHit.key];
+                if (existing && existing.pendingLiveStretch && !existing.src) {
+                    continue;
+                }
                 if (
                     !existing ||
                     !existing.src
@@ -880,6 +891,9 @@
             }
             if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
                 out.gainDb = raw.gainDb;
+            }
+            if (raw && Number.isFinite(raw.pitchSemitones) && raw.pitchSemitones !== 0) {
+                out.pitchSemitones = Math.round(raw.pitchSemitones);
             }
             if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
                 out.fadeInSec = raw.fadeInSec;

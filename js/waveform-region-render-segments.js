@@ -1182,6 +1182,14 @@
         gainLabel.hidden = !gainText;
         gainLabel.setAttribute('aria-hidden', gainText ? 'false' : 'true');
         el.appendChild(gainLabel);
+        const pitchSemitones = getSegmentPitchSemitones(track, segmentIndex);
+        const pitchLabel = document.createElement('span');
+        pitchLabel.className = 'audio-waveform-lane__playback-region__pitch';
+        const pitchText = formatRegionPitchDisplay(pitchSemitones);
+        pitchLabel.textContent = pitchText;
+        pitchLabel.hidden = !pitchText;
+        pitchLabel.setAttribute('aria-hidden', pitchText ? 'false' : 'true');
+        el.appendChild(pitchLabel);
         if (shouldShowMusicalMetaOnSegment(track, segmentIndex)) {
             const restoreBusy =
                 typeof isSessionRestoreBusy === 'function' && isSessionRestoreBusy();
@@ -1271,6 +1279,23 @@
             fadeCurve.style.setProperty('--region-fade-in-start', playbackOffsetRatio * 100 + '%');
             fadeCurve.style.setProperty('--region-fade-in-width', fadeInRatio * 100 + '%');
             fadeCurve.style.setProperty('--region-fade-out-width', fadeOutRatio * 100 + '%');
+        }
+
+        const gainLabel = el.querySelector('.audio-waveform-lane__playback-region__gain-db');
+        if (gainLabel) {
+            const gainText = formatRegionGainDbDisplay(getSegmentGainDb(track, segmentIndex));
+            gainLabel.textContent = gainText;
+            gainLabel.hidden = !gainText;
+            gainLabel.setAttribute('aria-hidden', gainText ? 'false' : 'true');
+        }
+        const pitchLabel = el.querySelector('.audio-waveform-lane__playback-region__pitch');
+        if (pitchLabel) {
+            const pitchText = formatRegionPitchDisplay(
+                getSegmentPitchSemitones(track, segmentIndex),
+            );
+            pitchLabel.textContent = pitchText;
+            pitchLabel.hidden = !pitchText;
+            pitchLabel.setAttribute('aria-hidden', pitchText ? 'false' : 'true');
         }
     }
 
@@ -1448,6 +1473,7 @@
             regionInSec: getSegmentRegionTimelineIn(track, segmentIndex),
             regionLeadPadSec: getSegmentRegionLeadPadSec(track, segmentIndex),
             gainDb: getSegmentGainDb(track, segmentIndex),
+            pitchSemitones: getSegmentPitchSemitones(track, segmentIndex),
             fadeInSec: getSegmentFadeDurationSec(track, segmentIndex, 'in'),
             fadeOutSec: getSegmentFadeDurationSec(track, segmentIndex, 'out'),
         };
@@ -1572,6 +1598,9 @@
         }
         if (Number.isFinite(clip.gainDb) && Math.abs(clip.gainDb) > 0.0005) {
             clone.gainDb = clip.gainDb;
+        }
+        if (Number.isFinite(clip.pitchSemitones) && clip.pitchSemitones !== 0) {
+            clone.pitchSemitones = clip.pitchSemitones;
         }
         if (Number.isFinite(clip.fadeOutSec) && clip.fadeOutSec > 0.0005) {
             clone.fadeOutSec = clip.fadeOutSec;

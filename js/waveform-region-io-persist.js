@@ -233,6 +233,13 @@
                     if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
                         entry.gainDb = raw.gainDb;
                     }
+                    if (
+                        raw &&
+                        Number.isFinite(raw.pitchSemitones) &&
+                        raw.pitchSemitones !== 0
+                    ) {
+                        entry.pitchSemitones = Math.round(raw.pitchSemitones);
+                    }
                     if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
                         entry.fadeInSec = raw.fadeInSec;
                     }

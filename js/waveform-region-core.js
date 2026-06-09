@@ -11,6 +11,8 @@
     const JOINED_BOUNDARY_CROSSFADE_SEC = 1;
     const REGION_GAIN_DB_MIN = -96;
     const REGION_GAIN_DB_MAX = 10;
+    const REGION_PITCH_SEMITONES_MIN = -12;
+    const REGION_PITCH_SEMITONES_MAX = 12;
     const regionUndoStack = [];
     const regionRedoStack = [];
     let regionUndoPaused = false;
@@ -990,6 +992,13 @@
                 Math.min(REGION_GAIN_DB_MAX, seg.gainDb),
             );
             if (Math.abs(db) > 0.0005) base.gainDb = db;
+        }
+        if (seg && Number.isFinite(seg.pitchSemitones)) {
+            const pitch = Math.max(
+                REGION_PITCH_SEMITONES_MIN,
+                Math.min(REGION_PITCH_SEMITONES_MAX, Math.round(seg.pitchSemitones)),
+            );
+            if (pitch !== 0) base.pitchSemitones = pitch;
         }
         if (seg && Number.isFinite(seg.fadeInSec)) {
             base.fadeInSec = Math.max(0, seg.fadeInSec);

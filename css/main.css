@@ -2416,6 +2416,26 @@
             -webkit-user-select: none;
             white-space: nowrap;
         }
+        .audio-waveform-lane__playback-region__pitch {
+            position: absolute;
+            left: 50%;
+            top: calc(50% - 1.05rem);
+            transform: translateX(-50%);
+            z-index: 4;
+            font-size: 0.58rem;
+            font-weight: 600;
+            line-height: 1.25;
+            letter-spacing: 0.02em;
+            color: #b8e4ff;
+            -webkit-text-fill-color: #b8e4ff;
+            background: rgba(0, 0, 0, 0.88);
+            padding: 1px 5px;
+            border-radius: 3px;
+            pointer-events: none;
+            user-select: none;
+            -webkit-user-select: none;
+            white-space: nowrap;
+        }
         .audio-waveform-composite__markers.seek-bar-markers .seek-bar-marker {
             pointer-events: auto;
         }
@@ -2609,6 +2629,11 @@
         .audio-waveform-lane__playback-regions--dense-boundaries
             .audio-waveform-lane__playback-region--narrow
             .audio-waveform-lane__playback-region__gain-db {
+            display: none;
+        }
+        .audio-waveform-lane__playback-regions--dense-boundaries
+            .audio-waveform-lane__playback-region--narrow
+            .audio-waveform-lane__playback-region__pitch {
             display: none;
         }
         .audio-waveform-lane__playback-regions--dense-boundaries

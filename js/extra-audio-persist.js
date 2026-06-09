@@ -204,6 +204,9 @@
         }
         for (let i = 0; i < EXTRA_TRACK_COUNT; i++) {
             applyExtraSlotMixFromSessionRestore(i);
+            if (typeof schedulePitchSliceRenderForTrack === 'function') {
+                schedulePitchSliceRenderForTrack({ type: 'extra', slot: i });
+            }
         }
         syncExtraLaneVisibilityAfterSessionRestore();
         refreshReviewMixUi();

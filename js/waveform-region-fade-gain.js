@@ -1,10 +1,60 @@
 /**
- * waveform-region-fade-gain.js — リージョン Gain / Fade
+ * waveform-region-fade-gain.js — リージョン Gain / Fade / Pitch
  */
+
     function clampRegionGainDb(db) {
         const n = Number(db);
         if (!Number.isFinite(n)) return 0;
         return Math.max(REGION_GAIN_DB_MIN, Math.min(REGION_GAIN_DB_MAX, n));
+    }
+
+    function clampRegionPitchSemitones(semitones) {
+        const n = Math.round(Number(semitones));
+        if (!Number.isFinite(n)) return 0;
+        return Math.max(
+            REGION_PITCH_SEMITONES_MIN,
+            Math.min(REGION_PITCH_SEMITONES_MAX, n),
+        );
+    }
+
+    function getSegmentPitchSemitones(track, segmentIndex) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (!raw || !Number.isFinite(raw.pitchSemitones)) return 0;
+        return clampRegionPitchSemitones(raw.pitchSemitones);
+    }
+
+    /** +1 半音 = 2^(1/12) 倍速（高く・速く）。レガシー再生のタイムライン尺合わせは playDur 側で補正。 */
+    function segmentPitchPlaybackRate(pitchSemitones) {
+        const pitch = clampRegionPitchSemitones(pitchSemitones);
+        if (pitch === 0) return 1;
+        return Math.pow(2, pitch / 12);
+    }
+
+    /** ピッチ変更に伴う playbackRate の速度変化を打ち消す係数（playDur 補正と対）。 */
+    function segmentPitchTimelineCompensationRate(pitchSemitones) {
+        const pitch = clampRegionPitchSemitones(pitchSemitones);
+        if (pitch === 0) return 1;
+        return Math.pow(2, -pitch / 12);
+    }
+
+    function applySegmentPitchToBufferSource(src, pitchSemitones) {
+        if (!src) return 1;
+        const pitch = clampRegionPitchSemitones(pitchSemitones);
+        if (pitch === 0) {
+            src.detune.value = 0;
+            src.playbackRate.value = 1;
+            return 1;
+        }
+        const rate = segmentPitchPlaybackRate(pitch);
+        src.detune.value = 0;
+        src.playbackRate.value = rate;
+        return rate;
+    }
+
+    function formatRegionPitchDisplay(semitones) {
+        const n = clampRegionPitchSemitones(semitones);
+        if (Math.abs(n) < 0.0005) return '';
+        return 'Key ' + (n > 0 ? '+' : '') + n;
     }
 
     function getSegmentGainDb(track, segmentIndex) {
@@ -222,6 +272,50 @@
             tryRejoinVolumeSplitBoundariesAtSegment(track, segmentIndex, {
                 skipUndo: !!(opt && opt.skipUndo),
             });
+        }
+        return true;
+    }
+
+    function setSegmentPitchSemitones(track, segmentIndex, pitchSemitones, opt) {
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments[segmentIndex]) return false;
+        const next = clampRegionPitchSemitones(pitchSemitones);
+        const prev = getSegmentPitchSemitones(track, segmentIndex);
+        if (next === prev) return false;
+        if (!(opt && opt.skipUndo) && !regionUndoPaused) {
+            requestRegionUndoCapture();
+        }
+        const raw = state.segments[segmentIndex];
+        if (next === 0) {
+            delete raw.pitchSemitones;
+        } else {
+            raw.pitchSemitones = next;
+        }
+        updateTrackRegionOverlays(track);
+        redrawAfterRegionChange(track.slot);
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (
+            !(opt && opt.skipPitchMarker) &&
+            typeof syncMarkerForRegionPitchChange === 'function'
+        ) {
+            syncMarkerForRegionPitchChange(track, segmentIndex, next, prev);
+        }
+        if (typeof invalidatePitchSliceCacheForSegment === 'function') {
+            invalidatePitchSliceCacheForSegment(track, segmentIndex);
+        }
+        if (
+            next !== 0 &&
+            typeof schedulePitchSliceRenderForSegment === 'function'
+        ) {
+            schedulePitchSliceRenderForSegment(track, segmentIndex);
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Key', 'Processing…', 'notice');
+            }
         }
         return true;
     }

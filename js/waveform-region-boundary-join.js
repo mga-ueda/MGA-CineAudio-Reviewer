@@ -251,6 +251,12 @@
         for (let b = segmentIndex; b < segments.length - 1; b++) {
             if (!isSegmentBoundaryJoined(track, b)) break;
             if (!isSegmentSourceContinuousAtBoundary(track, b)) break;
+            if (
+                typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+                boundaryNeedsPitchPlaybackSplit(track, b)
+            ) {
+                break;
+            }
             const next = segments[b + 1];
             if (!next) break;
             outSec = Number(next.sourceOutSec) || outSec;
@@ -297,14 +303,57 @@
             Number.isFinite(leftEntry.playbackAnchorCtxTime) &&
             Number.isFinite(leftEntry.bufferOff)
         ) {
-            const fadeBuf = segmentSourceSecFromTransport(
+            let leftSourceSecNow;
+            if (leftEntry.usesPitchSlice) {
+                const leftSeg = segments[segmentIndex - 1];
+                const leftSourceIn = leftSeg ? leftSeg.sourceInSec : 0;
+                leftSourceSecNow =
+                    leftSourceIn + Math.max(0, Number(leftEntry.bufferOff) || 0);
+            } else {
+                leftSourceSecNow = Number.isFinite(leftEntry.absoluteBufferOff)
+                    ? leftEntry.absoluteBufferOff
+                    : leftEntry.bufferOff;
+            }
+            const elapsed = Math.max(
+                0,
+                ctx.currentTime - leftEntry.playbackAnchorCtxTime,
+            );
+            leftSourceSecNow = Math.min(
+                segments[segmentIndex - 1]
+                    ? segments[segmentIndex - 1].sourceOutSec
+                    : leftSourceSecNow + elapsed,
+                leftSourceSecNow + elapsed,
+            );
+            const incomingSourceAtStart = segmentSourceSecFromTransport(
                 track,
-                segmentIndex - 1,
-                fadeTransportSec,
+                segmentIndex,
+                playbackStart,
             );
             whenCtx =
-                leftEntry.playbackAnchorCtxTime +
-                Math.max(0, fadeBuf - leftEntry.bufferOff);
+                ctx.currentTime +
+                Math.max(0.0005, playbackStart - mapT);
+            if (leftEntry.usesPitchSlice) {
+                const sourceLeadSec = Math.max(
+                    0,
+                    incomingSourceAtStart - leftSourceSecNow,
+                );
+                whenCtx = Math.max(
+                    whenCtx,
+                    leftEntry.playbackAnchorCtxTime +
+                        Math.max(0, sourceLeadSec - elapsed),
+                );
+            } else {
+                const fadeBuf = segmentSourceSecFromTransport(
+                    track,
+                    segmentIndex - 1,
+                    fadeTransportSec,
+                );
+                whenCtx = Math.max(
+                    whenCtx,
+                    leftEntry.playbackAnchorCtxTime +
+                        Math.max(0, fadeBuf - leftSourceSecNow),
+                );
+            }
         } else if (inCrossfadeLeadIn && mapT < fadeTransportSec) {
             whenCtx = ctx.currentTime + Math.max(0.0005, fadeTransportSec - mapT);
         }

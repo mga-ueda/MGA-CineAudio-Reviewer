@@ -1,10 +1,19 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.07';
+    const APP_VERSION = '0.08';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.08',
+            date: '2026年6月10日',
+            items: [
+                'Phrase 着色 ON 時、リージョン選択＋Alt+Shift+ホイールでキー ±1 半音（-12〜+12）。リージョン尺不変のタイムストレッチ再生。範囲マーカーと「キーを ±N する」コメントが自動連動。',
+                'Signalsmith Stretch を同梱しオフライン事前レンダリングで音質改善。結合境界での再生チェーン分割と handoff を調整し、キー変更↔未変更の繋がりを改善。',
+                'UI 表記を Pitch → Key に統一（オーバーレイ・トースト・マーカー・使い方・ショートカット）。',
+            ],
+        },
         {
             version: '0.07',
             date: '2026年6月8日',

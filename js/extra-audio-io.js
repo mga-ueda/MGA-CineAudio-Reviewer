@@ -28,6 +28,9 @@
     window.getSegmentMappingTransportSec = getSegmentMappingTransportSec;
     window.extraTrackHasAudibleOrImminentSegment = extraTrackHasAudibleOrImminentSegment;
     window.EXTRA_AUDIO_SCHEDULE_AHEAD_SEC = EXTRA_AUDIO_SCHEDULE_AHEAD_SEC;
+    window.PITCH_SPLIT_BOUNDARY_HANDOFF_SEC = PITCH_SPLIT_BOUNDARY_HANDOFF_SEC;
+    window.PITCH_SLICE_ENTER_HANDOFF_SEC = PITCH_SLICE_ENTER_HANDOFF_SEC;
+    window.PITCH_SLICE_EXIT_HANDOFF_SEC = PITCH_SLICE_EXIT_HANDOFF_SEC;
     window.beginVideoExportAudioFilter = beginVideoExportAudioFilter;
     window.endVideoExportAudioFilter = endVideoExportAudioFilter;
 

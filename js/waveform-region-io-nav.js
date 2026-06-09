@@ -427,6 +427,7 @@
         };
     };
     window.handlePlaybackRegionGainWheel = handlePlaybackRegionGainWheel;
+    window.handlePlaybackRegionPitchWheel = handlePlaybackRegionPitchWheel;
     window.ensureDefaultTrackRegion = ensureDefaultTrackRegion;
     window.updatePlaybackRegionHoverFromPointer = updatePlaybackRegionHoverFromPointer;
     window.addExtraTrackRegionForClip = function (slot, clipId, durationSec, timelineStartSec) {

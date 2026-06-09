@@ -73,6 +73,12 @@
                 forPlayback &&
                 joinedNext &&
                 isSegmentSourceContinuousAtBoundary(track, i);
+            const pitchSplitNext =
+                forPlayback &&
+                joinedNext &&
+                continuousNext &&
+                typeof window.boundaryNeedsPitchPlaybackSplit === 'function' &&
+                window.boundaryNeedsPitchPlaybackSplit(track, i);
             const autoCrossfadePrev =
                 joinedPrev &&
                 i > 0 &&
@@ -130,10 +136,46 @@
                 if (t < playbackStart - 0.0005 && !inHandoffFromPrev && !inManualCrossfade) {
                     continue;
                 }
-                const playbackEndCutoff =
+                let playbackEndCutoff =
                     joinedNext && continuousNext
                         ? absEnd + 0.00001
                         : absEnd - 0.0005;
+                if (pitchSplitNext && boundaryNext != null) {
+                    let pitchHandoffSec = 0;
+                    if (
+                        typeof window.pitchSplitBoundaryHandoffSec === 'function'
+                    ) {
+                        pitchHandoffSec = window.pitchSplitBoundaryHandoffSec(
+                            track,
+                            i,
+                        );
+                    } else if (
+                        typeof window.pitchSliceExitBoundary === 'function' &&
+                        window.pitchSliceExitBoundary(track, i)
+                    ) {
+                        pitchHandoffSec =
+                            typeof window.PITCH_SLICE_EXIT_HANDOFF_SEC === 'number'
+                                ? window.PITCH_SLICE_EXIT_HANDOFF_SEC
+                                : 0.02;
+                    } else {
+                        pitchHandoffSec =
+                            typeof window.PITCH_SPLIT_BOUNDARY_HANDOFF_SEC ===
+                            'number'
+                                ? window.PITCH_SPLIT_BOUNDARY_HANDOFF_SEC
+                                : 0.12;
+                    }
+                    if (pitchHandoffSec > 0.0005) {
+                        playbackEndCutoff = Math.max(
+                            playbackEndCutoff,
+                            boundaryNext + pitchHandoffSec,
+                        );
+                    } else {
+                        playbackEndCutoff = Math.min(
+                            playbackEndCutoff,
+                            boundaryNext + 0.00001,
+                        );
+                    }
+                }
                 if (t >= playbackEndCutoff && !inHandoffToNext && !inManualCrossfade) {
                     continue;
                 }
@@ -256,6 +298,24 @@
                 for (let i = 0; i < hits.length; i++) {
                     const hit = hits[i];
                     if (seen.has(hit.key)) continue;
+                    if (
+                        p > 0 &&
+                        hit.segmentIndex > 0 &&
+                        typeof pitchSliceEnterBoundary === 'function' &&
+                        pitchSliceEnterBoundary(track, hit.segmentIndex - 1) &&
+                        typeof getSegmentPlaybackTimelineStart === 'function'
+                    ) {
+                        const boundaryT = getSegmentPlaybackTimelineStart(
+                            track,
+                            hit.segmentIndex,
+                        );
+                        if (
+                            Number.isFinite(boundaryT) &&
+                            t < boundaryT - 0.0005
+                        ) {
+                            continue;
+                        }
+                    }
                     const refreshed = refreshSegmentHitAtTransport(track, hit, t);
                     if (!refreshed) continue;
                     seen.add(hit.key);

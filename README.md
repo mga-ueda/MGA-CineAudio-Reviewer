@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.07 |
+| **バージョン** | v0.08 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,12 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.08 - 2026年6月10日
+
+- Phrase 着色 ON 時、リージョン選択＋Alt+Shift+ホイールでキー ±1 半音（-12〜+12）。リージョン尺不変のタイムストレッチ再生。範囲マーカーと「キーを ±N する」コメントが自動連動。
+- Signalsmith Stretch を同梱しオフライン事前レンダリングで音質改善。結合境界での再生チェーン分割と handoff を調整し、キー変更↔未変更の繋がりを改善。
+- UI 表記を Pitch → Key に統一（オーバーレイ・トースト・マーカー・使い方・ショートカット）。
 
 ### v0.07 - 2026年6月8日
 

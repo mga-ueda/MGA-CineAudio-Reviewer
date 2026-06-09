@@ -30,7 +30,7 @@
         if (changed && o.logChange !== false && typeof writeLog === 'function') {
             writeLog(
                 next
-                    ? 'Debug Log enabled ([RegionRestore], [MusicalSlot], [VideoAnalyzer], etc.)'
+                    ? 'Debug Log enabled ([RegionRestore], [MusicalSlot], [KeyPlayback], [VideoAnalyzer], etc.)'
                     : 'Debug Log disabled',
             );
         }

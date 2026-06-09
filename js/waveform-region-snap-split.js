@@ -147,6 +147,10 @@
             left.gainDb = seg.gainDb;
             right.gainDb = seg.gainDb;
         }
+        if (Number.isFinite(seg.pitchSemitones) && seg.pitchSemitones !== 0) {
+            left.pitchSemitones = seg.pitchSemitones;
+            right.pitchSemitones = seg.pitchSemitones;
+        }
         if (Number.isFinite(seg.fadeInSec) && seg.fadeInSec > 0.0005) {
             left.fadeInSec = seg.fadeInSec;
         }
@@ -237,6 +241,112 @@
                 flashSeekHint('Region', stepLabel + ' × ' + targets.length, 'notice');
             }
         }
+        return true;
+    }
+
+    function adjustSegmentPitchSemitonesForTargets(targets, deltaSemitones) {
+        const step = Math.round(Number(deltaSemitones));
+        if (!targets || !targets.length) return false;
+        if (!Number.isFinite(step) || step === 0) return false;
+
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        let anyChanged = false;
+        let lastSlot = -1;
+        let lastSeg = -1;
+        let lastLabel = '';
+        for (let i = 0; i < targets.length; i++) {
+            const { slot, segmentIndex } = targets[i];
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            const next = clampRegionPitchSemitones(
+                getSegmentPitchSemitones(track, segmentIndex) + step,
+            );
+            if (
+                setSegmentPitchSemitones(track, segmentIndex, next, {
+                    skipPersist: true,
+                    skipUndo: true,
+                })
+            ) {
+                anyChanged = true;
+                lastSlot = slot;
+                lastSeg = segmentIndex;
+                lastLabel = formatRegionPitchDisplay(next);
+            }
+        }
+        if (!anyChanged) return false;
+
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+
+        for (let i = 0; i < targets.length; i++) {
+            const { slot, segmentIndex } = targets[i];
+            if (typeof schedulePitchSliceRenderForSegment === 'function') {
+                schedulePitchSliceRenderForSegment({ type: 'extra', slot }, segmentIndex);
+            }
+        }
+
+        if (targets.length === 1) {
+            writeLog(
+                'Ex ' +
+                    (lastSlot + 1) +
+                    ' region ' +
+                    (lastSeg + 1) +
+                    ' key: ' +
+                    (lastLabel || 'Key 0'),
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint(
+                    'Ex ' + (lastSlot + 1) + ' R' + (lastSeg + 1),
+                    lastLabel || 'Key 0',
+                    'notice',
+                );
+            }
+        } else {
+            const stepLabel = (step > 0 ? '+' : '') + step;
+            writeLog(
+                'Playback region key ' +
+                    stepLabel +
+                    ' (' +
+                    targets.length +
+                    ' regions)',
+            );
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Key ' + stepLabel + ' × ' + targets.length, 'notice');
+            }
+        }
+        return true;
+    }
+
+    function handlePlaybackRegionPitchWheel(ev) {
+        if (!ev || !ev.altKey || !ev.shiftKey || ev.ctrlKey || ev.metaKey) {
+            return false;
+        }
+        if (
+            typeof getMusicalGridPhraseFillVisible !== 'function' ||
+            !getMusicalGridPhraseFillVisible()
+        ) {
+            return false;
+        }
+        const lanes =
+            typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
+        if (!lanes) return false;
+        let over = false;
+        if (typeof ev.composedPath === 'function') {
+            over = ev.composedPath().includes(lanes);
+        } else if (ev.target) {
+            over = lanes.contains(ev.target);
+        }
+        if (!over) return false;
+        const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
+        if (!delta) return false;
+        const deltaPitch = delta > 0 ? -1 : 1;
+
+        const selectionTargets = expandRegionSegmentEditTargetsFromSelection();
+        if (!selectionTargets.length) {
+            return false;
+        }
+
+        adjustSegmentPitchSemitonesForTargets(selectionTargets, deltaPitch);
+        ev.preventDefault();
         return true;
     }
 

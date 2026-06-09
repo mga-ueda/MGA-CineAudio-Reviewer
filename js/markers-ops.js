@@ -239,6 +239,16 @@
         return db > 0 ? '+' + s : s;
     }
 
+    function isRegionPitchMarkerComment(comment) {
+        return /^(?:ピッチ|キー)/.test(String(comment || ''));
+    }
+
+    function isRegionVolumeMarkerComment(comment) {
+        const c = String(comment || '');
+        if (isRegionPitchMarkerComment(c)) return false;
+        return /dB/i.test(c);
+    }
+
     function formatRegionVolumeMarkerComment(gainDb, prevGainDb) {
         let db = Number(gainDb);
         if (!Number.isFinite(db)) db = 0;
@@ -266,6 +276,7 @@
         const narrow = endSec - startSec <= oneFrame + 1e-9;
         for (let i = currentMarkers.length - 1; i >= 0; i--) {
             const m = currentMarkers[i];
+            if (!isRegionVolumeMarkerComment(m.comment)) continue;
             if (m.type === 'range') {
                 if (
                     markerSecNearlyEqual(m.startSec, startSec) &&
@@ -281,6 +292,118 @@
         }
         return null;
     }
+
+    function formatRegionPitchToken(semitones) {
+        const n = Math.round(Number(semitones));
+        if (!Number.isFinite(n) || n === 0) return '0';
+        return (n > 0 ? '+' : '') + n;
+    }
+
+    function formatRegionPitchMarkerComment(pitchSemitones) {
+        const token = formatRegionPitchToken(pitchSemitones);
+        return 'キーを ' + token + ' する';
+    }
+
+    function findRegionPitchMarker(startSec, endSec) {
+        const oneFrame = markerOneFrameSec();
+        const narrow = endSec - startSec <= oneFrame + 1e-9;
+        for (let i = currentMarkers.length - 1; i >= 0; i--) {
+            const m = currentMarkers[i];
+            if (!isRegionPitchMarkerComment(m.comment)) continue;
+            if (m.type === 'range') {
+                if (
+                    markerSecNearlyEqual(m.startSec, startSec) &&
+                    markerSecNearlyEqual(m.endSec, endSec)
+                ) {
+                    return m;
+                }
+            } else if (narrow && m.type === 'point') {
+                if (markerSecNearlyEqual(m.timeSec, startSec)) {
+                    return m;
+                }
+            }
+        }
+        return null;
+    }
+
+    function removeRegionPitchMarkerAtBounds(startSec, endSec, opt) {
+        let start = startSec;
+        let end = endSec;
+        if (end < start) {
+            const swap = start;
+            start = end;
+            end = swap;
+        }
+        start = clampMarkerSec(start);
+        end = clampMarkerSec(end);
+        const m = findRegionPitchMarker(start, end);
+        if (!m) return;
+        currentMarkers = currentMarkers.filter((x) => x.id !== m.id);
+        if (activeMarkerId === m.id) activeMarkerId = null;
+        persistMarkersAfterChange(opt);
+    }
+
+    function upsertRegionPitchMarker(startSec, endSec, pitchSemitones, opt) {
+        if (!markerTimelineReady()) return;
+        let start = startSec;
+        let end = endSec;
+        if (end < start) {
+            const swap = start;
+            start = end;
+            end = swap;
+        }
+        start = clampMarkerSec(start);
+        end = clampMarkerSec(end);
+        const pitch = Math.round(Number(pitchSemitones));
+        if (!Number.isFinite(pitch) || pitch === 0) {
+            removeRegionPitchMarkerAtBounds(start, end, opt);
+            return;
+        }
+        const comment = formatRegionPitchMarkerComment(pitch);
+        const oneFrame = markerOneFrameSec();
+        const span = end - start;
+        const makeRange = span > oneFrame + 1e-9;
+
+        let m = findRegionPitchMarker(start, end);
+        if (m) {
+            if (makeRange) {
+                m.type = 'range';
+                m.startSec = start;
+                m.endSec = end;
+                delete m.timeSec;
+            } else {
+                m.type = 'point';
+                m.timeSec = start;
+                delete m.startSec;
+                delete m.endSec;
+            }
+            m.comment = comment;
+            activeMarkerId = m.id;
+            persistMarkersAfterChange(opt);
+            return;
+        }
+
+        addRangeMarkerBetweenSecs(start, end, {
+            comment,
+            silent: true,
+            ...(opt || {}),
+        });
+    }
+
+    function syncMarkerForRegionPitchChange(track, segmentIndex, pitchSemitones, prevPitchSemitones) {
+        if (!track || track.type !== 'extra' || !Number.isFinite(track.slot)) return;
+        if (typeof getSegmentRegionTimelineBounds !== 'function') return;
+        const bounds = getSegmentRegionTimelineBounds(track.slot, segmentIndex);
+        if (!bounds || !Number.isFinite(bounds.startSec) || !Number.isFinite(bounds.endSec)) {
+            return;
+        }
+        upsertRegionPitchMarker(bounds.startSec, bounds.endSec, pitchSemitones, {
+            silent: true,
+            prevPitchSemitones,
+        });
+    }
+
+    window.syncMarkerForRegionPitchChange = syncMarkerForRegionPitchChange;
 
     function removeRegionVolumeMarkerAtBounds(startSec, endSec, opt) {
         let start = startSec;

@@ -14,6 +14,20 @@
     var EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC = 0.08;
     /** onended 後に再開する最小 remain（これ未満はビビビッ連打の原因になる） */
     var EXTRA_AUDIO_SEGMENT_MIN_CONTINUE_REMAIN_SEC = 0.04;
+    /** レガシー: 両側ピッチ等のフォールバック */
+    var PITCH_SPLIT_BOUNDARY_HANDOFF_SEC = 0.12;
+    /**
+     * ピッチ区間への入り口: 左（ピッチ未変更）の終端を僅かに延長し、右（ピッチ変更）開始と重ねる秒数。
+     * 結合境界の僅かな無音/重なりはここを調整する（既定 0.004）。
+     * 隙間が気になる → 0.005〜0.006 / 重なりすぎ → 0.002〜0.003
+     */
+    var PITCH_SLICE_ENTER_HANDOFF_SEC = 0.004;
+    /** ピッチ区間からの出口: 左（ピッチ変更）と右（ピッチ未変更）の切替を重ねる秒数 */
+    var PITCH_SLICE_EXIT_HANDOFF_SEC = 0.02;
+    /** 連続結合: セグメント壁を越えて BufferSource を延長する秒数（handoff 猶予） */
+    var CONTINUOUS_JOIN_PLAY_EXTEND_SEC = 0.06;
+    /** 連続結合 handoff: 入側起動後に出側を止めるまでの重ね秒数 */
+    var CONTINUOUS_JOIN_HANDOFF_SEC = 0.04;
     var EXTRA_AUDIO_RESYNC_DRIFT_SEC = 0.045;
     var extraTrackUi;
     var extraLaneUiOpen;

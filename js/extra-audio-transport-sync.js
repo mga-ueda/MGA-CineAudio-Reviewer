@@ -146,7 +146,52 @@
             applyReviewMixVideoGain();
             return;
         }
+        if (
+            !force &&
+            segmentSourcesReadyForActive(allActiveAtT) &&
+            extraAudioSourcesActive()
+        ) {
+            applySegmentFadeGainsForActive(ctx, allActiveAtT, gainT);
+            if (allActiveAtT.length >= 2) {
+                applySegmentCrossfadeGains(
+                    ctx,
+                    allActiveAtT,
+                    getCrossfadeGainTransportSec(),
+                );
+            }
+            pruneExtraSegmentSourcesToActive(allActiveAtT, ctx);
+            applyReviewMixVideoGain();
+            return;
+        }
         resetExtraMixScheduleTime();
+        if (
+            typeof pitchPlaybackLog === 'function' &&
+            typeof isDebugLogEnabled === 'function' &&
+            isDebugLogEnabled()
+        ) {
+            const pendingPitch = allActiveAtT
+                .filter((h) => {
+                    const tr = extraTrackBySlot(h.slot);
+                    const e =
+                        tr && tr.segmentSources
+                            ? tr.segmentSources[h.key]
+                            : null;
+                    return e && (e.pendingLiveStretch || e.usesLiveStretch);
+                })
+                .map((h) => ({
+                    segmentIndex: h.segmentIndex,
+                    key: h.key,
+                }));
+            pitchPlaybackLog('sync/full-resync', {
+                force,
+                crossfadeActive,
+                sourcesReady: segmentSourcesReadyForActive(allActiveAtT),
+                needResync: extraTracksNeedResync(masterT, ctx),
+                activeCount: allActiveAtT.length,
+                gainT,
+                pendingPitch,
+            });
+        }
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
         const crossfadeGains = computeSegmentCrossfadeGainsForActive(
             ctx,

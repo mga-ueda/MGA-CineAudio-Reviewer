@@ -57,15 +57,26 @@
                 const { out: outIdx, in: inIdx } = crossfadeOutInIndices(active, i, j);
                 const inHit = active[inIdx];
                 const outHit = active[outIdx];
+                const trackRef = { type: 'extra', slot: inHit.slot };
+                if (
+                    outHit.segmentIndex === inHit.segmentIndex - 1 &&
+                    typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+                    boundaryNeedsPitchPlaybackSplit(trackRef, outHit.segmentIndex)
+                ) {
+                    continue;
+                }
                 const tr = extraTrackBySlot(inHit.slot);
                 const inEntry =
                     tr && tr.segmentSources ? tr.segmentSources[inHit.key] : null;
                 const outEntry =
                     tr && tr.segmentSources ? tr.segmentSources[outHit.key] : null;
+                if (inEntry && inEntry.pendingLiveStretch && !inEntry.src) {
+                    continue;
+                }
                 if (inEntry && inEntry.src && outEntry && outEntry.src) {
                     continue;
                 }
-                if (!inEntry || !inEntry.src) {
+                if (!inEntry || (!inEntry.src && !inEntry.pendingLiveStretch)) {
                     const outCf = gains.get(outHit.key) ?? 1;
                     out.set(outHit.key, outCf);
                     out.set(inHit.key, 0);
@@ -306,6 +317,12 @@
             return false;
         }
         if (
+            typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+            boundaryNeedsPitchPlaybackSplit(trackRef, boundaryIndex)
+        ) {
+            return false;
+        }
+        if (
             typeof isSegmentBoundaryJoined !== 'function' ||
             !isSegmentBoundaryJoined(trackRef, boundaryIndex)
         ) {
@@ -321,7 +338,11 @@
         );
         if (!leftHit) return false;
         const leftEntry = tr.segmentSources[leftHit.key];
-        return !!(leftEntry && leftEntry.src);
+        if (!leftEntry || !leftEntry.src) return false;
+        const mixCtx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        if (!mixCtx) return true;
+        return extraTrackSourceEntryScheduledOrAudibleOnCtx(leftEntry, mixCtx);
     }
 
     /**
@@ -367,6 +388,27 @@
                     typeof isSegmentSourceContinuousAtBoundary !== 'function' ||
                     !isSegmentSourceContinuousAtBoundary(trackRef, leftHit.segmentIndex)
                 ) {
+                    continue;
+                }
+                if (
+                    typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+                    boundaryNeedsPitchPlaybackSplit(trackRef, leftHit.segmentIndex)
+                ) {
+                    if (
+                        typeof pitchPlaybackLog === 'function' &&
+                        typeof isDebugLogEnabled === 'function' &&
+                        isDebugLogEnabled()
+                    ) {
+                        pitchPlaybackLog('crossfade/pitch-split-skip', {
+                            slot,
+                            boundaryIndex: leftHit.segmentIndex,
+                            leftKey: leftHit.key,
+                            rightKey: rightHit.key,
+                            leftGain: out.get(leftHit.key),
+                            rightGain: out.get(rightHit.key),
+                            transportSec,
+                        });
+                    }
                     continue;
                 }
                 if (
@@ -437,7 +479,54 @@
                 const rightHit = byIndex.get(rightIdx);
                 if (!leftHit || !rightHit) continue;
                 const pair = [leftHit, rightHit];
+                const pitchSplit =
+                    typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+                    boundaryNeedsPitchPlaybackSplit(trackRef, leftIdx);
+                let pitchSplitOverlap = false;
+                let pitchSplitBoundaryT = null;
+                if (pitchSplit) {
+                    if (
+                        typeof pitchSliceEnterBoundary === 'function' &&
+                        pitchSliceEnterBoundary(trackRef, leftIdx)
+                    ) {
+                        pitchSplitOverlap = false;
+                    } else if (typeof getSegmentPlaybackTimelineStart === 'function') {
+                        pitchSplitBoundaryT = getSegmentPlaybackTimelineStart(
+                            trackRef,
+                            rightIdx,
+                        );
+                        if (Number.isFinite(pitchSplitBoundaryT)) {
+                            const handoffSec =
+                                typeof pitchSplitBoundaryHandoffSec === 'function'
+                                    ? pitchSplitBoundaryHandoffSec(
+                                          trackRef,
+                                          leftIdx,
+                                      )
+                                    : typeof PITCH_SPLIT_BOUNDARY_HANDOFF_SEC ===
+                                        'number'
+                                      ? PITCH_SPLIT_BOUNDARY_HANDOFF_SEC
+                                      : 0.12;
+                            if (handoffSec > 0.0005) {
+                                pitchSplitOverlap =
+                                    gainT >=
+                                        pitchSplitBoundaryT -
+                                            handoffSec -
+                                            0.0005 &&
+                                    gainT <=
+                                        pitchSplitBoundaryT +
+                                            handoffSec +
+                                            0.0005;
+                            }
+                        }
+                    } else if (typeof getSegmentTimelineStart === 'function') {
+                        pitchSplitBoundaryT = getSegmentTimelineStart(
+                            trackRef,
+                            rightIdx,
+                        );
+                    }
+                }
                 if (
+                    !pitchSplitOverlap &&
                     !activeHasJoinedBoundaryCrossfadeAtTransport(pair, gainT) &&
                     !activeHasJoinedBoundaryCrossfadeAtTransport(pair, scheduleProbeT)
                 ) {
@@ -459,7 +548,15 @@
                         inCrossfade: true,
                     });
                 }
-                if (!rightEntry || !rightEntry.src) {
+                const rightReady =
+                    rightEntry &&
+                    (rightEntry.pendingLiveStretch ||
+                        (rightEntry.src &&
+                            extraTrackSourceEntryScheduledOrAudibleOnCtx(
+                                rightEntry,
+                                ctx,
+                            )));
+                if (!rightReady) {
                     if (
                         shouldDeferIncomingSourceAtContinuousJoinedBoundary(
                             trackRef,
@@ -484,7 +581,10 @@
                         force: false,
                         transportSec: gainT,
                     });
-                } else if (isSegmentSourceAudibleOnCtx(rightEntry, ctx)) {
+                } else if (
+                    rightEntry.src &&
+                    isSegmentSourceAudibleOnCtx(rightEntry, ctx)
+                ) {
                     const gRight = segmentPlaybackGainLinear(
                         rightHit,
                         gains.get(rightHit.key) ?? 1,
@@ -562,6 +662,14 @@
             if (entry.src) entry.src.disconnect();
         } catch (_) {}
         try {
+            if (entry.stretch && typeof entry.stretch.stop === 'function') {
+                entry.stretch.stop();
+            }
+        } catch (_) {}
+        try {
+            if (entry.stretch) entry.stretch.disconnect();
+        } catch (_) {}
+        try {
             if (entry.segGain) entry.segGain.disconnect();
         } catch (_) {}
         entry.lastAppliedGain = null;
@@ -621,6 +729,141 @@
                 ? EXTRA_AUDIO_SCHEDULE_AHEAD_SEC
                 : 0.02;
         return entry.playbackAnchorCtxTime <= ctx.currentTime + ahead + 0.008;
+    }
+
+    function markSegmentSourceEntryForHandoffStop(entry) {
+        if (entry) entry._handoffStopRequested = true;
+    }
+
+    function shouldSkipSegmentOnendedRestart(
+        slot,
+        key,
+        segHit,
+        trackRef,
+        tr,
+        hit,
+        transportSec,
+        entry,
+        ctx,
+    ) {
+        if (entry && entry._handoffStopRequested) {
+            if (typeof pitchPlaybackLog === 'function') {
+                pitchPlaybackLog('onended/skip-handoff-stop', {
+                    slot,
+                    segmentIndex: segHit.segmentIndex,
+                    key,
+                });
+            }
+            return true;
+        }
+        if (tr && tr.segmentSources && ctx) {
+            for (const k of Object.keys(tr.segmentSources)) {
+                if (k === key) continue;
+                const peer = tr.segmentSources[k];
+                if (
+                    peer &&
+                    peer.src &&
+                    peer.src !== (entry && entry.src) &&
+                    peer.segmentIndex === segHit.segmentIndex &&
+                    extraTrackSourceEntryScheduledOrAudibleOnCtx(peer, ctx)
+                ) {
+                    if (typeof pitchPlaybackLog === 'function') {
+                        pitchPlaybackLog('onended/skip-handoff-peer', {
+                            slot,
+                            segmentIndex: segHit.segmentIndex,
+                            key,
+                            peerKey: k,
+                        });
+                    }
+                    return true;
+                }
+            }
+        }
+        if (!hit) return false;
+        let handoffSec =
+            typeof PITCH_SPLIT_BOUNDARY_HANDOFF_SEC === 'number'
+                ? PITCH_SPLIT_BOUNDARY_HANDOFF_SEC
+                : 0.12;
+        if (
+            typeof pitchSplitBoundaryHandoffSec === 'function' &&
+            typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+            boundaryNeedsPitchPlaybackSplit(trackRef, segHit.segmentIndex)
+        ) {
+            handoffSec = pitchSplitBoundaryHandoffSec(
+                trackRef,
+                segHit.segmentIndex,
+            );
+        }
+        if (
+            typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+            boundaryNeedsPitchPlaybackSplit(trackRef, segHit.segmentIndex) &&
+            hit.remain <= handoffSec + 0.001
+        ) {
+            if (typeof pitchPlaybackLog === 'function') {
+                pitchPlaybackLog('onended/skip-pitch-split-tail', {
+                    slot,
+                    segmentIndex: segHit.segmentIndex,
+                    remain: hit.remain,
+                    handoffSec,
+                });
+            }
+            return true;
+        }
+        if (typeof getTrackSegments === 'function' && tr && tr.segmentSources) {
+            const segments = getTrackSegments(trackRef);
+            const nextIdx = segHit.segmentIndex + 1;
+            if (segments && nextIdx < segments.length) {
+                const nextSeg = segments[nextIdx];
+                const nextKey =
+                    nextSeg && slot + ':' + (nextSeg.id || 'i' + nextIdx);
+                const nextEntry = nextKey && tr.segmentSources[nextKey];
+                if (
+                    nextEntry &&
+                    (nextEntry.src ||
+                        nextEntry.pendingLiveStretch ||
+                        extraTrackSourceEntryScheduledOrAudibleOnCtx(nextEntry, ctx))
+                ) {
+                    if (typeof pitchPlaybackLog === 'function') {
+                        pitchPlaybackLog('onended/skip-next-active', {
+                            slot,
+                            segmentIndex: segHit.segmentIndex,
+                            nextKey,
+                        });
+                    }
+                    return true;
+                }
+            }
+        }
+        if (
+            typeof getActiveExtraSegmentsAtTransport === 'function' &&
+            tr &&
+            tr.segmentSources &&
+            ctx
+        ) {
+            const active = getActiveExtraSegmentsAtTransport(transportSec).filter(
+                (s) => s.slot === slot,
+            );
+            for (let i = 0; i < active.length; i++) {
+                const a = active[i];
+                if (a.segmentIndex <= segHit.segmentIndex || a.key === key) continue;
+                const e = tr.segmentSources[a.key];
+                if (
+                    e &&
+                    (e.pendingLiveStretch ||
+                        extraTrackSourceEntryScheduledOrAudibleOnCtx(e, ctx))
+                ) {
+                    if (typeof pitchPlaybackLog === 'function') {
+                        pitchPlaybackLog('onended/skip-higher-segment', {
+                            slot,
+                            segmentIndex: segHit.segmentIndex,
+                            higherKey: a.key,
+                        });
+                    }
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     function extraTrackSourcesAudibleOnCtx(tr, ctx) {
@@ -702,12 +945,26 @@
                 continue;
             }
             const entry = tr.segmentSources[k];
+            if (entry && entry.pendingLiveStretch && !entry.src) {
+                continue;
+            }
             if (!entry || !entry.src) return false;
         }
         for (const k of Object.keys(tr.segmentSources)) {
             if (!wanted.has(k)) return false;
         }
         return true;
+    }
+
+    function segmentIndexForSourceKey(slot, key) {
+        if (typeof getTrackSegments !== 'function') return -1;
+        const track = { type: 'extra', slot };
+        const segments = getTrackSegments(track);
+        for (let i = 0; i < segments.length; i++) {
+            const k = slot + ':' + (segments[i].id || 'i' + i);
+            if (k === key) return i;
+        }
+        return -1;
     }
 
     function shouldHoldOutgoingSegmentSource(slot, outgoingKey, allActiveAtT, ctx) {
@@ -721,6 +978,26 @@
             const incoming = tr.segmentSources[segHit.key];
             if (!incoming || !incoming.src) return true;
             if (!isSegmentSourceAudibleOnCtx(incoming, ctx)) return true;
+        }
+        const trackRef = { type: 'extra', slot };
+        const outIdx = segmentIndexForSourceKey(slot, outgoingKey);
+        if (
+            outIdx >= 0 &&
+            typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
+            boundaryNeedsPitchPlaybackSplit(trackRef, outIdx)
+        ) {
+            const segments = getTrackSegments(trackRef);
+            const nextSeg = segments[outIdx + 1];
+            const nextKey =
+                nextSeg && slot + ':' + (nextSeg.id || 'i' + (outIdx + 1));
+            const incoming = nextKey && tr.segmentSources[nextKey];
+            if (
+                !incoming ||
+                !incoming.src ||
+                !isSegmentSourceAudibleOnCtx(incoming, ctx)
+            ) {
+                return true;
+            }
         }
         return false;
     }

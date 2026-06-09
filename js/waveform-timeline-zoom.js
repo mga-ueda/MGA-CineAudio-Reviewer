@@ -438,6 +438,17 @@
 
         if (
             ev.altKey &&
+            ev.shiftKey &&
+            !ev.ctrlKey &&
+            !ev.metaKey &&
+            typeof handlePlaybackRegionPitchWheel === 'function' &&
+            handlePlaybackRegionPitchWheel(ev)
+        ) {
+            return;
+        }
+
+        if (
+            ev.altKey &&
             !ev.ctrlKey &&
             !ev.metaKey &&
             !ev.shiftKey &&
