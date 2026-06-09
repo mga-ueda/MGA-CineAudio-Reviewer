@@ -255,12 +255,8 @@
         let prev = Number(prevGainDb);
         if (!Number.isFinite(prev)) prev = 0;
         const token = formatRegionVolumeDbToken(db);
-        if (db > prev + 0.0005) {
-            const num = token.charAt(0) === '+' ? token.slice(1) : token;
-            return num + 'dB 上げる';
-        }
-        if (db < prev - 0.0005) {
-            return token + ' dB 下げる';
+        if (db > prev + 0.0005 || db < prev - 0.0005) {
+            return token + ' dB する';
         }
         return token + ' dB';
     }
