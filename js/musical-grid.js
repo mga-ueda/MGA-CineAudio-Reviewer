@@ -3970,6 +3970,7 @@
     window.formatMeterTextForBarRange = formatMeterTextForBarRange;
     window.getMusicalGridMeterDisplayText = getMusicalGridMeterDisplayText;
     window.musicalGridDrawSettings = musicalGridDrawSettings;
+    window.getMusicalGridBarBySec = getMusicalGridBarBySec;
     window.collectPhraseGroupRangesFromBarCounts = collectPhraseGroupRangesFromBarCounts;
     window.formatPhraseTextFromGroupBarCounts = formatPhraseTextFromGroupBarCounts;
     window.capturePhraseUndoSnapshot = capturePhraseUndoSnapshot;

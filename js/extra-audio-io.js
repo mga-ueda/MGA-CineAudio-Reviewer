@@ -69,6 +69,7 @@
     window.syncReviewMixToTransport = syncReviewMixToTransport;
     window.syncExtraAudioToTransport = syncExtraAudioToTransport;
     window.isPastAllLoadedTrackPlaybackEnds = isPastAllLoadedTrackPlaybackEnds;
+    window.connectMonoAudioCentered = connectMonoAudioCentered;
 
     window.applyExtraTrackPeaksPreview = applyExtraTrackPeaksPreview;
     window.getExtraTracksPersistSnapshot = getExtraTracksPersistSnapshot;

@@ -708,6 +708,20 @@
         return when;
     }
 
+    /** モノラル（1ch）を L/R 同一のセンター定位で dest へ接続する。 */
+    function connectMonoAudioCentered(upstream, dest, channelCount) {
+        if (!upstream || !dest) return upstream;
+        if ((channelCount | 0) === 1 && upstream.context) {
+            const merger = upstream.context.createChannelMerger(2);
+            upstream.connect(merger, 0, 0);
+            upstream.connect(merger, 0, 1);
+            merger.connect(dest);
+            return merger;
+        }
+        upstream.connect(dest);
+        return upstream;
+    }
+
     function stopExtraTrackSource(slot) {
         const tr = extraTrackBySlot(slot);
         if (!tr || !tr.source) return;

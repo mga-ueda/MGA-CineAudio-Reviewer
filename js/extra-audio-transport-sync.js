@@ -37,7 +37,7 @@
         const scheduleWhen = acquireExtraMixScheduleTime(ctx, opt);
         const src = ctx.createBufferSource();
         src.buffer = tr.buffer;
-        src.connect(tr.gainNode);
+        connectMonoAudioCentered(src, tr.gainNode, tr.buffer.numberOfChannels);
         src.start(scheduleWhen, startAt, remain);
         tr.source = src;
         const transportAnchor =
@@ -87,6 +87,9 @@
         applyReviewMixVideoGain();
         if (!playing) {
             stopAllExtraTrackSources();
+            if (typeof syncMetronomeToTransport === 'function') {
+                syncMetronomeToTransport(opt);
+            }
             return;
         }
         const ctx = ensureReviewMixCtx();
@@ -272,6 +275,14 @@
                 allActiveAtT,
                 getCrossfadeGainTransportSec(),
             );
+        }
+        if (typeof syncMetronomeToTransport === 'function') {
+            const metTimerActive =
+                typeof isMetronomeSyncTimerActive === 'function' &&
+                isMetronomeSyncTimerActive();
+            if (force || !metTimerActive) {
+                syncMetronomeToTransport(opt);
+            }
         }
     }
 

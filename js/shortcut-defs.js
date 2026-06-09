@@ -129,6 +129,14 @@
             shift: false,
         },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
+        metronomeClickToggle: {
+            code: 'KeyC',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
         rehearsalMarkOffsetToggle: {
             key: '.',
             primary: false,
@@ -608,6 +616,7 @@
             addExtraTrack: formatShortcutDef(s.addExtraTrack),
             markerHide: formatShortcutDef(s.markerHideToggle),
             analyze: formatShortcutDef(s.analyzeToggle),
+            metronomeClick: formatShortcutDef(s.metronomeClickToggle),
             rehearsalMarkOffset: formatShortcutDef(s.rehearsalMarkOffsetToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
             musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
@@ -720,6 +729,13 @@
         setElementTitle(
             document.getElementById('analyzeToggleWrap'),
             `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
+        );
+
+        const clickTitle = `メトロノームクリック音（${h.metronomeClick} で切替）。Click ON かつ再生中のみ鳴ります。`;
+        setElementTitle(document.getElementById('metronomeClickCheckbox'), clickTitle);
+        setElementTitle(
+            document.getElementById('metronomeClickToggleWrap'),
+            `Click — 再生中に BPM/拍子グリッドへ同期したクリック音（${h.metronomeClick} で切替）。音量はミックス RMS に連動（楽曲より大きく、Analyze 不要）。設定は次回起動時に復元。`,
         );
 
         const offsetTitle = `P. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review およびセッション復元に保存。`;

@@ -362,6 +362,11 @@
             } else if (typeof prev.musicalGridPhraseFillVisible === 'boolean') {
                 payload.musicalGridPhraseFillVisible = prev.musicalGridPhraseFillVisible;
             }
+            if (typeof getMetronomeClickEnabled === 'function') {
+                payload.metronomeClickEnabled = getMetronomeClickEnabled();
+            } else if (typeof prev.metronomeClickEnabled === 'boolean') {
+                payload.metronomeClickEnabled = prev.metronomeClickEnabled;
+            }
             if (typeof window.isTimecodeOverlayUserHidden === 'function') {
                 payload.timecodeOverlayHidden = window.isTimecodeOverlayUserHidden();
             } else             if (typeof prev.timecodeOverlayHidden === 'boolean') {

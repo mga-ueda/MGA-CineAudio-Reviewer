@@ -41,6 +41,8 @@
             '.transport-bar--playback .transport-opt-box--playback, .transport-opt-box--playback',
         analyze:
             '.transport-bar #analyzeToggleWrap.transport-opt-chip, #analyzeToggleWrap.transport-opt-chip',
+        metronomeClick:
+            '.transport-bar #metronomeClickToggleWrap.transport-opt-chip, #metronomeClickToggleWrap',
         masterVol:
             '.transport-bar .master-vol-container, #masterVolWrap',
         rehearsalMarkOffset:

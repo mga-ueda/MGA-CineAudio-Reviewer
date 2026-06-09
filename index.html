@@ -330,16 +330,9 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--export">
-            <div
-                class="session-save-indicator-chip"
-                id="sessionSaveIndicator"
-                title="データ保存中はランプが明るく光ります"
-            >
-                <span class="session-save-indicator__housing" aria-hidden="true">
-                    <span class="session-save-indicator__lamp session-save-indicator__lamp--idle"></span>
-                    <span class="session-save-indicator__lamp session-save-indicator__lamp--active"></span>
-                    <span class="session-save-indicator__text">SAVED</span>
-                </span>
+            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap" title="Click — 再生中に BPM/拍子グリッドへ同期したクリック音（C で切替）。">
+                <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
+                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)" title="メトロノームクリック音（C で切替）">
             </div>
             <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — スペクトラムとレベルメーター（A で切替）。OFF でも CLIP PROTECT は有効。">
                 <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
@@ -369,6 +362,17 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--secondary">
+            <div
+                class="session-save-indicator-chip"
+                id="sessionSaveIndicator"
+                title="データ保存中はランプが明るく光ります"
+            >
+                <span class="session-save-indicator__housing" aria-hidden="true">
+                    <span class="session-save-indicator__lamp session-save-indicator__lamp--idle"></span>
+                    <span class="session-save-indicator__lamp session-save-indicator__lamp--active"></span>
+                    <span class="session-save-indicator__text">SAVED</span>
+                </span>
+            </div>
             <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master Vol — ミックス後のマスター音量（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。クリップ時は CLIP PROTECT で自動減衰。">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
                 <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="ダブルクリックまたは Ctrl+Shift+V で 100%">
@@ -627,6 +631,7 @@
     <script src="js/extra-audio-load.js"></script>
     <script src="js/extra-audio-init.js"></script>
     <script src="js/extra-audio-io.js"></script>
+    <script src="js/metronome.js"></script>
     <script src="js/lane-waveform-loading.js"></script>
     <script src="js/track-lane-controls.js"></script>
     <script src="js/audio-monitor.js"></script>

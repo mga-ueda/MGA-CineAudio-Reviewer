@@ -329,6 +329,13 @@
         }
 
         if (
+            typeof handleMetronomeClickShortcutKeydown === 'function' &&
+            handleMetronomeClickShortcutKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handleAnalyzeShortcutKeydown === 'function' &&
             handleAnalyzeShortcutKeydown(e)
         ) {

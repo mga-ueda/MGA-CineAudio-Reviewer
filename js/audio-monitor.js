@@ -299,6 +299,9 @@
                 reviewMixMasterNode.gain.setValueAtTime(safeG, ctx.currentTime);
             }
         }
+        if (typeof window.ensureMetronomeOutputRouting === 'function') {
+            window.ensureMetronomeOutputRouting(ctx);
+        }
     }
 
     let reviewMixMasterNode = null;
@@ -608,6 +611,9 @@
         } catch (_) {}
         masterGainNode.connect(ctx.destination);
         applyMasterVolToMix(reviewMixMasterLinearGain, false, ctx);
+        if (typeof window.ensureMetronomeOutputRouting === 'function') {
+            window.ensureMetronomeOutputRouting(ctx);
+        }
         if (monitorTransportActive && !requestAnimId) {
             requestAnimationFrame(updateUIFrame);
         }
@@ -703,6 +709,7 @@
                 cancelAnimationFrame(requestAnimId);
                 requestAnimId = null;
             }
+            resetReviewMixMonitorRmsForMetronome();
             renderMasterVolDisp();
             extinguishMonitorDisplays();
             if (typeof extinguishTrackLaneMeters === 'function') {
@@ -1049,6 +1056,96 @@ window.addEventListener('resize', () => {
     let peakScratchL = null;
     let peakScratchR = null;
     let peakScratchV = null;
+    /** メトロノーム音量参照: マスター出力 RMS（Analyze OFF でも anaL/R で更新） */
+    const METRONOME_REF_RMS_DB_MIN = -96;
+    const METRONOME_REF_RMS_DB_MAX = 0;
+    const METRONOME_REF_RMS_UP_SMOOTH = 0.06;
+    const METRONOME_REF_RMS_DN_SMOOTH = 0.012;
+    let reviewMixMonitorRmsDbSmoothed = null;
+    let rmsScratchL = null;
+    let rmsScratchR = null;
+    let rmsScratchV = null;
+
+    function resetReviewMixMonitorRmsForMetronome() {
+        reviewMixMonitorRmsDbSmoothed = null;
+    }
+
+    function ingestReviewMixMonitorRmsDb(instRmsDb) {
+        if (!isFinite(instRmsDb)) return;
+        const clamped = Math.max(
+            METRONOME_REF_RMS_DB_MIN,
+            Math.min(METRONOME_REF_RMS_DB_MAX, instRmsDb),
+        );
+        if (!isFinite(reviewMixMonitorRmsDbSmoothed)) {
+            reviewMixMonitorRmsDbSmoothed = clamped;
+            return;
+        }
+        const k =
+            clamped > reviewMixMonitorRmsDbSmoothed
+                ? METRONOME_REF_RMS_UP_SMOOTH
+                : METRONOME_REF_RMS_DN_SMOOTH;
+        reviewMixMonitorRmsDbSmoothed += (clamped - reviewMixMonitorRmsDbSmoothed) * k;
+    }
+
+    function rmsDbFromAnalyser(analyser, scratch) {
+        if (!analyser) return { rmsDb: -Infinity, scratch: scratch };
+        const len = analyser.fftSize | 0;
+        if (len <= 0) return { rmsDb: -Infinity, scratch: scratch };
+        if (!scratch || !(scratch instanceof Float32Array) || scratch.length !== len) {
+            scratch = new Float32Array(len);
+        }
+        analyser.getFloatTimeDomainData(scratch);
+        let sumSquares = 0;
+        for (let i = 0; i < scratch.length; i++) {
+            const v = scratch[i];
+            sumSquares += v * v;
+        }
+        const rms = Math.sqrt(sumSquares / scratch.length);
+        const instRmsDb = 20 * Math.log10(Math.max(rms, 1e-8));
+        return { rmsDb: instRmsDb, scratch: scratch };
+    }
+
+    function sampleReviewMixMonitorInstRmsDb() {
+        if (!isReviewMixMonitorActive()) return null;
+        let maxInst = -Infinity;
+        if (anaL) {
+            const res = rmsDbFromAnalyser(anaL, rmsScratchL);
+            rmsScratchL = res.scratch;
+            maxInst = Math.max(maxInst, res.rmsDb);
+        }
+        if (anaR) {
+            const res = rmsDbFromAnalyser(anaR, rmsScratchR);
+            rmsScratchR = res.scratch;
+            maxInst = Math.max(maxInst, res.rmsDb);
+        }
+        if (
+            typeof isVideoAudioPlaybackViaNativeElement === 'function' &&
+            isVideoAudioPlaybackViaNativeElement() &&
+            typeof getVideoTrackAnalyser === 'function'
+        ) {
+            const vAna = getVideoTrackAnalyser();
+            if (vAna) {
+                const res = rmsDbFromAnalyser(vAna, rmsScratchV);
+                rmsScratchV = res.scratch;
+                maxInst = Math.max(maxInst, res.rmsDb);
+            }
+        }
+        return isFinite(maxInst) ? maxInst : null;
+    }
+
+    function updateReviewMixMonitorRmsForMetronome(instRmsDbOpt) {
+        const inst =
+            instRmsDbOpt != null && isFinite(instRmsDbOpt)
+                ? instRmsDbOpt
+                : sampleReviewMixMonitorInstRmsDb();
+        if (inst != null && isFinite(inst)) ingestReviewMixMonitorRmsDb(inst);
+    }
+
+    function getReviewMixMonitorRmsDbForMetronome() {
+        return isFinite(reviewMixMonitorRmsDbSmoothed)
+            ? reviewMixMonitorRmsDbSmoothed
+            : null;
+    }
 
     function peakDbFromAnalyser(analyser, scratch) {
         if (!analyser) return { peakDb: -Infinity, scratch: scratch };
@@ -1109,6 +1206,8 @@ window.addEventListener('resize', () => {
                 updateTrackLaneMeters();
             }
 
+            updateReviewMixMonitorRmsForMetronome();
+
             requestAnimId = requestAnimationFrame(updateUIFrame);
             return;
         }
@@ -1134,6 +1233,8 @@ window.addEventListener('resize', () => {
         if (isFinite(maxPeakDb) && maxPeakDb > 0.15) {
             autoReduceGain(maxPeakDb);
         }
+
+        updateReviewMixMonitorRmsForMetronome(Math.max(l.instRmsDb, r.instRmsDb));
     
         const mCont0 = document.querySelector('.m-meter-container');
         const meterStackH = mCont0 && mCont0.clientHeight > 8 ? mCont0.clientHeight : defaultSpectrumLedTrackHeightPx();
@@ -2019,6 +2120,12 @@ window.addEventListener('resize', () => {
         return !!analyzeOn;
     }
 
+    function getReviewMixMasterLinearGain() {
+        return normalizeMasterVolLinear(reviewMixMasterLinearGain);
+    }
+
+    window.getReviewMixMasterLinearGain = getReviewMixMasterLinearGain;
+    window.getReviewMixMonitorRmsDbForMetronome = getReviewMixMonitorRmsDbForMetronome;
     window.ensureReviewMixMonitorOutput = ensureReviewMixMonitorOutput;
     window.isReviewMixMonitorAnalyzersWired = isReviewMixMonitorAnalyzersWired;
     window.setReviewMixMonitorTransportActive = setReviewMixMonitorTransportActive;

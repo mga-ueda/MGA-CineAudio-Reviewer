@@ -937,7 +937,7 @@
         }
         const segGain = ctx.createGain();
         segGain.gain.value = Math.max(0, gainLinear);
-        src.connect(segGain);
+        connectMonoAudioCentered(src, segGain, playbackBuffer.numberOfChannels);
         segGain.connect(tr.gainNode);
         if (typeof pitchPlaybackLog === 'function') {
             const timelineEndForLog =
@@ -1135,7 +1135,7 @@
             }
             const segGain = ctx.createGain();
             segGain.gain.value = Math.max(0, gainLinear);
-            stretch.connect(segGain);
+            connectMonoAudioCentered(stretch, segGain, slice.channelArrays.length);
             segGain.connect(tr.gainNode);
             await stretch.addBuffers(
                 slice.channelArrays,
