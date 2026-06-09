@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.08 |
+| **バージョン** | v0.09 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,12 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.09 - 2026年6月10日
+
+- Click メトロノームを追加（C キー・オプションバー Click、Tempo/Sig 入力の BPM/拍子グリッドに同期。Tempo/Sig 表示とは独立、デフォルト OFF、設定は次回起動時に復元）。
+- クリック音量をマスター出力 RMS に連動（Analyze 不要）。静かな曲でも楽曲に対して常に大きく聞こえる相対レベルを保つ。
+- テンポチェンジ・シーク時の先読み予約を安定化。クリック用 WAV（High/Low）を同梱。
 
 ### v0.08 - 2026年6月10日
 

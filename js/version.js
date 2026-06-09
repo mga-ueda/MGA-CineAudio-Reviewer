@@ -1,10 +1,19 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.08';
+    const APP_VERSION = '0.09';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.09',
+            date: '2026年6月10日',
+            items: [
+                'Click メトロノームを追加（C キー・オプションバー Click、Tempo/Sig 入力の BPM/拍子グリッドに同期。Tempo/Sig 表示とは独立、デフォルト OFF、設定は次回起動時に復元）。',
+                'クリック音量をマスター出力 RMS に連動（Analyze 不要）。静かな曲でも楽曲に対して常に大きく聞こえる相対レベルを保つ。',
+                'テンポチェンジ・シーク時の先読み予約を安定化。クリック用 WAV（High/Low）を同梱。',
+            ],
+        },
         {
             version: '0.08',
             date: '2026年6月10日',
