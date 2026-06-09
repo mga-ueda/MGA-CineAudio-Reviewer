@@ -1738,6 +1738,24 @@
         return sec;
     }
 
+    /** Phrase 定義があるとき — 練習番号（A/B/C…）内の localBar 小節の開始秒 */
+    function secForPhraseLocalBarNumber(phraseRange, localBar, barBoundaries) {
+        const n = localBar | 0;
+        if (!phraseRange || n < 1 || !barBoundaries || !barBoundaries.length) return null;
+        const eps = 1e-4;
+        if (n === 1) {
+            const sec = phraseRange.startSec;
+            return sec < phraseRange.endSec - eps ? sec : null;
+        }
+        const phraseStartIdx = barIndexForBoundarySec(phraseRange.startSec, barBoundaries);
+        if (phraseStartIdx < 0) return null;
+        const targetIdx = phraseStartIdx + n - 1;
+        if (targetIdx < 0 || targetIdx >= barBoundaries.length - 1) return null;
+        const sec = barBoundaries[targetIdx];
+        if (sec >= phraseRange.endSec - eps) return null;
+        return sec;
+    }
+
     function seekToRegionLocalBarSec(targetSec, localBar, opt) {
         const resumeAfter = !!(opt && opt.resumeAfterSeek);
         let target = targetSec;
@@ -1795,6 +1813,20 @@
                 : typeof videoMain !== 'undefined' && videoMain
                   ? videoMain.currentTime || 0
                   : 0;
+        const phraseRanges = resolvePhraseGroupRanges({ requireFillVisible: false });
+        if (phraseRanges.length) {
+            const phraseRange = phraseRangeAfterGridBoundarySec(t);
+            if (phraseRange) {
+                const phraseTargetSec = secForPhraseLocalBarNumber(
+                    phraseRange,
+                    localBar | 0,
+                    barBoundaries,
+                );
+                if (Number.isFinite(phraseTargetSec)) {
+                    return seekToRegionLocalBarSec(phraseTargetSec, localBar | 0, opt);
+                }
+            }
+        }
         const span = resolvePlaybackRegionSpanAtSeekbar(spans, t, barBoundaries);
         if (!span) return false;
         const targetSec = secForRegionLocalBarNumber(span, localBar | 0, barBoundaries, spans);
