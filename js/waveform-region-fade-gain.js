@@ -175,6 +175,9 @@
         }
         if (next <= 0.0005) delete raw[key];
         else raw[key] = next;
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(track.slot);
+        }
         if (opt && opt.geometryOnly) {
             refreshTrackRegionOverlayGeometry(track);
         } else {
@@ -250,6 +253,9 @@
         } else {
             raw.gainDb = next;
         }
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(track.slot);
+        }
         updateTrackRegionOverlays(track);
         redrawAfterRegionChange(track.slot);
         if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
@@ -290,6 +296,9 @@
             delete raw.pitchSemitones;
         } else {
             raw.pitchSemitones = next;
+        }
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(track.slot);
         }
         updateTrackRegionOverlays(track);
         redrawAfterRegionChange(track.slot);

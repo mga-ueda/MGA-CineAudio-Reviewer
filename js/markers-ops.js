@@ -483,6 +483,412 @@
 
     window.syncMarkerForRegionVolumeChange = syncMarkerForRegionVolumeChange;
 
+    function parseGainDbFromRegionVolumeMarkerComment(comment) {
+        const c = String(comment || '');
+        const match = c.match(/([+-]?\d+(?:\.\d+)?)\s*dB/i);
+        if (!match) return 0;
+        const db = Number(match[1]);
+        return Number.isFinite(db) ? db : 0;
+    }
+
+    function parsePitchFromRegionPitchMarkerComment(comment) {
+        const c = String(comment || '');
+        const match = c.match(/(?:ピッチ|キー)を\s*([+-]?\d+)/);
+        if (!match) return 0;
+        const pitch = Math.round(Number(match[1]));
+        return Number.isFinite(pitch) ? pitch : 0;
+    }
+
+    function markerMatchesSegmentBounds(m, startSec, endSec) {
+        if (!m) return false;
+        if (m.type === 'range') {
+            return (
+                markerSecNearlyEqual(m.startSec, startSec) &&
+                markerSecNearlyEqual(m.endSec, endSec)
+            );
+        }
+        if (m.type === 'point') {
+            const t = Number(m.timeSec);
+            if (!Number.isFinite(t)) return false;
+            if (markerSecNearlyEqual(t, startSec)) return true;
+            const frame = markerOneFrameSec();
+            const eps = Math.max(1e-6, frame * 0.5);
+            return t >= startSec - eps && t <= endSec + eps;
+        }
+        return false;
+    }
+
+    function findRegionVolumeMarkerAtSegmentBounds(startSec, endSec) {
+        const direct = findRegionVolumeMarker(startSec, endSec);
+        if (direct) return direct;
+        for (let i = currentMarkers.length - 1; i >= 0; i--) {
+            const m = currentMarkers[i];
+            if (!isRegionVolumeMarkerComment(m.comment)) continue;
+            if (markerMatchesSegmentBounds(m, startSec, endSec)) return m;
+        }
+        return null;
+    }
+
+    function findRegionPitchMarkerAtSegmentBounds(startSec, endSec) {
+        const direct = findRegionPitchMarker(startSec, endSec);
+        if (direct) return direct;
+        for (let i = currentMarkers.length - 1; i >= 0; i--) {
+            const m = currentMarkers[i];
+            if (!isRegionPitchMarkerComment(m.comment)) continue;
+            if (markerMatchesSegmentBounds(m, startSec, endSec)) return m;
+        }
+        return null;
+    }
+
+    function captureTrackSegmentRegionBoundsMap(track) {
+        const map = {};
+        if (!track || track.type !== 'extra' || !Number.isFinite(track.slot)) return map;
+        if (typeof getSegmentRegionTimelineBounds !== 'function') return map;
+        const count =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track).length : 0;
+        for (let i = 0; i < count; i++) {
+            const bounds = getSegmentRegionTimelineBounds(track.slot, i);
+            if (
+                bounds &&
+                Number.isFinite(bounds.startSec) &&
+                Number.isFinite(bounds.endSec)
+            ) {
+                map[i] = { startSec: bounds.startSec, endSec: bounds.endSec };
+            }
+        }
+        return map;
+    }
+
+    function boundsPairNearlyEqual(a, b) {
+        return (
+            a &&
+            b &&
+            markerSecNearlyEqual(a.startSec, b.startSec) &&
+            markerSecNearlyEqual(a.endSec, b.endSec)
+        );
+    }
+
+    function applyRegionMarkerBounds(m, newStartSec, newEndSec) {
+        if (!m) return;
+        const newStart = clampMarkerSec(newStartSec);
+        const newEnd = clampMarkerSec(newEndSec);
+        const oneFrame = markerOneFrameSec();
+        const span = newEnd - newStart;
+        const makeRange = span > oneFrame + 1e-9;
+        if (makeRange) {
+            m.type = 'range';
+            m.startSec = newStart;
+            m.endSec = newEnd;
+            delete m.timeSec;
+        } else {
+            m.type = 'point';
+            m.timeSec = newStart;
+            delete m.startSec;
+            delete m.endSec;
+        }
+    }
+
+    function removeStrayRegionVolumePitchMarkersAtBounds(startSec, endSec, keepIds) {
+        const keep = keepIds && typeof keepIds.has === 'function' ? keepIds : null;
+        let changed = false;
+        for (let i = currentMarkers.length - 1; i >= 0; i--) {
+            const m = currentMarkers[i];
+            if (keep && keep.has(m.id)) continue;
+            const isVol = isRegionVolumeMarkerComment(m.comment);
+            const isPitch = isRegionPitchMarkerComment(m.comment);
+            if (!isVol && !isPitch) continue;
+            if (!markerMatchesSegmentBounds(m, startSec, endSec)) continue;
+            currentMarkers.splice(i, 1);
+            if (activeMarkerId === m.id) activeMarkerId = null;
+            changed = true;
+        }
+        return changed;
+    }
+
+    function resolveRegionVolumeDbForSegmentMove(track, segmentIndex, markerRef) {
+        let gainDb =
+            typeof getSegmentGainDb === 'function' ? getSegmentGainDb(track, segmentIndex) : 0;
+        if (Math.abs(gainDb) > 0.0005) return gainDb;
+        if (markerRef && isRegionVolumeMarkerComment(markerRef.comment)) {
+            gainDb = parseGainDbFromRegionVolumeMarkerComment(markerRef.comment);
+        }
+        return Math.abs(gainDb) > 0.0005 ? gainDb : 0;
+    }
+
+    function resolveRegionPitchForSegmentMove(track, segmentIndex, markerRef) {
+        let pitch =
+            typeof getSegmentPitchSemitones === 'function'
+                ? getSegmentPitchSemitones(track, segmentIndex)
+                : 0;
+        if (pitch !== 0) return pitch;
+        if (markerRef && isRegionPitchMarkerComment(markerRef.comment)) {
+            pitch = parsePitchFromRegionPitchMarkerComment(markerRef.comment);
+        }
+        return pitch !== 0 ? pitch : 0;
+    }
+
+    function relocateRegionVolumePitchMarkersAfterLayout(track, beforeBoundsMap, opt) {
+        if (!markerTimelineReady()) return false;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const before =
+            beforeBoundsMap && typeof beforeBoundsMap === 'object' ? beforeBoundsMap : {};
+        if (typeof getSegmentRegionTimelineBounds !== 'function') return false;
+        const count =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track).length : 0;
+
+        const plans = [];
+        for (let i = 0; i < count; i++) {
+            const oldBounds = before[i];
+            if (!oldBounds) continue;
+            const newBounds = getSegmentRegionTimelineBounds(track.slot, i);
+            if (!newBounds) continue;
+            if (boundsPairNearlyEqual(oldBounds, newBounds)) continue;
+            const volM = findRegionVolumeMarkerAtSegmentBounds(
+                oldBounds.startSec,
+                oldBounds.endSec,
+            );
+            const pitchM = findRegionPitchMarkerAtSegmentBounds(
+                oldBounds.startSec,
+                oldBounds.endSec,
+            );
+            plans.push({
+                segmentIndex: i,
+                oldBounds,
+                newBounds,
+                volM,
+                pitchM,
+            });
+        }
+        if (!plans.length) return false;
+
+        const touchedMarkerIds = new Set();
+        let changed = false;
+
+        for (let pi = 0; pi < plans.length; pi++) {
+            const plan = plans[pi];
+            if (plan.volM && !touchedMarkerIds.has(plan.volM.id)) {
+                applyRegionMarkerBounds(
+                    plan.volM,
+                    plan.newBounds.startSec,
+                    plan.newBounds.endSec,
+                );
+                touchedMarkerIds.add(plan.volM.id);
+                changed = true;
+            }
+            if (plan.pitchM && !touchedMarkerIds.has(plan.pitchM.id)) {
+                applyRegionMarkerBounds(
+                    plan.pitchM,
+                    plan.newBounds.startSec,
+                    plan.newBounds.endSec,
+                );
+                touchedMarkerIds.add(plan.pitchM.id);
+                changed = true;
+            }
+        }
+
+        for (let pi = 0; pi < plans.length; pi++) {
+            const plan = plans[pi];
+            let volAtNew = findRegionVolumeMarkerAtSegmentBounds(
+                plan.newBounds.startSec,
+                plan.newBounds.endSec,
+            );
+            if (!volAtNew && plan.volM && !touchedMarkerIds.has(plan.volM.id)) {
+                applyRegionMarkerBounds(
+                    plan.volM,
+                    plan.newBounds.startSec,
+                    plan.newBounds.endSec,
+                );
+                touchedMarkerIds.add(plan.volM.id);
+                volAtNew = plan.volM;
+                changed = true;
+            }
+            if (!volAtNew) {
+                const strayVol = findRegionVolumeMarkerAtSegmentBounds(
+                    plan.oldBounds.startSec,
+                    plan.oldBounds.endSec,
+                );
+                if (strayVol && !touchedMarkerIds.has(strayVol.id)) {
+                    applyRegionMarkerBounds(
+                        strayVol,
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                    );
+                    touchedMarkerIds.add(strayVol.id);
+                    volAtNew = strayVol;
+                    changed = true;
+                }
+            }
+            if (!volAtNew) {
+                const gainDb = resolveRegionVolumeDbForSegmentMove(
+                    track,
+                    plan.segmentIndex,
+                    plan.volM,
+                );
+                if (Math.abs(gainDb) > 0.0005) {
+                    upsertRegionVolumeMarker(
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                        gainDb,
+                        { silent: true, prevGainDb: gainDb },
+                    );
+                    volAtNew = findRegionVolumeMarkerAtSegmentBounds(
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                    );
+                    if (volAtNew) touchedMarkerIds.add(volAtNew.id);
+                    changed = true;
+                }
+            }
+
+            let pitchAtNew = findRegionPitchMarkerAtSegmentBounds(
+                plan.newBounds.startSec,
+                plan.newBounds.endSec,
+            );
+            if (!pitchAtNew && plan.pitchM && !touchedMarkerIds.has(plan.pitchM.id)) {
+                applyRegionMarkerBounds(
+                    plan.pitchM,
+                    plan.newBounds.startSec,
+                    plan.newBounds.endSec,
+                );
+                touchedMarkerIds.add(plan.pitchM.id);
+                pitchAtNew = plan.pitchM;
+                changed = true;
+            }
+            if (!pitchAtNew) {
+                const strayPitch = findRegionPitchMarkerAtSegmentBounds(
+                    plan.oldBounds.startSec,
+                    plan.oldBounds.endSec,
+                );
+                if (strayPitch && !touchedMarkerIds.has(strayPitch.id)) {
+                    applyRegionMarkerBounds(
+                        strayPitch,
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                    );
+                    touchedMarkerIds.add(strayPitch.id);
+                    pitchAtNew = strayPitch;
+                    changed = true;
+                }
+            }
+            if (!pitchAtNew) {
+                const pitch = resolveRegionPitchForSegmentMove(
+                    track,
+                    plan.segmentIndex,
+                    plan.pitchM,
+                );
+                if (pitch !== 0) {
+                    upsertRegionPitchMarker(
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                        pitch,
+                        { silent: true },
+                    );
+                    pitchAtNew = findRegionPitchMarkerAtSegmentBounds(
+                        plan.newBounds.startSec,
+                        plan.newBounds.endSec,
+                    );
+                    if (pitchAtNew) touchedMarkerIds.add(pitchAtNew.id);
+                    changed = true;
+                }
+            }
+
+            if (volAtNew || pitchAtNew) {
+                if (
+                    removeStrayRegionVolumePitchMarkersAtBounds(
+                        plan.oldBounds.startSec,
+                        plan.oldBounds.endSec,
+                        touchedMarkerIds,
+                    )
+                ) {
+                    changed = true;
+                }
+            }
+        }
+
+        if (!changed) return false;
+        persistMarkersAfterChange({ silent: o.silent !== false });
+        if (typeof renderSeekBarMarkers === 'function') renderSeekBarMarkers();
+        if (typeof renderMarkerList === 'function') renderMarkerList();
+        if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+        if (typeof refreshAllRegionPitchGainOverlay === 'function') {
+            refreshAllRegionPitchGainOverlay();
+        }
+        return true;
+    }
+
+    function syncSegmentVolumePitchAfterRegionLayout(track, beforeBoundsMap, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const before =
+            beforeBoundsMap && typeof beforeBoundsMap === 'object' ? beforeBoundsMap : {};
+        if (typeof getSegmentRegionTimelineBounds !== 'function') return false;
+        const count =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track).length : 0;
+        let changed = false;
+        for (let i = 0; i < count; i++) {
+            const oldBounds = before[i];
+            if (!oldBounds) continue;
+            const newBounds = getSegmentRegionTimelineBounds(track.slot, i);
+            if (!newBounds || boundsPairNearlyEqual(oldBounds, newBounds)) continue;
+
+            const volM = findRegionVolumeMarkerAtSegmentBounds(
+                newBounds.startSec,
+                newBounds.endSec,
+            );
+            const pitchM = findRegionPitchMarkerAtSegmentBounds(
+                newBounds.startSec,
+                newBounds.endSec,
+            );
+
+            let gainDb =
+                typeof getSegmentGainDb === 'function' ? getSegmentGainDb(track, i) : 0;
+            if (volM) {
+                gainDb = parseGainDbFromRegionVolumeMarkerComment(volM.comment);
+            }
+            let pitch =
+                typeof getSegmentPitchSemitones === 'function'
+                    ? getSegmentPitchSemitones(track, i)
+                    : 0;
+            if (pitchM) {
+                pitch = parsePitchFromRegionPitchMarkerComment(pitchM.comment);
+            }
+
+            const segOpt = {
+                skipUndo: true,
+                skipVolumeMarker: true,
+                skipPitchMarker: true,
+                skipPersist: true,
+            };
+            if (
+                typeof setSegmentGainDb === 'function' &&
+                setSegmentGainDb(track, i, gainDb, segOpt)
+            ) {
+                changed = true;
+            }
+            if (
+                typeof setSegmentPitchSemitones === 'function' &&
+                setSegmentPitchSemitones(track, i, pitch, segOpt)
+            ) {
+                changed = true;
+            }
+        }
+        if (!changed) return false;
+        if (!(o.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof refreshAllRegionPitchGainOverlay === 'function') {
+            refreshAllRegionPitchGainOverlay();
+        }
+        return true;
+    }
+
+    window.captureTrackSegmentRegionBoundsMap = captureTrackSegmentRegionBoundsMap;
+    window.relocateRegionVolumePitchMarkersAfterLayout =
+        relocateRegionVolumePitchMarkersAfterLayout;
+    window.syncSegmentVolumePitchAfterRegionLayout = syncSegmentVolumePitchAfterRegionLayout;
+
     function completePendingRangeAtCurrentTime() {
         if (!markerTimelineReady() || pendingRangeStartSec == null) return;
         const start = pendingRangeStartSec;

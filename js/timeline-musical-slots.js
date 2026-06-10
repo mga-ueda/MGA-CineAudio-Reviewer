@@ -1034,6 +1034,11 @@
             window.snapshotSegmentTimelineAnchorsOnCopies(track, segments);
         }
 
+        const beforeRegionMarkerBounds =
+            typeof window.captureTrackSegmentRegionBoundsMap === 'function'
+                ? window.captureTrackSegmentRegionBoundsMap(track)
+                : null;
+
         const metrics =
             typeof getRegionOverlayTimelineMetrics === 'function'
                 ? getRegionOverlayTimelineMetrics()
@@ -1103,6 +1108,24 @@
             }
             if (ok && slots) {
                 cacheTrackTimelineSlots(track, slots);
+            }
+            if (
+                ok &&
+                beforeRegionMarkerBounds &&
+                typeof window.relocateRegionVolumePitchMarkersAfterLayout === 'function'
+            ) {
+                window.relocateRegionVolumePitchMarkersAfterLayout(track, beforeRegionMarkerBounds, {
+                    silent: true,
+                });
+            }
+            if (
+                ok &&
+                beforeRegionMarkerBounds &&
+                typeof window.syncSegmentVolumePitchAfterRegionLayout === 'function'
+            ) {
+                window.syncSegmentVolumePitchAfterRegionLayout(track, beforeRegionMarkerBounds, {
+                    silent: true,
+                });
             }
             return !!ok;
         }

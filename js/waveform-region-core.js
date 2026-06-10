@@ -71,7 +71,7 @@
     }
     function normalizeRegionUndoSnapshot(snap) {
         if (Array.isArray(snap)) {
-            return { tracks: snap, phrase: null, phraseExpandedCounts: null };
+            return { tracks: snap, phrase: null, phraseExpandedCounts: null, markers: null };
         }
         if (snap && Array.isArray(snap.tracks)) {
             return {
@@ -81,9 +81,10 @@
                     snap.phraseExpandedCounts && snap.phraseExpandedCounts.length
                         ? snap.phraseExpandedCounts.slice()
                         : null,
+                markers: Array.isArray(snap.markers) ? snap.markers : null,
             };
         }
-        return { tracks: [], phrase: null, phraseExpandedCounts: null };
+        return { tracks: [], phrase: null, phraseExpandedCounts: null, markers: null };
     }
     function restoredPlaybackHasUsableTimelineSlots(playbackRegions) {
         const slots =
@@ -160,7 +161,11 @@
                 }
             }
         }
-        return { tracks, phrase, phraseExpandedCounts };
+        let markers = null;
+        if (typeof getMarkersSnapshot === 'function') {
+            markers = getMarkersSnapshot();
+        }
+        return { tracks, phrase, phraseExpandedCounts, markers };
     }
     function regionUndoSnapshotsEqual(a, b) {
         return (
@@ -249,6 +254,9 @@
                 });
             }
         }
+        if (Array.isArray(normalized.markers) && typeof setMarkersFromSnapshot === 'function') {
+            setMarkersFromSnapshot(normalized.markers);
+        }
         if (!o.deferRedraw) {
             for (let i = 0; i < n; i++) {
                 const tr =
@@ -259,12 +267,14 @@
             }
             updateAllPlaybackRegionOverlays();
         }
-        if (
-            !o.deferRedraw &&
-            !o.skipSyncTransport &&
-            typeof syncExtraAudioToTransport === 'function'
-        ) {
+        if (!o.deferRedraw && !o.skipSyncTransport && typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
+        }
+        if (
+            Array.isArray(normalized.markers) &&
+            typeof refreshAllRegionPitchGainOverlay === 'function'
+        ) {
+            refreshAllRegionPitchGainOverlay();
         }
         if (!o.deferRedraw && !o.skipPersist && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
