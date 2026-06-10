@@ -381,10 +381,6 @@
         };
     }
 
-    function waveformTimelineHoverLeftPercent(clientX) {
-        return transportRatioFromClientX(clientX) * 100;
-    }
-
     function transportRatioFromClientX(clientX) {
         const lanes = waveformScrubTargetEl();
         const m = waveformTimelineMetrics(lanes);
@@ -1154,7 +1150,6 @@
         return true;
     }
 
-    window.waveformTimelineHoverLeftPercent = waveformTimelineHoverLeftPercent;
     window.handleWaveformTimelineKeydown = handleWaveformTimelineKeydown;
     window.resetWaveformTimelineZoom = resetWaveformTimelineZoom;
     window.beginMarkerTcEditWaveformZoom = beginMarkerTcEditWaveformZoom;
@@ -1170,7 +1165,6 @@
     window.getWaveformCanvasBackingWidthCss = getWaveformCanvasBackingWidthCss;
     window.applyWaveformCanvasContextTransform = applyWaveformCanvasContextTransform;
     window.getWaveformCanvasWindowSpec = getWaveformCanvasWindowSpec;
-    window.buildWaveformCanvasDrawOpt = buildWaveformCanvasDrawOpt;
     window.syncWaveformCanvasElement = syncWaveformCanvasElement;
     window.invalidateWaveformCanvasWindowCache = invalidateWaveformCanvasWindowCache;
 

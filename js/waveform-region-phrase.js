@@ -1287,8 +1287,6 @@
     window.applyPhraseCompositionToTrackRegions = applyPhraseCompositionToTrackRegions;
     window.applyPhraseCompositionToAllExtraTrackRegions =
         applyPhraseCompositionToAllExtraTrackRegions;
-    window.expandedPhraseGroupBarCountsSnapshot = expandedPhraseGroupBarCountsSnapshot;
-    window.phraseSlotRangesSnapshot = phraseSlotRangesSnapshot;
     window.phraseSlotIndexAtRegionInSec = phraseSlotIndexAtRegionInSec;
     window.phraseSlotIndexForSilentGap = phraseSlotIndexForSilentGap;
     window.phraseSlotStartSec = phraseSlotStartSec;

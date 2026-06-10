@@ -2166,5 +2166,4 @@ window.addEventListener('resize', () => {
     window.resetMasterVolumeForSessionClear = resetMasterVolumeForSessionClear;
     window.handleMasterVolShortcutKeydown = handleMasterVolShortcutKeydown;
     window.handleAnalyzeShortcutKeydown = handleAnalyzeShortcutKeydown;
-    window.handleAnalyzeOffShortcutKeydown = handleAnalyzeShortcutKeydown;
 })();

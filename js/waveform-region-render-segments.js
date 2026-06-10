@@ -2075,7 +2075,5 @@
         }
     }
 
-    window.findSilentGapElAtPointer = findSilentGapElAtPointer;
-
 
 

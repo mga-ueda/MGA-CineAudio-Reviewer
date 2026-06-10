@@ -168,52 +168,6 @@
         return peaksFromChannelData(sub, barCount);
     }
 
-    const PCM_RANGE_WORKER_MIN_SAMPLES = 96000;
-
-    /** 長い範囲の PCM 走査を Worker に逃がす（コールバック） */
-    function peaksFromChannelRangeAsync(ch, sampleRate, startSec, endSec, barCount, callback) {
-        const cb = typeof callback === 'function' ? callback : function () {};
-        const sr = sampleRate > 0 ? sampleRate : 48000;
-        const startSample = Math.max(0, Math.floor(startSec * sr));
-        const endSample = Math.min(ch.length, Math.ceil(endSec * sr));
-        const len = endSample - startSample;
-        if (len <= 0) {
-            cb([]);
-            return;
-        }
-        const worker = len >= PCM_RANGE_WORKER_MIN_SAMPLES ? getPeakWorker() : null;
-        if (!worker) {
-            cb(peaksFromChannelRange(ch, sampleRate, startSec, endSec, barCount));
-            return;
-        }
-        const id = ++peakWorkerReqId;
-        const onMsg = (ev) => {
-            if (!ev.data || ev.data.id !== id) return;
-            if (ev.data.type !== 'rangeBuilt') return;
-            worker.removeEventListener('message', onMsg);
-            cb(ev.data.peaks || []);
-        };
-        worker.addEventListener('message', onMsg);
-        try {
-            const samples = ch.subarray(startSample, endSample);
-            const copy = samples.slice();
-            worker.postMessage(
-                {
-                    type: 'range',
-                    id,
-                    samples: copy,
-                    barCount: Math.max(1, barCount | 0),
-                    startSample: 0,
-                    endSample: copy.length,
-                },
-                [copy.buffer],
-            );
-        } catch (_) {
-            worker.removeEventListener('message', onMsg);
-            cb(peaksFromChannelRange(ch, sampleRate, startSec, endSec, barCount));
-        }
-    }
-
     function viewportCacheKey(bufferId, startSec, endSec, barCount) {
         const tStep = 0.025;
         const s0 = Math.round(startSec / tStep) * tStep;
@@ -474,15 +428,12 @@
         }
     }
 
-    window.peaksFromChannelRangeAsync = peaksFromChannelRangeAsync;
     window.buildPeakPyramidFromBuffer = buildPeakPyramidFromBuffer;
     window.buildPeakPyramidFromBufferAsync = buildPeakPyramidFromBufferAsync;
-    window.peaksFromPyramidRange = peaksFromPyramidRange;
     window.peaksOverviewFromPyramid = peaksOverviewFromPyramid;
     window.peaksForViewportRange = peaksForViewportRange;
     window.peaksForViewportRangeWithQuality = peaksForViewportRangeWithQuality;
     window.isViewportPeakPyramidInsufficient = isViewportPeakPyramidInsufficient;
     window.clearViewportPeakCache = clearViewportPeakCache;
     window.bufferPeakId = bufferPeakId;
-    window.peaksFromChannelData = peaksFromChannelData;
 })();

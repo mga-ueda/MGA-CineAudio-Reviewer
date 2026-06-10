@@ -59,6 +59,8 @@
         return el && !el.hidden ? el : null;
     }
 
+    window.findSilentGapElAtPointer = findSilentGapElAtPointer;
+
     function findPlaybackRegionElAtPointer(clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
 

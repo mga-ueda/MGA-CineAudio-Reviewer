@@ -121,7 +121,6 @@
         return showAppConfirm(title, body, opts).then(() => true);
     }
 
-    window.showAppConfirm = showAppConfirm;
     window.requestAppNotice = requestAppNotice;
 
     function requestAppConfirm(title, body, cancelLogMsg, options) {
