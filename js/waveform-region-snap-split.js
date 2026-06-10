@@ -115,8 +115,26 @@
     function isPlaybackRegionSplitForbiddenAtTransport(track, transportSec) {
         return !resolvePlaybackRegionSplitPlacement(track, transportSec);
     }
+    /** Tempo/Sig または Phrase 着色 ON 時 — リージョン本体（平行移動）ドラッグを禁止 */
+    function isPlaybackRegionOffsetDragForbidden() {
+        if (
+            typeof getMusicalGridVisible === 'function' &&
+            getMusicalGridVisible()
+        ) {
+            return true;
+        }
+        if (
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible()
+        ) {
+            return true;
+        }
+        return false;
+    }
     window.isPlaybackRegionSplitForbiddenAtTransport =
         isPlaybackRegionSplitForbiddenAtTransport;
+    window.isPlaybackRegionOffsetDragForbidden = isPlaybackRegionOffsetDragForbidden;
+    window.isPlaybackRegionDragForbidden = isPlaybackRegionOffsetDragForbidden;
 
     function splitPlaybackRegionAtTransportSec(track, transportSec, opt) {
         if (!isExtraTrackRef(track)) return false;

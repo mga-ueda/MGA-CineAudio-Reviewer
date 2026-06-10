@@ -2726,6 +2726,10 @@
             min-width: 28px;
             overflow: visible;
         }
+        .audio-waveform-composite__lanes--region-drag-forbidden
+            .audio-waveform-lane__playback-region {
+            cursor: default;
+        }
         /* In/Out 縦線はリージョン枠のみ（ハンドル ::after と二重描画しない） */
         .audio-waveform-lane__playback-region--edge-in {
             border-left: 0.5px solid rgba(150, 156, 168, 0.88);

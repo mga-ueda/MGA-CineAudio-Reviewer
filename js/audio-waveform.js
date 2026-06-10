@@ -1222,7 +1222,11 @@
             !inPreTrackGap &&
             !inRegionHandleZone &&
             regionHit &&
-            canDragWaveformTrackTimelineStart(regionHit.slot)
+            canDragWaveformTrackTimelineStart(regionHit.slot) &&
+            !(
+                typeof isPlaybackRegionOffsetDragForbidden === 'function' &&
+                isPlaybackRegionOffsetDragForbidden()
+            )
                 ? regionHit
                 : null;
 
@@ -1716,6 +1720,14 @@
     }
 
     function onWaveformTrackOffsetPointerDown(ev, slot, segmentIndex) {
+        if (
+            typeof isPlaybackRegionOffsetDragForbidden === 'function' &&
+            isPlaybackRegionOffsetDragForbidden() &&
+            typeof segmentIndex === 'number' &&
+            segmentIndex >= 0
+        ) {
+            return;
+        }
         if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
             syncSnapSuppressionFromPointerEvent(ev);
         }

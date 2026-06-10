@@ -652,13 +652,16 @@
             window.clearRegionSwapHistoryAnimHint();
         }
     }
+    function regionUndoCaptureOptions() {
+        return regionUndoSnapshotIncludePhrase({ includePhrase: true }) ? { includePhrase: true } : undefined;
+    }
     function beginRegionUndoGesture() {
         if (regionUndoPaused) return;
-        regionUndoDragSnap = captureRegionUndoSnapshot();
+        regionUndoDragSnap = captureRegionUndoSnapshot(regionUndoCaptureOptions());
     }
     function commitRegionUndoGesture() {
         if (regionUndoPaused || !regionUndoDragSnap) return;
-        const current = captureRegionUndoSnapshot();
+        const current = captureRegionUndoSnapshot(regionUndoCaptureOptions());
         if (!regionUndoSnapshotsEqual(regionUndoDragSnap, current)) {
             regionUndoStack.push(regionUndoDragSnap);
             clearRegionRedoStack();

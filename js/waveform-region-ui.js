@@ -1001,6 +1001,12 @@
     }
 
     function onSplitHandlePointerDown(ev, track, boundaryIndex) {
+        if (
+            typeof isPlaybackRegionOffsetDragForbidden === 'function' &&
+            isPlaybackRegionOffsetDragForbidden()
+        ) {
+            return;
+        }
         if (ev.button !== 0) return;
         if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
             syncSnapSuppressionFromPointerEvent(ev);

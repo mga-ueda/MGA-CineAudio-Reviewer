@@ -83,6 +83,7 @@
         persistMusicalGridAndRedraw({
             skipUndo: true,
             skipTimelineSlotRebuild: !!o.skipTimelineSlotRebuild,
+            relayoutRegions: canCommitPhraseCompositionLayout(),
         });
         updatePhraseBoundaryOverlay();
         phraseUndoPaused = false;
@@ -606,6 +607,16 @@
             composite.classList.toggle(
                 'audio-waveform-composite--phrase-fill',
                 getMusicalGridPhraseFillVisible(),
+            );
+        }
+        const regionDragForbidden =
+            getMusicalGridVisible() || getMusicalGridPhraseFillVisible();
+        const lanes =
+            typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;
+        if (lanes) {
+            lanes.classList.toggle(
+                'audio-waveform-composite__lanes--region-drag-forbidden',
+                regionDragForbidden,
             );
         }
     }
@@ -3603,7 +3614,11 @@
             const boundaryIdx = phraseBoundaryDragStartBoundaryIndex;
             if (finalCounts && finalCounts.length) {
                 if (!phraseGroupCountsEqual(startCounts, finalCounts)) {
-                    requestPhraseUndoCapture();
+                    if (typeof window.requestRegionUndoCapture === 'function') {
+                        window.requestRegionUndoCapture({ includePhrase: true });
+                    } else {
+                        requestPhraseUndoCapture();
+                    }
                 }
                 applyExplicitPhraseGroupBarCounts(finalCounts, { skipUndo: true });
                 persistPhraseWaveformEditAndRedraw({ skipUndo: true });
