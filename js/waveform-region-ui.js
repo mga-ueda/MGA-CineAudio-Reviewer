@@ -146,6 +146,42 @@
         }
     }
 
+    /** 複数選択ボンドが不可な理由。選択が有効な連続範囲のときは null。 */
+    function resolveRegionSelectionJoinBlockReason() {
+        if (regionSelectionEntries.length < 2) return null;
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (segEntries.length !== regionSelectionEntries.length) {
+            return 'silent gap in selection';
+        }
+        if (segEntries.length < 2) return null;
+
+        const slot = segEntries[0].slot;
+        if (!segEntries.every((e) => e.slot === slot)) {
+            return 'different tracks';
+        }
+
+        const indices = [...new Set(segEntries.map((e) => e.segmentIndex))].sort(
+            (a, b) => a - b,
+        );
+        if (indices.length !== segEntries.length) {
+            return 'duplicate selection';
+        }
+
+        for (let i = 1; i < indices.length; i++) {
+            if (indices[i] !== indices[i - 1] + 1) {
+                return 'non-consecutive regions';
+            }
+        }
+        return null;
+    }
+
+    function notifyCannotBondFromSelection(reason) {
+        writeLog('Playback region: cannot bond (' + reason + ')');
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', "Can't bond", 'error');
+        }
+    }
+
     function joinSegmentBoundaryAt(track, boundaryIndex, opt) {
         if (!isSegmentBoundaryJoinableAtIndex(track, boundaryIndex)) {
             if (!(opt && opt.silent)) {
@@ -160,6 +196,9 @@
             typeof window.joinPhraseAtRegionBoundary === 'function' &&
             window.joinPhraseAtRegionBoundary(track, boundaryIndex, opt)
         ) {
+            if (!(opt && opt.skipClearSelection) && typeof clearRegionSelection === 'function') {
+                clearRegionSelection();
+            }
             return true;
         }
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
@@ -213,6 +252,10 @@
         }
         noteRegionShrinkPersistIntent(track.slot);
 
+        if (!(opt && opt.skipClearSelection) && typeof clearRegionSelection === 'function') {
+            clearRegionSelection();
+        }
+
         writeLog(
             'Ex ' +
                 (track.slot + 1) +
@@ -225,6 +268,159 @@
         if (!(opt && opt.silent) && typeof flashSeekHint === 'function') {
             flashSeekHint('Ex ' + (track.slot + 1), 'Regions joined', 'notice');
         }
+        return true;
+    }
+
+    /** lo..hi（含む）の連続セグメントを 1 リージョンにまとめる。各境界が結合可能であること。 */
+    function mergeSegmentSpanAt(track, lo, hi, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const first = lo | 0;
+        const last = hi | 0;
+        if (last <= first) return false;
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        if (first < 0 || last >= segments.length) return false;
+
+        for (let b = first; b < last; b++) {
+            if (!isSegmentBoundaryJoinableAtIndex(track, b)) {
+                if (!o.silent) {
+                    notifyCannotJoinSegmentBoundary(track, b);
+                }
+                return false;
+            }
+        }
+
+        const left = segments[first];
+        const right = segments[last];
+        if (!left || !right) return false;
+
+        const leftClip = left.clipId || getSegmentClipId(track, first);
+        const merged = {
+            id: left.id || newRegionId(),
+            clipId: leftClip,
+            sourceInSec: left.sourceInSec,
+            sourceOutSec: right.sourceOutSec,
+            timelineStartSec: getSegmentTimelineStart(track, first),
+        };
+        if (Number.isFinite(left.regionTimelineInSec)) {
+            merged.regionTimelineInSec = left.regionTimelineInSec;
+        }
+        if (Number.isFinite(left.regionLeadPadSec)) {
+            merged.regionLeadPadSec = left.regionLeadPadSec;
+        }
+        if (Number.isFinite(left.gainDb)) {
+            merged.gainDb = left.gainDb;
+        }
+        if (Number.isFinite(left.pitchSemitones) && left.pitchSemitones !== 0) {
+            merged.pitchSemitones = left.pitchSemitones;
+        }
+        if (Number.isFinite(left.fadeInSec)) {
+            merged.fadeInSec = left.fadeInSec;
+        }
+        if (Number.isFinite(right.fadeOutSec)) {
+            merged.fadeOutSec = right.fadeOutSec;
+        }
+
+        segments.splice(first, last - first + 1, merged);
+        if (
+            !setTrackSegments(track, segments, {
+                silent: true,
+                skipUndo: !!(o && o.skipUndo),
+            })
+        ) {
+            if (!o.silent) {
+                writeLog('Playback region: join failed');
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Join failed', 'notice');
+                }
+            }
+            return false;
+        }
+        noteRegionShrinkPersistIntent(track.slot);
+        return true;
+    }
+
+    function notifyRegionsJoined(track, joinedCount, remainingCount, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.silent) return;
+        writeLog(
+            'Ex ' +
+                (track.slot + 1) +
+                ': ' +
+                joinedCount +
+                ' regions joined (' +
+                remainingCount +
+                ' left)',
+        );
+        if (typeof flashSeekHint === 'function') {
+            const hint =
+                joinedCount >= 2
+                    ? joinedCount + ' regions joined'
+                    : 'Regions joined';
+            flashSeekHint('Ex ' + (track.slot + 1), hint, 'notice');
+        }
+    }
+
+    /** 選択範囲 lo..hi の連続リージョンをまとめて結合する。 */
+    function joinConsecutiveRegionSpanAt(track, lo, hi, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const first = lo | 0;
+        const last = hi | 0;
+        if (last <= first) return false;
+
+        const joinedCount = last - first + 1;
+        if (joinedCount === 2) {
+            return joinSegmentBoundaryAt(track, first, o);
+        }
+
+        for (let b = first; b < last; b++) {
+            if (!isSegmentBoundaryJoinableAtIndex(track, b)) {
+                if (!o.silent) {
+                    notifyCannotJoinSegmentBoundary(track, b);
+                }
+                return false;
+            }
+        }
+
+        if (!regionUndoPaused && !o.skipUndo) {
+            const includePhrase =
+                typeof getMusicalGridPhraseFillVisible === 'function' &&
+                getMusicalGridPhraseFillVisible();
+            requestRegionUndoCapture({ includePhrase: !!includePhrase });
+        }
+
+        const chainOpt = {
+            ...o,
+            silent: true,
+            skipClearSelection: true,
+            skipUndo: true,
+        };
+
+        if (
+            !(o.skipPhraseRelayout) &&
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible() &&
+            typeof window.joinPhraseAtRegionSpan === 'function' &&
+            window.joinPhraseAtRegionSpan(track, first, last, chainOpt)
+        ) {
+            if (!(o.skipClearSelection) && typeof clearRegionSelection === 'function') {
+                clearRegionSelection();
+            }
+            const remaining =
+                typeof getTrackSegments === 'function'
+                    ? getTrackSegments(track).length
+                    : joinedCount;
+            notifyRegionsJoined(track, joinedCount, remaining, o);
+            return true;
+        }
+
+        if (!mergeSegmentSpanAt(track, first, last, chainOpt)) {
+            return false;
+        }
+
+        if (!(o.skipClearSelection) && typeof clearRegionSelection === 'function') {
+            clearRegionSelection();
+        }
+        notifyRegionsJoined(track, joinedCount, getTrackSegments(track).length, o);
         return true;
     }
 
@@ -1314,38 +1510,33 @@
         return anyChanged;
     }
 
-    function joinPlaybackRegionAtPointer(opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const slot = resolveSplitTargetExtraSlot();
-        if (slot < 0) {
-            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
-                writeLog(
-                    'Playback region: hover an Ex lane (1–' +
-                        getExtraTrackCount() +
-                        '), then press B',
-                );
-                if (typeof flashSeekHint === 'function') {
-                    flashSeekHint('Region', 'Hover Ex lane', 'notice');
-                }
-            }
-            return false;
+    /** 同一トラック上で隙間なく連続したリージョンが選択されているとき、その範囲を返す。 */
+    function resolveConsecutiveRegionSelectionJoinSpan() {
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (segEntries.length < 2) return null;
+        if (segEntries.length !== regionSelectionEntries.length) return null;
+
+        const slot = segEntries[0].slot;
+        if (!segEntries.every((e) => e.slot === slot)) return null;
+
+        const indices = [...new Set(segEntries.map((e) => e.segmentIndex))].sort(
+            (a, b) => a - b,
+        );
+        if (indices.length !== segEntries.length) return null;
+
+        for (let i = 1; i < indices.length; i++) {
+            if (indices[i] !== indices[i - 1] + 1) return null;
         }
-        if (!isExtraSlotUsableForRegion(slot)) {
-            if (!o.silent) {
-                writeLog('Playback region: load an extra audio track first');
-            }
-            return false;
-        }
-        const track = { type: 'extra', slot };
-        if (!isTrackRegionActive(track)) {
-            if (!o.silent) {
-                writeLog('Playback region: no active regions on Ex ' + (slot + 1));
-                if (typeof flashSeekHint === 'function') {
-                    flashSeekHint('Region', 'No regions', 'notice');
-                }
-            }
-            return false;
-        }
+
+        return {
+            slot,
+            lo: indices[0],
+            hi: indices[indices.length - 1],
+            regionCount: indices.length,
+        };
+    }
+
+    function resolveJoinableBoundaryAtPointerOrSeek(track) {
         const { clientX, clientY } = waveformPointerClientXY();
         let boundaryIndex = resolveSegmentBoundaryIndexAtPointer(
             track,
@@ -1354,40 +1545,96 @@
             true,
         );
         if (boundaryIndex < 0) {
-            const seekTransportSec = transportSecFromSeekbar();
             boundaryIndex = resolveSegmentBoundaryIndexAtTransport(
                 track,
-                seekTransportSec,
+                transportSecFromSeekbar(),
                 true,
             );
         }
-        if (boundaryIndex >= 0) {
-            return joinSegmentBoundaryAt(track, boundaryIndex, o);
-        }
-        let blockedBoundaryIndex = resolveSegmentBoundaryIndexAtPointer(
+        return boundaryIndex;
+    }
+
+    function resolveBlockedBoundaryAtPointerOrSeek(track) {
+        const { clientX, clientY } = waveformPointerClientXY();
+        let boundaryIndex = resolveSegmentBoundaryIndexAtPointer(
             track,
             clientX,
             clientY,
             false,
         );
-        if (blockedBoundaryIndex < 0) {
-            const seekTransportSec = transportSecFromSeekbar();
-            blockedBoundaryIndex = resolveSegmentBoundaryIndexAtTransport(
+        if (boundaryIndex < 0) {
+            boundaryIndex = resolveSegmentBoundaryIndexAtTransport(
                 track,
-                seekTransportSec,
+                transportSecFromSeekbar(),
                 false,
             );
         }
-        if (blockedBoundaryIndex >= 0) {
-            if (!o.silent) {
-                notifyCannotJoinSegmentBoundary(track, blockedBoundaryIndex);
+        return boundaryIndex;
+    }
+
+    function joinPlaybackRegionAtPointer(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const selBlockReason = resolveRegionSelectionJoinBlockReason();
+        if (selBlockReason) {
+            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
+                notifyCannotBondFromSelection(selBlockReason);
             }
             return false;
         }
+        const selSpan = resolveConsecutiveRegionSelectionJoinSpan();
+        let slot = resolveSplitTargetExtraSlot();
+        if (slot < 0 && selSpan) slot = selSpan.slot;
+        if (slot < 0) {
+            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
+                writeLog(
+                    'Playback region: hover an Ex lane (1–' +
+                        getExtraTrackCount() +
+                        '), or select consecutive regions, then press B',
+                );
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'Hover Ex lane or select regions', 'notice');
+                }
+            }
+            return false;
+        }
+        if (!isExtraSlotUsableForRegion(slot)) {
+            if (selSpan && isExtraSlotUsableForRegion(selSpan.slot)) {
+                slot = selSpan.slot;
+            } else {
+                if (!o.silent) {
+                    writeLog('Playback region: load an extra audio track first');
+                }
+                return false;
+            }
+        }
+        const track = { type: 'extra', slot };
+        if (selSpan && isExtraSlotUsableForRegion(selSpan.slot)) {
+            const selTrack = { type: 'extra', slot: selSpan.slot };
+            if (isTrackRegionActive(selTrack)) {
+                return joinConsecutiveRegionSpanAt(selTrack, selSpan.lo, selSpan.hi, o);
+            }
+        }
+        if (isTrackRegionActive(track)) {
+            const boundaryIndex = resolveJoinableBoundaryAtPointerOrSeek(track);
+            if (boundaryIndex >= 0) {
+                return joinSegmentBoundaryAt(track, boundaryIndex, o);
+            }
+        }
+        if (isTrackRegionActive(track)) {
+            const blockedBoundaryIndex = resolveBlockedBoundaryAtPointerOrSeek(track);
+            if (blockedBoundaryIndex >= 0) {
+                if (!o.silent) {
+                    notifyCannotJoinSegmentBoundary(track, blockedBoundaryIndex);
+                }
+                return false;
+            }
+        }
         if (!o.silent) {
-            writeLog('Playback region: hover a joinable boundary or seek to boundary, then press B');
+            writeLog(
+                'Playback region: hover a joinable boundary, seek to boundary, or select consecutive regions, then press B',
+            );
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Hover/seek joinable boundary', 'notice');
+                flashSeekHint('Region', 'Boundary or consecutive regions', 'notice');
             }
         }
         return false;
@@ -1397,7 +1644,8 @@
         if (!matchUserShortcut(e, 'regionJoin')) return false;
         if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
-        joinPlaybackRegionAtPointer();
+        const ok = joinPlaybackRegionAtPointer();
+        if (ok) e.stopPropagation();
         return true;
     }
 

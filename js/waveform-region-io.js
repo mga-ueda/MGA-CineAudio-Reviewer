@@ -140,6 +140,7 @@
     };
     window.splitPlaybackRegionAtTargetSec = splitPlaybackRegionAtTargetSec;
     window.joinPlaybackRegionAtPointer = joinPlaybackRegionAtPointer;
+    window.mergeSegmentSpanAt = mergeSegmentSpanAt;
     window.applyRegionFadeAtSeekbar = applyRegionFadeAtSeekbar;
     window.tryRejoinVolumeSplitBoundariesAtSegment =
         tryRejoinVolumeSplitBoundariesAtSegment;

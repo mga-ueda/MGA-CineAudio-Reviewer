@@ -2925,6 +2925,78 @@
         }
         return null;
     }
+    /**
+     * 連続セグメント lo..hi をまとめて結合 — Phrase 境界を右から左へ counts 更新後、1 回 relayout。
+     * 同一 Phrase スロット内の分割のみ（relayoutOnly のみ）のときは false を返し、呼び出し側で segment 結合へ。
+     */
+    function joinPhraseAtRegionSpan(track, lo, hi, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const first = lo | 0;
+        const last = hi | 0;
+        if (last <= first) return false;
+        if (!getMusicalGridPhraseFillVisible()) return false;
+        if (!canCommitPhraseCompositionLayout()) return false;
+
+        const phraseBoundaryIndices = [];
+        let hasRelayoutOnly = false;
+        for (let b = first; b < last; b++) {
+            if (
+                typeof window.isSegmentBoundaryJoinableAtIndex === 'function' &&
+                !window.isSegmentBoundaryJoinableAtIndex(track, b)
+            ) {
+                return false;
+            }
+            const hit = resolvePhraseBoundaryJoinAtRegionBoundary(track, b);
+            if (!hit) return false;
+            if (hit.relayoutOnly) {
+                hasRelayoutOnly = true;
+            } else if (hit.counts) {
+                phraseBoundaryIndices.push(hit.boundaryIndex);
+            }
+        }
+        if (!phraseBoundaryIndices.length) return false;
+
+        if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
+            window.requestRegionUndoCapture({ includePhrase: true });
+        }
+
+        if (
+            hasRelayoutOnly &&
+            typeof window.mergeSegmentSpanAt === 'function' &&
+            !window.mergeSegmentSpanAt(track, first, last, {
+                silent: true,
+                skipUndo: true,
+                skipPhraseRelayout: true,
+            })
+        ) {
+            return false;
+        }
+
+        let counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        if (!counts) return false;
+        phraseBoundaryIndices.sort((a, b) => b - a);
+        for (let i = 0; i < phraseBoundaryIndices.length; i++) {
+            counts = mergePhraseGroupsAtBoundaryIndex(counts, phraseBoundaryIndices[i]);
+            if (!counts) return false;
+        }
+
+        const phraseBefore = musicalGridPhraseText;
+        applyExplicitPhraseGroupBarCounts(counts, { skipUndo: true });
+        persistPhraseWaveformEditAndRedraw({
+            skipUndo: true,
+            relayoutSilent: o.relayoutSilent !== false,
+        });
+
+        phraseSwapDiagLog('region-bond/span-applied', {
+            ex: (track.slot | 0) + 1,
+            regionLo: first + 1,
+            regionHi: last + 1,
+            phraseBoundaries: phraseBoundaryIndices.map((i) => i + 1),
+            before: phraseBefore,
+            after: musicalGridPhraseText,
+        });
+        return true;
+    }
     /** Phrase 着色 ON — リージョン境界ボンドで counts 更新＋構成どおりに切り直し */
     function joinPhraseAtRegionBoundary(track, boundaryIndex, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
@@ -3082,13 +3154,15 @@
         if (
             getMusicalGridPhraseFillVisible() &&
             typeof window.joinPlaybackRegionAtPointer === 'function' &&
-            window.joinPlaybackRegionAtPointer({ silent: true })
+            window.joinPlaybackRegionAtPointer()
         ) {
             e.preventDefault();
+            e.stopPropagation();
             return true;
         }
-        joinPhraseAtTarget();
+        const phraseJoined = joinPhraseAtTarget();
         e.preventDefault();
+        if (phraseJoined) e.stopPropagation();
         return true;
     }
     function wasLeftPhraseAbsorbedIntoRight(startCounts, finalCounts, boundaryIndex) {
@@ -3922,6 +3996,7 @@
     window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;
     window.joinPhraseAtTarget = joinPhraseAtTarget;
     window.joinPhraseAtRegionBoundary = joinPhraseAtRegionBoundary;
+    window.joinPhraseAtRegionSpan = joinPhraseAtRegionSpan;
     window.handleMusicalGridPhraseUndoKeydown = handleMusicalGridPhraseUndoKeydown;
     window.handleMusicalGridPhraseRedoKeydown = handleMusicalGridPhraseRedoKeydown;
     window.undoPhraseDefinition = undoPhraseDefinition;
