@@ -700,7 +700,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} で横倍率変更（${h.waveformZoomExtreme} で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。`,
+            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} またはホイール上/下で横倍率変更（${h.waveformZoomExtreme} または Ctrl+ホイール上/下で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} または Shift+Ctrl+ホイール上/下でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;

@@ -460,7 +460,41 @@
 
         const delta = ev.deltaY !== 0 ? ev.deltaY : ev.deltaX;
 
-        if (ev.shiftKey) {
+        if (
+            (ev.ctrlKey || ev.metaKey) &&
+            !ev.altKey &&
+            !ev.shiftKey &&
+            !isWaveformTimelineZoomKeyboardBlocked(ev)
+        ) {
+            if (!delta) return;
+            ev.preventDefault();
+            if (delta < 0) {
+                setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
+            } else {
+                resetWaveformTimelineZoom();
+            }
+            return;
+        }
+
+        if (
+            (ev.ctrlKey || ev.metaKey) &&
+            ev.shiftKey &&
+            !ev.altKey &&
+            !isWaveformTimelineZoomKeyboardBlocked(ev) &&
+            typeof stepWaveformLaneHeightScale === 'function' &&
+            typeof setWaveformLaneHeightScale === 'function'
+        ) {
+            if (!delta) return;
+            ev.preventDefault();
+            if (delta < 0) {
+                setWaveformLaneHeightScale(stepWaveformLaneHeightScale(-1));
+            } else {
+                setWaveformLaneHeightScale(stepWaveformLaneHeightScale(1));
+            }
+            return;
+        }
+
+        if (ev.shiftKey && !ev.ctrlKey && !ev.metaKey) {
             const lanes = waveformScrubTargetEl();
             if (!lanes) return;
             const m = waveformTimelineMetrics(lanes);
@@ -472,6 +506,23 @@
                 0,
                 Math.min(max, lanes.scrollLeft + delta),
             );
+            return;
+        }
+
+        if (
+            !ev.ctrlKey &&
+            !ev.metaKey &&
+            !ev.altKey &&
+            !ev.shiftKey &&
+            !isWaveformTimelineZoomKeyboardBlocked(ev)
+        ) {
+            if (!delta) return;
+            ev.preventDefault();
+            if (delta < 0) {
+                setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(1), true);
+            } else {
+                setWaveformTimelineZoom(stepWaveformTimelineZoomLevel(-1), true);
+            }
             return;
         }
 
