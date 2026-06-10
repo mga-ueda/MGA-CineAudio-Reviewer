@@ -1308,13 +1308,37 @@
 
     function seekToPhraseNavStop(stop, opt) {
         if (!stop || !Number.isFinite(stop.sec)) return false;
-        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const resumeAfter = !!o.resumeAfterSeek;
         let target = stop.sec;
         if (typeof clampTransportSec === 'function') {
             target = clampTransportSec(target);
         }
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
+        }
+        const hintTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(target)
+                : String(target);
+        const hintTitle = stop.label || 'Phrase';
+        if (
+            o.discreteStopNav &&
+            typeof applyDiscreteStopNavStep === 'function'
+        ) {
+            applyDiscreteStopNavStep(target, {
+                resumeAfterSeek: resumeAfter,
+                fromRepeat: o.fromRepeat,
+            });
+            if (!o.fromRepeat) {
+                if (typeof writeLog === 'function') {
+                    writeLog('Phrase: seek to ' + hintTitle + ' @ ' + hintTc);
+                }
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint(hintTitle, hintTc);
+                }
+            }
+            return true;
         }
         if (typeof applyJumpTransportSeek === 'function') {
             applyJumpTransportSeek(target, resumeAfter);
@@ -1329,11 +1353,6 @@
         if (typeof updateAllWaveformPlayheads === 'function') {
             updateAllWaveformPlayheads();
         }
-        const hintTc =
-            typeof formatTimecodeForTransport === 'function'
-                ? formatTimecodeForTransport(target)
-                : String(target);
-        const hintTitle = stop.label || 'Phrase';
         if (typeof writeLog === 'function') {
             writeLog('Phrase: seek to ' + hintTitle + ' @ ' + hintTc);
         }
@@ -1833,13 +1852,37 @@
     }
 
     function seekToRegionLocalBarSec(targetSec, localBar, opt) {
-        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const resumeAfter = !!o.resumeAfterSeek;
         let target = targetSec;
         if (typeof clampTransportSec === 'function') {
             target = clampTransportSec(target);
         }
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
+        }
+        const hintTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(target)
+                : String(target);
+        const hintTitle = 'Bar ' + (localBar | 0);
+        if (
+            o.discreteStopNav !== false &&
+            typeof applyDiscreteStopNavStep === 'function'
+        ) {
+            applyDiscreteStopNavStep(target, {
+                resumeAfterSeek: resumeAfter,
+                fromRepeat: o.fromRepeat,
+            });
+            if (!o.fromRepeat) {
+                if (typeof writeLog === 'function') {
+                    writeLog('Region bar: jump to ' + hintTitle + ' @ ' + hintTc);
+                }
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint(hintTitle, hintTc);
+                }
+            }
+            return true;
         }
         if (typeof applyJumpTransportSeek === 'function') {
             applyJumpTransportSeek(target, resumeAfter);
@@ -1856,11 +1899,6 @@
         if (typeof updateAllWaveformPlayheads === 'function') {
             updateAllWaveformPlayheads();
         }
-        const hintTc =
-            typeof formatTimecodeForTransport === 'function'
-                ? formatTimecodeForTransport(target)
-                : String(target);
-        const hintTitle = 'Bar ' + (localBar | 0);
         if (typeof writeLog === 'function') {
             writeLog('Region bar: jump to ' + hintTitle + ' @ ' + hintTc);
         }

@@ -137,6 +137,13 @@
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
         }
+        if (typeof applyDiscreteStopNavStep === 'function') {
+            applyDiscreteStopNavStep(target, { resumeAfterSeek: wasPlaying });
+            writeLog(
+                'Seek keyboard: ' + keyLabel + ' -> ' + formatTimecodeForTransport(target),
+            );
+            return true;
+        }
         void (async () => {
             if (typeof seekTransportToAndWait === 'function') {
                 await seekTransportToAndWait(target, { resumeAfter: wasPlaying });
@@ -474,6 +481,17 @@
                     : !videoMain.paused;
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint(seekHintTitle, formatTimecodeForTransport(target));
+            }
+            if (typeof applyDiscreteStopNavStep === 'function') {
+                applyDiscreteStopNavStep(target, { resumeAfterSeek: wasPlaying });
+                writeLog(
+                    'Seek keyboard: ' +
+                        d +
+                        ' -> ' +
+                        formatTimecodeForTransport(target) +
+                        seekLogSuffix
+                );
+                return;
             }
             void (async () => {
                 if (typeof seekTransportToAndWait === 'function') {

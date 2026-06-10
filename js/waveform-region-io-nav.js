@@ -287,6 +287,7 @@
             {
                 resumeAfterSeek: !!(opt && opt.resumeAfterSeek),
                 hintTitle: 'Region ' + markHint,
+                discreteStopNav: true,
             },
         );
     }

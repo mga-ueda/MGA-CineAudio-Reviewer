@@ -498,6 +498,17 @@
             suppressRangeLoopSnapForExplicitSeek();
         }
         const resumeAfter = !!(opt && opt.resumeAfter);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (
+            o.discreteStopNav &&
+            typeof applyDiscreteStopNavStep === 'function'
+        ) {
+            applyDiscreteStopNavStep(t, {
+                resumeAfterSeek: resumeAfter,
+                fromRepeat: o.fromRepeat,
+            });
+            return t;
+        }
         if (typeof applyJumpTransportSeek === 'function') {
             applyJumpTransportSeek(t, resumeAfter);
         } else if (typeof applyTransportAtSec === 'function') {
@@ -965,7 +976,11 @@
             target = opt.targetSec;
         } else if (m.type === 'range') target = seekEnd ? m.endSec : m.startSec;
         else target = m.timeSec;
-        const t = commitMarkerTransportSeek(target, { resumeAfter: resumeAfter });
+        const t = commitMarkerTransportSeek(target, {
+            resumeAfter: resumeAfter,
+            discreteStopNav: !!(opt && opt.discreteStopNav),
+            fromRepeat: !!(opt && opt.fromRepeat),
+        });
         syncMarkerSeekTransportUi(t);
         markerPanelHoverId = null;
         waveformMarkerHoverId = null;
@@ -975,10 +990,12 @@
         activeMarkerId = m.id;
         updateMarkerListRowClasses();
         renderSeekBarMarkers();
-        const hintTc = tcLabelForSec(t);
-        const hintSuffix = markerSeekHintSuffix(m, opt, target);
-        writeLog('Marker: seek to ' + hintTc + hintSuffix);
-        flashMarkerSeekHint(m, hintTc, hintSuffix);
+        if (!(opt && opt.fromRepeat)) {
+            const hintTc = tcLabelForSec(t);
+            const hintSuffix = markerSeekHintSuffix(m, opt, target);
+            writeLog('Marker: seek to ' + hintTc + hintSuffix);
+            flashMarkerSeekHint(m, hintTc, hintSuffix);
+        }
         const focusTcEdge = opt && opt.focusTcEdge;
         if (focusComment) {
             suppressMarkerRowHoverSeek(300);
@@ -1426,6 +1443,8 @@
             focusComment: !!(opt && opt.focusComment),
             resumeAfterSeek: !!(opt && opt.resumeAfterSeek),
             seekEnd: stop.edge === 'end',
+            discreteStopNav: !!(opt && opt.discreteStopNav),
+            fromRepeat: !!(opt && opt.fromRepeat),
         });
         return true;
     }
