@@ -120,6 +120,33 @@
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
         }
+        if (
+            opt &&
+            opt.discreteStopNav &&
+            typeof applyDiscreteStopNavStep === 'function'
+        ) {
+            applyDiscreteStopNavStep(target, {
+                resumeAfterSeek: resumeAfter,
+                fromRepeat: opt.fromRepeat,
+            });
+            syncRegionNavSeekTransportUi(target);
+            const edgeLabel = stop.edge === 'out' ? ' Out' : ' In';
+            const hintTc =
+                typeof formatTimecodeForTransport === 'function'
+                    ? formatTimecodeForTransport(target)
+                    : String(target);
+            const hintTitle =
+                opt && opt.hintTitle
+                    ? opt.hintTitle
+                    : regionNavHintTitleForSlot(stop.slot);
+            if (!opt.fromRepeat) {
+                writeLog('Region: seek to ' + hintTitle + ' ' + hintTc + edgeLabel);
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint(hintTitle, hintTc + edgeLabel);
+                }
+            }
+            return true;
+        }
         if (typeof applyJumpTransportSeek === 'function') {
             applyJumpTransportSeek(target, resumeAfter);
         } else if (typeof applyTransportAtSec === 'function') {

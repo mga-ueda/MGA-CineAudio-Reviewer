@@ -585,15 +585,6 @@
                     ? isTransportPlaying()
                     : !videoMain.paused;
             if (oneFrameStep && playingBeforeStep && e.repeat) return;
-            const useKeyboardScrubSession =
-                pageSeekStep || (isArrowKey && !(oneFrameStep && playingBeforeStep));
-            if (
-                useKeyboardScrubSession &&
-                !e.repeat &&
-                typeof noteKeyboardTransportScrubBegin === 'function'
-            ) {
-                noteKeyboardTransportScrubBegin(e);
-            }
             const dur =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
@@ -609,17 +600,48 @@
                     : parseFloat(seekBar.value) || 0;
             let t = baseSec + dir * stepSec;
             t = Math.max(0, Math.min(dur - 0.001, t));
-            if (
-                e.repeat &&
-                useKeyboardScrubSession &&
-                typeof applyKeyboardTransportScrubStep === 'function'
-            ) {
+            if (pageSeekStep && typeof applyDiscreteStopNavStep === 'function') {
+                applyDiscreteStopNavStep(t, {
+                    resumeAfterSeek: playingBeforeStep,
+                    fromRepeat: e.repeat,
+                });
+                if (!e.repeat) {
+                    flashTransportSeekHint(dir, e);
+                    writeLog(
+                        'Seek keyboard: ' +
+                            transportSeekKeyLabel(e) +
+                            ' (' +
+                            transportSeekStepLabel(e) +
+                            ') -> ' +
+                            formatTimecodeForTransport(t),
+                    );
+                }
+                return;
+            }
+            const useKeyboardScrubSession =
+                isArrowKey && !(oneFrameStep && playingBeforeStep);
+            if (useKeyboardScrubSession) {
+                if (typeof cancelKeyboardScrubFlushTimer === 'function') {
+                    cancelKeyboardScrubFlushTimer();
+                }
+                if (
+                    typeof isKeyboardTransportScrubActive === 'function' &&
+                    !isKeyboardTransportScrubActive() &&
+                    typeof beginKeyboardTransportScrub === 'function'
+                ) {
+                    beginKeyboardTransportScrub(e);
+                }
+            }
+            if (useKeyboardScrubSession && typeof applyKeyboardTransportScrubStep === 'function') {
                 applyKeyboardTransportScrubStep(t, {
                     keyboardScrub: true,
-                    fromRepeat: true,
-                    resumeAfter: false,
-                    pauseAfterSeek: false,
+                    fromRepeat: e.repeat,
+                    resumeAfter: resumeAfter && !oneFrameStep,
+                    pauseAfterSeek: oneFrameStep,
                 });
+                if (!e.repeat) {
+                    flashTransportSeekHint(dir, e);
+                }
                 return;
             }
             if (!e.repeat) {
@@ -660,11 +682,32 @@
         }
     });
 
+    function isMarkerStopJumpKeyup(e) {
+        if (!e || e.altKey || e.shiftKey) return false;
+        return (
+            matchUserShortcut(e, 'markerStopJumpPrev', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'markerStopJumpNext', { allowRepeat: true })
+        );
+    }
+
     function isTransportSeekStepKeyup(e) {
         return isTransportSeekStepEvent(e);
     }
 
     window.addEventListener('keyup', (e) => {
+        if (isMarkerStopJumpKeyup(e)) {
+            if (typeof flushDiscreteStopNavIfActive === 'function') {
+                flushDiscreteStopNavIfActive({ immediate: true });
+            }
+            return;
+        }
+        if (isTransportSeekPageEvent(e)) {
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (typeof flushDiscreteStopNavIfActive === 'function') {
+                flushDiscreteStopNavIfActive({ immediate: true });
+            }
+            return;
+        }
         if (!isTransportSeekStepKeyup(e)) return;
         if (isTransportSeekArrowEvent(e)) {
             const lanesEl =

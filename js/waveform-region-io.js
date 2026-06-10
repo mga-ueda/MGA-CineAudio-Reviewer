@@ -115,6 +115,8 @@
     window.getExtraTrackPlaybackAtTransport = mapTransportToSegmentForPlayback;
     window.drawExtraTrackWaveformRegions = drawExtraTrackWaveformRegions;
     window.rebuildExtraTrackRegionViewportPeaks = rebuildExtraTrackRegionViewportPeaks;
+    window.initExtraTrackViewportTiles = initExtraTrackViewportTiles;
+    window.applyExtraTrackViewportTile = applyExtraTrackViewportTile;
     window.getTrackTimelineEndSec = getTrackTimelineEndSec;
     window.getTrackTimelineStartSec = getTrackTimelineStartSec;
     window.getExtraTrackMaxTimelineEndSec = (function () {

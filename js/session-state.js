@@ -9,6 +9,8 @@
     let lastSeekBarInputLogAt = 0;
     let lastSeekFlashScrubAt = 0;
     let rafId = 0;
+    /** 再生中シークバー／プレイヘッド専用（波形描画 RAF とは別ループ） */
+    let transportUiRafId = 0;
     let transportPlayInFlight = null;
     let transportPlayGeneration = 0;
     /** 連続ジャンプバースト中、最後に再生を再開するか */

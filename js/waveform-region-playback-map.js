@@ -780,9 +780,41 @@
         return tp;
     }
 
+    function viewportTilePeaksCoverMasterTime(tile, masterSec) {
+        if (!tile) return false;
+        if (
+            masterSec + 1e-9 < tile.masterStartSec ||
+            masterSec - 1e-9 > tile.masterEndSec
+        ) {
+            return false;
+        }
+        if (tile.peaks && tile.peaks.length) return true;
+        if (!tile.segments || !tile.segments.length) return false;
+        for (let i = 0; i < tile.segments.length; i++) {
+            const s = tile.segments[i];
+            if (
+                masterSec + 1e-9 >= s.masterStartSec &&
+                masterSec - 1e-9 <= s.masterEndSec &&
+                s.peaks &&
+                s.peaks.length
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function viewportPeaksCoverMasterTime(vp, masterSec) {
         if (!vp) return false;
         if (masterSec + 1e-9 < vp.masterStartSec || masterSec - 1e-9 > vp.masterEndSec) {
+            return false;
+        }
+        if (vp.tiles && vp.tiles.length) {
+            for (let ti = 0; ti < vp.tiles.length; ti++) {
+                if (viewportTilePeaksCoverMasterTime(vp.tiles[ti], masterSec)) {
+                    return true;
+                }
+            }
             return false;
         }
         if (!vp.segments || !vp.segments.length) {
@@ -802,10 +834,75 @@
         return false;
     }
 
-    function drawRegionViewportPeaks(ctx, wCss, hCss, master, vp, grad, track) {
-        if (!vp || !vp.segments || !vp.segments.length || !(master > 0) || !track) {
+    function drawRegionViewportPeaks(ctx, wCss, hCss, master, vp, grad, track, drawOpt) {
+        if (!vp || !(master > 0) || !track) {
             return;
         }
+        if (vp.tiles && vp.tiles.length) {
+            for (let ti = 0; ti < vp.tiles.length; ti++) {
+                const tile = vp.tiles[ti];
+                if (tile.segments && tile.segments.length) {
+                    drawRegionViewportPeaks(
+                        ctx,
+                        wCss,
+                        hCss,
+                        master,
+                        { segments: tile.segments },
+                        grad,
+                        track,
+                        drawOpt,
+                    );
+                } else if (tile.peaks && tile.peaks.length) {
+                    drawRegionViewportPeaks(
+                        ctx,
+                        wCss,
+                        hCss,
+                        master,
+                        {
+                            peaks: tile.peaks,
+                            masterStartSec: tile.masterStartSec,
+                            masterEndSec: tile.masterEndSec,
+                        },
+                        grad,
+                        track,
+                        drawOpt,
+                    );
+                }
+            }
+            return;
+        }
+        if (!vp.segments || !vp.segments.length) {
+            if (vp.peaks && vp.peaks.length) {
+                const layoutW =
+                    drawOpt &&
+                    Number.isFinite(drawOpt.timelineLayoutW) &&
+                    drawOpt.timelineLayoutW > 0
+                        ? drawOpt.timelineLayoutW
+                        : wCss;
+                const mid = hCss * 0.5;
+                const gradFill = grad || '#ffffff';
+                const x0 = (vp.masterStartSec / master) * layoutW;
+                const x1 = (vp.masterEndSec / master) * layoutW;
+                const drawW = x1 - x0;
+                if (drawW > 0.5) {
+                    ctx.fillStyle =
+                        typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
+                            ? TIMELINE_LANE_TRACK_BG
+                            : '#161820';
+                    ctx.fillRect(x0, 0, drawW, hCss);
+                    ctx.fillStyle = gradFill;
+                    drawPeaksBarsInRange(ctx, vp.peaks, x0, drawW, hCss, gradFill);
+                }
+            }
+            return;
+        }
+        if (!vp.segments.length) return;
+        const layoutW =
+            drawOpt &&
+            Number.isFinite(drawOpt.timelineLayoutW) &&
+            drawOpt.timelineLayoutW > 0
+                ? drawOpt.timelineLayoutW
+                : wCss;
         const slot = track.slot;
         const mid = hCss * 0.5;
         const bg =
@@ -813,15 +910,15 @@
                 ? TIMELINE_LANE_TRACK_BG
                 : '#161820';
         const gradFill = grad || '#ffffff';
-        const drawOpt = { viewportPeaks: vp };
+        const vpDrawOpt = { viewportPeaks: vp };
 
         for (let si = 0; si < vp.segments.length; si++) {
             const s = vp.segments[si];
             if (!s.peaks || !s.peaks.length) continue;
             const segDur = s.masterEndSec - s.masterStartSec;
             if (!(segDur > 1e-9)) continue;
-            const x0 = (s.masterStartSec / master) * wCss;
-            const x1 = (s.masterEndSec / master) * wCss;
+            const x0 = (s.masterStartSec / master) * layoutW;
+            const x1 = (s.masterEndSec / master) * layoutW;
             const drawW = x1 - x0;
             if (!(drawW > 0.5)) continue;
             ctx.fillStyle = bg;
@@ -834,8 +931,8 @@
             if (!s.peaks || !s.peaks.length) continue;
             const segDur = s.masterEndSec - s.masterStartSec;
             if (!(segDur > 1e-9)) continue;
-            const x0 = (s.masterStartSec / master) * wCss;
-            const x1 = (s.masterEndSec / master) * wCss;
+            const x0 = (s.masterStartSec / master) * layoutW;
+            const x1 = (s.masterEndSec / master) * layoutW;
             const drawW = x1 - x0;
             if (!(drawW > 0.5)) continue;
             const barW = drawW / s.peaks.length;
@@ -857,13 +954,15 @@
                     barTransport,
                     s.peaks[p],
                     segIdx,
-                    drawOpt,
+                    vpDrawOpt,
                 );
             }
         }
     }
 
-    function buildSegmentViewportPeakEntry(track, tr, segmentIndex, spec, viewportDur) {
+    function buildSegmentViewportPeakEntry(track, tr, segmentIndex, spec, viewportDur, applyOpt) {
+        const opt = applyOpt && typeof applyOpt === 'object' ? applyOpt : { cacheOnly: !!applyOpt };
+        const cacheOnly = !!opt.cacheOnly;
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return null;
@@ -888,7 +987,24 @@
 
         const bars = Math.max(1, Math.round(spec.barCount * ((t1 - t0) / viewportDur)));
         let peaks = [];
-        if (typeof peaksForViewportRange === 'function') {
+        let peakQuality = 'preview';
+        const rangeOpt = cacheOnly ? { cacheOnly: true } : opt;
+        if (typeof peaksForViewportRangeWithQuality === 'function') {
+            const bufId =
+                (typeof bufferPeakId === 'function' ? bufferPeakId(buf) : 0) +
+                (track && track.slot >= 0 ? (track.slot + 1) * 1000003 : 0);
+            const result = peaksForViewportRangeWithQuality(
+                buf,
+                tr.peakPyramid,
+                srcStart,
+                srcEnd,
+                bars,
+                bufId,
+                rangeOpt,
+            );
+            peaks = result.peaks;
+            peakQuality = result.peakQuality;
+        } else if (typeof peaksForViewportRange === 'function') {
             const bufId =
                 (typeof bufferPeakId === 'function' ? bufferPeakId(buf) : 0) +
                 (track && track.slot >= 0 ? (track.slot + 1) * 1000003 : 0);
@@ -899,16 +1015,63 @@
                 srcEnd,
                 bars,
                 bufId,
+                rangeOpt,
             );
+            peakQuality = opt.peakPass === 'preview' ? 'preview' : 'full';
         } else if (typeof peaksFromBufferRange === 'function') {
             peaks = peaksFromBufferRange(buf, srcStart, srcEnd, bars);
+            peakQuality = 'full';
         }
         if (!peaks.length) return null;
-        return { masterStartSec: t0, masterEndSec: t1, peaks, segmentIndex };
+        return {
+            masterStartSec: t0,
+            masterEndSec: t1,
+            peaks,
+            segmentIndex,
+            peakQuality,
+            srcStart,
+            srcEnd,
+            barCount: bars,
+        };
+    }
+
+    function extraSegmentPeakNeedsRefine(tr, segEntry) {
+        if (!segEntry || !segEntry.peaks || !segEntry.peaks.length) return true;
+        if (segEntry.peakQuality === 'full') return false;
+        if (!tr || !tr.peakPyramid) return true;
+        const rangeDur = segEntry.srcEnd - segEntry.srcStart;
+        if (!(rangeDur > 0)) return false;
+        return (
+            typeof isViewportPeakPyramidInsufficient === 'function' &&
+            isViewportPeakPyramidInsufficient(
+                tr.peakPyramid,
+                segEntry.barCount,
+                rangeDur,
+            )
+        );
     }
 
     function segmentHasViewportPeaksForDraw(vp, segmentIndex) {
-        if (!vp || !vp.segments || !vp.segments.length) return false;
+        if (!vp) return false;
+        if (vp.tiles && vp.tiles.length) {
+            for (let ti = 0; ti < vp.tiles.length; ti++) {
+                const tile = vp.tiles[ti];
+                if (!tile.segments || !tile.segments.length) continue;
+                for (let j = 0; j < tile.segments.length; j++) {
+                    const s = tile.segments[j];
+                    if (
+                        s.segmentIndex === segmentIndex &&
+                        s.peaks &&
+                        s.peaks.length > 0 &&
+                        s.masterEndSec > s.masterStartSec + 1e-9
+                    ) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+        if (!vp.segments || !vp.segments.length) return false;
         for (let j = 0; j < vp.segments.length; j++) {
             const s = vp.segments[j];
             if (
@@ -984,6 +1147,359 @@
 
     window.refreshExtraTrackViewportPeaksForRegionEdit =
         refreshExtraTrackViewportPeaksForRegionEdit;
+
+    function extraTrackViewportTileLacksPeaks(slot, tileId) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tr.buffer) return false;
+        const vp = tr.viewportPeaks;
+        if (!vp || !vp.tiles) return true;
+        for (let i = 0; i < vp.tiles.length; i++) {
+            const t = vp.tiles[i];
+            if (t.tileId !== tileId) continue;
+            if (t.segments && t.segments.length) {
+                const track = { type: 'extra', slot };
+                const tileSpec = {
+                    masterStartSec: t.masterStartSec,
+                    masterEndSec: t.masterEndSec,
+                };
+                const segments = getTrackSegments(track);
+                for (let si = 0; si < segments.length; si++) {
+                    if (!segmentIntersectsTileSpec(track, si, tileSpec)) continue;
+                    let found = false;
+                    for (let k = 0; k < t.segments.length; k++) {
+                        const s = t.segments[k];
+                        if (s.segmentIndex !== si) continue;
+                        found = true;
+                        if (!s.peaks || !s.peaks.length) return true;
+                        break;
+                    }
+                    if (!found) return true;
+                }
+                return false;
+            }
+            return !(t.peaks && t.peaks.length);
+        }
+        return true;
+    }
+
+    function extraTrackViewportTilePending(slot, tileId) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tr.buffer) return false;
+        const vp = tr.viewportPeaks;
+        if (!vp || !vp.tiles) return true;
+        for (let i = 0; i < vp.tiles.length; i++) {
+            const t = vp.tiles[i];
+            if (t.tileId !== tileId) continue;
+            if (t.segments && t.segments.length) {
+                return extraTrackViewportTileSegmentIndicesPending(slot, tileId);
+            }
+            if (!(t.peaks && t.peaks.length)) return true;
+            if (t.peakQuality === 'full') return false;
+            if (!tr.peakPyramid) return true;
+            const rangeDur = t.masterEndSec - t.masterStartSec;
+            return (
+                typeof isViewportPeakPyramidInsufficient === 'function' &&
+                isViewportPeakPyramidInsufficient(tr.peakPyramid, t.barCount, rangeDur)
+            );
+        }
+        return true;
+    }
+
+    window.extraTrackViewportTilePending = extraTrackViewportTilePending;
+    window.extraTrackViewportTileLacksPeaks = extraTrackViewportTileLacksPeaks;
+
+    function initExtraTrackViewportTiles(slot, plan) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !plan || !plan.tiles || !plan.tiles.length) return;
+        const prevById = new Map();
+        if (tr.viewportPeaks && tr.viewportPeaks.tiles) {
+            for (let i = 0; i < tr.viewportPeaks.tiles.length; i++) {
+                const pt = tr.viewportPeaks.tiles[i];
+                if (extraViewportTileHasPeaks(pt)) prevById.set(pt.tileId, pt);
+            }
+        }
+        let reused = 0;
+        const tiles = plan.tiles.map((t) => {
+            const prev = prevById.get(t.id);
+            if (prev && prev.barCount === t.barCount && extraViewportTileHasPeaks(prev)) {
+                reused++;
+                return {
+                    tileId: t.id,
+                    pxLeft: t.px,
+                    pxWidth: t.width,
+                    masterStartSec: prev.masterStartSec,
+                    masterEndSec: prev.masterEndSec,
+                    barCount: t.barCount,
+                    peaks: prev.peaks || null,
+                    peakQuality: prev.peakQuality || 'preview',
+                    segments: prev.segments || null,
+                };
+            }
+            return {
+                tileId: t.id,
+                pxLeft: t.px,
+                pxWidth: t.width,
+                masterStartSec: t.masterStartSec,
+                masterEndSec: t.masterEndSec,
+                barCount: t.barCount,
+                peaks: null,
+                segments: null,
+            };
+        });
+        if (typeof logWaveformViewportTileMerge === 'function') {
+            logWaveformViewportTileMerge('extra' + (slot + 1), reused, tiles.length - reused, tiles.length);
+        }
+        tr.viewportPeaks = {
+            masterStartSec: tiles[0].masterStartSec,
+            masterEndSec: tiles[tiles.length - 1].masterEndSec,
+            tiles,
+        };
+    }
+
+    function extraViewportTileHasPeaks(prev) {
+        if (!prev) return false;
+        if (prev.peaks && prev.peaks.length) return true;
+        if (prev.segments && prev.segments.length) {
+            for (let i = 0; i < prev.segments.length; i++) {
+                const s = prev.segments[i];
+                if (s.peaks && s.peaks.length) return true;
+            }
+        }
+        return false;
+    }
+
+    function segmentIntersectsTileSpec(track, segmentIndex, tileSpec) {
+        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const visStart = getSegmentWaveformVisibleTimelineStart(track, segmentIndex);
+        return (
+            segEnd > tileSpec.masterStartSec + 1e-9 &&
+            visStart < tileSpec.masterEndSec - 1e-9
+        );
+    }
+
+    function buildExtraTrackTileSegmentPeaks(track, tr, tileSpec, applyOpt) {
+        const segments = getTrackSegments(track);
+        const viewportDur = tileSpec.masterEndSec - tileSpec.masterStartSec;
+        const outSegs = [];
+        for (let i = 0; i < segments.length; i++) {
+            if (!segmentIntersectsTileSpec(track, i, tileSpec)) continue;
+            const entry = buildSegmentViewportPeakEntry(
+                track,
+                tr,
+                i,
+                tileSpec,
+                viewportDur,
+                applyOpt,
+            );
+            if (entry) outSegs.push(entry);
+        }
+        return outSegs;
+    }
+
+    function extraTrackViewportTileSegmentIndicesPending(slot, tileId) {
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tr.viewportPeaks || !tr.viewportPeaks.tiles) return true;
+        const track = { type: 'extra', slot };
+        let tile = null;
+        for (let i = 0; i < tr.viewportPeaks.tiles.length; i++) {
+            if (tr.viewportPeaks.tiles[i].tileId === tileId) {
+                tile = tr.viewportPeaks.tiles[i];
+                break;
+            }
+        }
+        if (!tile || !tile.segments || !tile.segments.length) return true;
+        const tileSpec = {
+            masterStartSec: tile.masterStartSec,
+            masterEndSec: tile.masterEndSec,
+        };
+        const segments = getTrackSegments(track);
+        for (let i = 0; i < segments.length; i++) {
+            if (!segmentIntersectsTileSpec(track, i, tileSpec)) continue;
+            let found = false;
+            for (let k = 0; k < tile.segments.length; k++) {
+                const s = tile.segments[k];
+                if (s.segmentIndex !== i) continue;
+                found = true;
+                if (!s.peaks || !s.peaks.length) return true;
+                if (extraSegmentPeakNeedsRefine(tr, s)) return true;
+                break;
+            }
+            if (!found) return true;
+        }
+        return false;
+    }
+
+    function applyExtraTrackViewportTile(slot, tile, plan, applyOpt) {
+        const opt = applyOpt && typeof applyOpt === 'object' ? applyOpt : {};
+        if (
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive() &&
+            !opt.cacheOnly &&
+            !(opt.peakPass === 'preview' && opt.scrubPreview)
+        ) {
+            return false;
+        }
+        const tr =
+            typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
+        if (!tr || !tile || !plan) return false;
+        const cacheOnly = !!opt.cacheOnly;
+        if (!cacheOnly && !tr.peakPyramid) return false;
+        const track = { type: 'extra', slot };
+        const tileSpec = {
+            masterStartSec: tile.masterStartSec,
+            masterEndSec: tile.masterEndSec,
+            barCount: tile.barCount,
+            master: plan.master,
+        };
+        const rangeOpt = cacheOnly ? { cacheOnly: true } : opt;
+        const segments = getTrackSegments(track);
+        let tileEntry = null;
+        if (!segments.length) {
+            const t0Track = getTrackTimelineStartSec(track);
+            const fullDur = getTrackSourceDurationSec(track);
+            if (!fullDur || !tr.buffer) return false;
+            const trackEnd = t0Track + fullDur;
+            const t0 = Math.max(t0Track, tile.masterStartSec);
+            const t1 = Math.min(trackEnd, tile.masterEndSec);
+            if (t1 <= t0 + 1e-9) return false;
+            const srcStart = t0 - t0Track;
+            const srcEnd = t1 - t0Track;
+            const viewportDur = tile.masterEndSec - tile.masterStartSec;
+            const bars = Math.max(
+                1,
+                Math.round(tile.barCount * ((t1 - t0) / Math.max(viewportDur, 1e-9))),
+            );
+            let peaks = [];
+            let peakQuality = 'preview';
+            if (typeof peaksForViewportRangeWithQuality === 'function') {
+                const bufId =
+                    (typeof bufferPeakId === 'function' ? bufferPeakId(tr.buffer) : 0) +
+                    (slot >= 0 ? (slot + 1) * 1000003 : 0);
+                const result = peaksForViewportRangeWithQuality(
+                    tr.buffer,
+                    tr.peakPyramid,
+                    srcStart,
+                    srcEnd,
+                    bars,
+                    bufId,
+                    rangeOpt,
+                );
+                peaks = result.peaks;
+                peakQuality = result.peakQuality;
+            } else if (typeof peaksForViewportRange === 'function') {
+                const bufId =
+                    (typeof bufferPeakId === 'function' ? bufferPeakId(tr.buffer) : 0) +
+                    (slot >= 0 ? (slot + 1) * 1000003 : 0);
+                peaks = peaksForViewportRange(
+                    tr.buffer,
+                    tr.peakPyramid,
+                    srcStart,
+                    srcEnd,
+                    bars,
+                    bufId,
+                    rangeOpt,
+                );
+                peakQuality = opt.peakPass === 'preview' ? 'preview' : 'full';
+            } else if (!cacheOnly && typeof peaksFromBufferRange === 'function') {
+                peaks = peaksFromBufferRange(tr.buffer, srcStart, srcEnd, bars);
+                peakQuality = 'full';
+            }
+            if (!peaks.length) return false;
+            tileEntry = {
+                tileId: tile.id,
+                pxLeft: tile.px,
+                pxWidth: tile.width,
+                masterStartSec: t0,
+                masterEndSec: t1,
+                barCount: tile.barCount,
+                peaks,
+                peakQuality,
+                segments: null,
+            };
+        } else {
+            const outSegs = buildExtraTrackTileSegmentPeaks(
+                track,
+                tr,
+                tileSpec,
+                rangeOpt,
+            );
+            if (!outSegs.length) return false;
+            if (!cacheOnly) {
+                const needed = [];
+                for (let i = 0; i < segments.length; i++) {
+                    if (segmentIntersectsTileSpec(track, i, tileSpec)) {
+                        needed.push(i);
+                    }
+                }
+                if (needed.length) {
+                    const got = new Set(outSegs.map((s) => s.segmentIndex));
+                    for (let n = 0; n < needed.length; n++) {
+                        if (!got.has(needed[n])) return false;
+                    }
+                }
+            } else {
+                if (tr.viewportPeaks && tr.viewportPeaks.tiles) {
+                    for (let ti = 0; ti < tr.viewportPeaks.tiles.length; ti++) {
+                        const prevTile = tr.viewportPeaks.tiles[ti];
+                        if (prevTile.tileId !== tile.id || !prevTile.segments) continue;
+                        const byIdx = new Map();
+                        for (let ps = 0; ps < prevTile.segments.length; ps++) {
+                            const s = prevTile.segments[ps];
+                            byIdx.set(s.segmentIndex, s);
+                        }
+                        for (let os = 0; os < outSegs.length; os++) {
+                            byIdx.set(outSegs[os].segmentIndex, outSegs[os]);
+                        }
+                        outSegs.length = 0;
+                        byIdx.forEach((v) => outSegs.push(v));
+                        break;
+                    }
+                }
+                let anyCachedPeaks = false;
+                for (let ci = 0; ci < outSegs.length; ci++) {
+                    if (outSegs[ci].peaks && outSegs[ci].peaks.length) {
+                        anyCachedPeaks = true;
+                        break;
+                    }
+                }
+                if (!anyCachedPeaks) return false;
+            }
+            let tilePeakQuality = 'full';
+            for (let si = 0; si < outSegs.length; si++) {
+                if (outSegs[si].peakQuality !== 'full') {
+                    tilePeakQuality = 'preview';
+                    break;
+                }
+            }
+            tileEntry = {
+                tileId: tile.id,
+                pxLeft: tile.px,
+                pxWidth: tile.width,
+                masterStartSec: tile.masterStartSec,
+                masterEndSec: tile.masterEndSec,
+                barCount: tile.barCount,
+                peaks: null,
+                peakQuality: tilePeakQuality,
+                segments: outSegs,
+            };
+        }
+        if (!tr.viewportPeaks || !tr.viewportPeaks.tiles) {
+            initExtraTrackViewportTiles(slot, plan);
+        }
+        const tiles = tr.viewportPeaks && tr.viewportPeaks.tiles;
+        if (!tiles) return false;
+        for (let i = 0; i < tiles.length; i++) {
+            if (tiles[i].tileId === tile.id) {
+                tiles[i] = tileEntry;
+                return true;
+            }
+        }
+        return false;
+    }
 
     function rebuildExtraTrackRegionViewportPeaks(slot, spec, opt) {
         const tr =

@@ -17,11 +17,7 @@
     }
 
     function getTransportSec() {
-        if (
-            (typeof isTransportTailPlaybackActive === 'function' &&
-                isTransportTailPlaybackActive()) ||
-            (typeof isTransportPlaying === 'function' && isTransportPlaying())
-        ) {
+        if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
             if (typeof getTransportPlaybackClockSec === 'function') {
                 return getTransportPlaybackClockSec();
             }
@@ -165,6 +161,9 @@
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
+        if (typeof syncWaveformTimelineAfterTransportSeek === 'function') {
+            syncWaveformTimelineAfterTransportSeek(0);
+        }
         if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
@@ -175,6 +174,11 @@
     window.getTransportSec = getTransportSec;
     window.getTransportSecForVideoExport = getTransportSecForVideoExport;
     window.forceTransportRafLoop = forceTransportRafLoop;
+    window.isTransportUiRafActive = isTransportUiRafActive;
+    window.startTransportUiRafLoop = startTransportUiRafLoop;
+    window.stopTransportUiRafLoop = stopTransportUiRafLoop;
+    window.scheduleWorkAfterTransportUiFrame = scheduleWorkAfterTransportUiFrame;
+    window.updateTransportPlaybackUiFrame = updateTransportPlaybackUiFrame;
     window.startVideoPlayback = startVideoPlayback;
 
     function rememberTransportPlaybackStartSec(sec) {
@@ -554,6 +558,9 @@
         }
         if (typeof setPlayingUi === 'function') setPlayingUi(false);
         if (typeof stopRaf === 'function') stopRaf();
+        if (typeof freezeTransportPlaybackClock === 'function') {
+            freezeTransportPlaybackClock();
+        }
         if (typeof markReviewMixVideoMonitorTapStale === 'function') {
             markReviewMixVideoMonitorTapStale();
         }
@@ -673,6 +680,14 @@
                   : 0;
         transportPlaybackSec = x;
         transportPlaybackLastTs = performance.now();
+        if (!o.keyboardScrub && !o.lightweight) {
+            if (typeof clearTransportTailPlayback === 'function') {
+                clearTransportTailPlayback();
+            }
+            if (typeof clearVideoParkedForTail === 'function') {
+                clearVideoParkedForTail();
+            }
+        }
         if (!o.deferSeekBar && typeof setTransportSec === 'function') {
             setTransportSec(x);
         }
@@ -689,11 +704,20 @@
             updateTimecodeOverlay();
         }
         if (typeof updateAllWaveformPlayheads === 'function') {
-            if (o.keyboardScrub) {
+            if (o.keyboardScrub && typeof applyTransportScrubPositionImmediate === 'function') {
+                applyTransportScrubPositionImmediate(x);
+            } else if (o.keyboardScrub) {
                 updateAllWaveformPlayheads({ keyboardScrub: true });
             } else {
                 updateAllWaveformPlayheads(o.lightweight ? { lightweight: true } : undefined);
             }
+        }
+        if (
+            !o.keyboardScrub &&
+            !o.lightweight &&
+            typeof syncWaveformTimelineAfterTransportSeek === 'function'
+        ) {
+            syncWaveformTimelineAfterTransportSeek(x);
         }
     }
 
@@ -1119,6 +1143,72 @@
         return startVideoPlayback({ force: true });
     }
 
+    function shouldRunTransportUiRafLoop() {
+        if (typeof isTransportUiClockActive === 'function') {
+            return isTransportUiClockActive();
+        }
+        return typeof isTransportPlaying === 'function' && isTransportPlaying();
+    }
+
+    function isTransportUiRafActive() {
+        return !!transportUiRafId;
+    }
+
+    /** 再生中: シークバー・TC・プレイヘッド・スクロール追従のみ（波形描画より先） */
+    function updateTransportPlaybackUiFrame() {
+        if (typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive()) {
+            return;
+        }
+        if (isSeeking) return;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : getDuration(videoMain);
+        const t =
+            typeof getTransportPlaybackClockSec === 'function'
+                ? getTransportPlaybackClockSec()
+                : transportPlaybackSec;
+        const clamped = Math.max(0, Math.min(t, master));
+        setTransportSec(clamped);
+        if (currentTimeEl) {
+            currentTimeEl.textContent = formatTimecodeForTransport(clamped);
+        }
+        if (typeof updateMusicalGridPlayheadDisplay === 'function') {
+            updateMusicalGridPlayheadDisplay(clamped);
+        }
+        if (typeof updateAllWaveformPlayheads === 'function') {
+            updateAllWaveformPlayheads({ lightweight: true, transportUiFrame: true });
+        }
+    }
+
+    function transportUiRafLoop() {
+        transportUiRafId = 0;
+        if (!shouldRunTransportUiRafLoop()) return;
+        updateTransportPlaybackUiFrame();
+        transportUiRafId = requestAnimationFrame(transportUiRafLoop);
+    }
+
+    function startTransportUiRafLoop() {
+        if (transportUiRafId) return;
+        transportUiRafId = requestAnimationFrame(transportUiRafLoop);
+    }
+
+    function stopTransportUiRafLoop() {
+        if (transportUiRafId) {
+            cancelAnimationFrame(transportUiRafId);
+            transportUiRafId = 0;
+        }
+    }
+
+    /** 波形など重い描画は transport UI RAF の後段フレームへ */
+    function scheduleWorkAfterTransportUiFrame(work) {
+        if (typeof work !== 'function') return 0;
+        if (isTransportUiRafActive()) {
+            return requestAnimationFrame(() => requestAnimationFrame(work));
+        }
+        return requestAnimationFrame(work);
+    }
+
     function updateSeekUiFromVideo() {
         const master =
             typeof getMasterTransportDurationSec === 'function'
@@ -1128,6 +1218,25 @@
             typeof isTransportUiClockActive === 'function'
                 ? isTransportUiClockActive()
                 : typeof isTransportPlaying === 'function' && isTransportPlaying();
+        const scrubUi =
+            typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive();
+        if (
+            isTransportUiRafActive() &&
+            transportPlayingUi &&
+            !scrubUi &&
+            !isSeeking
+        ) {
+            updateTimecodeOverlay();
+            if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
+            if (
+                typeof markersNeedTimelineRefreshOnTransport === 'function' &&
+                markersNeedTimelineRefreshOnTransport() &&
+                typeof renderAudioWaveformMarkers === 'function'
+            ) {
+                renderAudioWaveformMarkers();
+            }
+            return;
+        }
         if (
             !isSeeking &&
             !transportPlayingUi &&
@@ -1146,8 +1255,6 @@
             updateTimecodeOverlay();
             return;
         }
-        const scrubUi =
-            typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive();
         if (!isSeeking || scrubUi) {
             let t;
             if (scrubUi && seekBar) {
@@ -1155,18 +1262,16 @@
                 t = Number.isFinite(fromBar) ? fromBar : transportPlaybackSec;
             } else {
                 const transportActive =
-                    typeof isTransportUiClockActive === 'function'
-                        ? isTransportUiClockActive()
-                        : typeof isTransportPlaying === 'function'
-                          ? isTransportPlaying()
-                          : !videoMain.paused;
+                    typeof isTransportPlaying === 'function'
+                        ? isTransportPlaying()
+                        : !!(videoMain && !videoMain.paused);
                 if (transportActive) {
                     t =
-                        typeof transportPlaybackSec === 'number' &&
-                        Number.isFinite(transportPlaybackSec)
-                            ? transportPlaybackSec
-                            : typeof getTransportPlaybackClockSec === 'function'
-                              ? getTransportPlaybackClockSec()
+                        typeof getTransportPlaybackClockSec === 'function'
+                            ? getTransportPlaybackClockSec()
+                            : typeof transportPlaybackSec === 'number' &&
+                                Number.isFinite(transportPlaybackSec)
+                              ? transportPlaybackSec
                               : 0;
                 } else {
                     t = getTransportSec();
@@ -1254,10 +1359,15 @@
             cancelAnimationFrame(rafId);
             rafId = 0;
         }
+        stopTransportUiRafLoop();
     }
 
     function forceTransportRafLoop() {
-        stopRaf();
+        if (rafId) {
+            cancelAnimationFrame(rafId);
+            rafId = 0;
+        }
+        startTransportUiRafLoop();
         rafId = requestAnimationFrame(tick);
     }
 
@@ -1276,8 +1386,17 @@
             } else if (typeof syncTransportPlaybackClockFromVideo === 'function') {
                 syncTransportPlaybackClockFromVideo();
             }
-            const t = transportPlaybackSec;
-            setTransportSec(t);
+            if (!isTransportUiRafActive()) {
+                const t =
+                    typeof getTransportPlaybackClockSec === 'function'
+                        ? getTransportPlaybackClockSec()
+                        : transportPlaybackSec;
+                setTransportSec(t);
+            }
+            const t =
+                typeof getTransportPlaybackClockSec === 'function'
+                    ? getTransportPlaybackClockSec()
+                    : transportPlaybackSec;
             if (typeof refreshVideoPastEndBlackoutUi === 'function') {
                 refreshVideoPastEndBlackoutUi();
             }
@@ -1316,6 +1435,19 @@
             }
         }
         updateSeekUiFromVideo();
+        if (
+            isTransportUiRafActive() &&
+            transportActive &&
+            typeof recordSeekPlaybackTrail === 'function' &&
+            typeof drawSeekPlaybackTrail === 'function'
+        ) {
+            const trailT =
+                typeof getTransportPlaybackClockSec === 'function'
+                    ? getTransportPlaybackClockSec()
+                    : transportPlaybackSec;
+            recordSeekPlaybackTrail(trailT);
+            drawSeekPlaybackTrail();
+        }
         if (
             typeof isPlaybackDriftMonitoringActive === 'function' &&
             !isPlaybackDriftMonitoringActive() &&
@@ -1367,9 +1499,11 @@
         if (playing) {
             playStopBtn.textContent = 'Pause';
             playStopBtn.classList.add('transport-toggle--stop');
+            startTransportUiRafLoop();
         } else {
             playStopBtn.textContent = 'Play';
             playStopBtn.classList.remove('transport-toggle--stop');
+            stopTransportUiRafLoop();
         }
     }
 

@@ -5,6 +5,13 @@
         const ui = getExtraUi(slot);
         const tr = extraTrackBySlot(slot);
         if (!ui || !ui.canvas) return;
+        const scrubActive =
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive();
+        const scrubOverview =
+            scrubActive &&
+            typeof isWaveformScrubOverviewDrawActive === 'function' &&
+            isWaveformScrubOverviewDrawActive();
         try {
             if (tr && tr.buffer && (!tr.peaks || tr.peaks.length < 1)) {
                 rebuildExtraTrackPeaksIfNeeded(slot);
@@ -19,17 +26,26 @@
                     ? timelineWaveformFillGradient(ctx, hCss, 'extra', audible)
                     : null;
             const timelineStartSec = getExtraTrackTimelineStartSec(slot);
-            const drawOpt = { timelineStartSec };
-            if (tr && tr.viewportPeaks) {
+            const drawOpt = Object.assign({ timelineStartSec }, sized.drawOpt || {});
+            if (scrubActive) {
+                drawOpt.scrubRedraw = !scrubOverview;
+            }
+            if (scrubOverview) {
+                drawOpt.scrubOverview = true;
+                if (tr && tr.scrubOverviewPeaks && tr.scrubOverviewPeaks.length) {
+                    drawOpt.scrubOverviewPeaks = tr.scrubOverviewPeaks;
+                }
+            }
+            if (!scrubOverview && tr && tr.viewportPeaks) {
                 if (tr.viewportPeaks.segments && tr.viewportPeaks.segments.length === 1) {
                     drawOpt.viewportPeaks = tr.viewportPeaks.segments[0];
-                } else if (tr.viewportPeaks.peaks) {
+                } else if (tr.viewportPeaks.peaks || tr.viewportPeaks.tiles) {
                     drawOpt.viewportPeaks = tr.viewportPeaks;
                 }
             }
             if (typeof drawExtraTrackWaveformRegions === 'function') {
                 try {
-                    drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad);
+                    drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad, drawOpt);
                 } catch (err) {
                     ctx.clearRect(0, 0, wCss, hCss);
                     ctx.fillStyle =
@@ -39,7 +55,14 @@
                     ctx.fillRect(0, 0, wCss, hCss);
                     drawPeaksForMasterTimeline(
                         ctx,
-                        tr ? tr.peaks : null,
+                        scrubOverview &&
+                            tr &&
+                            tr.scrubOverviewPeaks &&
+                            tr.scrubOverviewPeaks.length
+                            ? tr.scrubOverviewPeaks
+                            : tr
+                              ? tr.peaks
+                              : null,
                         wCss,
                         hCss,
                         extraTrackContentDurationSec(slot),
@@ -50,7 +73,14 @@
             } else {
                 drawPeaksForMasterTimeline(
                     ctx,
-                    tr ? tr.peaks : null,
+                    scrubOverview &&
+                        tr &&
+                        tr.scrubOverviewPeaks &&
+                        tr.scrubOverviewPeaks.length
+                        ? tr.scrubOverviewPeaks
+                        : tr
+                          ? tr.peaks
+                          : null,
                     wCss,
                     hCss,
                     extraTrackContentDurationSec(slot),

@@ -1223,7 +1223,9 @@
         }
         renderSeekBarMarkers();
         updateMarkerCommentOverlay();
-        if (typeof centerWaveformTimelineOnTransport === 'function') {
+        if (typeof syncWaveformTimelineScrollToTransport === 'function') {
+            syncWaveformTimelineScrollToTransport();
+        } else if (typeof centerWaveformTimelineOnTransport === 'function') {
             centerWaveformTimelineOnTransport();
         }
         return true;

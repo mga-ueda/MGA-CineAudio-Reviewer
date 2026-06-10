@@ -13,6 +13,8 @@
     let waveformTimelineZoom = 1;
     let waveformVerticalZoom = 1;
     let markerTcEditWaveformZoomActive = false;
+    /** マーカー TC 編集時のみ有効。通常再生・シークでは左端追従 */
+    let waveformTimelineCenterLockActive = false;
 
     /** ブラウザ canvas backing store の実効上限（device px） */
     const WAVEFORM_CANVAS_BACKING_MAX_PX = 32767;
@@ -36,6 +38,192 @@
         } else {
             ctx.setTransform(d, 0, 0, d, 0, 0);
         }
+    }
+
+    /** 可視幅の前後に同量の余白 → 合計 3× ビューポート幅の描画バッファ */
+    const WAVEFORM_CANVAS_WINDOW_SIDE_FACTOR = 1;
+    let waveformCanvasWindowLeftCache = null;
+    let waveformCanvasWindowWCache = 0;
+    let waveformCanvasWindowContentWCache = 0;
+    let waveformCanvasWindowViewportWCache = 0;
+    let waveformCanvasWindowZoomCache = 1;
+    let lanesScrollTrailRaf = 0;
+    let waveformTimelineProgrammaticScroll = false;
+
+    function setWaveformTimelineScrollLeft(lanes, scrollLeft, opt) {
+        if (!lanes) return;
+        const force = !!(opt && opt.force);
+        if (!force && Math.abs((lanes.scrollLeft || 0) - scrollLeft) <= 0.5) return;
+        waveformTimelineProgrammaticScroll = true;
+        try {
+            if (typeof lanes.scrollTo === 'function') {
+                lanes.scrollTo({ left: scrollLeft, top: 0, behavior: 'instant' });
+            } else {
+                lanes.scrollLeft = scrollLeft;
+            }
+        } finally {
+            waveformTimelineProgrammaticScroll = false;
+        }
+    }
+
+    function isWaveformTimelineProgrammaticScroll() {
+        return waveformTimelineProgrammaticScroll;
+    }
+
+    function isWaveformLanesScrollVisualDeferActive() {
+        if (typeof isWaveformVisualRefreshDeferred === 'function' && isWaveformVisualRefreshDeferred()) {
+            return true;
+        }
+        if (typeof isAudioWaveformScrubActive === 'function' && isAudioWaveformScrubActive()) {
+            return true;
+        }
+        if (
+            typeof isKeyboardTransportScrubActive === 'function' &&
+            isKeyboardTransportScrubActive()
+        ) {
+            return true;
+        }
+        if (typeof isSeeking !== 'undefined' && isSeeking) return true;
+        return false;
+    }
+
+    function scheduleSeekPlaybackTrailOnLanesScroll() {
+        if (isWaveformLanesScrollVisualDeferActive()) return;
+        if (lanesScrollTrailRaf) return;
+        lanesScrollTrailRaf = requestAnimationFrame(() => {
+            lanesScrollTrailRaf = 0;
+            if (isWaveformLanesScrollVisualDeferActive()) return;
+            if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        });
+    }
+
+    function invalidateWaveformCanvasWindowCache() {
+        waveformCanvasWindowLeftCache = null;
+        waveformCanvasWindowWCache = 0;
+        waveformCanvasWindowContentWCache = 0;
+        waveformCanvasWindowViewportWCache = 0;
+        waveformCanvasWindowZoomCache = 1;
+    }
+
+    function clampWaveformCanvasWindowLeft(left, contentW, windowW) {
+        return Math.max(0, Math.min(left, Math.max(0, contentW - windowW)));
+    }
+
+    function resolveWaveformCanvasWindowLeft(scrollLeft, viewportW, contentW, windowW) {
+        const side = viewportW * WAVEFORM_CANVAS_WINDOW_SIDE_FACTOR;
+        const idealLeft = scrollLeft - side;
+        const clampLeft = (v) => clampWaveformCanvasWindowLeft(v, contentW, windowW);
+        const zoom = waveformTimelineZoom;
+        if (
+            waveformCanvasWindowLeftCache == null ||
+            waveformCanvasWindowWCache !== windowW ||
+            waveformCanvasWindowContentWCache !== contentW ||
+            waveformCanvasWindowViewportWCache !== viewportW ||
+            Math.abs(waveformCanvasWindowZoomCache - zoom) > 0.001
+        ) {
+            waveformCanvasWindowLeftCache = clampLeft(idealLeft);
+            waveformCanvasWindowWCache = windowW;
+            waveformCanvasWindowContentWCache = contentW;
+            waveformCanvasWindowViewportWCache = viewportW;
+            waveformCanvasWindowZoomCache = zoom;
+            return waveformCanvasWindowLeftCache;
+        }
+        const bufLeft = waveformCanvasWindowLeftCache;
+        const bufRight = bufLeft + windowW;
+        const visLeft = scrollLeft;
+        const visRight = scrollLeft + viewportW;
+        const margin = Math.max(32, viewportW * 0.25);
+        if (visLeft < bufLeft + margin || visRight > bufRight - margin) {
+            waveformCanvasWindowLeftCache = clampLeft(idealLeft);
+        }
+        return waveformCanvasWindowLeftCache;
+    }
+
+    /** 拡大時: 可視+前後バッファの Canvas 窓。1× 時は従来どおり全幅 */
+    function getWaveformCanvasWindowSpec() {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes) return null;
+        const m = waveformTimelineMetrics(lanes);
+        if (!m || !(m.viewportW > 0)) return null;
+        const contentW = Math.max(1, m.scrubW | 0);
+        const viewportW = Math.max(1, m.viewportW | 0);
+        const scrollLeft = m.scrollable ? lanes.scrollLeft || 0 : 0;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const useWindow = !isWaveformTimelineAtFitZoom() && contentW > viewportW + 0.5;
+        if (!useWindow) {
+            return {
+                mode: 'full',
+                contentW,
+                viewportW,
+                scrollLeft,
+                canvasW: contentW,
+                canvasLeft: 0,
+                dpr,
+            };
+        }
+        const idealWindowW = viewportW * (1 + 2 * WAVEFORM_CANVAS_WINDOW_SIDE_FACTOR);
+        const maxCanvasCss = getWaveformCanvasBackingWidthCss(idealWindowW, dpr);
+        const windowW = Math.max(viewportW, Math.min(contentW, idealWindowW, maxCanvasCss));
+        const canvasLeft = resolveWaveformCanvasWindowLeft(
+            scrollLeft,
+            viewportW,
+            contentW,
+            windowW,
+        );
+        return {
+            mode: 'window',
+            contentW,
+            viewportW,
+            scrollLeft,
+            canvasW: windowW,
+            canvasLeft,
+            dpr,
+        };
+    }
+
+    function buildWaveformCanvasDrawOpt(spec) {
+        if (!spec || spec.mode !== 'window') return {};
+        return {
+            timelineLayoutW: spec.contentW,
+            timelineXOffset: spec.canvasLeft,
+            timelineCanvasW: spec.canvasW,
+        };
+    }
+
+    function syncWaveformCanvasElement(canvas, hCss) {
+        if (!canvas) return null;
+        const spec = getWaveformCanvasWindowSpec();
+        if (!spec) return null;
+        const laneH = Math.max(1, hCss | 0);
+        const backingW = getWaveformCanvasBackingWidthCss(spec.canvasW, spec.dpr);
+        canvas.width = Math.max(1, Math.round(backingW * spec.dpr));
+        canvas.height = Math.max(1, Math.round(laneH * spec.dpr));
+        canvas.style.width = spec.canvasW + 'px';
+        canvas.style.height = laneH + 'px';
+        if (spec.mode === 'window') {
+            canvas.style.position = 'absolute';
+            canvas.style.left = spec.canvasLeft + 'px';
+            canvas.style.top = '0';
+        } else {
+            canvas.style.position = '';
+            canvas.style.left = '';
+            canvas.style.top = '';
+        }
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            applyWaveformCanvasContextTransform(ctx, spec.canvasW, backingW, spec.dpr);
+        }
+        const overviewLayoutW = spec.contentW;
+        const barCount = Math.min(4096, Math.max(64, overviewLayoutW));
+        return {
+            ctx,
+            wCss: spec.canvasW,
+            hCss: laneH,
+            barCount,
+            backingW,
+            canvasSpec: spec,
+            drawOpt: buildWaveformCanvasDrawOpt(spec),
+        };
     }
 
     function snapWaveformTimelineZoom(z) {
@@ -154,15 +342,6 @@
         return waveformTimelineZoom;
     }
 
-    function pauseTransportBeforeWaveformZoomIfNeeded(opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        if (o.allowDuringPlayback) return;
-        if (!isTransportPlaying()) return;
-        if (typeof pauseTransportBeforeSeek === 'function') {
-            pauseTransportBeforeSeek();
-        }
-    }
-
     function waveformTimelineViewportWidthCss() {
         const el = waveformScrubTargetEl();
         if (el) return Math.max(1, el.clientWidth | 0);
@@ -264,6 +443,9 @@
         const lanes = waveformScrubTargetEl();
         if (!lanes) return;
         const viewportW = syncWaveformLanesViewportWidthCss();
+        if (Math.abs(viewportW - waveformCanvasWindowViewportWCache) > 0.5) {
+            invalidateWaveformCanvasWindowCache();
+        }
         const contentW = masterTimelineWidthCss();
         lanes.style.setProperty('--wave-timeline-content-w', contentW + 'px');
         const zoomed = !isWaveformTimelineAtFitZoom();
@@ -327,17 +509,60 @@
         );
     }
 
+    /** 指定時刻が画面外のときだけ、ビューポート左端へ来る scrollLeft */
+    function scrollLeftToRevealMasterSecAtLeftEdge(sec, scrubW, viewportW, currentScrollLeft) {
+        const ratio = transportRatioFromMasterSec(sec);
+        const x = ratio * scrubW;
+        const scrollLeft = Number.isFinite(currentScrollLeft) ? currentScrollLeft : 0;
+        const visLeft = scrollLeft;
+        const visRight = scrollLeft + viewportW;
+        if (x >= visLeft && x <= visRight) return scrollLeft;
+        return clampWaveformTimelineScrollLeft(x, scrubW, viewportW);
+    }
+
+    function scrollLeftForMasterSec(sec, scrubW, viewportW, currentScrollLeft) {
+        if (waveformTimelineCenterLockActive) {
+            return scrollLeftToCenterMasterSec(sec, scrubW, viewportW);
+        }
+        const ratio = transportRatioFromMasterSec(sec);
+        if (ratio <= 1e-8) {
+            return 0;
+        }
+        return scrollLeftToRevealMasterSecAtLeftEdge(
+            sec,
+            scrubW,
+            viewportW,
+            currentScrollLeft,
+        );
+    }
+
+    function scrollLeftForTransportSec(scrubW, viewportW, currentScrollLeft) {
+        return scrollLeftForMasterSec(
+            transportSecForWaveformZoomCenter(),
+            scrubW,
+            viewportW,
+            currentScrollLeft,
+        );
+    }
+
+    function isWaveformTimelineCenterLockActive() {
+        return waveformTimelineCenterLockActive;
+    }
+
+    function setWaveformTimelineCenterLock(active) {
+        waveformTimelineCenterLockActive = !!active;
+    }
+
     function applyWaveformTimelineZoomScroll(lanes, scrollLeft) {
         if (!lanes) return;
         if (Math.abs((lanes.scrollLeft || 0) - scrollLeft) <= 0.5) return;
         lanes.scrollLeft = scrollLeft;
         notifyWaveformTimelineZoomChanged();
-        centerWaveformTimelineOnTransport();
+        syncWaveformTimelineScrollToTransport();
     }
 
     function setWaveformTimelineZoom(nextZoom, centerSeekBar, scrollOpt) {
         const o = scrollOpt && typeof scrollOpt === 'object' ? scrollOpt : {};
-        pauseTransportBeforeWaveformZoomIfNeeded(o);
         const lanes = waveformScrubTargetEl();
         const vw = waveformTimelineViewportWidthCss();
         const oldZoom = waveformTimelineZoom;
@@ -352,7 +577,7 @@
                 vw,
             );
         } else if (lanes && centerSeekBar && z > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
-            scrollLeft = scrollLeftToCenterTransportSec(newContentW, vw);
+            scrollLeft = scrollLeftForTransportSec(newContentW, vw, scrollLeft);
         } else if (z <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
             scrollLeft = 0;
         }
@@ -364,11 +589,19 @@
             return true;
         }
 
+        invalidateWaveformCanvasWindowCache();
         waveformTimelineZoom = z;
+        if (
+            z <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001 &&
+            oldZoom > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001 &&
+            typeof onWaveformTimelineFitZoomRestored === 'function'
+        ) {
+            onWaveformTimelineFitZoomRestored();
+        }
         applyWaveformTimelineZoomLayout();
         if (lanes) lanes.scrollLeft = scrollLeft;
         notifyWaveformTimelineZoomChanged();
-        centerWaveformTimelineOnTransport();
+        syncWaveformTimelineScrollToTransport();
         flashWaveformTimelineZoomHint(z, o);
         return true;
     }
@@ -377,8 +610,9 @@
     function zoomWaveformTimelineToMarkerPointSec(sec) {
         if (!Number.isFinite(sec)) return;
         markerTcEditWaveformZoomActive = false;
+        setWaveformTimelineCenterLock(false);
         setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, false);
-        centerWaveformTimelineOnMasterSec(sec);
+        syncWaveformTimelineScrollToMasterSec(sec);
     }
 
     /** 範囲マーカーを 32× で中央表示（再生位置は範囲中央） */
@@ -390,9 +624,10 @@
         const span = Math.max(hi - lo, master * 1e-6, 1e-6);
         const centerSec = lo + span * 0.5;
         markerTcEditWaveformZoomActive = false;
+        setWaveformTimelineCenterLock(false);
         applyTransportAtSec(centerSec, { markers: true });
         setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, false);
-        centerWaveformTimelineOnMasterSec(centerSec);
+        syncWaveformTimelineScrollToMasterSec(centerSec);
     }
 
     /** ダブルクリック時: 最大倍率なら全体表示へ、それ以外は対象に合わせて拡大 */
@@ -534,20 +769,22 @@
     }
 
     function onWaveformLanesScroll() {
-        if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
+        if (waveformTimelineProgrammaticScroll) return;
+        if (
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive()
+        ) {
+            return;
+        }
+        scheduleSeekPlaybackTrailOnLanesScroll();
         if (typeof refreshHoverPlayheadFromLastPointer === 'function') {
             refreshHoverPlayheadFromLastPointer();
         }
         if (isWaveformTimelineAtFitZoom()) return;
-        if (
-            typeof isKeyboardTransportScrubActive === 'function' &&
-            isKeyboardTransportScrubActive()
-        ) {
-            return;
-        }
+        if (isWaveformLanesScrollVisualDeferActive()) return;
         if (isTransportPlaying()) {
-            if (typeof scheduleWaveformVisualRefresh === 'function') {
-                scheduleWaveformVisualRefresh();
+            if (typeof scheduleWaveformVisualRefreshOnScroll === 'function') {
+                scheduleWaveformVisualRefreshOnScroll({ playbackScroll: true });
             }
             return;
         }
@@ -570,51 +807,116 @@
 
     function resetWaveformTimelineZoom(opt) {
         markerTcEditWaveformZoomActive = false;
+        setWaveformTimelineCenterLock(false);
+        invalidateWaveformCanvasWindowCache();
         return setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, false, opt);
     }
 
-    /** 拡大中の再生時のみプレイヘッド追従スクロールを抑止 */
-    function shouldSkipWaveformTimelineAutoCentering() {
-        return (
+    function applyWaveformTimelineScrollTarget(next, opt) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || isWaveformTimelineAtFitZoom()) return;
+        const force = !!(opt && opt.force);
+        if (!force && Math.abs((lanes.scrollLeft || 0) - next) <= 0.5) return;
+        const seekSync = !!(opt && opt.seekSync);
+        const deferVisualRefresh = !!(opt && opt.deferVisualRefresh);
+        const keyboardScrub =
+            typeof isKeyboardTransportScrubActive === 'function' &&
+            isKeyboardTransportScrubActive();
+        const playbackScroll =
+            !seekSync &&
             typeof isTransportPlaying === 'function' &&
             isTransportPlaying() &&
-            !isWaveformTimelineAtFitZoom()
-        );
+            !keyboardScrub;
+
+        if (seekSync || force || deferVisualRefresh || keyboardScrub || playbackScroll) {
+            setWaveformTimelineScrollLeft(lanes, next, force || seekSync ? { force: true } : undefined);
+            scheduleSeekPlaybackTrailOnLanesScroll();
+            if (seekSync || force) {
+                if (typeof invalidateWaveformCanvasWindowCache === 'function') {
+                    invalidateWaveformCanvasWindowCache();
+                }
+                if (typeof flushWaveformVisualRefresh === 'function') {
+                    flushWaveformVisualRefresh({ force: true });
+                } else if (typeof scheduleWaveformVisualRefresh === 'function') {
+                    scheduleWaveformVisualRefresh({ force: true, sync: true });
+                }
+                return;
+            }
+            if (playbackScroll) {
+                if (typeof scheduleWaveformScrubOverviewDraw === 'function') {
+                    scheduleWaveformScrubOverviewDraw();
+                }
+                if (typeof scheduleWaveformVisualRefreshOnScroll === 'function') {
+                    scheduleWaveformVisualRefreshOnScroll({ playbackScroll: true });
+                }
+            } else if (
+                typeof isWaveformScrubPriorityActive === 'function' &&
+                isWaveformScrubPriorityActive() &&
+                typeof scheduleWaveformScrubOverviewDraw === 'function'
+            ) {
+                scheduleWaveformScrubOverviewDraw();
+            } else if (typeof scheduleWaveformVisualRefreshOnScroll === 'function') {
+                scheduleWaveformVisualRefreshOnScroll();
+            } else if (typeof scheduleWaveformVisualRefresh === 'function') {
+                scheduleWaveformVisualRefresh();
+            }
+            return;
+        }
+
+        lanes.scrollLeft = next;
+        scheduleSeekPlaybackTrailOnLanesScroll();
+        if (typeof scheduleWaveformVisualRefreshOnScroll === 'function') {
+            scheduleWaveformVisualRefreshOnScroll();
+        } else if (typeof scheduleWaveformVisualRefresh === 'function') {
+            scheduleWaveformVisualRefresh();
+        }
     }
 
-    /** 指定時刻がビューポート中央へ来るよう scrollLeft を設定 */
-    function centerWaveformTimelineOnMasterSec(sec) {
+    /** センターロック ON 時は中央、OFF 時は画面外なら左端追従 */
+    function syncWaveformTimelineScrollToMasterSec(sec, opt) {
+        const lanes = waveformScrubTargetEl();
+        if (!lanes || isWaveformTimelineAtFitZoom()) return;
+        const vw = waveformTimelineViewportWidthCss();
+        const scrubW = waveformTimelineScrubWidthCss();
+        const next = scrollLeftForMasterSec(sec, scrubW, vw, lanes.scrollLeft || 0);
+        applyWaveformTimelineScrollTarget(next, opt);
+    }
+
+    function syncWaveformTimelineScrollToTransport(opt) {
+        syncWaveformTimelineScrollToMasterSec(transportSecForWaveformZoomCenter(), opt);
+    }
+
+    /** 明示シーク後: スクロール位置を合わせて波形を即再描画（先頭シーク等） */
+    function syncWaveformTimelineAfterTransportSeek(sec) {
+        if (typeof isWaveformTimelineAtFitZoom === 'function' && isWaveformTimelineAtFitZoom()) {
+            if (typeof invalidateWaveformCanvasWindowCache === 'function') {
+                invalidateWaveformCanvasWindowCache();
+            }
+            if (typeof scheduleWaveformVisualRefresh === 'function') {
+                scheduleWaveformVisualRefresh({ force: true, sync: true });
+            }
+            return;
+        }
+        syncWaveformTimelineScrollToMasterSec(sec, { force: true, seekSync: true });
+    }
+
+    /** 指定時刻がビューポート中央へ来るよう scrollLeft を設定（明示センターロック） */
+    function centerWaveformTimelineOnMasterSec(sec, opt) {
         const lanes = waveformScrubTargetEl();
         if (!lanes || isWaveformTimelineAtFitZoom()) return;
         const vw = waveformTimelineViewportWidthCss();
         const scrubW = waveformTimelineScrubWidthCss();
         const next = scrollLeftToCenterMasterSec(sec, scrubW, vw);
-        if (Math.abs((lanes.scrollLeft || 0) - next) > 0.5) {
-            lanes.scrollLeft = next;
-            notifyWaveformTimelineZoomChanged();
-            const keyboardScrub =
-                typeof isKeyboardTransportScrubActive === 'function' &&
-                isKeyboardTransportScrubActive();
-            if (!keyboardScrub && typeof drawSeekPlaybackTrail === 'function') {
-                drawSeekPlaybackTrail();
-            }
-            if (
-                isTransportPlaying() &&
-                !keyboardScrub &&
-                typeof scheduleWaveformVisualRefresh === 'function'
-            ) {
-                scheduleWaveformVisualRefresh();
-            }
-        }
+        applyWaveformTimelineScrollTarget(next, opt);
     }
 
-    /** 現在の transport 位置をビューポート中央へ（拡大中の再生時はスキップ） */
-    function centerWaveformTimelineOnTransport() {
-        if (shouldSkipWaveformTimelineAutoCentering()) return;
-        centerWaveformTimelineOnMasterSec(transportSecForWaveformZoomCenter());
+    /** 現在の transport 位置をビューポート中央へ */
+    function centerWaveformTimelineOnTransport(opt) {
+        centerWaveformTimelineOnMasterSec(transportSecForWaveformZoomCenter(), opt);
     }
 
     function beginMarkerTcEditWaveformZoom() {
+        setWaveformTimelineCenterLock(true);
         if (markerTcEditWaveformZoomActive) {
             centerWaveformTimelineOnTransport();
             return;
@@ -627,10 +929,8 @@
     function endMarkerTcEditWaveformZoom() {
         if (!markerTcEditWaveformZoomActive) return;
         markerTcEditWaveformZoomActive = false;
-        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, false, {
-            allowDuringPlayback: true,
-            silent: true,
-        });
+        setWaveformTimelineCenterLock(false);
+        setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_FIT, false, { silent: true });
     }
 
     function handleWaveformTimelineKeydown(e) {
@@ -861,9 +1161,18 @@
     window.endMarkerTcEditWaveformZoom = endMarkerTcEditWaveformZoom;
     window.centerWaveformTimelineOnTransport = centerWaveformTimelineOnTransport;
     window.centerWaveformTimelineOnMasterSec = centerWaveformTimelineOnMasterSec;
-    window.shouldSkipWaveformTimelineAutoCentering = shouldSkipWaveformTimelineAutoCentering;
+    window.syncWaveformTimelineScrollToTransport = syncWaveformTimelineScrollToTransport;
+    window.syncWaveformTimelineScrollToMasterSec = syncWaveformTimelineScrollToMasterSec;
+    window.syncWaveformTimelineAfterTransportSeek = syncWaveformTimelineAfterTransportSeek;
+    window.setWaveformTimelineCenterLock = setWaveformTimelineCenterLock;
+    window.isWaveformTimelineCenterLockActive = isWaveformTimelineCenterLockActive;
+    window.setWaveformTimelineScrollLeft = setWaveformTimelineScrollLeft;
     window.getWaveformCanvasBackingWidthCss = getWaveformCanvasBackingWidthCss;
     window.applyWaveformCanvasContextTransform = applyWaveformCanvasContextTransform;
+    window.getWaveformCanvasWindowSpec = getWaveformCanvasWindowSpec;
+    window.buildWaveformCanvasDrawOpt = buildWaveformCanvasDrawOpt;
+    window.syncWaveformCanvasElement = syncWaveformCanvasElement;
+    window.invalidateWaveformCanvasWindowCache = invalidateWaveformCanvasWindowCache;
 
     function initWaveformTimelineZoomUi() {
         const lanes = waveformScrubTargetEl();
@@ -907,6 +1216,7 @@
     window.transportRatioFromClientX = transportRatioFromClientX;
     window.transportSecFromClientX = transportSecFromClientX;
     window.scrollLeftToCenterTransportSec = scrollLeftToCenterTransportSec;
+    window.scrollLeftForTransportSec = scrollLeftForTransportSec;
     window.getWaveformTimelineVisibleSecRange = getWaveformTimelineVisibleSecRange;
     window.isZoomViewportPlaybackActive = isZoomViewportPlaybackActive;
     window.clearZoomViewportPlayback = clearZoomViewportPlayback;

@@ -3,9 +3,11 @@
  */
 (function () {
     const PEAK_PYRAMID_MIN_BARS = 256;
-    const PEAK_PYRAMID_MAX_BARS = 16384;
-    const PEAK_PYRAMID_BARS_PER_SEC = 20;
-    const VIEWPORT_PEAK_CACHE_MAX = 32;
+    const PEAK_PYRAMID_MAX_BARS = 65536;
+    /** 高ズーム viewport タイル向けに最細レベルを厚くする */
+    const PEAK_PYRAMID_BARS_PER_SEC = 64;
+    /** タイル単位スクロールでも再利用できるよう余裕を持たせる */
+    const VIEWPORT_PEAK_CACHE_MAX = 256;
 
     /** @type {Map<string, { peaks: Array<{min:number,max:number}>, at: number }>} */
     const viewportPeakCache = new Map();
@@ -79,14 +81,40 @@
         const levels = pyramid.levels;
         if (!levels.length) return null;
         const fullDur = pyramid.durationSec;
-        if (!(fullDur > 0) || !(rangeDurSec > 0)) return levels[levels.length - 1];
+        if (!(fullDur > 0) || !(rangeDurSec > 0)) return levels[0];
         const idealBars = barCount * (fullDur / rangeDurSec);
-        let chosen = levels[0];
         for (let i = 0; i < levels.length; i++) {
-            chosen = levels[i];
-            if (chosen.barCount >= idealBars * 0.85) break;
+            if (levels[i].barCount >= idealBars * 0.85) {
+                return levels[i];
+            }
         }
-        return chosen;
+        // 要求解像度をピラミッドが満たせない場合は最粗ではなく最細を使う
+        return levels[0];
+    }
+
+    function pyramidBarsInRange(pyramid, barCount, rangeDurSec) {
+        const level = pickPyramidLevel(pyramid, barCount, rangeDurSec);
+        if (!level || !(pyramid.durationSec > 0) || !(rangeDurSec > 0)) return 0;
+        return Math.max(
+            1,
+            Math.floor(level.barCount * (rangeDurSec / pyramid.durationSec)),
+        );
+    }
+
+    function isViewportPeakPyramidInsufficient(pyramid, barCount, rangeDurSec) {
+        return pyramidBarsInRange(pyramid, barCount, rangeDurSec) < barCount * 0.85;
+    }
+
+    function resolveViewportPeakOpt(arg) {
+        if (arg && typeof arg === 'object') {
+            return {
+                cacheOnly: !!arg.cacheOnly,
+                peakPass: arg.peakPass === 'preview' ? 'preview' : 'full',
+                force: !!arg.force,
+                scrubPreview: !!arg.scrubPreview,
+            };
+        }
+        return { cacheOnly: !!arg, peakPass: 'full', force: false, scrubPreview: false };
     }
 
     function resamplePeaks(peaks, barCount) {
@@ -140,6 +168,52 @@
         return peaksFromChannelData(sub, barCount);
     }
 
+    const PCM_RANGE_WORKER_MIN_SAMPLES = 96000;
+
+    /** 長い範囲の PCM 走査を Worker に逃がす（コールバック） */
+    function peaksFromChannelRangeAsync(ch, sampleRate, startSec, endSec, barCount, callback) {
+        const cb = typeof callback === 'function' ? callback : function () {};
+        const sr = sampleRate > 0 ? sampleRate : 48000;
+        const startSample = Math.max(0, Math.floor(startSec * sr));
+        const endSample = Math.min(ch.length, Math.ceil(endSec * sr));
+        const len = endSample - startSample;
+        if (len <= 0) {
+            cb([]);
+            return;
+        }
+        const worker = len >= PCM_RANGE_WORKER_MIN_SAMPLES ? getPeakWorker() : null;
+        if (!worker) {
+            cb(peaksFromChannelRange(ch, sampleRate, startSec, endSec, barCount));
+            return;
+        }
+        const id = ++peakWorkerReqId;
+        const onMsg = (ev) => {
+            if (!ev.data || ev.data.id !== id) return;
+            if (ev.data.type !== 'rangeBuilt') return;
+            worker.removeEventListener('message', onMsg);
+            cb(ev.data.peaks || []);
+        };
+        worker.addEventListener('message', onMsg);
+        try {
+            const samples = ch.subarray(startSample, endSample);
+            const copy = samples.slice();
+            worker.postMessage(
+                {
+                    type: 'range',
+                    id,
+                    samples: copy,
+                    barCount: Math.max(1, barCount | 0),
+                    startSample: 0,
+                    endSample: copy.length,
+                },
+                [copy.buffer],
+            );
+        } catch (_) {
+            worker.removeEventListener('message', onMsg);
+            cb(peaksFromChannelRange(ch, sampleRate, startSec, endSec, barCount));
+        }
+    }
+
     function viewportCacheKey(bufferId, startSec, endSec, barCount) {
         const tStep = 0.025;
         const s0 = Math.round(startSec / tStep) * tStep;
@@ -149,34 +223,94 @@
     }
 
     function trimViewportPeakCache() {
+        let evicted = 0;
         while (viewportPeakCache.size > VIEWPORT_PEAK_CACHE_MAX) {
             const first = viewportPeakCache.keys().next().value;
             viewportPeakCache.delete(first);
+            evicted++;
+        }
+        if (
+            evicted > 0 &&
+            typeof logWaveformViewportPeakCacheTrim === 'function'
+        ) {
+            logWaveformViewportPeakCacheTrim(
+                evicted,
+                viewportPeakCache.size,
+                VIEWPORT_PEAK_CACHE_MAX,
+            );
         }
     }
 
     /**
-     * ピラミッドが足りない場合のみ PCM を直接走査する。
-     * @param {AudioBuffer} buffer
-     * @param {{ durationSec: number, levels: Array }} pyramid
-     * @param {number} bufferId stable id (e.g. duration + length)
+     * @returns {{ peaks: Array, peakQuality: 'preview'|'full', source: string }}
      */
-    function peaksForViewportRange(buffer, pyramid, startSec, endSec, barCount, bufferId) {
+    function peaksForViewportRangeWithQuality(
+        buffer,
+        pyramid,
+        startSec,
+        endSec,
+        barCount,
+        bufferId,
+        optArg,
+    ) {
         const rangeDur = endSec - startSec;
-        if (!(rangeDur > 0)) return [];
+        if (!(rangeDur > 0)) {
+            return { peaks: [], peakQuality: 'preview', source: 'none' };
+        }
+
+        const opt = resolveViewportPeakOpt(optArg);
+        const cacheOnly = opt.cacheOnly;
+        const peakPass = opt.peakPass;
 
         const key = viewportCacheKey(bufferId, startSec, endSec, barCount);
         const cached = viewportPeakCache.get(key);
-        if (cached) return cached.peaks;
+        if (cached && cached.peaks && cached.peaks.length) {
+            if (cacheOnly || peakPass === 'preview' || cached.quality === 'full') {
+                if (typeof logWaveformViewportPeakCacheHit === 'function') {
+                    logWaveformViewportPeakCacheHit(key, barCount, cacheOnly);
+                }
+                return {
+                    peaks: cached.peaks,
+                    peakQuality: cached.quality === 'full' ? 'full' : 'preview',
+                    source: cached.source || 'cache',
+                };
+            }
+        }
+        if (cacheOnly) {
+            if (typeof logWaveformViewportPeakCacheMiss === 'function') {
+                logWaveformViewportPeakCacheMiss(key, barCount, 'cacheOnly', true);
+            }
+            return { peaks: [], peakQuality: 'preview', source: 'cacheOnly' };
+        }
+
+        if (
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive() &&
+            !opt.force &&
+            !(peakPass === 'preview' && opt.scrubPreview && pyramid)
+        ) {
+            return { peaks: [], peakQuality: 'preview', source: 'scrubDefer' };
+        }
 
         let peaks = [];
-        if (pyramid) {
-            const level = pickPyramidLevel(pyramid, barCount, rangeDur);
-            const sliceBars = Math.max(
-                1,
-                Math.ceil(level.barCount * (rangeDur / pyramid.durationSec)),
-            );
-            if (barCount > sliceBars * 1.35 && buffer) {
+        let computeSource = 'none';
+        let peakQuality = 'full';
+
+        if (peakPass === 'preview') {
+            peakQuality = 'preview';
+            if (pyramid) {
+                peaks = peaksFromPyramidRange(pyramid, startSec, endSec, barCount);
+                computeSource = peaks.length ? 'pyramid' : 'none';
+            }
+        } else if (pyramid) {
+            const needsPcm =
+                buffer &&
+                isViewportPeakPyramidInsufficient(pyramid, barCount, rangeDur);
+            if (!needsPcm) {
+                peaks = peaksFromPyramidRange(pyramid, startSec, endSec, barCount);
+                computeSource = peaks.length ? 'pyramid' : 'none';
+            }
+            if ((!peaks.length || needsPcm) && buffer) {
                 const ch = buffer.getChannelData(0);
                 peaks = peaksFromChannelRange(
                     ch,
@@ -185,9 +319,9 @@
                     endSec,
                     barCount,
                 );
-            } else {
-                peaks = peaksFromPyramidRange(pyramid, startSec, endSec, barCount);
+                computeSource = 'pcm';
             }
+            peakQuality = 'full';
         } else if (buffer) {
             const ch = buffer.getChannelData(0);
             peaks = peaksFromChannelRange(
@@ -197,13 +331,44 @@
                 endSec,
                 barCount,
             );
+            computeSource = 'pcm';
+            peakQuality = 'full';
+        }
+
+        if (typeof logWaveformViewportPeakCacheMiss === 'function') {
+            logWaveformViewportPeakCacheMiss(key, barCount, computeSource, false);
         }
 
         if (peaks.length) {
-            viewportPeakCache.set(key, { peaks, at: performance.now() });
+            viewportPeakCache.set(key, {
+                peaks,
+                at: performance.now(),
+                quality: peakQuality,
+                source: computeSource,
+            });
             trimViewportPeakCache();
+            if (typeof logWaveformViewportPeakCacheStore === 'function') {
+                logWaveformViewportPeakCacheStore(
+                    key,
+                    barCount,
+                    viewportPeakCache.size,
+                    VIEWPORT_PEAK_CACHE_MAX,
+                );
+            }
         }
-        return peaks;
+        return { peaks, peakQuality, source: computeSource };
+    }
+
+    function peaksForViewportRange(buffer, pyramid, startSec, endSec, barCount, bufferId, optArg) {
+        return peaksForViewportRangeWithQuality(
+            buffer,
+            pyramid,
+            startSec,
+            endSec,
+            barCount,
+            bufferId,
+            optArg,
+        ).peaks;
     }
 
     function peaksOverviewFromPyramid(pyramid, barCount) {
@@ -214,8 +379,30 @@
         return resamplePeaks(coarse.peaks, bars);
     }
 
-    function clearViewportPeakCache() {
+    function clearViewportPeakCache(reason, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const r = reason || 'unknown';
+        if (
+            !o.force &&
+            typeof isWaveformViewportTileLoadActive === 'function' &&
+            isWaveformViewportTileLoadActive()
+        ) {
+            if (typeof deferViewportPeakCacheClear === 'function') {
+                deferViewportPeakCacheClear(r);
+            }
+            if (typeof logWaveformViewportPeakCacheClear === 'function') {
+                logWaveformViewportPeakCacheClear(
+                    r + '/deferred',
+                    viewportPeakCache.size,
+                );
+            }
+            return;
+        }
+        const count = viewportPeakCache.size;
         viewportPeakCache.clear();
+        if (typeof logWaveformViewportPeakCacheClear === 'function') {
+            logWaveformViewportPeakCacheClear(r, count);
+        }
     }
 
     function bufferPeakId(buffer) {
@@ -287,11 +474,14 @@
         }
     }
 
+    window.peaksFromChannelRangeAsync = peaksFromChannelRangeAsync;
     window.buildPeakPyramidFromBuffer = buildPeakPyramidFromBuffer;
     window.buildPeakPyramidFromBufferAsync = buildPeakPyramidFromBufferAsync;
     window.peaksFromPyramidRange = peaksFromPyramidRange;
     window.peaksOverviewFromPyramid = peaksOverviewFromPyramid;
     window.peaksForViewportRange = peaksForViewportRange;
+    window.peaksForViewportRangeWithQuality = peaksForViewportRangeWithQuality;
+    window.isViewportPeakPyramidInsufficient = isViewportPeakPyramidInsufficient;
     window.clearViewportPeakCache = clearViewportPeakCache;
     window.bufferPeakId = bufferPeakId;
     window.peaksFromChannelData = peaksFromChannelData;

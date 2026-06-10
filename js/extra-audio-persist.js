@@ -10,6 +10,7 @@
         if (!tr || !ui) return false;
         setExtraTrackLaneUiOpen(slot, true);
         tr.peaks = entry.peaks;
+        refreshExtraTrackScrubOverviewCache(slot);
         tr.restoreDurationHint = entry.duration;
         tr.timelineStartSec =
             Number.isFinite(entry.timelineStartSec) && entry.timelineStartSec > 0
@@ -250,6 +251,26 @@
         }
     }
 
+    const EXTRA_WAVEFORM_SCRUB_OVERVIEW_BARS = 384;
+
+    function refreshExtraTrackScrubOverviewCache(slot) {
+        const tr = extraTrackBySlot(slot);
+        if (!tr) return;
+        if (
+            tr.peakPyramid &&
+            typeof peaksOverviewFromPyramid === 'function'
+        ) {
+            const overview = peaksOverviewFromPyramid(
+                tr.peakPyramid,
+                EXTRA_WAVEFORM_SCRUB_OVERVIEW_BARS,
+            );
+            tr.scrubOverviewPeaks = overview && overview.length ? overview : null;
+            return;
+        }
+        tr.scrubOverviewPeaks =
+            tr.peaks && tr.peaks.length ? tr.peaks : null;
+    }
+
     function rebuildExtraTrackPeaksIfNeeded(slot) {
         const tr = extraTrackBySlot(slot);
         const ui = getExtraUi(slot);
@@ -272,6 +293,7 @@
             }
         }
         syncExtraTrackClipPeaksFromTrackOverview(slot);
+        refreshExtraTrackScrubOverviewCache(slot);
         return !!(tr.peaks && tr.peaks.length > 0);
     }
 
@@ -290,13 +312,13 @@
         const onBuilt = (pyramid) => {
             if (!tr.buffer || tr.buffer !== buffer || tr.peakPyramidGen !== gen) return;
             if (!pyramid) return;
-            if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
             tr.peakPyramid = pyramid;
             if (typeof peaksOverviewFromPyramid === 'function') {
                 const overview = peaksOverviewFromPyramid(tr.peakPyramid, barCount);
                 if (overview && overview.length) tr.peaks = overview;
             }
             syncExtraTrackClipPeaksFromTrackOverview(slot);
+            refreshExtraTrackScrubOverviewCache(slot);
             drawExtraTrackWaveform(slot);
             if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
                 scheduleWaveformHiresRedrawAfterZoom({ slots: [slot] });
@@ -530,16 +552,19 @@
         if (typeof applyWaveformLaneHeightScaleToDom === 'function') {
             applyWaveformLaneHeightScaleToDom();
         }
+        const hCss =
+            typeof getWaveformLaneHeightCss === 'function'
+                ? getWaveformLaneHeightCss()
+                : Math.max(1, ui.track.clientHeight | 0);
+        if (typeof syncWaveformCanvasElement === 'function') {
+            return syncWaveformCanvasElement(ui.canvas, hCss);
+        }
         const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
                   ? masterTimelineWidthCss()
                   : Math.max(1, ui.track.clientWidth | 0);
-        const hCss =
-            typeof getWaveformLaneHeightCss === 'function'
-                ? getWaveformLaneHeightCss()
-                : Math.max(1, ui.track.clientHeight | 0);
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         let backingW =
             typeof getWaveformCanvasBackingWidthCss === 'function'
@@ -558,6 +583,6 @@
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             }
         }
-        return { ctx, wCss: layoutW, hCss, barCount, backingW };
+        return { ctx, wCss: layoutW, hCss, barCount, backingW, drawOpt: {} };
     }
 

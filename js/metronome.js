@@ -254,6 +254,17 @@
         flushMetronomeScheduledAudio(ctx);
     }
 
+    function isMetronomeTransportPlaybackCatchUp(delta) {
+        if (!(delta > METRONOME_TRANSPORT_JUMP_SEC)) return false;
+        if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
+            return true;
+        }
+        if (typeof isTransportUiClockActive === 'function' && isTransportUiClockActive()) {
+            return true;
+        }
+        return false;
+    }
+
     function syncMetronomeAnchor(ctx, transportSec, force, meterKey) {
         if (!metronomeActive || meterKey !== metronomeMeterKey) {
             resetMetronomeSchedule(ctx, transportSec, meterKey);
@@ -262,8 +273,10 @@
         if (Number.isFinite(metronomeLastSeenTransportSec)) {
             const delta = transportSec - metronomeLastSeenTransportSec;
             if (Math.abs(delta) > METRONOME_TRANSPORT_JUMP_SEC) {
-                resetMetronomeSchedule(ctx, transportSec, meterKey);
-                return;
+                if (!isMetronomeTransportPlaybackCatchUp(delta)) {
+                    resetMetronomeSchedule(ctx, transportSec, meterKey);
+                    return;
+                }
             }
         }
         if (force) {

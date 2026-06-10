@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.09 |
+| **バージョン** | v0.10 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,13 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.10 - 2026年6月11日
+
+- 先頭から再生されない不具合を修正（トランスポート時計の外挿を再生中のみに限定、明示シークでテール状態をクリア）。
+- 波形ズーム中も再生を継続（ズーム操作での一時停止を廃止）。拡大中のスクロール追従を左端追従に変更（マーカー TC 編集時のみ中央固定）。
+- Ctrl+←/→ / PgUp/PgDn のキーボードシークを軽量化（離散停止点ナビ、確定は keyup 後 coalesce）。Ctrl+←/→ のグリッド停止点を小節線+フレーズ境界のみに（拍線除外）。
+- 拡大時の波形描画を最適化（表示窓 unchanged 時はタイル再取得スキップ、タイル描画を左端から順）。使い方・ショートカット一覧を実装に合わせて更新。
 
 ### v0.09 - 2026年6月10日
 

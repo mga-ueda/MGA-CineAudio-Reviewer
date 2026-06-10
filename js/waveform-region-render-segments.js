@@ -68,12 +68,20 @@
         return true;
     }
 
-    function drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad) {
+    function drawExtraTrackWaveformRegions(ctx, wCss, hCss, slot, grad, drawOpt) {
         const track = { type: 'extra', slot };
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
-        let vp = tr ? tr.viewportPeaks : null;
+        const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
+        const scrubOverview = !!o.scrubOverview;
+        const scrubRedraw = !!o.scrubRedraw;
+        const vpOverlay = scrubOverview ? null : tr ? tr.viewportPeaks : null;
+        const vpSkip = scrubOverview || scrubRedraw ? null : vpOverlay;
         const t0 = getTrackTimelineStartSec(track);
+        const layoutW = Number.isFinite(o.timelineLayoutW) && o.timelineLayoutW > 0
+            ? o.timelineLayoutW
+            : wCss;
+        const xOffset = Number.isFinite(o.timelineXOffset) ? o.timelineXOffset : 0;
         const state = getPlaybackRegionsState(track);
         const hasConfiguredRegions =
             state &&
@@ -94,6 +102,9 @@
                 : '#161820';
         ctx.fillRect(0, 0, wCss, hCss);
 
+        ctx.save();
+        if (xOffset) ctx.translate(-xOffset, 0);
+
         if (!segments.length) {
             if (hasConfiguredRegions) {
                 if (tr) {
@@ -103,31 +114,84 @@
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(0, mid);
-                ctx.lineTo(wCss, mid);
+                ctx.moveTo(xOffset, mid);
+                ctx.lineTo(xOffset + wCss, mid);
                 ctx.stroke();
+                ctx.restore();
                 return;
             }
             const fullDur = getTrackSourceDurationSec(track);
-            const peaks = tr ? tr.peaks : null;
+            const peaks =
+                scrubOverview && o.scrubOverviewPeaks && o.scrubOverviewPeaks.length
+                    ? o.scrubOverviewPeaks
+                    : tr
+                      ? tr.peaks
+                      : null;
             if (!peaks || !peaks.length || !fullDur) {
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(0, mid);
-                ctx.lineTo(wCss, mid);
+                ctx.moveTo(xOffset, mid);
+                ctx.lineTo(xOffset + wCss, mid);
                 ctx.stroke();
+                ctx.restore();
                 return;
             }
             if (typeof drawPeaksForMasterTimeline === 'function') {
-                const drawOpt = { timelineStartSec: t0 };
-                if (vp && vp.segments && vp.segments.length === 1) {
-                    drawOpt.viewportPeaks = vp.segments[0];
-                } else if (vp && vp.peaks) {
-                    drawOpt.viewportPeaks = vp;
+                const peakDrawOpt = Object.assign({ timelineStartSec: t0 }, o);
+                if (!scrubOverview) {
+                    if (vpOverlay && vpOverlay.segments && vpOverlay.segments.length === 1) {
+                        peakDrawOpt.viewportPeaks = vpOverlay.segments[0];
+                    } else if (vpOverlay && vpOverlay.peaks) {
+                        peakDrawOpt.viewportPeaks = vpOverlay;
+                    } else if (vpOverlay && vpOverlay.tiles) {
+                        peakDrawOpt.viewportPeaks = vpOverlay;
+                    }
                 }
-                drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, fullDur, grad, drawOpt);
+                ctx.restore();
+                drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, fullDur, grad, peakDrawOpt);
+                return;
             }
+            ctx.restore();
+            return;
+        }
+
+        if (
+            scrubOverview &&
+            o.scrubOverviewPeaks &&
+            o.scrubOverviewPeaks.length &&
+            segments.length &&
+            typeof drawPeaksForMasterTimeline === 'function'
+        ) {
+            const fullDur = getTrackSourceDurationSec(track);
+            if (fullDur > 0) {
+                const underlayOpt = Object.assign({ timelineStartSec: t0 }, o);
+                delete underlayOpt.viewportPeaks;
+                delete underlayOpt.scrubOverview;
+                ctx.restore();
+                drawPeaksForMasterTimeline(
+                    ctx,
+                    o.scrubOverviewPeaks,
+                    wCss,
+                    hCss,
+                    fullDur,
+                    grad,
+                    underlayOpt,
+                );
+                ctx.save();
+                if (xOffset) ctx.translate(-xOffset, 0);
+            }
+            drawRegionViewportPeaks(ctx, layoutW, hCss, master, vpOverlay, grad, track, o);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(xOffset, mid);
+            ctx.lineTo(xOffset + wCss, mid);
+            ctx.stroke();
+            if (typeof drawTimelineVideoEndMarkerLine === 'function') {
+                drawTimelineVideoEndMarkerLine(ctx, layoutW, hCss, o);
+            }
+            ctx.restore();
             return;
         }
 
@@ -136,11 +200,11 @@
             ctx,
             track,
             slot,
-            wCss,
+            layoutW,
             hCss,
             mid,
             grad,
-            vp,
+            vpSkip,
             segments,
         );
         if (!chainOverviewDrawn) {
@@ -148,7 +212,7 @@
                 const seg = segments[i];
                 const clipId = seg.clipId || getSegmentClipId(track, i);
                 const fullDur = getSegmentSourceDurationSec(track, seg);
-                if (segmentHasViewportPeaksForDraw(vp, i)) continue;
+                if (segmentHasViewportPeaksForDraw(vpSkip, i)) continue;
 
                 const peaks = getSegmentPeaksForDraw(slot, clipId);
                 if (!peaks || !peaks.length || !fullDur) continue;
@@ -164,13 +228,13 @@
                 if (!(contentDur > 0.0005)) continue;
                 const startX =
                     typeof masterTimelineContentWidth === 'function'
-                        ? masterTimelineContentWidth(wCss, segT0)
+                        ? masterTimelineContentWidth(layoutW, segT0)
                         : 0;
                 const contentW =
                     typeof masterTimelineContentWidth === 'function'
-                        ? masterTimelineContentWidth(wCss, contentDur)
-                        : wCss;
-                const drawW = contentW > 0 ? contentW : wCss;
+                        ? masterTimelineContentWidth(layoutW, contentDur)
+                        : layoutW;
+                const drawW = contentW > 0 ? contentW : layoutW;
                 const barW = drawW / segPeaks.length;
                 const waveformHideBefore = getSegmentWaveformHideBeforeTimeline(track, i);
                 for (let p = 0; p < segPeaks.length; p++) {
@@ -181,9 +245,9 @@
                     }
                     const x =
                         typeof masterTimelineContentWidth === 'function'
-                            ? masterTimelineContentWidth(wCss, barTransport) - barW * 0.5
+                            ? masterTimelineContentWidth(layoutW, barTransport) - barW * 0.5
                             : startX + p * barW;
-                    if (viewportPeaksCoverMasterTime(vp, barTransport)) {
+                    if (viewportPeaksCoverMasterTime(vpSkip, barTransport)) {
                         continue;
                     }
                     drawWaveformBarAtTransport(
@@ -196,23 +260,24 @@
                         barTransport,
                         segPeaks[p],
                         i,
-                        vp ? { viewportPeaks: vp } : null,
+                        vpSkip ? { viewportPeaks: vpSkip } : null,
                     );
                 }
             }
         }
 
-        drawRegionViewportPeaks(ctx, wCss, hCss, master, vp, grad, track);
+        drawRegionViewportPeaks(ctx, layoutW, hCss, master, vpOverlay, grad, track, o);
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, mid);
-        ctx.lineTo(wCss, mid);
+        ctx.moveTo(xOffset, mid);
+        ctx.lineTo(xOffset + wCss, mid);
         ctx.stroke();
         if (typeof drawTimelineVideoEndMarkerLine === 'function') {
-            drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
+            drawTimelineVideoEndMarkerLine(ctx, layoutW, hCss, o);
         }
+        ctx.restore();
     }
 
     function applySegmentsToState(track, segments, opt) {
@@ -974,11 +1039,18 @@
         }
 
         if (!usedViewportRefresh) {
-            if (opt && opt.invalidatePeakCache && typeof clearViewportPeakCache === 'function') {
-                clearViewportPeakCache();
-            }
-            if (typeof invalidateWaveformViewportHiresSpec === 'function') {
-                invalidateWaveformViewportHiresSpec();
+            if (typeof invalidateWaveformViewportPeaksForRegionEdit === 'function') {
+                invalidateWaveformViewportPeaksForRegionEdit({
+                    slot: typeof slot === 'number' ? slot : -1,
+                    clearTrackTiles: true,
+                });
+            } else {
+                if (opt && opt.invalidatePeakCache && typeof clearViewportPeakCache === 'function') {
+                    clearViewportPeakCache('regionRenderFallback', { force: true });
+                }
+                if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+                    invalidateWaveformViewportHiresSpec();
+                }
             }
         }
 

@@ -7,6 +7,129 @@
     /** マルチレゾピーク（ビューポート用スライスの元） */
     let waveformPeakPyramid = null;
     let waveformPeakPyramidGen = 0;
+    /** スクラブ中の固定低解像度 overview（ピラミッドから一度だけ生成） */
+    const WAVEFORM_SCRUB_OVERVIEW_BARS = 384;
+    let waveformScrubOverviewPeaks = null;
+    let waveformScrubOverviewDrawRaf = 0;
+    /** スクラブ overview を描いた Canvas 窓（変わらなければ再描画しない） */
+    let waveformScrubOverviewWindowKey = '';
+    let waveformScrubOverviewDrawCommitted = false;
+
+    function waveformCanvasWindowDrawKey(spec) {
+        if (!spec) return '';
+        const zoom =
+            typeof waveformTimelineZoom !== 'undefined' ? waveformTimelineZoom : 1;
+        return [
+            spec.mode,
+            Math.round(spec.canvasLeft),
+            Math.round(spec.canvasW),
+            Math.round(spec.contentW),
+            Math.round(spec.scrollLeft),
+            zoom,
+        ].join('|');
+    }
+
+    function currentWaveformCanvasWindowDrawKey() {
+        const spec =
+            typeof getWaveformCanvasWindowSpec === 'function'
+                ? getWaveformCanvasWindowSpec()
+                : null;
+        return waveformCanvasWindowDrawKey(spec);
+    }
+
+    function isWaveformScrubOverviewDrawActive() {
+        return waveformScrubOverviewDrawCommitted;
+    }
+
+    /** スクラブ開始: 現在の表示窓を基準に記録（即 overview には切り替えない） */
+    function beginWaveformScrubOverviewDrawState() {
+        waveformScrubOverviewDrawCommitted = false;
+        waveformScrubOverviewWindowKey = currentWaveformCanvasWindowDrawKey();
+    }
+
+    function resetWaveformScrubOverviewDrawState() {
+        waveformScrubOverviewDrawCommitted = false;
+        waveformScrubOverviewWindowKey = '';
+    }
+
+    function refreshWaveformScrubOverviewCache() {
+        if (
+            !waveformPeakPyramid ||
+            typeof peaksOverviewFromPyramid !== 'function'
+        ) {
+            waveformScrubOverviewPeaks = null;
+            return;
+        }
+        const overview = peaksOverviewFromPyramid(
+            waveformPeakPyramid,
+            WAVEFORM_SCRUB_OVERVIEW_BARS,
+        );
+        waveformScrubOverviewPeaks =
+            overview && overview.length ? overview : null;
+    }
+
+    function scheduleWaveformScrubOverviewDraw() {
+        if (waveformScrubOverviewDrawRaf) return;
+        const runDraw = () => {
+            waveformScrubOverviewDrawRaf = 0;
+            tryDrawWaveformScrubOverviewIfNeeded();
+        };
+        if (typeof scheduleWorkAfterTransportUiFrame === 'function') {
+            waveformScrubOverviewDrawRaf = scheduleWorkAfterTransportUiFrame(runDraw);
+        } else {
+            waveformScrubOverviewDrawRaf = requestAnimationFrame(runDraw);
+        }
+    }
+
+    /** 表示窓が変わったとき: キャッシュ/preview タイル優先、無い場合のみ超荒 overview */
+    function tryDrawWaveformScrubOverviewIfNeeded() {
+        const playbackScrollFollow =
+            typeof isWaveformPlaybackScrollFollowActive === 'function' &&
+            isWaveformPlaybackScrollFollowActive();
+        const scrubPriority =
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive();
+        if (!scrubPriority && !playbackScrollFollow) {
+            return false;
+        }
+        const key = currentWaveformCanvasWindowDrawKey();
+        if (key === waveformScrubOverviewWindowKey) return false;
+        waveformScrubOverviewWindowKey = key;
+        let coverage =
+            typeof hydrateWaveformViewportCacheForScrub === 'function'
+                ? hydrateWaveformViewportCacheForScrub()
+                : 'none';
+        if (coverage === 'partial') {
+            if (typeof applyScrubPreviewWaveformViewportTiles === 'function') {
+                applyScrubPreviewWaveformViewportTiles();
+            }
+            waveformScrubOverviewDrawCommitted = false;
+        } else if (coverage === 'none') {
+            waveformScrubOverviewDrawCommitted = !!(
+                waveformScrubOverviewPeaks && waveformScrubOverviewPeaks.length
+            );
+        } else {
+            waveformScrubOverviewDrawCommitted = false;
+        }
+        if (typeof drawAudioWaveformCanvas === 'function') {
+            drawAudioWaveformCanvas();
+        }
+        if (typeof redrawAllExtraTrackWaveforms === 'function') {
+            redrawAllExtraTrackWaveforms();
+        }
+        return true;
+    }
+
+    function drawWaveformScrubOverviewOnce() {
+        tryDrawWaveformScrubOverviewIfNeeded();
+    }
+
+    window.scheduleWaveformScrubOverviewDraw = scheduleWaveformScrubOverviewDraw;
+    window.drawWaveformScrubOverviewOnce = drawWaveformScrubOverviewOnce;
+    window.tryDrawWaveformScrubOverviewIfNeeded = tryDrawWaveformScrubOverviewIfNeeded;
+    window.beginWaveformScrubOverviewDrawState = beginWaveformScrubOverviewDrawState;
+    window.resetWaveformScrubOverviewDrawState = resetWaveformScrubOverviewDrawState;
+    window.isWaveformScrubOverviewDrawActive = isWaveformScrubOverviewDrawActive;
     let waveformAudioBuffer = null;
     let waveformBuildGen = 0;
     let waveformResizeObs = null;
@@ -37,6 +160,9 @@
     let waveformPointerGestureDocUp = null;
     let waveformPointerGestureWasPlaying = false;
     let seekBarScrubWasPlaying = false;
+    let seekBarScrubActive = false;
+    let seekBarInputRaf = 0;
+    let seekBarInputPendingSec = null;
     const WAVEFORM_POINTER_GESTURE_DRAG_PX = 5;
     const WAVEFORM_LANES_DBLCLICK_MS = 450;
     const WAVEFORM_LANES_DBLCLICK_SLOP_PX = 12;
@@ -709,7 +835,11 @@
     window.getMainWaveformPeaksForDraw = getMainWaveformPeaksForDraw;
 
     function isAudioWaveformScrubActive() {
-        return waveformOffsetDragActive || waveformPointerGestureId != null;
+        return (
+            waveformOffsetDragActive ||
+            waveformPointerGestureId != null ||
+            seekBarScrubActive
+        );
     }
 
     function detachWaveformOffsetDragDocListeners() {
@@ -989,6 +1119,12 @@
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--scrubbing');
         if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
+        if (typeof beginWaveformVisualRefreshDefer === 'function') {
+            beginWaveformVisualRefreshDefer();
+        }
+        if (typeof beginWaveformScrubOverviewDrawState === 'function') {
+            beginWaveformScrubOverviewDrawState();
+        }
     }
 
     function captureWaveformPointerScrubWasPlaying() {
@@ -1163,6 +1299,12 @@
         }
         isSeeking = false;
         if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
+        if (typeof resetWaveformScrubOverviewDrawState === 'function') {
+            resetWaveformScrubOverviewDrawState();
+        }
+        if (typeof endWaveformVisualRefreshDefer === 'function') {
+            endWaveformVisualRefreshDefer({ flush: true });
+        }
     }
 
     function onWaveformLanesPointerDownCapture(ev) {
@@ -1234,10 +1376,7 @@
 
         if (!waveformPointerGestureRegionHit) {
             beginWaveformPointerScrubTransport();
-            seekFromWaveformPointer(ev.clientX, { scrubbing: true, logInput: true, flash: true });
-            if (typeof updateAllWaveformPlayheads === 'function') {
-                updateAllWaveformPlayheads();
-            }
+            seekFromWaveformPointer(ev.clientX, { scrubbing: true });
             if (currentTimeEl && typeof formatTimecodeForTransport === 'function') {
                 const t =
                     typeof getTransportSec === 'function'
@@ -1269,10 +1408,7 @@
                     waveformPointerGestureRegionHit.segmentIndex,
                 );
             } else if (!waveformOffsetDragActive) {
-                seekFromWaveformPointer(e.clientX, { scrubbing: true, logInput: true, flash: true });
-                if (typeof updateAllWaveformPlayheads === 'function') {
-                    updateAllWaveformPlayheads();
-                }
+                seekFromWaveformPointer(e.clientX, { scrubbing: true });
             }
         };
         waveformPointerGestureDocUp = (e) => {
@@ -1281,6 +1417,12 @@
                 finishWaveformPointerSeek(e);
             } else {
                 isSeeking = false;
+                if (typeof resetWaveformScrubOverviewDrawState === 'function') {
+                    resetWaveformScrubOverviewDrawState();
+                }
+                if (typeof endWaveformVisualRefreshDefer === 'function') {
+                    endWaveformVisualRefreshDefer({ flush: true });
+                }
             }
             cancelWaveformPointerGesture();
         };
@@ -1356,8 +1498,9 @@
         waveformViewportPeaks = null;
         waveformPeakPyramid = null;
         waveformPeakPyramidGen += 1;
+        waveformScrubOverviewPeaks = null;
         waveformAudioBuffer = null;
-        if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
+        if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache('mainBufferClear', { force: true });
         endAudioWaveformScrub({ force: true });
         setAudioWaveformLoaded(false);
         setAudioWaveformStatus('Not Loaded');
@@ -1431,13 +1574,16 @@
     function syncAudioWaveformCanvasSize() {
         if (!audioWaveformCanvas || !audioWaveformTrack) return null;
         applyWaveformLaneHeightScaleToDom();
+        const hCss = resolveWaveformTrackHeightCss();
+        if (typeof syncWaveformCanvasElement === 'function') {
+            return syncWaveformCanvasElement(audioWaveformCanvas, hCss);
+        }
         const layoutW =
             typeof waveformTimelineScrubWidthCss === 'function'
                 ? waveformTimelineScrubWidthCss()
                 : typeof masterTimelineWidthCss === 'function'
                   ? masterTimelineWidthCss()
                   : Math.max(1, audioWaveformTrack.clientWidth | 0);
-        const hCss = resolveWaveformTrackHeightCss();
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         let backingW =
             typeof getWaveformCanvasBackingWidthCss === 'function'
@@ -1456,7 +1602,7 @@
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             }
         }
-        return { ctx, wCss: layoutW, hCss, barCount, backingW };
+        return { ctx, wCss: layoutW, hCss, barCount, backingW, drawOpt: {} };
     }
 
     function clearMainWaveformViewportPeaks() {
@@ -1472,6 +1618,7 @@
         if (waveformPeakPyramid && typeof peaksOverviewFromPyramid === 'function') {
             const overview = peaksOverviewFromPyramid(waveformPeakPyramid, barCount);
             if (overview && overview.length) waveformPeaks = overview;
+            refreshWaveformScrubOverviewCache();
         }
         if (!waveformPeaks || waveformPeaks.length !== barCount) {
             if (typeof peaksFromAudioBuffer === 'function') {
@@ -1529,13 +1676,163 @@
         waveformViewportPeaks = { peaks, masterStartSec: t0, masterEndSec: t1 };
     }
 
+    function initMainWaveformViewportTiles(plan) {
+        if (!plan || !plan.tiles || !plan.tiles.length) {
+            waveformViewportPeaks = null;
+            return;
+        }
+        const prevById = new Map();
+        if (waveformViewportPeaks && waveformViewportPeaks.tiles) {
+            for (let i = 0; i < waveformViewportPeaks.tiles.length; i++) {
+                const pt = waveformViewportPeaks.tiles[i];
+                if (pt.peaks && pt.peaks.length) prevById.set(pt.tileId, pt);
+            }
+        }
+        let reused = 0;
+        const tiles = plan.tiles.map((t) => {
+            const prev = prevById.get(t.id);
+            if (
+                prev &&
+                prev.peaks &&
+                prev.peaks.length &&
+                prev.barCount === t.barCount
+            ) {
+                reused++;
+                return {
+                    tileId: t.id,
+                    pxLeft: t.px,
+                    pxWidth: t.width,
+                    masterStartSec: prev.masterStartSec,
+                    masterEndSec: prev.masterEndSec,
+                    barCount: t.barCount,
+                    peaks: prev.peaks,
+                    peakQuality: prev.peakQuality || 'preview',
+                };
+            }
+            return {
+                tileId: t.id,
+                pxLeft: t.px,
+                pxWidth: t.width,
+                masterStartSec: t.masterStartSec,
+                masterEndSec: t.masterEndSec,
+                barCount: t.barCount,
+                peaks: null,
+            };
+        });
+        if (typeof logWaveformViewportTileMerge === 'function') {
+            logWaveformViewportTileMerge('main', reused, tiles.length - reused, tiles.length);
+        }
+        waveformViewportPeaks = {
+            masterStartSec: tiles[0].masterStartSec,
+            masterEndSec: tiles[tiles.length - 1].masterEndSec,
+            tiles,
+        };
+    }
+
+    function mainWaveformTilePeakNeedsRefine(tile) {
+        if (!tile || !tile.peaks || !tile.peaks.length) return false;
+        if (tile.peakQuality === 'full') return false;
+        if (!waveformPeakPyramid) return true;
+        const rangeDur = tile.masterEndSec - tile.masterStartSec;
+        if (!(rangeDur > 0)) return false;
+        return (
+            typeof isViewportPeakPyramidInsufficient === 'function' &&
+            isViewportPeakPyramidInsufficient(
+                waveformPeakPyramid,
+                tile.barCount,
+                rangeDur,
+            )
+        );
+    }
+
+    function applyMainWaveformViewportTile(tile, applyOpt) {
+        const opt = applyOpt && typeof applyOpt === 'object' ? applyOpt : {};
+        if (
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive() &&
+            !opt.cacheOnly &&
+            !(opt.peakPass === 'preview' && opt.scrubPreview)
+        ) {
+            return false;
+        }
+        if (!waveformAudioBuffer || !tile || !waveformViewportPeaks || !waveformViewportPeaks.tiles) {
+            return false;
+        }
+        const cacheOnly = !!opt.cacheOnly;
+        if (!cacheOnly && !waveformPeakPyramid) return false;
+        const contentDur = getWaveformAudioDurationSec();
+        const timelineStartSec = 0;
+        const trackEndSec = timelineStartSec + contentDur;
+        const t0 = Math.max(timelineStartSec, tile.masterStartSec);
+        const t1 = Math.min(trackEndSec, tile.masterEndSec);
+        if (t1 <= t0 + 1e-9) return false;
+        const audioStart = t0 - timelineStartSec;
+        const audioEnd = t1 - timelineStartSec;
+        let peaks = [];
+        let peakQuality = 'preview';
+        const rangeOpt = cacheOnly ? { cacheOnly: true } : opt;
+        if (typeof peaksForViewportRangeWithQuality === 'function') {
+            const bufId =
+                typeof bufferPeakId === 'function'
+                    ? bufferPeakId(waveformAudioBuffer)
+                    : 0;
+            const result = peaksForViewportRangeWithQuality(
+                waveformAudioBuffer,
+                waveformPeakPyramid,
+                audioStart,
+                audioEnd,
+                tile.barCount,
+                bufId,
+                rangeOpt,
+            );
+            peaks = result.peaks;
+            peakQuality = result.peakQuality;
+        } else if (typeof peaksForViewportRange === 'function') {
+            const bufId =
+                typeof bufferPeakId === 'function'
+                    ? bufferPeakId(waveformAudioBuffer)
+                    : 0;
+            peaks = peaksForViewportRange(
+                waveformAudioBuffer,
+                waveformPeakPyramid,
+                audioStart,
+                audioEnd,
+                tile.barCount,
+                bufId,
+                rangeOpt,
+            );
+            peakQuality = opt.peakPass === 'preview' ? 'preview' : 'full';
+        } else if (!cacheOnly) {
+            peaks = peaksFromAudioBufferRange(
+                waveformAudioBuffer,
+                audioStart,
+                audioEnd,
+                tile.barCount,
+            );
+            peakQuality = 'full';
+        }
+        if (!peaks.length) return false;
+        const tiles = waveformViewportPeaks.tiles;
+        for (let i = 0; i < tiles.length; i++) {
+            if (tiles[i].tileId === tile.id) {
+                tiles[i].peaks = peaks;
+                tiles[i].masterStartSec = t0;
+                tiles[i].masterEndSec = t1;
+                tiles[i].barCount = tile.barCount;
+                tiles[i].peakQuality = peakQuality;
+                return true;
+            }
+        }
+        return false;
+    }
+
     function scheduleMainWaveformPeakPyramidBuild(buffer, barCount) {
         const gen = ++waveformPeakPyramidGen;
         const onBuilt = (pyramid) => {
             if (gen !== waveformPeakPyramidGen || waveformAudioBuffer !== buffer) return;
             if (!pyramid) return;
-            if (typeof clearViewportPeakCache === 'function') clearViewportPeakCache();
             waveformPeakPyramid = pyramid;
+            refreshWaveformScrubOverviewCache();
             if (typeof peaksOverviewFromPyramid === 'function') {
                 const overview = peaksOverviewFromPyramid(waveformPeakPyramid, barCount);
                 if (overview && overview.length) waveformPeaks = overview;
@@ -1560,11 +1857,65 @@
         }
     }
 
+    function mainWaveformViewportTileLacksPeaks(tileId) {
+        if (!waveformAudioBuffer) return false;
+        if (!waveformViewportPeaks || !waveformViewportPeaks.tiles) return true;
+        for (let i = 0; i < waveformViewportPeaks.tiles.length; i++) {
+            const t = waveformViewportPeaks.tiles[i];
+            if (t.tileId !== tileId) continue;
+            return !(t.peaks && t.peaks.length);
+        }
+        return true;
+    }
+
+    function mainWaveformViewportTilePending(tileId) {
+        if (!waveformAudioBuffer) return false;
+        if (!waveformViewportPeaks || !waveformViewportPeaks.tiles) return false;
+        for (let i = 0; i < waveformViewportPeaks.tiles.length; i++) {
+            const t = waveformViewportPeaks.tiles[i];
+            if (t.tileId !== tileId) continue;
+            if (!(t.peaks && t.peaks.length)) return true;
+            return mainWaveformTilePeakNeedsRefine(t);
+        }
+        return true;
+    }
+
+    function mainWaveformViewportTilesPending() {
+        if (!waveformViewportPeaks) return true;
+        const vp = waveformViewportPeaks;
+        if (vp.tiles && vp.tiles.length) {
+            for (let i = 0; i < vp.tiles.length; i++) {
+                const t = vp.tiles[i];
+                if (!(t.peaks && t.peaks.length)) return true;
+                if (mainWaveformTilePeakNeedsRefine(t)) return true;
+            }
+            return false;
+        }
+        return !(vp.peaks && vp.peaks.length);
+    }
+
+    function mainWaveformViewportPeaksHasTiles() {
+        return !!(
+            waveformViewportPeaks &&
+            waveformViewportPeaks.tiles &&
+            waveformViewportPeaks.tiles.length
+        );
+    }
+
     window.clearMainWaveformViewportPeaks = clearMainWaveformViewportPeaks;
     window.rebuildMainWaveformOverviewPeaksIfNeeded = rebuildMainWaveformOverviewPeaksIfNeeded;
     window.rebuildMainWaveformViewportPeaks = rebuildMainWaveformViewportPeaks;
+    window.initMainWaveformViewportTiles = initMainWaveformViewportTiles;
+    window.applyMainWaveformViewportTile = applyMainWaveformViewportTile;
+    window.mainWaveformViewportTilePending = mainWaveformViewportTilePending;
+    window.mainWaveformViewportTileLacksPeaks = mainWaveformViewportTileLacksPeaks;
+    window.mainWaveformViewportTilesPending = mainWaveformViewportTilesPending;
+    window.mainWaveformViewportPeaksHasTiles = mainWaveformViewportPeaksHasTiles;
 
     function drawAudioWaveformCanvas() {
+        const scrubActive =
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive();
         if (!audioWaveformCanvas) return;
         const sized = syncAudioWaveformCanvasSize();
         if (!sized || !sized.ctx) return;
@@ -1582,9 +1933,28 @@
                       g.addColorStop(1, 'rgba(255, 255, 255, 0.42)');
                       return g;
                   })();
-        const drawOpt = {};
-        if (waveformViewportPeaks) drawOpt.viewportPeaks = waveformViewportPeaks;
-        drawPeaksForMasterTimeline(ctx, waveformPeaks, wCss, hCss, contentDur, grad, drawOpt);
+        const drawOpt = Object.assign({}, sized.drawOpt || {});
+        const useScrubOverview =
+            scrubActive &&
+            waveformScrubOverviewDrawCommitted &&
+            waveformScrubOverviewPeaks &&
+            waveformScrubOverviewPeaks.length;
+        let peaksForDraw = useScrubOverview ? waveformScrubOverviewPeaks : waveformPeaks;
+        if (
+            scrubActive &&
+            (!peaksForDraw || !peaksForDraw.length) &&
+            waveformScrubOverviewPeaks &&
+            waveformScrubOverviewPeaks.length
+        ) {
+            peaksForDraw = waveformScrubOverviewPeaks;
+        }
+        if (!useScrubOverview && waveformViewportPeaks) {
+            drawOpt.viewportPeaks = waveformViewportPeaks;
+        }
+        if (scrubActive && !useScrubOverview) {
+            drawOpt.scrubRedraw = true;
+        }
+        drawPeaksForMasterTimeline(ctx, peaksForDraw, wCss, hCss, contentDur, grad, drawOpt);
     }
 
     function seekFromWaveformPointer(clientX, opt) {
@@ -2391,22 +2761,49 @@
         lanes.addEventListener('pointerdown', onWaveformLanesPointerDownCapture, true);
 
         if (typeof seekBar !== 'undefined' && seekBar) {
-            const onSeekBarInput = () => {
-                if (seekBar.disabled) return;
-                const t = snapSeekBarTransportSec(parseFloat(seekBar.value));
+            const flushSeekBarWaveformRefresh = () => {
+                seekBarScrubActive = false;
+                isSeeking = false;
+                if (typeof resetWaveformScrubOverviewDrawState === 'function') {
+                    resetWaveformScrubOverviewDrawState();
+                }
+                if (typeof endWaveformVisualRefreshDefer === 'function') {
+                    endWaveformVisualRefreshDefer({ flush: true });
+                }
+            };
+            const runSeekBarInputFrame = () => {
+                seekBarInputRaf = 0;
+                const t = seekBarInputPendingSec;
+                seekBarInputPendingSec = null;
                 if (!Number.isFinite(t)) return;
                 isSeeking = true;
-                if (typeof applyTransportAtSec === 'function') {
-                    applyTransportAtSec(t, { scrubbing: true, logInput: true, flash: true });
+                if (typeof applyTransportScrubPositionImmediate === 'function') {
+                    applyTransportScrubPositionImmediate(t, { deferSeekBar: true });
+                } else if (typeof applyTransportAtSec === 'function') {
+                    applyTransportAtSec(t, { scrubbing: true });
                 }
-                if (typeof updateAllWaveformPlayheads === 'function') {
-                    updateAllWaveformPlayheads();
-                }
+            };
+            const onSeekBarInput = () => {
+                if (seekBar.disabled) return;
+                const raw = parseFloat(seekBar.value);
+                const t = seekBarScrubActive ? raw : snapSeekBarTransportSec(raw);
+                if (!Number.isFinite(t)) return;
+                seekBarInputPendingSec = t;
+                if (seekBarInputRaf) return;
+                seekBarInputRaf = requestAnimationFrame(runSeekBarInputFrame);
             };
             const onSeekBarChange = () => {
                 if (seekBar.disabled) return;
+                if (seekBarInputRaf) {
+                    cancelAnimationFrame(seekBarInputRaf);
+                    seekBarInputRaf = 0;
+                    runSeekBarInputFrame();
+                }
                 const t = snapSeekBarTransportSec(parseFloat(seekBar.value));
-                if (!Number.isFinite(t)) return;
+                if (!Number.isFinite(t)) {
+                    flushSeekBarWaveformRefresh();
+                    return;
+                }
                 const wasPlayingBeforeSeek = seekBarScrubWasPlaying;
                 seekBarScrubWasPlaying = false;
                 if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
@@ -2422,12 +2819,19 @@
                         wasPlayingBeforeSeek,
                     });
                 }
-                isSeeking = false;
+                flushSeekBarWaveformRefresh();
                 if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
             };
             seekBar.addEventListener('pointerdown', (ev) => {
                 ev.stopPropagation();
                 if (ev.button !== 0) return;
+                seekBarScrubActive = true;
+                if (typeof beginWaveformVisualRefreshDefer === 'function') {
+                    beginWaveformVisualRefreshDefer();
+                }
+                if (typeof beginWaveformScrubOverviewDrawState === 'function') {
+                    beginWaveformScrubOverviewDrawState();
+                }
                 seekBarScrubWasPlaying =
                     typeof captureTransportWasActive === 'function' && captureTransportWasActive();
                 if (seekBarScrubWasPlaying && typeof pauseTransportBeforeSeek === 'function') {

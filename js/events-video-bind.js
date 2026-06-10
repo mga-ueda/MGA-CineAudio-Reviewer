@@ -259,9 +259,13 @@
             }
             writeLog('Transport: pause (button)');
             if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
+            if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
             videoMain.pause();
             setPlayingUi(false);
             stopRaf();
+            if (typeof freezeTransportPlaybackClock === 'function') {
+                freezeTransportPlaybackClock();
+            }
             updateSeekUiFromVideo();
             if (typeof syncExtraAudioToTransport === 'function') {
                 syncExtraAudioToTransport();

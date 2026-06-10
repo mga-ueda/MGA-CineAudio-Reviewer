@@ -102,12 +102,16 @@
 
     /** 音声マスター位置（transportPlaybackSec / シークバー）。 */
     function getMasterTransportSecForAudioSync() {
-        if (
-            isTransportPlayingForExtra() &&
-            typeof transportPlaybackSec === 'number' &&
-            Number.isFinite(transportPlaybackSec)
-        ) {
-            return transportPlaybackSec;
+        if (isTransportPlayingForExtra()) {
+            if (typeof getTransportPlaybackClockSec === 'function') {
+                return getTransportPlaybackClockSec();
+            }
+            if (
+                typeof transportPlaybackSec === 'number' &&
+                Number.isFinite(transportPlaybackSec)
+            ) {
+                return transportPlaybackSec;
+            }
         }
         if (typeof getTransportSec === 'function') {
             return getTransportSec();

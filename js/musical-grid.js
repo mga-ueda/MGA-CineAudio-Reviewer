@@ -15,6 +15,8 @@
     let musicalGridVisible = false;
     let musicalGridPhraseFillVisible = false;
     let musicalGridPosCache = null;
+    let musicalGridNavStopsCache = null;
+    let musicalGridNavStopsCacheKey = '';
     /** RegionSwap 等で展開 counts を直接保持（Phrase 欄テキストは spec サイクルのまま） */
     let phraseGroupBarCountsOverride = null;
     const phraseUndoStack = [];
@@ -478,6 +480,35 @@
     }
     function clearMusicalGridPositionCache() {
         musicalGridPosCache = null;
+        invalidateMusicalGridNavStopsCache();
+    }
+    function invalidateMusicalGridNavStopsCache() {
+        musicalGridNavStopsCache = null;
+        musicalGridNavStopsCacheKey = '';
+    }
+    function musicalGridNavStopsCacheKeyNow() {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        return [
+            musicalGridMeterText || '',
+            musicalGridPhraseText || '',
+            getMusicalGridVisible() ? '1' : '0',
+            getMusicalGridPhraseFillVisible() ? '1' : '0',
+            Number(master).toFixed(4),
+        ].join('\0');
+    }
+    function dedupeSortedMusicalGridStops(stops) {
+        if (!stops.length) return stops;
+        stops.sort((a, b) => a - b);
+        const deduped = [];
+        for (let i = 0; i < stops.length; i++) {
+            if (!deduped.length || Math.abs(stops[i] - deduped[deduped.length - 1]) > 1e-6) {
+                deduped.push(stops[i]);
+            }
+        }
+        return deduped;
     }
     function clampMusicalGridSec(sec, maxSec) {
         const s = Number(sec);
@@ -1070,6 +1101,12 @@
     }
 
     function scheduleMusicalGridRedraw() {
+        if (
+            typeof isWaveformScrubPriorityActive === 'function' &&
+            isWaveformScrubPriorityActive()
+        ) {
+            return;
+        }
         if (musicalGridRedrawRaf) return;
         musicalGridRedrawRaf = requestAnimationFrame(() => {
             musicalGridRedrawRaf = 0;
@@ -1088,16 +1125,30 @@
                 : typeof waveformScrubTargetEl === 'function'
                   ? waveformScrubTargetEl()
                   : null;
+        if (!lanes) return null;
+        const h = Math.max(1, lanes.clientHeight | 0);
+        if (h < 1) return null;
+        if (typeof syncWaveformCanvasElement === 'function') {
+            const sized = syncWaveformCanvasElement(musicalGridCanvas, h);
+            if (!sized) return null;
+            const spec = sized.canvasSpec || {};
+            return {
+                ctx: sized.ctx,
+                w: sized.wCss,
+                h: sized.hCss,
+                layoutW: spec.contentW || sized.wCss,
+                xOffset: spec.mode === 'window' ? spec.canvasLeft || 0 : 0,
+            };
+        }
         const inner =
             typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner
                 ? audioWaveformLanesInner
                 : typeof waveformTimelineInnerEl === 'function'
                   ? waveformTimelineInnerEl()
                   : musicalGridCanvas.parentElement;
-        if (!lanes || !inner) return null;
+        if (!inner) return null;
         const w = Math.max(1, inner.clientWidth | 0);
-        const h = Math.max(1, lanes.clientHeight | 0);
-        if (w < 1 || h < 1) return null;
+        if (w < 1) return null;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const bw = Math.round(w * dpr);
         const bh = Math.round(h * dpr);
@@ -1110,7 +1161,7 @@
         const ctx = musicalGridCanvas.getContext('2d');
         if (!ctx) return null;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx, w, h };
+        return { ctx, w, h, layoutW: w, xOffset: 0 };
     }
 
     /** 展開 Phrase スロット index（0 始まり）→ A, B … Z, AA … */
@@ -2005,7 +2056,7 @@
             }
             return;
         }
-        const { ctx, w, h } = sized;
+        const { ctx, w, h, layoutW, xOffset } = sized;
         ctx.clearRect(0, 0, w, h);
         const settings = musicalGridDrawSettings();
         if (!settings) return;
@@ -2014,11 +2065,13 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return;
+        ctx.save();
+        if (xOffset) ctx.translate(-xOffset, 0);
         const suppressPhraseFillsDuringRegionSwap =
             typeof window.isPlaybackRegionSwapPhraseFillSuppressed === 'function' &&
             window.isPlaybackRegionSwapPhraseFillSuppressed();
         if (!suppressPhraseFillsDuringRegionSwap) {
-            drawPhraseGroupFills(ctx, w, h, master, settings);
+            drawPhraseGroupFills(ctx, layoutW, h, master, settings);
         }
         if (getMusicalGridVisible()) {
             ctx.save();
@@ -2029,11 +2082,13 @@
             const lines = collectMusicalGridLines(settings.meterSpec, master, {
                 showBeats,
             });
-            const secToX = (sec) => (sec / master) * w;
+            const secToX = (sec) => (sec / master) * layoutW;
+            const visMin = xOffset - 0.5;
+            const visMax = xOffset + w + 0.5;
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i];
                 const x = secToX(line.sec);
-                if (x < -0.5 || x > w + 0.5) continue;
+                if (x < visMin || x > visMax) continue;
                 const xi = Math.round(x) + 0.5;
                 if (line.kind === 'bar') {
                     ctx.strokeStyle = 'rgba(255, 90, 90, 0.75)';
@@ -2047,10 +2102,11 @@
                 ctx.lineTo(xi, h);
                 ctx.stroke();
             }
-            drawRegionBarNumberLabels(ctx, w, h, master, lines, settings.meterSpec);
+            drawRegionBarNumberLabels(ctx, layoutW, h, master, lines, settings.meterSpec);
             ctx.restore();
         }
-        drawPhraseGroupLabels(ctx, w, h, master, settings);
+        drawPhraseGroupLabels(ctx, layoutW, h, master, settings);
+        ctx.restore();
         if (!phraseBoundaryDragActive) updatePhraseBoundaryOverlay();
     }
     /** @returns {number[]} 各小節の開始秒。末尾に durationSec。 */
@@ -3250,6 +3306,27 @@
         }
         return stops;
     }
+    /** Ctrl+←→ ナビ用: 小節線 + Phrase 境界のみ（拍線は含めない） */
+    function collectMusicalGridBarSnapStopsForNav() {
+        if (!getMusicalGridVisible()) return [];
+        const settings = musicalGridDrawSettings();
+        if (!settings) return [];
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return [];
+        const lines = collectMusicalGridLines(settings.meterSpec, master, { showBeats: false });
+        if (!lines.length) return [];
+        const stops = [];
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (line && line.kind === 'bar' && Number.isFinite(line.sec)) {
+                stops.push(line.sec);
+            }
+        }
+        return stops;
+    }
     function collectPhraseGroupSnapStops() {
         if (!getMusicalGridPhraseFillVisible()) return [];
         const ranges = getPhraseGroupRangesSnapshot();
@@ -3262,19 +3339,25 @@
         return stops;
     }
     function collectMusicalGridSnapStops() {
-        const stops = collectMusicalGridBarSnapStops().concat(collectPhraseGroupSnapStops());
-        if (!stops.length) return stops;
-        stops.sort((a, b) => a - b);
-        const deduped = [];
-        for (let i = 0; i < stops.length; i++) {
-            if (!deduped.length || Math.abs(stops[i] - deduped[deduped.length - 1]) > 1e-6) {
-                deduped.push(stops[i]);
-            }
+        return dedupeSortedMusicalGridStops(
+            collectMusicalGridBarSnapStops().concat(collectPhraseGroupSnapStops()),
+        );
+    }
+    function collectMusicalGridNavStops() {
+        const key = musicalGridNavStopsCacheKeyNow();
+        if (musicalGridNavStopsCache && musicalGridNavStopsCacheKey === key) {
+            return musicalGridNavStopsCache;
         }
-        return deduped;
+        const stops = dedupeSortedMusicalGridStops(
+            collectMusicalGridBarSnapStopsForNav().concat(collectPhraseGroupSnapStops()),
+        );
+        musicalGridNavStopsCache = stops;
+        musicalGridNavStopsCacheKey = key;
+        return stops;
     }
     function hasMusicalGridSnapStops() {
-        return collectMusicalGridSnapStops().length > 0;
+        if (collectMusicalGridNavStops().length > 0) return true;
+        return collectMusicalGridBarSnapStops().length > 0;
     }
     function musicalGridNavStopEpsilonSec() {
         if (typeof regionNavStopEpsilonSec === 'function') {
@@ -3397,13 +3480,64 @@
 
     function seekToMusicalGridNavStop(stopSec, opt) {
         if (!Number.isFinite(stopSec)) return false;
-        const resumeAfter = !!(opt && opt.resumeAfterSeek);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const resumeAfter = !!o.resumeAfterSeek;
         let target = stopSec;
         if (typeof clampTransportSec === 'function') {
             target = clampTransportSec(target);
         }
         if (typeof suppressRangeLoopSnapForExplicitSeek === 'function') {
             suppressRangeLoopSnapForExplicitSeek();
+        }
+        const scrubOpt = Object.assign({ keyboardScrub: true }, o);
+        if (
+            o.discreteStopNav &&
+            typeof applyDiscreteStopNavStep === 'function'
+        ) {
+            applyDiscreteStopNavStep(target, {
+                resumeAfterSeek: resumeAfter,
+                fromRepeat: o.fromRepeat,
+            });
+            if (!o.fromRepeat) {
+                const hintTc =
+                    typeof formatTimecodeForTransport === 'function'
+                        ? formatTimecodeForTransport(target)
+                        : String(target);
+                const hintTitle = musicalGridSeekToastPrimary(target);
+                if (typeof writeLog === 'function') {
+                    writeLog('Grid: seek to ' + hintTitle + ' @ ' + hintTc);
+                }
+                flashMusicalGridSeekHint(target, hintTc);
+            }
+            return true;
+        }
+        if (
+            typeof isKeyboardScrubLightweight === 'function' &&
+            isKeyboardScrubLightweight(scrubOpt)
+        ) {
+            if (typeof applyKeyboardTransportScrubStep === 'function') {
+                applyKeyboardTransportScrubStep(target, scrubOpt);
+            } else if (typeof applyTransportUiImmediate === 'function') {
+                applyTransportUiImmediate(target, { lightweight: true, keyboardScrub: true });
+            }
+            if (
+                !o.fromRepeat &&
+                !(
+                    typeof isKeyboardTransportScrubActive === 'function' &&
+                    isKeyboardTransportScrubActive()
+                )
+            ) {
+                const hintTc =
+                    typeof formatTimecodeForTransport === 'function'
+                        ? formatTimecodeForTransport(target)
+                        : String(target);
+                const hintTitle = musicalGridSeekToastPrimary(target);
+                if (typeof writeLog === 'function') {
+                    writeLog('Grid: seek to ' + hintTitle + ' @ ' + hintTc);
+                }
+                flashMusicalGridSeekHint(target, hintTc);
+            }
+            return true;
         }
         if (typeof applyJumpTransportSeek === 'function') {
             applyJumpTransportSeek(target, resumeAfter);
@@ -3430,7 +3564,7 @@
         return true;
     }
     function resolveAdjacentMusicalGridStopSec(dir, fromSec) {
-        const stops = collectMusicalGridSnapStops();
+        const stops = collectMusicalGridNavStops();
         const n = stops.length;
         if (!n) return null;
         const idx = musicalGridNavStopIndexForCurrent(stops, fromSec);

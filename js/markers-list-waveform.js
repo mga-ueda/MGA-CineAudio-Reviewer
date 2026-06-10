@@ -1504,6 +1504,8 @@
         const navOpt = {
             focusComment: false,
             resumeAfterSeek: markerStopNavigationResumeAfterSeek(),
+            discreteStopNav: true,
+            fromRepeat: e.repeat,
         };
         if (!runAdjacentStopNavigation(dir, navOpt)) return false;
         e.preventDefault();

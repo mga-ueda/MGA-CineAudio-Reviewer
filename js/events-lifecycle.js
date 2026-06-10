@@ -30,7 +30,7 @@
             setAltKeySnapSuppressed(false);
         }
         if (typeof flushKeyboardTransportScrubIfActive === 'function') {
-            flushKeyboardTransportScrubIfActive();
+            flushKeyboardTransportScrubIfActive({ immediate: true });
         }
     });
 

@@ -447,7 +447,6 @@
     }
 
     function isTransportUiClockActive() {
-        if (transportTailPlaybackActive) return true;
         if (isTransportPlaying()) return true;
         return !!(videoMain && !videoMain.paused);
     }
@@ -499,7 +498,21 @@
     }
 
     function getTransportPlaybackClockSec() {
-        return Number.isFinite(transportPlaybackSec) ? transportPlaybackSec : 0;
+        if (!Number.isFinite(transportPlaybackSec)) return 0;
+        const clockActive =
+            typeof isTransportPlaying === 'function'
+                ? isTransportPlaying()
+                : !!(videoMain && !videoMain.paused);
+        if (
+            clockActive &&
+            Number.isFinite(transportPlaybackLastTs) &&
+            transportPlaybackLastTs > 0
+        ) {
+            return (
+                transportPlaybackSec + (performance.now() - transportPlaybackLastTs) / 1000
+            );
+        }
+        return transportPlaybackSec;
     }
 
     function refreshVideoPastEndBlackoutUi() {
@@ -776,6 +789,64 @@
         return ratio * 100;
     }
 
+    /** スクラブ中: 位置・プレイヘッド・スクロール追従のみ（描画・タイル取得より最優先） */
+    function applyTransportScrubPositionImmediate(sec, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const x =
+            typeof clampTransportSec === 'function'
+                ? clampTransportSec(sec)
+                : Number.isFinite(Number(sec))
+                  ? Number(sec)
+                  : 0;
+        transportPlaybackSec = x;
+        transportPlaybackLastTs = performance.now();
+        if (!o.deferSeekBar && typeof setTransportSec === 'function') {
+            setTransportSec(x);
+        }
+        if (
+            typeof currentTimeEl !== 'undefined' &&
+            currentTimeEl &&
+            typeof formatTimecodeForTransport === 'function'
+        ) {
+            currentTimeEl.textContent = formatTimecodeForTransport(x);
+        }
+        const pct = transportSecToTimelineLeftPercent(x);
+        const playheadWrap =
+            typeof audioWaveformPlayheadWrap !== 'undefined' && audioWaveformPlayheadWrap
+                ? audioWaveformPlayheadWrap
+                : document.getElementById('audioWaveformPlayheadWrap');
+        if (playheadWrap) {
+            playheadWrap.style.left = pct + '%';
+            if (playheadWrap.hidden) {
+                const show =
+                    (typeof videoReady === 'function' && videoReady()) ||
+                    (typeof anyExtraTrackLoadedForTimeline === 'function' &&
+                        anyExtraTrackLoadedForTimeline());
+                playheadWrap.hidden = !show;
+            }
+        }
+        const wantScrollFollow =
+            o.centerScroll !== false &&
+            typeof isWaveformTimelineAtFitZoom === 'function' &&
+            !isWaveformTimelineAtFitZoom();
+        if (wantScrollFollow) {
+            const scrollToSec =
+                typeof syncWaveformTimelineScrollToMasterSec === 'function'
+                    ? syncWaveformTimelineScrollToMasterSec
+                    : typeof centerWaveformTimelineOnMasterSec === 'function'
+                      ? centerWaveformTimelineOnMasterSec
+                      : null;
+            if (scrollToSec) {
+                scrollToSec(x, { deferVisualRefresh: true });
+            }
+        }
+        if (o.redrawWaveform && typeof scheduleWaveformScrubOverviewDraw === 'function') {
+            scheduleWaveformScrubOverviewDraw();
+        }
+    }
+
+    window.applyTransportScrubPositionImmediate = applyTransportScrubPositionImmediate;
+
     function applyTransportAtSec(t, opt) {
         if (
             opt &&
@@ -809,13 +880,18 @@
         if (
             keyboardLite &&
             typeof shouldQueueKeyboardScrubUi === 'function' &&
-            shouldQueueKeyboardScrubUi(opt) &&
-            typeof queueKeyboardScrubUiUpdate === 'function'
+            shouldQueueKeyboardScrubUi(opt)
         ) {
-            queueKeyboardScrubUiUpdate(x);
+            transportExplicitSeekTargetSec = x;
+            applyTransportScrubPositionImmediate(x);
             if (opt && opt.logInput && typeof logSeekBarInputThrottled === 'function') {
                 logSeekBarInputThrottled(x);
             }
+            return;
+        }
+        /* シークバー／波形ドラッグ中: 位置のみ（波形再描画は開始時1回・離したとき） */
+        if (scrubbing && !keyboardLite) {
+            applyTransportScrubPositionImmediate(x, { deferSeekBar: true });
             return;
         }
         transportPlaybackSec = x;
@@ -855,18 +931,24 @@
             syncExtraAudioToTransport({ force: true });
         }
         if (typeof updateAllWaveformPlayheads === 'function') {
-            const lite = scrubbing || keyboardLite;
+            const lite = keyboardLite;
             updateAllWaveformPlayheads(
                 lite
                     ? {
                           lightweight: true,
                           keyboardScrub:
-                              keyboardLite &&
                               typeof shouldQueueKeyboardScrubUi === 'function' &&
                               shouldQueueKeyboardScrubUi(opt),
                       }
                     : undefined,
             );
+        }
+        if (
+            !scrubbing &&
+            !keyboardLite &&
+            typeof syncWaveformTimelineAfterTransportSeek === 'function'
+        ) {
+            syncWaveformTimelineAfterTransportSeek(x);
         }
         if (typeof updateLaneContentEndMarkers === 'function') updateLaneContentEndMarkers();
         if (opt && opt.logInput && typeof logSeekBarInputThrottled === 'function') {
@@ -926,6 +1008,18 @@
         transportPlaybackLastTs = 0;
         clearTransportTailPlayback();
         clearVideoParkedForTail();
+    }
+
+    /** 一時停止時: 壁時計外挿を止め、シークバー位置で凍結 */
+    function freezeTransportPlaybackClock() {
+        if (typeof getTransportSec === 'function') {
+            const t = getTransportSec();
+            if (Number.isFinite(t)) transportPlaybackSec = t;
+        } else if (typeof seekBar !== 'undefined' && seekBar) {
+            const t = parseFloat(seekBar.value);
+            if (Number.isFinite(t)) transportPlaybackSec = t;
+        }
+        transportPlaybackLastTs = 0;
     }
 
     function advanceTransportTailPlaybackClock(master) {
@@ -1056,7 +1150,10 @@
     }
 
     function getTransportSecForDisplay() {
-        if (isTransportUiClockActive()) {
+        if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
+            if (typeof getTransportPlaybackClockSec === 'function') {
+                return getTransportPlaybackClockSec();
+            }
             if (Number.isFinite(transportPlaybackSec)) return transportPlaybackSec;
         }
         if (typeof getTransportSec === 'function') return getTransportSec();
@@ -1098,11 +1195,14 @@
     }
 
     /** 全波形レーン共通: 動画終端の極細・明るい赤の縦線 */
-    function drawTimelineVideoEndMarkerLine(ctx, wCss, hCss) {
+    function drawTimelineVideoEndMarkerLine(ctx, layoutW, hCss, drawOpt) {
         const videoEndSec = getVideoTimelineEndSecForWaveform();
-        if (!videoEndSec || videoEndSec <= 0 || !wCss || !hCss) return;
-        const x = masterTimelineContentWidth(wCss, videoEndSec);
-        if (x < 0.5 || x > wCss - 0.5) return;
+        if (!videoEndSec || videoEndSec <= 0 || !layoutW || !hCss) return;
+        const x = masterTimelineContentWidth(layoutW, videoEndSec);
+        const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
+        const xOff = Number.isFinite(o.timelineXOffset) ? o.timelineXOffset : 0;
+        const canvasW = Number.isFinite(o.timelineCanvasW) ? o.timelineCanvasW : layoutW;
+        if (x < xOff - 0.5 || x > xOff + canvasW + 0.5) return;
         const xi = Math.round(x) + 0.5;
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 0, 0, 0.98)';
@@ -1295,10 +1395,23 @@
         const inner =
             typeof waveformTimelineInnerEl === 'function' ? waveformTimelineInnerEl() : null;
         if (!canvas || !lanes || !inner) return null;
+        const h = lanes.clientHeight;
+        if (h < 2) return null;
+        if (typeof syncWaveformCanvasElement === 'function') {
+            const sized = syncWaveformCanvasElement(canvas, h);
+            if (!sized) return null;
+            const spec = sized.canvasSpec || {};
+            return {
+                ctx: sized.ctx,
+                w: sized.wCss,
+                h: sized.hCss,
+                layoutW: spec.contentW || sized.wCss,
+                xOffset: spec.mode === 'window' ? spec.canvasLeft || 0 : 0,
+            };
+        }
         const w =
             typeof masterTimelineWidthCss === 'function' ? masterTimelineWidthCss() : 0;
-        const h = lanes.clientHeight;
-        if (w < 2 || h < 2) return null;
+        if (w < 2) return null;
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         const bw = Math.round(w * dpr);
         const bh = Math.round(h * dpr);
@@ -1311,7 +1424,7 @@
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx: ctx, w: w, h: h };
+        return { ctx: ctx, w: w, h: h, layoutW: w, xOffset: 0 };
     }
 
     function drawSeekPlaybackTrail() {
@@ -1327,7 +1440,7 @@
             }
             return;
         }
-        const { ctx, w, h } = sized;
+        const { ctx, w, h, layoutW, xOffset } = sized;
         ctx.clearRect(0, 0, w, h);
         if (!seekTrailSamples.length) return;
 
@@ -1338,10 +1451,15 @@
         const master = getMasterTransportDurationSec();
         if (!(master > 0)) return;
 
-        const secToX = (sec) => (sec / master) * w;
+        ctx.save();
+        if (xOffset) ctx.translate(-xOffset, 0);
+        const secToX = (sec) => (sec / master) * layoutW;
         const playheadX = secToX(seekTrailSamples[seekTrailSamples.length - 1].sec);
         const trailRightX = playheadX - SEEK_TRAIL_PLAYHEAD_GAP_PX;
-        if (trailRightX <= 0) return;
+        if (trailRightX <= xOffset) {
+            ctx.restore();
+            return;
+        }
 
         for (let i = 1; i < seekTrailSamples.length; i++) {
             drawSeekTrailSegment(
@@ -1354,6 +1472,7 @@
                 h,
             );
         }
+        ctx.restore();
     }
 
     window.clearSeekPlaybackTrail = clearSeekPlaybackTrail;
@@ -1362,7 +1481,21 @@
     function updateAllWaveformPlayheads(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const keyboardScrub = !!o.keyboardScrub;
-        const lite = o.lightweight || keyboardScrub;
+        const transportUiFrame = !!o.transportUiFrame;
+        if (keyboardScrub && typeof applyTransportScrubPositionImmediate === 'function') {
+            const t =
+                typeof getTransportSecForDisplay === 'function'
+                    ? getTransportSecForDisplay()
+                    : typeof getTransportSec === 'function'
+                      ? getTransportSec()
+                      : transportPlaybackSec;
+            applyTransportScrubPositionImmediate(t, {
+                deferSeekBar: false,
+                centerScroll: true,
+            });
+            return;
+        }
+        const lite = o.lightweight || keyboardScrub || transportUiFrame;
         const t =
             typeof getTransportSecForDisplay === 'function'
                 ? getTransportSecForDisplay()
@@ -1390,8 +1523,29 @@
         if (lanes && !keyboardScrub) {
             lanes.setAttribute('aria-valuenow', String(Math.round(pct)));
         }
-        if (!lite && typeof centerWaveformTimelineOnTransport === 'function') {
-            centerWaveformTimelineOnTransport();
+        const scrollToTransport =
+            typeof syncWaveformTimelineScrollToTransport === 'function'
+                ? syncWaveformTimelineScrollToTransport
+                : typeof centerWaveformTimelineOnTransport === 'function'
+                  ? centerWaveformTimelineOnTransport
+                  : null;
+        if (scrollToTransport) {
+            if (transportUiFrame) {
+                scrollToTransport({ deferVisualRefresh: true });
+            } else if (!lite) {
+                const playbackScroll =
+                    typeof isTransportPlaying === 'function' && isTransportPlaying();
+                scrollToTransport(playbackScroll ? { deferVisualRefresh: true } : undefined);
+            } else {
+                const wantScrollFollow =
+                    !!o.timelineScroll ||
+                    (keyboardScrub &&
+                        typeof isWaveformTimelineAtFitZoom === 'function' &&
+                        !isWaveformTimelineAtFitZoom());
+                if (wantScrollFollow) {
+                    scrollToTransport({ deferVisualRefresh: true });
+                }
+            }
         }
     }
 
@@ -1416,7 +1570,14 @@
         return wCss * (contentDurSec / master);
     }
 
-    function getViewportPeakDrawRange(viewportPeaks, wCss, contentDurSec, drawOpt) {
+    function resolveTimelineLayoutW(wCss, drawOpt) {
+        const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
+        return Number.isFinite(o.timelineLayoutW) && o.timelineLayoutW > 0
+            ? o.timelineLayoutW
+            : wCss;
+    }
+
+    function getViewportPeakDrawRange(viewportPeaks, layoutW, contentDurSec, drawOpt) {
         if (!viewportPeaks || !viewportPeaks.peaks || viewportPeaks.peaks.length === 0) {
             return null;
         }
@@ -1430,8 +1591,8 @@
         const t0 = Math.max(timelineStartSec, viewportPeaks.masterStartSec);
         const t1 = Math.min(trackEndSec, viewportPeaks.masterEndSec);
         if (t1 <= t0 + 1e-9) return null;
-        const x0 = (t0 / master) * wCss;
-        const x1 = (t1 / master) * wCss;
+        const x0 = (t0 / master) * layoutW;
+        const x1 = (t1 / master) * layoutW;
         if (!(x1 > x0 + 0.5)) return null;
         return { x0, x1 };
     }
@@ -1468,7 +1629,8 @@
         fillStyle,
         drawOpt,
     ) {
-        const range = getViewportPeakDrawRange(viewportPeaks, wCss, contentDurSec, drawOpt);
+        const layoutW = resolveTimelineLayoutW(wCss, drawOpt);
+        const range = getViewportPeakDrawRange(viewportPeaks, layoutW, contentDurSec, drawOpt);
         if (!range) return;
         const vpW = range.x1 - range.x0;
         ctx.fillStyle = TIMELINE_LANE_TRACK_BG;
@@ -1490,50 +1652,97 @@
         );
     }
 
+    function drawViewportPeakTileOverlays(
+        ctx,
+        viewportPeaks,
+        layoutW,
+        hCss,
+        contentDurSec,
+        fillStyle,
+        drawOpt,
+    ) {
+        const tiles = viewportPeaks && viewportPeaks.tiles;
+        if (!tiles || !tiles.length) return;
+        for (let i = 0; i < tiles.length; i++) {
+            const tile = tiles[i];
+            if (!tile.peaks || !tile.peaks.length) continue;
+            drawViewportPeaksOnTimeline(
+                ctx,
+                {
+                    peaks: tile.peaks,
+                    masterStartSec: tile.masterStartSec,
+                    masterEndSec: tile.masterEndSec,
+                },
+                layoutW,
+                hCss,
+                contentDurSec,
+                fillStyle,
+                drawOpt,
+            );
+        }
+    }
+
     function drawPeaksForMasterTimeline(ctx, peaks, wCss, hCss, contentDurSec, fillStyle, drawOpt) {
+        const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
+        const layoutW = resolveTimelineLayoutW(wCss, o);
+        const xOffset = Number.isFinite(o.timelineXOffset) ? o.timelineXOffset : 0;
         const mid = hCss * 0.5;
+        const atFitZoom =
+            typeof isWaveformTimelineAtFitZoom === 'function' &&
+            isWaveformTimelineAtFitZoom();
+        const useTiles =
+            !atFitZoom &&
+            !!(o.viewportPeaks && o.viewportPeaks.tiles && o.viewportPeaks.tiles.length);
         ctx.clearRect(0, 0, wCss, hCss);
         ctx.fillStyle = TIMELINE_LANE_TRACK_BG;
         ctx.fillRect(0, 0, wCss, hCss);
 
+        ctx.save();
+        if (xOffset) ctx.translate(-xOffset, 0);
+
         const timelineStartSec =
-            drawOpt && Number.isFinite(drawOpt.timelineStartSec) && drawOpt.timelineStartSec > 0
-                ? drawOpt.timelineStartSec
-                : 0;
-        const startX = masterTimelineContentWidth(wCss, timelineStartSec);
+            Number.isFinite(o.timelineStartSec) && o.timelineStartSec > 0 ? o.timelineStartSec : 0;
+        const startX = masterTimelineContentWidth(layoutW, timelineStartSec);
         const vpRange =
-            drawOpt && drawOpt.viewportPeaks
-                ? getViewportPeakDrawRange(
-                      drawOpt.viewportPeaks,
-                      wCss,
-                      contentDurSec,
-                      drawOpt,
-                  )
+            !useTiles && o.viewportPeaks
+                ? getViewportPeakDrawRange(o.viewportPeaks, layoutW, contentDurSec, o)
                 : null;
 
         if (!peaks || peaks.length === 0) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(0, mid);
-            ctx.lineTo(wCss, mid);
+            ctx.moveTo(xOffset, mid);
+            ctx.lineTo(xOffset + wCss, mid);
             ctx.stroke();
-            drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
+            drawTimelineVideoEndMarkerLine(ctx, layoutW, hCss, o);
             if (vpRange) {
                 drawPeaksBarsInRange(
                     ctx,
-                    drawOpt.viewportPeaks.peaks,
+                    o.viewportPeaks.peaks,
                     vpRange.x0,
                     vpRange.x1 - vpRange.x0,
                     hCss,
                     fillStyle,
                 );
             }
+            if (useTiles) {
+                drawViewportPeakTileOverlays(
+                    ctx,
+                    o.viewportPeaks,
+                    layoutW,
+                    hCss,
+                    contentDurSec,
+                    fillStyle,
+                    o,
+                );
+            }
+            ctx.restore();
             return;
         }
 
-        const contentW = masterTimelineContentWidth(wCss, contentDurSec);
-        const drawW = contentW > 0 ? contentW : wCss;
+        const contentW = masterTimelineContentWidth(layoutW, contentDurSec);
+        const drawW = contentW > 0 ? contentW : layoutW;
         drawPeaksBarsInRange(
             ctx,
             peaks,
@@ -1541,14 +1750,24 @@
             drawW,
             hCss,
             fillStyle,
-            vpRange ? vpRange.x0 : null,
-            vpRange ? vpRange.x1 : null,
+            useTiles || !vpRange ? null : vpRange.x0,
+            useTiles || !vpRange ? null : vpRange.x1,
         );
 
-        if (vpRange) {
+        if (useTiles) {
+            drawViewportPeakTileOverlays(
+                ctx,
+                o.viewportPeaks,
+                layoutW,
+                hCss,
+                contentDurSec,
+                fillStyle,
+                o,
+            );
+        } else if (vpRange) {
             drawPeaksBarsInRange(
                 ctx,
-                drawOpt.viewportPeaks.peaks,
+                o.viewportPeaks.peaks,
                 vpRange.x0,
                 vpRange.x1 - vpRange.x0,
                 hCss,
@@ -1559,11 +1778,12 @@
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, mid);
-        ctx.lineTo(wCss, mid);
+        ctx.moveTo(xOffset, mid);
+        ctx.lineTo(xOffset + wCss, mid);
         ctx.stroke();
 
-        drawTimelineVideoEndMarkerLine(ctx, wCss, hCss);
+        drawTimelineVideoEndMarkerLine(ctx, layoutW, hCss, o);
+        ctx.restore();
     }
 
     window.drawPeaksBarsInRange = drawPeaksBarsInRange;
