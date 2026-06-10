@@ -330,9 +330,95 @@
 
     function appendSwapUnitMusicalMetaToEl(track, el, ref, slotsOpt) {
         if (!isMusicalGridPhraseFillVisibleSafe()) return;
-        if (typeof formatSwapUnitStoredMusicalMetaText !== 'function') return;
-        const metaText = formatSwapUnitStoredMusicalMetaText(track, ref, { slots: slotsOpt });
-        appendPhraseMusicalMetaLabelEl(el, metaText);
+        if (typeof formatSwapUnitStoredMusicalMetaText === 'function') {
+            const metaText = formatSwapUnitStoredMusicalMetaText(track, ref, { slots: slotsOpt });
+            appendPhraseMusicalMetaLabelEl(el, metaText);
+        }
+        appendChainNextRehearsalMarkLabelToEl(track, el, ref);
+    }
+
+    function resolveContentPhraseSlotIndexForSwapUnitRef(track, ref, phraseSlotFallback) {
+        if (ref && Number.isFinite(ref.segmentIndex) && ref.segmentIndex >= 0) {
+            return ref.segmentIndex | 0;
+        }
+        if (
+            ref &&
+            Number.isFinite(ref.silentGapIndex) &&
+            typeof collectTrackSilentGaps === 'function'
+        ) {
+            const gaps = collectTrackSilentGaps(track);
+            const gap = gaps && gaps[ref.silentGapIndex | 0];
+            if (gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
+                return gap.phraseIndex | 0;
+            }
+        }
+        if (phraseSlotFallback != null && phraseSlotFallback >= 0) {
+            return phraseSlotFallback | 0;
+        }
+        return null;
+    }
+
+    function appendChainNextRehearsalMarkLabelToEl(track, el, ref) {
+        if (!el || !isMusicalGridPhraseFillVisibleSafe()) return;
+        const ranges =
+            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
+                ? getPhraseGroupRangesForRegionRehearsalMarks()
+                : [];
+        if (!ranges.length) return;
+
+        let phraseSlotFallback = null;
+        if (ref && Number.isFinite(ref.segmentIndex) && ref.segmentIndex >= 0) {
+            const si = ref.segmentIndex | 0;
+            if (
+                typeof phraseSlotIndexAtRegionInSec === 'function' &&
+                typeof getSegmentRegionTimelineIn === 'function'
+            ) {
+                phraseSlotFallback = phraseSlotIndexAtRegionInSec(
+                    getSegmentRegionTimelineIn(track, si),
+                );
+            }
+        } else if (
+            ref &&
+            Number.isFinite(ref.silentGapIndex) &&
+            typeof collectTrackSilentGaps === 'function'
+        ) {
+            const gap = collectTrackSilentGaps(track)[ref.silentGapIndex | 0];
+            if (gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
+                phraseSlotFallback = gap.phraseIndex | 0;
+            }
+        }
+
+        const contentPhraseIdx = resolveContentPhraseSlotIndexForSwapUnitRef(
+            track,
+            ref,
+            phraseSlotFallback,
+        );
+        if (contentPhraseIdx == null) return;
+
+        const nextMark = chainSuccessorRehearsalMarkDisplay(contentPhraseIdx, ranges.length);
+        if (!nextMark) return;
+
+        const nextEl = document.createElement('span');
+        nextEl.className =
+            'audio-waveform-lane__phrase-meta__label audio-waveform-lane__phrase-meta__label--chain-next';
+        nextEl.textContent = nextMark === 'End' ? 'End' : 'next ' + nextMark;
+        nextEl.title =
+            nextMark === 'End'
+                ? '大元の順序ではここが終端（End）'
+                : '大元の順序ではこのリージョンの次に ' + nextMark + ' に繋がる';
+        nextEl.setAttribute('aria-hidden', 'true');
+        el.appendChild(nextEl);
+    }
+
+    /** 大元チェーン上、このコンテンツの直後に繋がる練習番号（末尾は End） */
+    function chainSuccessorRehearsalMarkDisplay(contentPhraseSlotIndex, phraseSlotCount) {
+        const nextIdx = (contentPhraseSlotIndex | 0) + 1;
+        if (nextIdx < 0 || nextIdx >= (phraseSlotCount | 0)) return 'End';
+        const markInternal = formatRehearsalMarkForPhraseSlot(nextIdx);
+        if (typeof rehearsalMarkDisplayLabel === 'function') {
+            return rehearsalMarkDisplayLabel(markInternal);
+        }
+        return markInternal === '_' ? '' : markInternal;
     }
 
     function appendPhraseRehearsalMarkEls(rowEl, ranges, master) {

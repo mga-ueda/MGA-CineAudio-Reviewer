@@ -2355,13 +2355,6 @@
             -webkit-user-select: none;
             white-space: nowrap;
         }
-        /* Phrase 着色 OFF — 練習番号（A B …）・Tempo/Sig メタは非表示 */
-        .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
-            .audio-waveform-lane__rehearsal-mark__label,
-        .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
-            .audio-waveform-lane__phrase-meta__label {
-            display: none !important;
-        }
         .audio-waveform-lane__phrase-meta__label {
             position: absolute;
             left: 0.12rem;
@@ -2386,10 +2379,31 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .audio-waveform-lane__phrase-meta__label--chain-next {
+            left: auto;
+            right: 0.12rem;
+            text-align: right;
+        }
+        /* Phrase 着色 OFF — 練習番号（A B …）・Tempo/Sig メタは非表示 */
+        .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
+            .audio-waveform-lane__rehearsal-mark__label,
+        .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
+            .audio-waveform-lane__phrase-meta__label {
+            display: none !important;
+        }
         .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-meta__label {
             left: 0.08rem;
             bottom: 0.08rem;
             font-size: 0.42rem;
+        }
+        .audio-waveform-lane__rehearsal-mark--narrow
+            .audio-waveform-lane__phrase-meta__label--chain-next,
+        .audio-waveform-lane__playback-region--narrow
+            .audio-waveform-lane__phrase-meta__label--chain-next,
+        .audio-waveform-lane__playback-region--phrase-narrow
+            .audio-waveform-lane__phrase-meta__label--chain-next {
+            left: auto;
+            right: 0.08rem;
         }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__phrase-meta__label {
             font-size: 0.48rem;
