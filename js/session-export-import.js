@@ -104,6 +104,54 @@
         return 'monitor: (default)';
     }
 
+    function musicalGridVisibilityPrefsForExport(prefs) {
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        let musicalGridVisible = false;
+        let musicalGridPhraseFillVisible = false;
+        if (typeof getMusicalGridVisible === 'function') {
+            musicalGridVisible = getMusicalGridVisible();
+        } else if (typeof p.musicalGridVisible === 'boolean') {
+            musicalGridVisible = p.musicalGridVisible;
+        }
+        if (typeof getMusicalGridPhraseFillVisible === 'function') {
+            musicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible();
+        } else if (typeof p.musicalGridPhraseFillVisible === 'boolean') {
+            musicalGridPhraseFillVisible = p.musicalGridPhraseFillVisible;
+        }
+        return { musicalGridVisible, musicalGridPhraseFillVisible };
+    }
+
+    function describeMusicalGridVisibilityPrefs(p) {
+        const pref = p && typeof p === 'object' ? p : {};
+        const tempo =
+            typeof pref.musicalGridVisible === 'boolean'
+                ? pref.musicalGridVisible
+                    ? 'ON'
+                    : 'OFF'
+                : '?';
+        const phrase =
+            typeof pref.musicalGridPhraseFillVisible === 'boolean'
+                ? pref.musicalGridPhraseFillVisible
+                    ? 'ON'
+                    : 'OFF'
+                : '?';
+        return 'Tempo/Sig ' + tempo + ', Phrase ' + phrase;
+    }
+
+    function applyMusicalGridVisibilityPrefs(p) {
+        const pref = p && typeof p === 'object' ? p : {};
+        const importOpt = { silent: true, persist: false, skipRegionRefresh: true };
+        if (typeof pref.musicalGridVisible === 'boolean' && typeof setMusicalGridVisible === 'function') {
+            setMusicalGridVisible(pref.musicalGridVisible, importOpt);
+        }
+        if (
+            typeof pref.musicalGridPhraseFillVisible === 'boolean' &&
+            typeof setMusicalGridPhraseFillVisible === 'function'
+        ) {
+            setMusicalGridPhraseFillVisible(pref.musicalGridPhraseFillVisible, importOpt);
+        }
+    }
+
     function reviewMonitorPrefsForExport() {
         if (typeof getMonitorUiPersistSnapshot !== 'function') return null;
         const snap = getMonitorUiPersistSnapshot();
@@ -184,6 +232,9 @@
             writeLog('Export Review: playback region off');
         }
         writeLog('Export Review: ' + describeLaneUi(manifest.prefs && manifest.prefs.laneUi));
+        writeLog(
+            'Export Review: ' + describeMusicalGridVisibilityPrefs(manifest.prefs),
+        );
         writeLog('Export Review: ' + describeMonitorPrefs(manifest.monitorPrefs));
         logMixSnapshotDetails(sess && sess.mix, 'Export Review');
         if (manifest.timecodeOverlay) {
@@ -217,6 +268,9 @@
             writeLog('Import Review: package app version ' + manifest.appVersion);
         }
         writeLog('Import Review: ' + describeLaneUi(manifest.prefs && manifest.prefs.laneUi));
+        writeLog(
+            'Import Review: ' + describeMusicalGridVisibilityPrefs(manifest.prefs),
+        );
         writeLog('Import Review: ' + describeMonitorPrefs(manifest.monitorPrefs));
         if (manifest.timecodeOverlay) {
             const o = manifest.timecodeOverlay;
@@ -616,6 +670,7 @@
             sessionRow.mix = getMixPersistSnapshot();
         }
         const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
+        const gridVisibility = musicalGridVisibilityPrefsForExport(prefs);
         /* マーカー HIDE 状態はエクスポートしない（表示のオンオフはセッション内のみ） */
         const manifest = {
             format: EXPORT_FORMAT,
@@ -632,6 +687,8 @@
                         : typeof getMusicalGridPersistSnapshot === 'function'
                           ? getMusicalGridPersistSnapshot()
                           : prefs.musicalGrid,
+                musicalGridVisible: gridVisibility.musicalGridVisible,
+                musicalGridPhraseFillVisible: gridVisibility.musicalGridPhraseFillVisible,
             },
             monitorPrefs: reviewMonitorPrefsForExport(),
             timecodeOverlay:
@@ -841,8 +898,9 @@
                 : null;
         if (mg && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(mg);
-            if (typeof writePrefs === 'function') writePrefs();
         }
+        applyMusicalGridVisibilityPrefs(p);
+        if (typeof writePrefs === 'function') writePrefs();
         const rm =
             manifest.session && typeof manifest.session.rehearsalMark === 'object'
                 ? manifest.session.rehearsalMark

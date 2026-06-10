@@ -154,6 +154,15 @@
                 const laneErr = validateLaneUiSnap(prefs.laneUi, 'prefs.laneUi');
                 if (laneErr) return { valid: false, reason: 'invalid prefs.laneUi: ' + laneErr };
             }
+            if ('musicalGridVisible' in prefs && typeof prefs.musicalGridVisible !== 'boolean') {
+                return { valid: false, reason: 'invalid prefs.musicalGridVisible' };
+            }
+            if (
+                'musicalGridPhraseFillVisible' in prefs &&
+                typeof prefs.musicalGridPhraseFillVisible !== 'boolean'
+            ) {
+                return { valid: false, reason: 'invalid prefs.musicalGridPhraseFillVisible' };
+            }
         }
 
         if (manifest.session != null) {
