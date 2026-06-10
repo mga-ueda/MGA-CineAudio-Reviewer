@@ -1565,6 +1565,9 @@
             (anchor.point ? ' seek-bar-marker__feedback--point' : ' seek-bar-marker__feedback--range');
         span.textContent = label;
         if (titleText) span.title = titleText;
+        if (anchor.markerId) {
+            span.dataset.markerId = String(anchor.markerId);
+        }
         if (anchor.point) {
             span.style.left = anchor.leftPct + '%';
             if (Number.isFinite(anchor.pointSec)) {
@@ -1630,6 +1633,7 @@
         const styleTarget = compositeRoot || layerEl;
         const laneH =
             parseFloat(getComputedStyle(styleTarget).getPropertyValue('--wave-lane-h')) || 52;
+        const laneCount = markerFeedbackLaneCount(layerEl);
         const inner =
             typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner
                 ? audioWaveformLanesInner
@@ -1645,7 +1649,7 @@
             (compositeRoot && compositeRoot.clientWidth) ||
             layerEl.clientWidth ||
             0;
-        return { laneH, layerH: laneH, layerW, lanes };
+        return { laneH, layerH: laneH * Math.max(1, laneCount), layerW, lanes };
     }
 
     /** 矩形が接触していなくても、指定ギャップ未満なら重なり扱い */
@@ -1700,6 +1704,73 @@
 
     function markerFeedbackLabelTextBoxesOverlap(a, b, padX, padY) {
         return markerFeedbackLabelBoxOverlap(a, b, padX, padY);
+    }
+
+    function markerFeedbackSecNearlyEqual(a, b) {
+        const frame = markerOneFrameSec();
+        const eps = Math.max(1e-6, frame * 0.5);
+        return Math.abs(Number(a) - Number(b)) <= eps;
+    }
+
+    function markerFeedbackPreassignRowsByBounds(items) {
+        const ordered = items
+            .slice()
+            .sort((a, b) => (a.listIdx | 0) - (b.listIdx | 0));
+        const groups = [];
+        for (let i = 0; i < ordered.length; i++) {
+            const it = ordered[i];
+            if (it.isPoint) continue;
+            if (!Number.isFinite(it.startSec) || !Number.isFinite(it.endSec)) continue;
+            let group = null;
+            for (let g = 0; g < groups.length; g++) {
+                const gr = groups[g];
+                if (
+                    markerFeedbackSecNearlyEqual(it.startSec, gr.startSec) &&
+                    markerFeedbackSecNearlyEqual(it.endSec, gr.endSec)
+                ) {
+                    group = gr;
+                    break;
+                }
+            }
+            if (!group) {
+                group = {
+                    startSec: it.startSec,
+                    endSec: it.endSec,
+                    count: 0,
+                };
+                groups.push(group);
+            }
+            it.minRowForBounds = group.count;
+            group.count += 1;
+        }
+    }
+
+    function markerFeedbackSameRangeBounds(a, b) {
+        if (!a || !b || a.isPoint || b.isPoint) return false;
+        if (
+            !Number.isFinite(a.startSec) ||
+            !Number.isFinite(a.endSec) ||
+            !Number.isFinite(b.startSec) ||
+            !Number.isFinite(b.endSec)
+        ) {
+            return false;
+        }
+        return (
+            markerFeedbackSecNearlyEqual(a.startSec, b.startSec) &&
+            markerFeedbackSecNearlyEqual(a.endSec, b.endSec)
+        );
+    }
+
+    /** 同一 In/Out の範囲マーカーは段をずらして両方のコメントを表示 */
+    function markerFeedbackMinRowForSameRangeBounds(it, rangePlaced) {
+        let minRow = 0;
+        if (!rangePlaced || !rangePlaced.length) return 0;
+        for (let i = 0; i < rangePlaced.length; i++) {
+            const prev = rangePlaced[i];
+            if (!markerFeedbackSameRangeBounds(it, prev)) continue;
+            minRow = Math.max(minRow, (prev.assignedRow | 0) + 1);
+        }
+        return minRow;
     }
 
     /** 範囲コメント（一覧側ラベル）が点マーカーコメントと横重なり時は下段へ */
@@ -1758,38 +1829,73 @@
         return null;
     }
 
+    function markerFeedbackApplyItemTopPx(it, baseTop, rowStep, minTop, maxTop, maxDownRows) {
+        const top = Math.min(
+            maxTop,
+            Math.max(
+                minTop,
+                markerFeedbackTopForRow(
+                    it.assignedRow || 0,
+                    baseTop,
+                    rowStep,
+                    minTop,
+                    maxTop,
+                    maxDownRows,
+                ),
+            ),
+        );
+        it.topPx = top;
+        it.span.style.top = top + 'px';
+        it.span.style.zIndex = String(10 + (it.assignedRow | 0));
+    }
+
     /** 1レーン帯内。横はマーカーと同じ % 固定。重なり時は下へ段を増やす。 */
-    function layoutMarkerFeedbackLabels(layerEl, spans) {
+    function layoutMarkerFeedbackLabels(layerEl, spans, opt) {
         if (!layerEl || !spans || !spans.length) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
         layerEl.hidden = false;
-        const frag = document.createDocumentFragment();
-        for (let i = 0; i < spans.length; i++) {
-            frag.appendChild(spans[i]);
+        const alreadyMounted = spans.every((s) => s.parentElement === layerEl);
+        if (!alreadyMounted) {
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < spans.length; i++) {
+                frag.appendChild(spans[i]);
+            }
+            layerEl.appendChild(frag);
         }
-        layerEl.appendChild(frag);
 
         const metrics = markerFeedbackLaneMetrics(layerEl);
         const layerW = Math.max(1, layerEl.clientWidth || metrics.layerW || 0);
         const layerH = metrics.layerH;
-        if (layerW <= 0 || layerH <= 0) return;
+        if (layerW <= 0 || layerH <= 0) {
+            if (!o.deferred) {
+                requestAnimationFrame(() => {
+                    layoutMarkerFeedbackLabels(layerEl, spans, { deferred: true });
+                });
+            }
+            return;
+        }
 
-        const firstRect = spans[0].getBoundingClientRect();
-        const labelH = Math.max(10, firstRect.height || spans[0].offsetHeight || 14);
-        const fontPx = parseFloat(getComputedStyle(spans[0]).fontSize) || 9;
-        const lh = parseFloat(getComputedStyle(spans[0]).lineHeight);
+        let labelH = 14;
+        let measureSpan = spans[0];
+        for (let si = 0; si < spans.length; si++) {
+            const r = spans[si].getBoundingClientRect();
+            const h = Math.max(10, r.height || spans[si].offsetHeight || 14);
+            if (h >= labelH) {
+                labelH = h;
+                measureSpan = spans[si];
+            }
+        }
+        const fontPx = parseFloat(getComputedStyle(measureSpan).fontSize) || 9;
+        const lh = parseFloat(getComputedStyle(measureSpan).lineHeight);
         const linePx = lh > 3 ? lh : lh * fontPx;
-        const rowStep = Math.max(labelH + 5, linePx + 8);
         const padX = 10;
-        const padY = 8;
+        const padY = 10;
+        const rowStep = Math.max(labelH + padY + 4, linePx + 10);
         const baseTop = labelH * 0.5 + 3;
         const minTop = labelH * 0.5 + 1;
         const maxTop = layerH - labelH * 0.5 - 1;
         const maxDownRows =
             rowStep > 0 ? Math.max(0, Math.floor((maxTop - baseTop) / rowStep)) : 0;
-        const maxRow = Math.max(
-            maxDownRows + Math.ceil((baseTop - minTop) / rowStep) + 2,
-            24,
-        );
 
         const items = [];
         const rangeBands = [];
@@ -1808,6 +1914,7 @@
                 : parseFloat(span.style.left) || 0;
             const item = {
                 span: span,
+                listIdx: i,
                 height: Math.max(10, r.height || span.offsetHeight || labelH),
                 textW: Math.max(r.width, span.offsetWidth || 0, span.scrollWidth || 0, 18),
                 anchorPct: anchorPct,
@@ -1819,29 +1926,41 @@
                 startSec: Number.isFinite(rangeStartSec) ? rangeStartSec : NaN,
                 endSec: Number.isFinite(rangeEndSec) ? rangeEndSec : NaN,
                 rangeBands: rangeBands,
+                minRowForBounds: 0,
                 assignedRow: 0,
                 topPx: baseTop,
             };
             items.push(item);
             if (isRange) rangeBands.push(item);
         }
+        markerFeedbackPreassignRowsByBounds(items);
         items.sort((a, b) => a.anchorPct - b.anchorPct);
         const pointItems = items.filter((it) => it.isPoint);
         const rangeItems = items.filter((it) => !it.isPoint);
         const placementOrder = pointItems.concat(rangeItems);
+        const maxRow = Math.max(
+            maxDownRows + Math.ceil((baseTop - minTop) / rowStep) + 4,
+            items.length * 3,
+            48,
+        );
 
         const pointPlaced = [];
+        const rangePlaced = [];
         for (let i = 0; i < placementOrder.length; i++) {
             const it = placementOrder[i];
             let row = 0;
             if (!it.isPoint) {
-                row = markerFeedbackMinRowForRangeBelowPoints(
-                    it,
-                    pointPlaced,
-                    layerW,
-                    baseTop,
-                    padX,
-                    padY,
+                row = Math.max(
+                    markerFeedbackMinRowForRangeBelowPoints(
+                        it,
+                        pointPlaced,
+                        layerW,
+                        baseTop,
+                        padX,
+                        padY,
+                    ),
+                    markerFeedbackMinRowForSameRangeBounds(it, rangePlaced),
+                    it.minRowForBounds | 0,
                 );
             }
             for (;;) {
@@ -1857,10 +1976,11 @@
                 const candidate = markerFeedbackLabelTextBox(it, layerW, it.topPx);
                 let hit = false;
                 for (let j = 0; j < i; j++) {
+                    const prevIt = placementOrder[j];
                     const prev = markerFeedbackLabelTextBox(
-                        placementOrder[j],
+                        prevIt,
                         layerW,
-                        placementOrder[j].topPx,
+                        prevIt.topPx,
                     );
                     if (markerFeedbackLabelBoxOverlap(candidate, prev, padX, padY)) {
                         hit = true;
@@ -1870,6 +1990,8 @@
                 if (!hit) {
                     if (it.isPoint) {
                         pointPlaced.push(it);
+                    } else {
+                        rangePlaced.push(it);
                     }
                     break;
                 }
@@ -1886,27 +2008,54 @@
                     );
                     if (it.isPoint) {
                         pointPlaced.push(it);
+                    } else {
+                        rangePlaced.push(it);
                     }
                     break;
                 }
             }
         }
 
-        for (let pass = 0; pass < 48; pass++) {
+        for (let pass = 0; pass < 96; pass++) {
             const pair = markerFeedbackLabelsOverlap(items, layerW, padX, padY);
             if (!pair) break;
             let bumpIdx = pair.b;
             const otherIdx = pair.a;
-            if (items[bumpIdx].isPoint && !items[otherIdx].isPoint) {
+            if (
+                !items[bumpIdx].isPoint &&
+                !items[otherIdx].isPoint &&
+                markerFeedbackSameRangeBounds(items[bumpIdx], items[otherIdx])
+            ) {
+                bumpIdx =
+                    (items[bumpIdx].listIdx | 0) >= (items[otherIdx].listIdx | 0)
+                        ? bumpIdx
+                        : otherIdx;
+            } else if (items[bumpIdx].isPoint && !items[otherIdx].isPoint) {
                 bumpIdx = pair.a;
             }
             const bump = items[bumpIdx];
             const anchor = items[bumpIdx === pair.b ? pair.a : pair.b];
             let nextRow = Math.max(bump.assignedRow || 0, anchor.assignedRow || 0) + 1;
             if (nextRow <= bump.assignedRow) nextRow = bump.assignedRow + 1;
-            bump.assignedRow = Math.min(nextRow, maxRow);
-            applyMarkerFeedbackLabelRows(
-                items,
+            bump.assignedRow = Math.max(
+                bump.minRowForBounds | 0,
+                Math.min(nextRow, maxRow),
+            );
+            for (let ri = 0; ri < items.length; ri++) {
+                markerFeedbackApplyItemTopPx(
+                    items[ri],
+                    baseTop,
+                    rowStep,
+                    minTop,
+                    maxTop,
+                    maxDownRows,
+                );
+            }
+        }
+
+        for (let i = 0; i < items.length; i++) {
+            markerFeedbackApplyItemTopPx(
+                items[i],
                 baseTop,
                 rowStep,
                 minTop,
@@ -1914,20 +2063,12 @@
                 maxDownRows,
             );
         }
-
-        applyMarkerFeedbackLabelRows(
-            items,
-            baseTop,
-            rowStep,
-            minTop,
-            maxTop,
-            maxDownRows,
-        );
         for (let i = 0; i < items.length; i++) {
             const it = items[i];
             const pct = markerFeedbackAnchorPct(it);
             it.span.style.left = pct + '%';
             it.span.style.top = it.topPx + 'px';
+            it.span.style.zIndex = String(10 + (it.assignedRow | 0));
             if (it.isPoint) {
                 it.span.style.transform = 'translate(0, -50%)';
             } else {
@@ -2042,6 +2183,7 @@
                                 widthPct: widthPct,
                                 startSec: m.startSec,
                                 endSec: m.endSec,
+                                markerId: m.id,
                             },
                         );
                         if (span) feedbackLabelSpans.push(span);

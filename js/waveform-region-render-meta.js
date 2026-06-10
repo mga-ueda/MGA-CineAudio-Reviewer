@@ -29,6 +29,7 @@
     }
 
     const REHEARSAL_MARKS_OVERLAY_ID = 'extraAudioRehearsalMarksOverlay';
+    const REGION_META_OVERLAY_ID = 'extraAudioRegionMetaOverlay';
 
     function purgeStaleLaneRehearsalMarks(lane) {
         if (!lane || typeof lane.querySelectorAll !== 'function') return;
@@ -92,30 +93,187 @@
         return el;
     }
 
+    function syncRegionMetaOverlayGridPlacement(overlayEl) {
+        syncRehearsalMarksOverlayGridPlacement(overlayEl);
+    }
+
+    function getRegionMetaOverlayEl() {
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+        if (!inner) return null;
+        let el = document.getElementById(REGION_META_OVERLAY_ID);
+        if (!el) {
+            el = document.createElement('div');
+            el.id = REGION_META_OVERLAY_ID;
+            el.className = 'audio-waveform-lane__region-meta--lanes-overlay';
+            el.hidden = true;
+            el.setAttribute('aria-hidden', 'true');
+        }
+        syncRegionMetaOverlayGridPlacement(el);
+        return el;
+    }
+
+    function positionRegionMetaSlotEl(el, track, segmentIndex) {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!el || !(master > 0)) return;
+        const trackStart =
+            typeof getTrackTimelineStartSec === 'function'
+                ? getTrackTimelineStartSec(track)
+                : 0;
+        const inTransport = Math.max(
+            trackStart,
+            getSegmentRegionTimelineIn(track, segmentIndex),
+        );
+        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        const leftPct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(inTransport)
+                : (inTransport / master) * 100;
+        const rightPct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(outTransport)
+                : (outTransport / master) * 100;
+        const widthPct = Math.max(0.05, rightPct - leftPct);
+        el.style.left = leftPct + '%';
+        el.style.width = widthPct + '%';
+        el.classList.toggle(
+            'audio-waveform-lane__region-meta-slot--narrow',
+            widthPct > 0 &&
+                regionOverlayWidthPxFromPct(
+                    widthPct,
+                    getRegionOverlayTimelineMetrics()?.scrubW,
+                ) < REGION_OVERLAY_NARROW_PX,
+        );
+    }
+
+    function buildRegionMetaSlotEl(track, segmentIndex) {
+        const pitchText =
+            typeof formatRegionPitchDisplay === 'function'
+                ? formatRegionPitchDisplay(getSegmentPitchSemitones(track, segmentIndex))
+                : '';
+        const gainText =
+            typeof formatRegionGainDbDisplay === 'function'
+                ? formatRegionGainDbDisplay(getSegmentGainDb(track, segmentIndex))
+                : '';
+        if (!pitchText && !gainText) return null;
+
+        const slotEl = document.createElement('div');
+        slotEl.className = 'audio-waveform-lane__region-meta-slot';
+        slotEl.dataset.segmentIndex = String(segmentIndex);
+
+        if (pitchText) {
+            const pitchLabel = document.createElement('span');
+            pitchLabel.className = 'audio-waveform-lane__playback-region__pitch';
+            pitchLabel.textContent = pitchText;
+            pitchLabel.setAttribute('aria-hidden', 'true');
+            slotEl.appendChild(pitchLabel);
+        }
+        if (gainText) {
+            const gainLabel = document.createElement('span');
+            gainLabel.className = 'audio-waveform-lane__playback-region__gain-db';
+            gainLabel.textContent = gainText;
+            gainLabel.setAttribute('aria-hidden', 'true');
+            slotEl.appendChild(gainLabel);
+        }
+        positionRegionMetaSlotEl(slotEl, track, segmentIndex);
+        return slotEl;
+    }
+
+    function buildRegionMetaRowEl(track, lane) {
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        if (!segments.length) return null;
+
+        const rowEl = document.createElement('div');
+        rowEl.className = 'audio-waveform-lane__region-meta-row';
+        rowEl.dataset.extraSlot = String(track.slot);
+        rowEl.style.top = rehearsalMarksRowTopPx(lane) + 'px';
+        rowEl.style.height = rehearsalMarksRowHeightPx(lane) + 'px';
+
+        const regionsContainer =
+            typeof getPlaybackRegionsContainerEl === 'function'
+                ? getPlaybackRegionsContainerEl(track)
+                : null;
+        rowEl.classList.toggle(
+            'audio-waveform-lane__region-meta-row--dense-boundaries',
+            !!(
+                regionsContainer &&
+                regionsContainer.classList.contains(
+                    'audio-waveform-lane__playback-regions--dense-boundaries',
+                )
+            ),
+        );
+
+        for (let i = 0; i < segments.length; i++) {
+            const slotEl = buildRegionMetaSlotEl(track, i);
+            if (slotEl) rowEl.appendChild(slotEl);
+        }
+        return rowEl.childElementCount ? rowEl : null;
+    }
+
+    function refreshAllRegionPitchGainOverlay() {
+        const overlay = getRegionMetaOverlayEl();
+        if (!overlay) return;
+
+        const phraseFillOn = isMusicalGridPhraseFillVisibleSafe();
+        overlay.replaceChildren();
+        if (!phraseFillOn) {
+            overlay.hidden = true;
+            return;
+        }
+
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        let anyVisible = false;
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const lane = document.getElementById('extraAudioLane' + slot);
+            const meta = document.getElementById('extraAudioMeta' + slot);
+            if (!lane || lane.hidden || (meta && meta.hidden)) continue;
+            if (typeof isTrackRegionActive === 'function' && !isTrackRegionActive(track)) {
+                continue;
+            }
+            const rowEl = buildRegionMetaRowEl(track, lane);
+            if (!rowEl) continue;
+            overlay.appendChild(rowEl);
+            anyVisible = true;
+        }
+        overlay.hidden = !anyVisible;
+    }
+
+    function readWaveLaneHeightPx() {
+        if (typeof getWaveformLaneHeightCss === 'function') {
+            const h = getWaveformLaneHeightCss();
+            if (h > 0) return h;
+        }
+        if (typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite) {
+            const h = parseFloat(
+                getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
+            );
+            if (h > 0) return h;
+        }
+        return 92;
+    }
+
     function rehearsalMarksRowTopPx(lane) {
         if (!lane) return 0;
+        const laneH = readWaveLaneHeightPx();
+        const row = parseInt(String(lane.style.gridRow || '1'), 10);
+        if (Number.isFinite(row) && row >= 1) {
+            return (row - 1) * laneH;
+        }
         if (typeof lane.offsetTop === 'number' && Number.isFinite(lane.offsetTop)) {
             return Math.max(0, lane.offsetTop);
         }
-        const row = parseInt(String(lane.style.gridRow || '1'), 10);
-        const laneH =
-            typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite
-                ? parseFloat(
-                      getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
-                  ) || 92
-                : 92;
-        return (Math.max(1, row) - 1) * laneH;
+        return 0;
     }
 
     function rehearsalMarksRowHeightPx(lane) {
+        const laneH = readWaveLaneHeightPx();
+        if (laneH > 0) return laneH;
         if (lane && lane.offsetHeight > 0) return lane.offsetHeight;
-        if (typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite) {
-            return (
-                parseFloat(
-                    getComputedStyle(audioWaveformComposite).getPropertyValue('--wave-lane-h'),
-                ) || 92
-            );
-        }
         return 92;
     }
 
@@ -219,6 +377,7 @@
 
     function syncTrackPhraseRehearsalMarks(_track) {
         refreshAllRegionRehearsalMarkLabels();
+        refreshAllRegionPitchGainOverlay();
     }
 
     function refreshAllRegionRehearsalMarkLabels() {
@@ -262,6 +421,7 @@
 
     function refreshAllRegionMusicalMetaPresentation() {
         refreshAllRegionRehearsalMarkLabels();
+        refreshAllRegionPitchGainOverlay();
         if (typeof getExtraTrackCount !== 'function' || typeof updateTrackRegionOverlays !== 'function') {
             return;
         }
@@ -276,6 +436,7 @@
     window.formatRehearsalMarkForPhraseSlot = formatRehearsalMarkForPhraseSlot;
     window.formatRegionRehearsalMarkLabel = formatRegionRehearsalMarkLabel;
     window.refreshAllRegionRehearsalMarkLabels = refreshAllRegionRehearsalMarkLabels;
+    window.refreshAllRegionPitchGainOverlay = refreshAllRegionPitchGainOverlay;
     window.syncRehearsalMarksOverlayGridPlacement = syncRehearsalMarksOverlayGridPlacement;
     window.refreshAllRegionMusicalMetaPresentation = refreshAllRegionMusicalMetaPresentation;
     const REGION_BOUNDARY_CLUSTER_PX = 12;

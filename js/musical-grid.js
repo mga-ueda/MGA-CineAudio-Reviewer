@@ -1101,7 +1101,7 @@
         return out;
     }
 
-    /** フレーズスロット index → 練習番号表示（P. Offset 時の番号なしは空文字） */
+    /** フレーズスロット index → 練習番号表示（R. Offset 時の番号なしは空文字） */
     function phraseRehearsalDisplayMarkForSlot(phraseSlotIndex) {
         if (typeof rehearsalMarkLabelForPhraseSlotIndex === 'function') {
             const internal = rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex);
@@ -3232,7 +3232,7 @@
         return null;
     }
 
-    /** 境界の後ろ側（右／先）に属する練習番号（A/B/…）。P. Offset 時の番号なしは空文字 */
+    /** 境界の後ろ側（右／先）に属する練習番号（A/B/…）。R. Offset 時の番号なしは空文字 */
     function phraseRehearsalMarkAfterGridBoundarySec(sec) {
         const range = phraseRangeAfterGridBoundarySec(sec);
         return range ? phraseRehearsalDisplayMarkForSlot(range.paletteIndex) : '';

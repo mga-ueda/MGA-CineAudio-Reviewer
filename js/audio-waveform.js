@@ -610,27 +610,30 @@
             for (let i = 0; i < extraTrackSlotCount(); i++) {
                 laneIds.push('extraAudioLane' + i);
             }
-            let firstTop = 0;
-            for (let i = 0; i < laneIds.length; i++) {
-                const lane = document.getElementById(laneIds[i]);
-                if (lane && !lane.hidden) {
-                    firstTop = lane.offsetTop;
-                    break;
-                }
-            }
-            audioWaveformComposite.style.setProperty('--marker-labels-top', firstTop + 'px');
             if (audioWaveformMarkerLabels) {
-                audioWaveformMarkerLabels.style.top = firstTop + 'px';
-                audioWaveformMarkerLabels.style.height = laneH + 'px';
+                audioWaveformMarkerLabels.style.top = '0px';
+                audioWaveformMarkerLabels.style.height = laneCount * laneH + 'px';
             }
+            const refreshLaneOverlays = () => {
+                if (typeof refreshAllRegionMusicalMetaPresentation === 'function') {
+                    refreshAllRegionMusicalMetaPresentation();
+                } else if (typeof refreshAllRegionPitchGainOverlay === 'function') {
+                    refreshAllRegionPitchGainOverlay();
+                    if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+                        refreshAllRegionRehearsalMarkLabels();
+                    }
+                }
+                if (typeof renderAudioWaveformMarkers === 'function') {
+                    renderAudioWaveformMarkers();
+                }
+            };
+            refreshLaneOverlays();
+            requestAnimationFrame(refreshLaneOverlays);
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
             if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
             if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
             if (typeof redrawAllExtraTrackWaveforms === 'function') {
                 redrawAllExtraTrackWaveforms();
-            }
-            if (typeof renderAudioWaveformMarkers === 'function') {
-                renderAudioWaveformMarkers();
             }
             refreshAudioWaveformCompositeLoadedState();
             if (typeof syncAllTrackWaveformLoading === 'function') {

@@ -824,12 +824,12 @@
             position: absolute;
             left: 0;
             right: 0;
-            top: var(--marker-labels-top, 0);
-            height: var(--wave-lane-h, 52px);
+            top: 0;
+            height: calc(var(--wave-lane-count, 1) * var(--wave-lane-h, 52px));
             bottom: auto;
             pointer-events: none;
             z-index: 10;
-            overflow: hidden;
+            overflow: visible;
         }
         .audio-waveform-composite__marker-labels[hidden] {
             display: none !important;
@@ -842,6 +842,13 @@
         }
         .audio-waveform-composite__marker-labels .seek-bar-marker__feedback--range {
             text-align: center;
+        }
+        .audio-waveform-composite__marker-labels .seek-bar-marker__feedback--range-stack {
+            white-space: pre-line;
+            text-overflow: clip;
+            overflow: visible;
+            line-height: 1.2;
+            max-width: 9.5rem;
         }
         .seek-bar-marker--range {
             background: var(--marker-orange-bg);
@@ -1569,7 +1576,9 @@
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__playhead-wrap,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead,
         .audio-waveform-composite__lanes-inner
-            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay,
+        .audio-waveform-composite__lanes-inner
+            > .audio-waveform-lane__region-meta--lanes-overlay {
             grid-row: 1 / -1;
             grid-column: 1;
         }
@@ -2264,6 +2273,18 @@
             user-select: none;
             -webkit-user-select: none;
         }
+        /* 着色 (6) より前面 — Key/音量ラベル（z7）・練習番号（z8） */
+        .audio-waveform-composite__lanes-inner > .audio-waveform-lane__region-meta--lanes-overlay {
+            z-index: 7;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            height: 100%;
+            pointer-events: none;
+            overflow: visible;
+        }
         /* 小節線グリッド (6) より前面 — マーカーと同様の全行オーバーレイ + 行バンド */
         .audio-waveform-composite__lanes-inner > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
             z-index: 8;
@@ -2275,10 +2296,28 @@
             height: 100%;
             pointer-events: none;
         }
+        .audio-waveform-lane__region-meta-row {
+            position: absolute;
+            left: 0;
+            right: 0;
+            box-sizing: border-box;
+            pointer-events: none;
+            overflow: visible;
+            --playback-lane-bottom-inset: 1px;
+        }
+        .audio-waveform-lane__region-meta-slot {
+            position: absolute;
+            top: 0;
+            bottom: var(--playback-lane-bottom-inset, 0px);
+            box-sizing: border-box;
+            pointer-events: none;
+            overflow: visible;
+        }
         .audio-waveform-lane__rehearsal-marks-row {
             position: absolute;
             left: 0;
             right: 0;
+            overflow: visible;
             box-sizing: border-box;
             pointer-events: none;
             --playback-lane-bottom-inset: 1px;
@@ -2367,21 +2406,58 @@
             bottom: 0.08rem;
             font-size: 0.42rem;
         }
-        /* Phrase 着色 ON — 練習番号は中央大 */
+        /* Phrase 着色 ON — 練習番号・Key・音量（Key↔音量は固定、レーン縮小時は全体を収める） */
+        .audio-waveform-composite--phrase-fill {
+            --region-phrase-label-reserve: min(
+                2.35rem,
+                max(1.35rem, calc(var(--wave-lane-h, 92px) * 0.42))
+            );
+            --region-phrase-label-step-mark-key: min(
+                1.55rem,
+                max(
+                    0.38rem,
+                    calc((var(--wave-lane-h, 92px) - var(--region-phrase-label-reserve)) * 0.46)
+                )
+            );
+            --region-phrase-label-step-key-gain: min(
+                1.15rem,
+                max(
+                    0.34rem,
+                    calc((var(--wave-lane-h, 92px) - var(--region-phrase-label-reserve)) * 0.36)
+                )
+            );
+        }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__playback-region__index {
             left: 50%;
-            top: 42%;
+            top: calc(50% - var(--region-phrase-label-step-mark-key));
             bottom: auto;
             transform: translate(-50%, -50%);
             font-size: 1.05rem;
         }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__rehearsal-mark__label {
             left: 50%;
-            top: 42%;
+            top: calc(50% - var(--region-phrase-label-step-mark-key));
             bottom: auto;
             transform: translate(-50%, -50%);
             font-size: 1.05rem;
         }
+        .audio-waveform-composite--phrase-fill .audio-waveform-lane__region-meta-slot .audio-waveform-lane__playback-region__pitch {
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .audio-waveform-composite--phrase-fill .audio-waveform-lane__region-meta-slot .audio-waveform-lane__playback-region__gain-db {
+            top: calc(50% + var(--region-phrase-label-step-key-gain));
+            transform: translate(-50%, -50%);
+        }
+        /* Phrase 着色 ON — Key/音量はオーバーレイ（z7）へ。リージョン内ラベルは二重表示防止 */
+        .audio-waveform-composite--phrase-fill
+            .audio-waveform-lane__playback-regions
+            .audio-waveform-lane__playback-region__pitch,
+        .audio-waveform-composite--phrase-fill
+            .audio-waveform-lane__playback-regions
+            .audio-waveform-lane__playback-region__gain-db {
+            display: none !important;
+        }
         .audio-waveform-composite--phrase-fill
             .audio-waveform-lane__playback-region--narrow
             .audio-waveform-lane__playback-region__index,
@@ -2412,45 +2488,33 @@
             bottom: 0.12rem;
             font-size: 0.52rem;
         }
-        .audio-waveform-lane__playback-region__gain-db {
-            position: absolute;
-            left: 50%;
-            top: calc(50% + 0.35rem);
-            transform: translateX(-50%);
-            z-index: 4;
-            font-size: 0.58rem;
-            font-weight: 600;
-            line-height: 1.25;
-            letter-spacing: 0.02em;
-            color: #f4f0e8;
-            -webkit-text-fill-color: #f4f0e8;
-            background: rgba(0, 0, 0, 0.88);
-            padding: 1px 5px;
-            border-radius: 3px;
-            pointer-events: none;
-            user-select: none;
-            -webkit-user-select: none;
-            white-space: nowrap;
-        }
+        .audio-waveform-lane__playback-region__gain-db,
         .audio-waveform-lane__playback-region__pitch {
             position: absolute;
             left: 50%;
-            top: calc(50% - 1.05rem);
             transform: translateX(-50%);
             z-index: 4;
+            font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
             font-size: 0.58rem;
-            font-weight: 600;
+            font-weight: 700;
             line-height: 1.25;
             letter-spacing: 0.02em;
-            color: #b8e4ff;
-            -webkit-text-fill-color: #b8e4ff;
-            background: rgba(0, 0, 0, 0.88);
+            color: rgba(255, 244, 220, 0.95);
+            -webkit-text-fill-color: rgba(255, 244, 220, 0.95);
+            background: rgb(0, 0, 0);
+            mix-blend-mode: normal;
             padding: 1px 5px;
             border-radius: 3px;
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
             white-space: nowrap;
+        }
+        .audio-waveform-lane__playback-region__gain-db {
+            top: calc(50% + 0.35rem);
+        }
+        .audio-waveform-lane__playback-region__pitch {
+            top: calc(50% - 1.05rem);
         }
         .audio-waveform-composite__markers.seek-bar-markers .seek-bar-marker {
             pointer-events: auto;
@@ -2592,7 +2656,9 @@
             visibility: hidden;
         }
         .audio-waveform-composite__lanes-inner.audio-waveform-composite--region-swap-active
-            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay,
+        .audio-waveform-composite__lanes-inner.audio-waveform-composite--region-swap-active
+            > .audio-waveform-lane__region-meta--lanes-overlay {
             visibility: hidden;
             opacity: 0;
         }
@@ -2617,14 +2683,26 @@
             transition: opacity 180ms ease-out;
         }
         .audio-waveform-composite--region-swap-reveal
-            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay,
+        .audio-waveform-composite--region-swap-reveal
+            > .audio-waveform-lane__region-meta--lanes-overlay {
             visibility: visible;
             opacity: 0;
         }
         .audio-waveform-composite--region-swap-reveal--active
-            > .audio-waveform-lane__rehearsal-marks--lanes-overlay {
+            > .audio-waveform-lane__rehearsal-marks--lanes-overlay,
+        .audio-waveform-composite--region-swap-reveal--active
+            > .audio-waveform-lane__region-meta--lanes-overlay {
             opacity: 1;
             transition: opacity 180ms ease-out;
+        }
+        .audio-waveform-lane__region-meta-row--dense-boundaries
+            .audio-waveform-lane__region-meta-slot--narrow
+            .audio-waveform-lane__playback-region__pitch,
+        .audio-waveform-lane__region-meta-row--dense-boundaries
+            .audio-waveform-lane__region-meta-slot--narrow
+            .audio-waveform-lane__playback-region__gain-db {
+            display: none;
         }
         /* ミュート等で波形と同様に非可聴になったトラックのリージョン／フェード UI */
         .audio-waveform-lane--mix-muted .audio-waveform-lane__playback-regions {
