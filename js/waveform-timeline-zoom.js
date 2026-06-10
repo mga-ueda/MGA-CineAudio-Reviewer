@@ -989,12 +989,7 @@
         return false;
     }
 
-    const ZOOM_VIEWPORT_PLAYBACK_MIN_SEC = 0.05;
-    /** 表示範囲の右端手前で止める（端まで行くと追従スクロールが発生するため） */
-    const ZOOM_VIEWPORT_PLAYBACK_STOP_RATIO = 0.99;
-    let zoomViewportPlaybackActive = false;
-    let zoomViewportPlaybackInSec = 0;
-    let zoomViewportPlaybackOutSec = 0;
+    const WAVEFORM_VISIBLE_SEC_RANGE_MIN = 0.05;
 
     /** 現在の scrollLeft / ビューポートから表示中の transport 秒範囲 */
     function getWaveformTimelineVisibleSecRange() {
@@ -1013,141 +1008,8 @@
         const endRatio = (scrollLeft + m.viewportW) / m.scrubW;
         const startSec = Math.max(0, startRatio * master);
         const endSec = Math.min(master, endRatio * master);
-        if (endSec - startSec < ZOOM_VIEWPORT_PLAYBACK_MIN_SEC) return null;
+        if (endSec - startSec < WAVEFORM_VISIBLE_SEC_RANGE_MIN) return null;
         return { startSec, endSec };
-    }
-
-    function isZoomViewportPlaybackActive() {
-        return (
-            zoomViewportPlaybackActive &&
-            Number.isFinite(zoomViewportPlaybackInSec) &&
-            Number.isFinite(zoomViewportPlaybackOutSec) &&
-            zoomViewportPlaybackOutSec > zoomViewportPlaybackInSec
-        );
-    }
-
-    function clearZoomViewportPlayback() {
-        zoomViewportPlaybackActive = false;
-        zoomViewportPlaybackInSec = 0;
-        zoomViewportPlaybackOutSec = 0;
-    }
-
-    function getTransportSecForZoomViewportPlayback() {
-        if (typeof getTransportSecForDisplay === 'function') {
-            return getTransportSecForDisplay();
-        }
-        if (typeof getTransportSec === 'function') {
-            return getTransportSec();
-        }
-        if (typeof transportPlaybackSec === 'number' && Number.isFinite(transportPlaybackSec)) {
-            return transportPlaybackSec;
-        }
-        return 0;
-    }
-
-    /** 拡大中の再生開始: 表示範囲を Out に設定し、範外なら In へ合わせる */
-    function armZoomViewportPlaybackOnPlayStart() {
-        clearZoomViewportPlayback();
-        if (isWaveformTimelineAtFitZoom()) return false;
-        if (
-            typeof isRangeLoopPlaybackActive === 'function' &&
-            isRangeLoopPlaybackActive()
-        ) {
-            return false;
-        }
-        const range = getWaveformTimelineVisibleSecRange();
-        if (!range) return false;
-        const span = range.endSec - range.startSec;
-        const stopSec = range.startSec + span * ZOOM_VIEWPORT_PLAYBACK_STOP_RATIO;
-        const cur = getTransportSecForZoomViewportPlayback();
-        let playStart = cur;
-        if (cur < range.startSec || cur >= range.endSec) {
-            playStart = range.startSec;
-            if (typeof setTransportSec === 'function') {
-                setTransportSec(playStart);
-            }
-            if (typeof transportPlaybackSec === 'number') {
-                transportPlaybackSec = playStart;
-                transportPlaybackLastTs = performance.now();
-            }
-            if (typeof applyVideoTimeForTransportSec === 'function') {
-                applyVideoTimeForTransportSec(playStart, { force: true });
-            }
-        }
-        if (playStart >= stopSec - 1e-6) {
-            return false;
-        }
-        zoomViewportPlaybackInSec = playStart;
-        zoomViewportPlaybackOutSec = stopSec;
-        zoomViewportPlaybackActive = true;
-        return true;
-    }
-
-    function stopZoomViewportPlaybackAtEnd() {
-        const returnSec = zoomViewportPlaybackInSec;
-        clearZoomViewportPlayback();
-        if (typeof transportPlaybackSec === 'number' && Number.isFinite(returnSec)) {
-            transportPlaybackSec = returnSec;
-            transportPlaybackLastTs = performance.now();
-        }
-        if (typeof setTransportSec === 'function' && Number.isFinite(returnSec)) {
-            setTransportSec(returnSec);
-        }
-        if (typeof applyVideoTimeForTransportSec === 'function' && Number.isFinite(returnSec)) {
-            applyVideoTimeForTransportSec(returnSec, { force: true });
-        }
-        if (typeof pauseTransportBeforeSeek === 'function') {
-            pauseTransportBeforeSeek();
-        }
-        if (typeof updateSeekUiFromVideo === 'function') {
-            updateSeekUiFromVideo();
-        }
-        if (typeof updateAllWaveformPlayheads === 'function') {
-            updateAllWaveformPlayheads();
-        }
-    }
-
-    /**
-     * 拡大ビューポート再生中の tick で毎フレーム video.currentTime を書き換えると再生が途切れる。
-     * 表示範囲内の通常再生では動画に追従し、終端停止時のみ同期する。
-     */
-    function shouldApplyVideoTimeDuringZoomViewportTick(t) {
-        if (!isZoomViewportPlaybackActive()) return true;
-        if (typeof videoMain === 'undefined' || !videoMain) return true;
-        if (videoMain.seeking) return false;
-        const x = Number(t);
-        if (!Number.isFinite(x)) return true;
-        if (!videoMain.paused && !videoMain.ended && x >= zoomViewportPlaybackInSec && x < zoomViewportPlaybackOutSec) {
-            return false;
-        }
-        return true;
-    }
-
-    /** @returns {boolean} */
-    function advanceZoomViewportPlaybackClock() {
-        if (!isZoomViewportPlaybackActive()) return false;
-        if (
-            typeof transportPlaybackIsInMasterTail === 'function' &&
-            transportPlaybackIsInMasterTail()
-        ) {
-            clearZoomViewportPlayback();
-            return false;
-        }
-        if (typeof transportPlaybackSec !== 'number' || !Number.isFinite(transportPlaybackSec)) {
-            return false;
-        }
-        if (typeof videoMain !== 'undefined' && videoMain && videoMain.seeking) {
-            return true;
-        }
-        const now = performance.now();
-        if (transportPlaybackLastTs > 0) {
-            transportPlaybackSec += (now - transportPlaybackLastTs) / 1000;
-        }
-        transportPlaybackLastTs = now;
-        if (transportPlaybackSec >= zoomViewportPlaybackOutSec) {
-            stopZoomViewportPlaybackAtEnd();
-        }
-        return true;
     }
 
     window.handleWaveformTimelineKeydown = handleWaveformTimelineKeydown;
@@ -1212,9 +1074,4 @@
     window.scrollLeftToCenterTransportSec = scrollLeftToCenterTransportSec;
     window.scrollLeftForTransportSec = scrollLeftForTransportSec;
     window.getWaveformTimelineVisibleSecRange = getWaveformTimelineVisibleSecRange;
-    window.isZoomViewportPlaybackActive = isZoomViewportPlaybackActive;
-    window.clearZoomViewportPlayback = clearZoomViewportPlayback;
-    window.armZoomViewportPlaybackOnPlayStart = armZoomViewportPlaybackOnPlayStart;
-    window.advanceZoomViewportPlaybackClock = advanceZoomViewportPlaybackClock;
-    window.shouldApplyVideoTimeDuringZoomViewportTick = shouldApplyVideoTimeDuringZoomViewportTick;
 })();
