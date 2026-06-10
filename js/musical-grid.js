@@ -586,6 +586,8 @@
         const snap = {
             meter: musicalGridMeterText,
             phrase: musicalGridPhraseText,
+            gridVisible: getMusicalGridVisible(),
+            phraseFillVisible: getMusicalGridPhraseFillVisible(),
         };
         if (phraseGroupBarCountsOverride && phraseGroupBarCountsOverride.length) {
             snap.phraseGroupBarCounts = phraseGroupBarCountsOverride.slice();
@@ -635,6 +637,9 @@
         }
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
+            if (!o.skipSessionPersist && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
         }
         if (!o.silent) {
             if (typeof writeLog === 'function') {
@@ -674,6 +679,9 @@
         }
         if (o.persist !== false) {
             if (typeof writePrefs === 'function') writePrefs();
+            if (!o.skipSessionPersist && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
         }
         if (!o.silent) {
             if (typeof writeLog === 'function') {
@@ -702,6 +710,12 @@
         clearMusicalGridPositionCache();
         if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
         if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
+        if (typeof s.gridVisible === 'boolean') {
+            musicalGridVisible = s.gridVisible !== false;
+        }
+        if (typeof s.phraseFillVisible === 'boolean') {
+            musicalGridPhraseFillVisible = s.phraseFillVisible !== false;
+        }
         clearPhraseUndoStack();
         syncMusicalGridVisibilityUi();
         scheduleMusicalGridRedraw();
@@ -3780,6 +3794,8 @@
         } catch (_) {}
 
         syncMusicalGridVisibilityUi();
+        if (typeof drawMusicalGridOverlay === 'function') drawMusicalGridOverlay();
+        else if (typeof updatePhraseBoundaryOverlay === 'function') updatePhraseBoundaryOverlay();
 
         if (musicalGridVisibleCheckbox) {
             musicalGridVisibleCheckbox.addEventListener('change', () => {

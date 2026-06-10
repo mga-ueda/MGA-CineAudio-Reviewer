@@ -140,7 +140,7 @@
 
     function applyMusicalGridVisibilityPrefs(p) {
         const pref = p && typeof p === 'object' ? p : {};
-        const importOpt = { silent: true, persist: false, skipRegionRefresh: true };
+        const importOpt = { silent: true, persist: false, skipRegionRefresh: true, skipSessionPersist: true };
         if (typeof pref.musicalGridVisible === 'boolean' && typeof setMusicalGridVisible === 'function') {
             setMusicalGridVisible(pref.musicalGridVisible, importOpt);
         }
@@ -900,6 +900,11 @@
             applyMusicalGridPersistSnapshot(mg);
         }
         applyMusicalGridVisibilityPrefs(p);
+        if (typeof drawMusicalGridOverlay === 'function') {
+            drawMusicalGridOverlay();
+        } else if (typeof updatePhraseBoundaryOverlay === 'function') {
+            updatePhraseBoundaryOverlay();
+        }
         if (typeof writePrefs === 'function') writePrefs();
         const rm =
             manifest.session && typeof manifest.session.rehearsalMark === 'object'

@@ -1659,6 +1659,11 @@
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
             applyMusicalGridPersistSnapshot(row.musicalGrid);
         }
+        if (typeof drawMusicalGridOverlay === 'function') {
+            drawMusicalGridOverlay();
+        } else if (typeof updatePhraseBoundaryOverlay === 'function') {
+            updatePhraseBoundaryOverlay();
+        }
         if (typeof applyRehearsalMarkImportSnapshot === 'function') {
             applyRehearsalMarkImportSnapshot(
                 row.rehearsalMark && typeof row.rehearsalMark === 'object'
