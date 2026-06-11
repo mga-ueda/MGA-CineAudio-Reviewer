@@ -60,9 +60,12 @@
             --marker-table-visible-rows: 10;
             --marker-table-row-h: 1.85rem;
             --marker-table-head-h: 2.1rem;
+            --marker-table-scroll-h: calc(
+                var(--marker-table-head-h) +
+                    var(--marker-table-row-h) * var(--marker-table-visible-rows)
+            );
             --player-panel-min-h: calc(
-                7.5rem + var(--marker-table-head-h) +
-                    var(--marker-table-row-h) * var(--marker-table-visible-rows) +
+                7.5rem + var(--marker-table-scroll-h) +
                     calc(1.35em * 5 + 12px + 2.5rem)
             );
         }
@@ -1056,15 +1059,14 @@
         }
         .layout-dock-panel-content--player .marker-panel .marker-table-wrap,
         .marker-panel .marker-table-wrap {
-            flex: 1 1 auto;
+            flex: 1 1 0;
             min-height: 0;
+            max-height: var(--marker-table-scroll-h);
         }
         .marker-table-wrap {
-            flex: 1 1 auto;
-            min-height: calc(
-                var(--marker-table-head-h) +
-                    var(--marker-table-row-h) * var(--marker-table-visible-rows)
-            );
+            flex: 1 1 0;
+            min-height: var(--marker-table-scroll-h);
+            max-height: var(--marker-table-scroll-h);
             overflow-x: hidden;
             overflow-y: auto;
             scroll-padding-top: var(--marker-table-head-h);
@@ -1161,7 +1163,7 @@
             width: 100%;
             min-width: 0;
             text-align: left;
-            vertical-align: top;
+            vertical-align: middle;
             padding-top: 2px;
             padding-bottom: 2px;
         }
@@ -1241,10 +1243,7 @@
             min-height: 0;
             min-width: 0;
             resize: none;
-            overflow-x: hidden;
-            overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255, 255, 255, 0.22) rgba(0, 0, 0, 0.45);
+            overflow: hidden;
             font-family: inherit;
             font-size: 0.72rem;
             font-weight: 400;
@@ -1257,15 +1256,12 @@
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 4px;
-            padding: 2px 5px;
+            padding: max(
+                    2px,
+                    calc((var(--marker-table-row-h) - 4px - 0.72rem * 1.35) / 2)
+                )
+                5px;
             ime-mode: auto;
-        }
-        .marker-table__comment::-webkit-scrollbar {
-            width: 8px;
-        }
-        .marker-table__comment::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 4px;
         }
         .marker-table__comment:focus {
             outline: none;
@@ -1559,11 +1555,8 @@
                 max-height: none;
             }
             .marker-table-wrap {
-                max-height: none;
-                min-height: calc(
-                    var(--marker-table-head-h) +
-                        var(--marker-table-row-h) * var(--marker-table-visible-rows)
-                );
+                max-height: var(--marker-table-scroll-h);
+                min-height: var(--marker-table-scroll-h);
             }
         }
 
