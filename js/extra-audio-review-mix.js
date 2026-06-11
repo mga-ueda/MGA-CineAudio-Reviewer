@@ -567,7 +567,7 @@
         } catch (err) {
             releaseReviewMixVideoCaptureGraph();
             writeLog(
-                'Review mix: video monitor tap failed — ' +
+                'Review mix: video monitor tap unavailable — ' +
                     (err && err.message ? err.message : String(err)),
             );
             videoAnalyzerDiag('monitor/error', {
@@ -650,7 +650,7 @@
         } catch (err) {
             releaseReviewMixVideoBoostPlayback();
             writeLog(
-                'Review mix: video capture boost failed — ' +
+                'Review mix: video capture boost unavailable — ' +
                     (err && err.message ? err.message : String(err)),
             );
             return false;

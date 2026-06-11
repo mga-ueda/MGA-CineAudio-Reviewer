@@ -317,7 +317,7 @@
             }
         } catch (err) {
             writeLog(
-                'Session: clear notify failed — ' +
+                'Session: clear notify skipped — ' +
                     (err && err.message ? err.message : String(err)),
             );
         }

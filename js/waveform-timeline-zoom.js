@@ -429,7 +429,11 @@
     function syncWaveformLanesViewportWidthCss() {
         const lanes = waveformScrubTargetEl();
         if (!lanes) return 0;
-        const viewportW = Math.max(0, waveformTimelineViewportWidthCss());
+        const viewportW = Math.max(0, lanes.clientWidth | 0);
+        if (viewportW <= 1) {
+            lanes.style.removeProperty('--wave-lanes-viewport-w');
+            return 0;
+        }
         lanes.style.setProperty('--wave-lanes-viewport-w', viewportW + 'px');
         return viewportW;
     }

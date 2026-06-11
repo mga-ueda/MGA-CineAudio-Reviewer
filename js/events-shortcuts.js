@@ -188,6 +188,23 @@
             typeof window.isNumpadDigitKeyCode === 'function'
                 ? window.isNumpadDigitKeyCode
                 : (code) => /^Numpad[0-9]$/.test(code || '');
+
+        if (matchUserShortcut(e, 'layoutEditToggle')) {
+            if (typeof toggleLayoutDockEditMode === 'function') {
+                e.preventDefault();
+                toggleLayoutDockEditMode();
+            }
+            return;
+        }
+
+        if (matchUserShortcut(e, 'layoutModeToggle')) {
+            if (typeof toggleLayoutDockMode === 'function') {
+                e.preventDefault();
+                toggleLayoutDockMode();
+            }
+            return;
+        }
+
         if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
             if (
                 typeof isWebmExportActive === 'function' &&
@@ -230,33 +247,6 @@
                 ['handlePlaybackRegionFadeInKeydown', 'handlePlaybackRegionFadeOutKeydown'],
                 e,
             )
-        ) {
-            return;
-        }
-
-        if (matchUserShortcut(e, 'transportOptionsToggle')) {
-            if (!transportOptionsSection) return;
-            e.preventDefault();
-            const willHide = !transportOptionsSection.hidden;
-            transportOptionsSection.hidden = willHide;
-            if (logSection) logSection.hidden = willHide;
-            if (typeof applyManualDocFoldsHidden === 'function') {
-                applyManualDocFoldsHidden(willHide);
-            }
-            writeLog(
-                willHide
-                    ? 'Transport options, log, and manual docs: hidden (O)'
-                    : 'Transport options, log, and manual docs: shown (O)'
-            );
-            if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
-                scheduleMarkersUiRefreshAfterLayout();
-            }
-            return;
-        }
-
-        if (
-            typeof handleVideoMarkersPanelsToggleKeydown === 'function' &&
-            handleVideoMarkersPanelsToggleKeydown(e)
         ) {
             return;
         }

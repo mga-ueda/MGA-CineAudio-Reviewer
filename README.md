@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.10 |
+| **バージョン** | v0.11 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -57,6 +57,13 @@
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
 
 ## バージョン情報
+
+### v0.11 - 2026年6月11日
+
+- ログパネルに重大度分類（info / warn / error）と行色分けを追加（[Warning] 黄原色、[Error] 赤原色）。W/E Only フィルタで警告・エラー行のみ表示（localStorage 保存、Import/Export 対象外）。
+- Debug Log ON 時はログ行数無制限、OFF 時は 500 行上限。Debug Log を ON にした直後に W/E Only 確認用のテスト [Warning] / [Error] 行を各 1 行出力。
+- ログメッセージを英語に統一（確認ダイアログは日本語可）。Failed 表現を実際の失敗とフォールバックで区別。CLIP PROTECT を info 扱いに変更。
+- 使い方・guide を W/E Only・ログ色・Debug Log に合わせて更新。未使用コード削除など JS の軽量リファクタリング。
 
 ### v0.10 - 2026年6月11日
 

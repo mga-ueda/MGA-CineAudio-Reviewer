@@ -6,9 +6,6 @@
         if (!Ctx) return null;
         if (!reviewMixCtx) {
             reviewMixCtx = new Ctx();
-            if (typeof warmupPitchStretchWorklet === 'function') {
-                void warmupPitchStretchWorklet(reviewMixCtx);
-            }
         }
         ensureReviewMixMasterBus(reviewMixCtx);
         if (reviewMixCtx.state === 'suspended') {

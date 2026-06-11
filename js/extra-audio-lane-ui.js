@@ -585,7 +585,7 @@
                 writeLog(
                     'Extra audio ' +
                         (i + 1) +
-                        ': waveform restore failed — ' +
+                        ': waveform restore incomplete — ' +
                         (err && err.message ? err.message : String(err)),
                 );
             }
@@ -596,7 +596,7 @@
             }
         } catch (err) {
             writeLog(
-                'Session: restore notify failed — ' +
+                'Session: restore notify skipped — ' +
                     (err && err.message ? err.message : String(err)),
             );
         }

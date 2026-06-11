@@ -902,18 +902,14 @@
     function fitMarkerCommentHeight(ta) {
         if (!ta) return;
         const cs = getComputedStyle(ta);
-        const maxPx = parseFloat(cs.maxHeight);
         const lineH = parseFloat(cs.lineHeight) || 16;
         const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
         const borderV =
             (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
         const minH = lineH + padV + borderV;
+        ta.style.overflowY = 'hidden';
         ta.style.height = '0';
-        let h = ta.scrollHeight;
-        if (Number.isFinite(maxPx) && maxPx > 0) h = Math.min(h, maxPx);
-        ta.style.height = Math.max(minH, h) + 'px';
-        ta.style.overflowY =
-            Number.isFinite(maxPx) && ta.scrollHeight > maxPx + 1 ? 'auto' : 'hidden';
+        ta.style.height = Math.max(minH, ta.scrollHeight) + 'px';
     }
 
     function focusMarkerCommentField(id, opt) {

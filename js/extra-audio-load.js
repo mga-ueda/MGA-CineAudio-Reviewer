@@ -35,7 +35,8 @@
                         mb +
                         ' MB) exceeds the limit (' +
                         limitMb +
-                        ' MB).'
+                        ' MB).',
+                    { log: false },
                 );
             }
             return;
@@ -106,7 +107,7 @@
             tr.viewportPeaks = null;
             tr.persistBlob = null;
             setExtraTrackLoaded(slot, false, { skipLayoutRefresh: true });
-            setExtraTrackStatus(slot, 'Decode failed');
+            setExtraTrackStatus(slot, 'Could not decode');
             const uiDecodeFail = getExtraUi(slot);
             if (typeof clearWaveformTrackLkfs === 'function' && uiDecodeFail && uiDecodeFail.track) {
                 clearWaveformTrackLkfs(uiDecodeFail.track);
@@ -121,7 +122,7 @@
             writeLog(
                 'Extra audio ' +
                     (slot + 1) +
-                    ': decode failed — ' +
+                    ': could not decode — ' +
                     (err && err.message ? err.message : String(err))
             );
             return;
@@ -314,7 +315,7 @@
             writeLog(
                 'Extra audio ' +
                     (slot + 1) +
-                    ': loaded but waveform draw failed — ' +
+                    ': loaded but waveform not drawn — ' +
                     (err && err.message ? err.message : String(err))
             );
             refreshExtraTrackUi(slot);

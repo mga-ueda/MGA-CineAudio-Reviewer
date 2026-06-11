@@ -18,7 +18,7 @@
         if (!isMgacrReviewFile(file)) {
             const name = file.name || 'unknown';
             throw new Error(
-                'Import Review は .mgacr ファイルのみ読み込めます（選択: "' + name + '"）',
+                'Import Review accepts .mgacr files only (selected: "' + name + '")',
             );
         }
     }
@@ -1212,12 +1212,12 @@
         if (!file) return Promise.resolve();
         if (!isMgacrReviewFile(file)) {
             const msg =
-                'Import Review は .mgacr ファイルのみ読み込めます（選択: "' +
+                'Import Review accepts .mgacr files only (selected: "' +
                 (file.name || 'unknown') +
-                '"）';
+                '")';
             writeLog('Import Review: rejected — ' + msg);
             if (typeof showAppAlert === 'function') {
-                showAppAlert('インポートできません', msg);
+                showAppAlert('インポートできません', msg, { log: false });
             }
             return Promise.resolve();
         }
@@ -1234,7 +1234,7 @@
                     writeLog('Import Review: error detail — ' + String(e.stack).split('\n')[0]);
                 }
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('インポートに失敗しました', msg);
+                    showAppAlert('インポートに失敗しました', msg, { log: false });
                 }
             })
             .finally(() => {
@@ -1260,6 +1260,7 @@
                 showAppAlert(
                     '動画をエクスポートできません',
                     'エクスポートする動画を読み込んでください。',
+                    { logLine: 'Export WebM: no video loaded' },
                 );
             }
             return;
@@ -1284,6 +1285,7 @@
                 showAppAlert(
                     'WebM エクスポート不可',
                     'このブラウザでは WebM エクスポート機能を利用できません。',
+                    { logLine: 'Export WebM: unavailable in this browser' },
                 );
             }
             return;
@@ -1295,7 +1297,7 @@
                 if (msg === 'Export cancelled') return;
                 writeLog('Export WebM: failed — ' + msg);
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('WebM のエクスポートに失敗しました', msg);
+                    showAppAlert('WebM のエクスポートに失敗しました', msg, { log: false });
                 }
             })
             .finally(() => {
@@ -1320,7 +1322,7 @@
                     writeLog('Export Review: error detail — ' + String(e.stack).split('\n')[0]);
                 }
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('エクスポートに失敗しました', msg);
+                    showAppAlert('エクスポートに失敗しました', msg, { log: false });
                 }
             })
             .finally(() => {
@@ -1355,6 +1357,10 @@
                       'All Clear',
                       '読み込んだ動画・追加音声・マーカーなど、すべての読み込み情報が失われます。よろしいですか？',
                       'All Clear: cancelled',
+                      {
+                          logLine:
+                              'All Clear: confirm — all loaded media, markers, and saved session will be removed',
+                      },
                   )
                 : Promise.resolve(false);
         void confirmPromise.then((confirmed) => {
@@ -1370,7 +1376,7 @@
                     if (typeof clearLog === 'function') clearLog();
                     writeLog('Session: All Clear failed — ' + msg);
                     if (typeof showAppAlert === 'function') {
-                        showAppAlert('All Clear に失敗しました', msg);
+                        showAppAlert('All Clear に失敗しました', msg, { log: false });
                     }
                 })
                 .finally(() => {
@@ -1426,7 +1432,7 @@
         } catch (e) {
             const msg = e && e.message ? e.message : String(e);
             if (typeof writeLog === 'function') {
-                writeLog('Session IO UI: init refresh failed — ' + msg);
+                writeLog('Session IO UI: init refresh incomplete — ' + msg);
             }
         }
         if (typeof whenSessionRestoreIdle === 'function') {

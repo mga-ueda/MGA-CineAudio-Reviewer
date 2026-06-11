@@ -77,7 +77,7 @@
             markerPasteBtn.addEventListener('click', () => {
                 if (markerPasteBtn.disabled) {
                     showMarkersPasteFormatError(
-                        '動画または追加音声を読み込んでから貼り付けてください。',
+                        'Load a video or extra audio track before pasting.',
                     );
                     return;
                 }
@@ -93,6 +93,10 @@
                               'Markers Clear',
                               'すべてのマーカーと Memo が削除されます。よろしいですか？',
                               'Markers Clear: cancelled',
+                              {
+                                  logLine:
+                                      'Markers Clear: confirm — all markers and memo will be removed',
+                              },
                           )
                         : Promise.resolve(false);
                 void confirmPromise.then((confirmed) => {

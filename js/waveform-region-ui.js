@@ -22,7 +22,7 @@
                 writeLog(
                     'Extra audio ' +
                         (i + 1) +
-                        ': overlay update failed — ' +
+                        ': overlay update skipped — ' +
                         (err && err.message ? err.message : String(err)),
                 );
                 try {
@@ -32,7 +32,7 @@
                     );
                 } catch (fallbackErr) {
                     if (typeof window.regionRestoreDiagLog === 'function') {
-                        window.regionRestoreDiagLog('overlay/fallback-failed', {
+                        window.regionRestoreDiagLog('overlay/fallback-unavailable', {
                             ex: i + 1,
                             err:
                                 fallbackErr && fallbackErr.message
@@ -244,9 +244,9 @@
                 skipUndo: !!(opt && opt.skipUndo),
             })
         ) {
-            writeLog('Playback region: join failed');
+            writeLog('Playback region: join not applied');
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Join failed', 'notice');
+                flashSeekHint('Region', 'Not joined', 'notice');
             }
             return false;
         }
@@ -328,9 +328,9 @@
             })
         ) {
             if (!o.silent) {
-                writeLog('Playback region: join failed');
+                writeLog('Playback region: join not applied');
                 if (typeof flashSeekHint === 'function') {
-                    flashSeekHint('Region', 'Join failed', 'notice');
+                    flashSeekHint('Region', 'Not joined', 'notice');
                 }
             }
             return false;

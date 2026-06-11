@@ -1309,8 +1309,12 @@
                 hint = 'Turn on Phrase fill and fix Phrase definition';
             } else if (reason === 'same phrase slot') {
                 hint = 'Already in that phrase slot';
-            } else if (reason === 'phrase span swap failed' || reason === 'phrase span unresolved') {
-                hint = 'Phrase span swap failed — check [MusicalSlot] log';
+            } else if (
+                reason === 'phrase span swap not applied' ||
+                reason === 'phrase span swap failed' ||
+                reason === 'phrase span unresolved'
+            ) {
+                hint = 'Phrase span swap not applied — check [MusicalSlot] log';
             } else if (reason === 'phrase span bar sum mismatch') {
                 hint = 'Phrase bar counts differ — cannot swap these regions';
             } else if (reason === 'phrase block swap API missing') {

@@ -308,9 +308,9 @@
         const m = row.musical || {};
         const parts = [
             row.label || '?',
-            '現在枠=' + (m.phraseLabel || '—'),
+            'phraseSlot=' + (m.phraseLabel || '—'),
         ];
-        if (!row.bindingResolved) parts.push('**musical未解決**');
+        if (!row.bindingResolved) parts.push('**musical unresolved**');
         if (row.identity) parts.push('entity=' + row.identity);
         if (row.unitIdx != null) parts.push('swapUnit#' + row.unitIdx);
         if (row.slotId) parts.push('slotId=' + row.slotId);
@@ -320,14 +320,14 @@
     function musicalSlotDiagAnalyzeOriginIssues(bindings) {
         const issues = [];
         if (!bindings || !bindings.length) {
-            issues.push('リージョン／無音の musical 行が 0 件');
+            issues.push('no region/silent-gap musical rows');
             return issues;
         }
         for (let i = 0; i < bindings.length; i++) {
             const row = bindings[i];
             const label = row.label || 'item ' + (i + 1);
             if (!row.bindingResolved) {
-                issues.push(label + ': SwapUnit musical 紐付けが取れない');
+                issues.push(label + ': SwapUnit musical binding unresolved');
             }
         }
         return issues;
@@ -337,7 +337,7 @@
         if (!musicalSlotDiagEnabled() || typeof writeLog !== 'function' || !lines || !lines.length) {
             return;
         }
-        writeLog(LOG_PREFIX + ' ' + stage + ' === 読み取り用サマリー ===');
+        writeLog(LOG_PREFIX + ' ' + stage + ' === readable summary ===');
         for (let i = 0; i < lines.length; i++) {
             writeLog(LOG_PREFIX + '   ' + lines[i]);
         }
@@ -352,7 +352,7 @@
         if (o.writeLines !== false) {
             musicalSlotDiagWriteReadableLines(stage + ' Ex' + ex, summary);
             if (issues.length) {
-                writeLog(LOG_PREFIX + ' ' + stage + ' Ex' + ex + ' === 検出した問題 ===');
+                writeLog(LOG_PREFIX + ' ' + stage + ' Ex' + ex + ' === detected issues ===');
                 for (let i = 0; i < issues.length; i++) {
                     writeLog(LOG_PREFIX + '   ! ' + issues[i]);
                 }
@@ -363,7 +363,7 @@
                         stage +
                         ' Ex' +
                         ex +
-                        ': OK — 全 SwapUnit に musical 紐付けあり',
+                        ': OK — all SwapUnits have musical binding',
                 );
             }
         }
@@ -449,11 +449,11 @@
                 LOG_PREFIX +
                     ' origin/cache-merge Ex' +
                     ex +
-                    ': **警告** index不一致 ' +
+                    ': **warning** index mismatch ' +
                     mismatchCount +
                     '/' +
                     units.length +
-                    ' — 別ユニットの musical が付いた可能性',
+                    ' — musical may be attached to a different unit',
             );
             for (let i = 0; i < rows.length; i++) {
                 const r = rows[i];
@@ -485,8 +485,8 @@
             warning:
                 mismatchCount > 0
                     ? mergeByIdentity
-                        ? 'rebuild entity が cache に無い、または identity 不一致'
-                        : 'cache index と rebuild 順が一致しない — musical が別ユニットに付く可能性'
+                        ? 'rebuild entity missing from cache or identity mismatch'
+                        : 'cache index order differs from rebuild — musical may bind to wrong unit'
                     : undefined,
             rows,
         });
@@ -524,7 +524,7 @@
                         : null,
                 musical: musicalSlotDiagSummarizeMusicalOrigin(s && s.musical),
             })),
-            legend: '現在枠=タイムライン上の Phrase 枠',
+            legend: 'phraseSlot = Phrase slot on timeline',
         });
     }
     function logSessionRestoreMusicalSlotSnapshot() {
@@ -535,7 +535,7 @@
         if (typeof writeLog === 'function') {
             writeLog(
                 LOG_PREFIX +
-                    ' session/restore === 開始 === Phrase="' +
+                    ' session/restore === begin === Phrase="' +
                     (phrase.text || '') +
                     '" fill=' +
                     (phrase.fill ? 'ON' : 'OFF') +
@@ -574,13 +574,13 @@
         }
         if (typeof writeLog === 'function') {
             if (!reportedTracks) {
-                writeLog(LOG_PREFIX + ' session/restore: アクティブな Ex トラックなし');
+                writeLog(LOG_PREFIX + ' session/restore: no active Ex tracks');
             } else if (allIssues.length) {
                 writeLog(
                     LOG_PREFIX +
-                        ' session/restore === 完了 **問題 ' +
+                        ' session/restore === done **' +
                         allIssues.length +
-                        ' 件** ===',
+                        ' issue(s)** ===',
                 );
                 for (let i = 0; i < allIssues.length; i++) {
                     writeLog(LOG_PREFIX + '   ! ' + allIssues[i]);
@@ -588,9 +588,9 @@
             } else {
                 writeLog(
                     LOG_PREFIX +
-                        ' session/restore === 完了 OK === ' +
+                        ' session/restore === done OK === ' +
                         reportedTracks +
-                        ' トラック — 全 SwapUnit に musical 紐付けあり',
+                        ' track(s) — all SwapUnits have musical binding',
                 );
             }
         }

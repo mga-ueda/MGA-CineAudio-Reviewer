@@ -298,6 +298,9 @@
                 await ctx.resume();
             } catch (_) {}
         }
+        if (ctx && typeof warmupPitchStretchWorklet === 'function') {
+            await warmupPitchStretchWorklet(ctx);
+        }
         applyReviewMixVideoGain();
         if (ctx) {
             const mode = reviewMixVideoBoostPlayback

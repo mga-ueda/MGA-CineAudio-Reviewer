@@ -791,7 +791,7 @@
                     void window.flushPersistSessionNow().catch((persistErr) => {
                         if (typeof writeLog === 'function') {
                             writeLog(
-                                'Session: swap persist failed — ' +
+                                'Session: swap persist could not complete — ' +
                                     (persistErr && persistErr.message
                                         ? persistErr.message
                                         : String(persistErr)),
@@ -917,7 +917,7 @@
             const ghosts = [];
             for (let i = 0; i < snapshots.length; i++) {
                 const built = buildRegionSwapGhost(snapshots[i], hCss);
-                if (!built) return { ok: false, reason: 'ghost build failed', index: i };
+                if (!built) return { ok: false, reason: 'ghost build incomplete', index: i };
                 layer.appendChild(built.el);
                 ghosts.push(built);
             }
@@ -1002,7 +1002,7 @@
         } catch (err) {
             playbackRegionSwapAnimPending = false;
             scheduleMusicalGridRedrawAfterRegionSwapAnim();
-            return regionSwapAnimReject('animation setup failed');
+            return regionSwapAnimReject('animation setup incomplete');
         }
     }
 

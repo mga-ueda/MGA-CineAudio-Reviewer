@@ -168,6 +168,46 @@
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
+
+    /** Chrome: range 入力の thumb が初回レイアウト前だと描画されないことがある */
+    function nudgeSeekBarChromePaint() {
+        if (!seekBar) return;
+        const v = seekBar.value;
+        seekBar.value = v;
+        void seekBar.getBoundingClientRect();
+    }
+
+    /** レーン幅・duration 確定後にシークバー／プレイヘッドを再同期 */
+    function refreshTransportUiAfterLayout() {
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        } else {
+            syncSeekMax();
+        }
+        if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
+        if (typeof drawWaveformChromeOverlays === 'function') {
+            drawWaveformChromeOverlays();
+        } else if (typeof updateAllWaveformPlayheads === 'function') {
+            updateAllWaveformPlayheads();
+        }
+        nudgeSeekBarChromePaint();
+    }
+
+    /** セッション復元直後・Chrome 向けに複数回リトライ */
+    function scheduleTransportUiRefreshAfterLayout() {
+        const run = () => refreshTransportUiAfterLayout();
+        run();
+        requestAnimationFrame(() => {
+            requestAnimationFrame(run);
+        });
+        [50, 200, 600].forEach((ms) => {
+            setTimeout(run, ms);
+        });
+        setTimeout(run, 1200);
+    }
+
+    window.refreshTransportUiAfterLayout = refreshTransportUiAfterLayout;
+    window.scheduleTransportUiRefreshAfterLayout = scheduleTransportUiRefreshAfterLayout;
     window.applySessionTransportAtHead = applySessionTransportAtHead;
     window.primePendingRestoreTransportUi = primePendingRestoreTransportUi;
     window.applyPendingTransportRestore = applyPendingTransportRestore;
@@ -1137,10 +1177,6 @@
             return startVideoPlayback({ force: true });
         }
         return false;
-    }
-
-    async function resumeTransportPlaybackAfterSeek() {
-        return startVideoPlayback({ force: true });
     }
 
     function shouldRunTransportUiRafLoop() {

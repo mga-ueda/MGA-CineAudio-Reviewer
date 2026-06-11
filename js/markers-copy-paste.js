@@ -331,20 +331,20 @@
         if (!raw) {
             return {
                 ok: false,
-                error: 'クリップボードが空です。Copy でコピーしたマーカー表を貼り付けてください。',
+                error: 'Clipboard is empty. Paste a marker table copied with Copy.',
             };
         }
         const lines = raw.split(/\r?\n/).filter((line) => String(line).trim() !== '');
         if (!lines.length) {
             return {
                 ok: false,
-                error: '貼り付けデータに行がありません。',
+                error: 'Paste data has no rows.',
             };
         }
         if (!markerTimelineReady()) {
             return {
                 ok: false,
-                error: '動画または追加音声を読み込んでから貼り付けてください。',
+                error: 'Load a video or extra audio track before pasting.',
             };
         }
         const firstCells = splitMarkersPasteLine(lines[0]);
@@ -354,7 +354,7 @@
             if (lines.length < 2) {
                 return {
                     ok: false,
-                    error: 'マーカー行がありません（見出し行の下に 1 行以上必要です）。',
+                    error: 'No marker rows (need at least one row below the header).',
                 };
             }
         } else if (isMarkersPasteDataRow(firstCells)) {
@@ -365,13 +365,13 @@
                 return {
                     ok: false,
                     error:
-                        'Length 列は含めない形式です。# / In / Out / Feedback の 4 列（Copy と同じ）にしてください。',
+                        'Do not include a Length column. Use 4 columns: # / In / Out / Feedback (same as Copy).',
                 };
             }
             return {
                 ok: false,
                 error:
-                    '見出し行は「#」「In」「Out」「Feedback」である必要があります（Copy と同じ形式）。先頭行に In のタイムコード（00:00:00.000 形式）が必要です。',
+                    'Header row must be #, In, Out, Feedback (same as Copy), or the first row must start with an In timecode (00:00:00.000).',
             };
         }
         const markers = [];
@@ -389,9 +389,9 @@
                 return {
                     ok: false,
                     error:
-                        '行 ' +
+                        'Row ' +
                         row +
-                        ' の列数が不足しています（# / In / Out / Feedback の 4 列、タブ区切り推奨）。',
+                        ' has too few columns (# / In / Out / Feedback; tab-separated recommended).',
                 };
             }
             const memoFromTableRow = parseMarkerMemoFromTableRow(cols, {
@@ -407,16 +407,16 @@
             if (!inTc) {
                 return {
                     ok: false,
-                    error: '行 ' + row + ' の In タイムコードが空です。',
+                    error: 'Row ' + row + ' In timecode is empty.',
                 };
             }
             if (!isMarkerPasteTcString(inTc)) {
                 return {
                     ok: false,
                     error:
-                        '行 ' +
+                        'Row ' +
                         row +
-                        ' の In タイムコードが不正です（00:00:00.000 形式、ミリ秒 3 桁）: ' +
+                        ' In timecode is invalid (00:00:00.000, 3-digit ms): ' +
                         inTc,
                 };
             }
@@ -425,11 +425,11 @@
                 return {
                     ok: false,
                     error:
-                        '行 ' +
+                        'Row ' +
                         row +
-                        ' の In を Copy と同じ形式で解釈できません: ' +
+                        ' In could not be parsed in Copy format: ' +
                         inTc +
-                        '（タイムライン長・FPS を確認）',
+                        ' (check timeline length / FPS)',
                 };
             }
             if (!outTc) {
@@ -445,9 +445,9 @@
                 return {
                     ok: false,
                     error:
-                        '行 ' +
+                        'Row ' +
                         row +
-                        ' の Out タイムコードが不正です（00:00:00.000 形式、ミリ秒 3 桁）: ' +
+                        ' Out timecode is invalid (00:00:00.000, 3-digit ms): ' +
                         outTc,
                 };
             }
@@ -456,9 +456,9 @@
                 return {
                     ok: false,
                     error:
-                        '行 ' +
+                        'Row ' +
                         row +
-                        ' の Out を Copy と同じ形式で解釈できません: ' +
+                        ' Out could not be parsed in Copy format: ' +
                         outTc,
                 };
             }
@@ -477,7 +477,7 @@
             }
             return {
                 ok: false,
-                error: 'マーカー行がありません。',
+                error: 'No marker rows.',
             };
         }
         return {
@@ -533,7 +533,7 @@
     function showMarkersPasteFormatError(message) {
         writeLog('Marker: paste format error — ' + message);
         if (typeof showAppAlert === 'function') {
-            showAppAlert('Markers Paste', message);
+            showAppAlert('Markers Paste', message, { log: false });
         } else {
             window.alert('Markers Paste\n\n' + message);
         }
@@ -611,7 +611,12 @@
             count +
             ' 件で、現在のマーカー一覧をすべて置き換えます。よろしいですか？';
         if (typeof requestAppConfirm === 'function') {
-            return requestAppConfirm('Markers Paste', body, 'Markers Paste: cancelled');
+            return requestAppConfirm('Markers Paste', body, 'Markers Paste: cancelled', {
+                logLine:
+                    'Markers Paste: confirm — replace all markers with ' +
+                    count +
+                    ' pasted item(s)',
+            });
         }
         return window.confirm('Markers Paste\n\n' + body);
     }
@@ -620,7 +625,7 @@
         try {
             if (!markerTimelineReady()) {
                 showMarkersPasteFormatError(
-                    '動画または追加音声を読み込んでから貼り付けてください。',
+                    'Load a video or extra audio track before pasting.',
                 );
                 return;
             }
@@ -629,7 +634,7 @@
             if (text == null) return;
             if (!String(text).trim()) {
                 showMarkersPasteFormatError(
-                    '貼り付けデータが空です。Copy でコピーした表を貼り付けてください。',
+                    'Paste data is empty. Paste a table copied with Copy.',
                 );
                 return;
             }
@@ -638,7 +643,7 @@
             const memoPart = split.memoText;
             if (!markersPart && memoPart == null) {
                 showMarkersPasteFormatError(
-                    '貼り付けデータが空です。Copy でコピーした表を貼り付けてください。',
+                    'Paste data is empty. Paste a table copied with Copy.',
                 );
                 return;
             }
@@ -674,7 +679,7 @@
                 'Marker: paste failed — ' + (err && err.message ? err.message : String(err)),
             );
             showMarkersPasteFormatError(
-                '貼り付け処理中にエラーが発生しました。ログを確認してください。',
+                'An error occurred during paste. See the log for details.',
             );
         }
     }

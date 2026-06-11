@@ -57,6 +57,14 @@
             --layout-section-gap: 7px;
             /** 波形トラック以外の主要ブロックの最大幅 */
             --layout-content-max-w: 1300px;
+            --marker-table-visible-rows: 10;
+            --marker-table-row-h: 1.85rem;
+            --marker-table-head-h: 2.1rem;
+            --player-panel-min-h: calc(
+                7.5rem + var(--marker-table-head-h) +
+                    var(--marker-table-row-h) * var(--marker-table-visible-rows) +
+                    calc(1.35em * 5 + 12px + 2.5rem)
+            );
         }
         body {
             font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -75,6 +83,643 @@
             margin-right: auto;
             width: 100%;
             box-sizing: border-box;
+        }
+
+        /** ドッキング可能レイアウト（標準 / 拡張、L で切替） */
+        .layout-dock-shell {
+            width: 100%;
+            max-width: var(--layout-content-max-w);
+            margin: 0 auto;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-shell--custom {
+            max-width: none;
+            width: 100%;
+            margin: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+        /** 拡張レイアウト（編集・表示）: 枠いっぱい、縦スクロール可（標準モードは body 余白 + max-width 1300px） */
+        body:has(.layout-dock-shell--custom) {
+            padding: 0;
+            min-height: 100vh;
+            min-height: 100dvh;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        .layout-dock-shell--default > .layout-dock-split,
+        .layout-dock-shell--default > .layout-dock-panel {
+            flex: 0 0 auto;
+        }
+        .layout-dock-shell--custom > .layout-dock-split,
+        .layout-dock-shell--custom > .layout-dock-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .layout-dock-split {
+            display: flex;
+            min-height: 0;
+            min-width: 0;
+            flex: 1 1 auto;
+            gap: 0;
+        }
+        .layout-dock-shell--default .layout-dock-split {
+            gap: var(--layout-section-gap);
+        }
+        /** 拡張レイアウト: 標準 UI と同じ 7px 隙間（編集・表示で共通） */
+        .layout-dock-shell--custom .layout-dock-split {
+            gap: var(--layout-section-gap);
+            position: relative;
+        }
+        /** Video + Markers 行: 高さは Video 列基準、Markers は追従 */
+        .layout-dock-shell--default .layout-dock-split--row:has(.layout-dock-panel-content--markers) {
+            align-items: stretch;
+        }
+        .layout-dock-shell--default .layout-dock-split--row:has(.layout-dock-panel-content--markers) > .layout-dock-split__pane {
+            min-height: 0;
+        }
+        .layout-dock-shell--default .layout-dock-split--row:has(.layout-dock-panel-content--markers) > .layout-dock-split__pane > .layout-dock-panel,
+        .layout-dock-shell--default .layout-dock-split--row:has(.layout-dock-panel-content--markers) > .layout-dock-split__pane > .layout-dock-panel > .layout-dock-panel__body {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+        }
+        .layout-dock-shell--default .layout-dock-panel-content--player {
+            flex: 0 0 auto;
+            height: auto;
+            min-height: 0;
+        }
+        .layout-dock-shell--default .layout-dock-panel-content--player .player-stage__main {
+            flex: 0 0 auto;
+            height: auto;
+        }
+        .layout-dock-shell--default .layout-dock-panel-content--markers {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+        }
+        .layout-dock-shell--default .layout-dock-panel-content--markers .marker-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            max-width: none;
+        }
+        .layout-dock-shell--default .layout-dock-panel-content--markers .marker-table-wrap {
+            min-height: 0;
+        }
+        .layout-dock-shell--default .layout-dock-split--column > .layout-dock-split__pane {
+            flex: 0 0 auto !important;
+        }
+        .layout-dock-split--column {
+            flex-direction: column;
+        }
+        .layout-dock-split--row {
+            flex-direction: row;
+        }
+        .layout-dock-split__pane {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+            align-self: stretch;
+        }
+        .layout-dock-split__pane[hidden],
+        .layout-dock-panel[hidden] {
+            display: none !important;
+        }
+        .layout-dock-split__pane > .layout-dock-panel,
+        .layout-dock-split__pane > .layout-dock-split {
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            align-self: stretch;
+        }
+        .layout-dock-resize-handle {
+            position: absolute;
+            z-index: 5;
+            touch-action: none;
+            background: transparent;
+            box-sizing: border-box;
+        }
+        .layout-dock-shell--custom-view .layout-dock-resize-handle {
+            display: none !important;
+        }
+        .layout-dock-resize-handle--row {
+            cursor: row-resize;
+        }
+        .layout-dock-resize-handle--col {
+            cursor: col-resize;
+        }
+        .layout-dock-resize-handle--row::before,
+        .layout-dock-resize-handle--col::before {
+            content: '';
+            position: absolute;
+            border-radius: 2px;
+            background: var(--waveform-seek-cyan-border);
+            box-shadow: 0 0 6px rgba(0, 232, 255, 0.22);
+            pointer-events: none;
+        }
+        .layout-dock-resize-handle--row::before {
+            left: 8px;
+            right: 8px;
+            top: 50%;
+            height: 2px;
+            transform: translateY(-50%);
+        }
+        .layout-dock-resize-handle--col::before {
+            top: 8px;
+            bottom: 8px;
+            left: 50%;
+            width: 2px;
+            transform: translateX(-50%);
+        }
+        .layout-dock-resize-handle:hover::before,
+        .layout-dock-resize-handle[data-layout-resize-active]::before,
+        .layout-dock-resize-handle.layout-dock-resize-handle--active::before,
+        body.layout-dock-resizing .layout-dock-resize-handle[data-layout-resize-active]::before {
+            background: rgba(196, 30, 58, 0.82);
+            box-shadow: 0 0 10px rgba(196, 30, 58, 0.35);
+        }
+        .layout-dock-resize-handle:hover,
+        .layout-dock-resize-handle[data-layout-resize-active],
+        .layout-dock-resize-handle.layout-dock-resize-handle--active {
+            background: rgba(196, 30, 58, 0.08);
+        }
+        .layout-dock-gutter {
+            display: none !important;
+        }
+        body.layout-dock-resizing {
+            user-select: none;
+            cursor: col-resize;
+        }
+        body.layout-dock-resizing.layout-dock-resizing--row {
+            cursor: row-resize;
+        }
+        .layout-dock-panel {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .layout-dock-panel__header {
+            display: none !important;
+        }
+        /** 拡張編集: パネル本体を直接ドラッグ（操作系 UI 上は除外） */
+        .layout-dock-shell--custom-edit .layout-dock-panel__body {
+            cursor: grab;
+        }
+        .layout-dock-shell--custom-edit .layout-dock-panel--dragging .layout-dock-panel__body {
+            cursor: grabbing;
+        }
+        /** レイアウト編集モード: パネル内 UI は見た目・操作とも無効（本体ドラッグとスプリッターのみ有効） */
+        body.layout-dock-structure-editing {
+            cursor: default;
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content {
+            position: relative;
+            opacity: 0.58;
+            filter: saturate(0.62) brightness(0.94);
+            pointer-events: none;
+            user-select: none;
+            transition: opacity 0.15s ease, filter 0.15s ease;
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 40;
+            pointer-events: none;
+            background: rgba(6, 8, 12, 0.16);
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content *,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content *::before,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content *::after {
+            pointer-events: none !important;
+            user-select: none !important;
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content button,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content input,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content select,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content textarea,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content a,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content label,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content summary {
+            cursor: not-allowed !important;
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content button:not(:disabled),
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content input:not(:disabled),
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content select:not(:disabled),
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content textarea:not(:disabled) {
+            opacity: 0.88;
+            box-shadow: none !important;
+            filter: grayscale(0.2);
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content .audio-waveform-composite__lanes,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content video,
+        body.layout-dock-structure-editing .layout-dock-panel__body .layout-dock-panel-content canvas {
+            cursor: not-allowed !important;
+        }
+        body.layout-dock-structure-editing .layout-dock-panel__body {
+            cursor: grab;
+            outline: 1px dashed rgba(0, 232, 255, 0.28);
+            outline-offset: -1px;
+            background: rgba(0, 232, 255, 0.03);
+        }
+        body.layout-dock-structure-editing .layout-dock-panel--dragging .layout-dock-panel__body {
+            cursor: grabbing;
+            outline-color: rgba(196, 30, 58, 0.45);
+            background: rgba(196, 30, 58, 0.06);
+        }
+        body.layout-dock-structure-editing .layout-dock-resize-handle {
+            opacity: 1;
+            filter: none;
+            pointer-events: auto;
+        }
+        body.layout-dock-structure-editing::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            z-index: 10000;
+            pointer-events: none;
+            background: linear-gradient(
+                90deg,
+                rgba(0, 232, 255, 0.55) 0%,
+                rgba(0, 232, 255, 0.35) 40%,
+                rgba(196, 30, 58, 0.35) 60%,
+                rgba(196, 30, 58, 0.55) 100%
+            );
+            box-shadow: 0 0 12px rgba(0, 232, 255, 0.2);
+        }
+        /** 拡張レイアウト: Video / Markers / Log は割当パネル高に追従（スプリッター変更は編集モードのみ） */
+        .layout-dock-shell--custom .layout-dock-panel-content--player {
+            min-height: 0;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--player .player-stage__main {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: 100%;
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--player .video-panel {
+            flex: 1 1 auto;
+            min-height: 0;
+            height: auto;
+        }
+        .layout-dock-panel-content--playback {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content--playback .transport-bar--playback {
+            flex: 0 0 auto;
+            width: 100%;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--player .video-panel__stage {
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            container-type: size;
+            container-name: video-stage;
+        }
+        /** 拡張レイアウト: 16:9 を維持しつつステージを余白なく埋める（外側レターボックスなし） */
+        .layout-dock-shell--custom .layout-dock-panel-content--player .video-panel__stage .video-frame {
+            flex: 0 0 auto;
+            aspect-ratio: 16 / 9;
+            width: min(100cqw, calc(100cqh * 16 / 9));
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            min-width: 0;
+            min-height: 0;
+            margin: 0;
+            align-self: center;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--markers .marker-table-wrap {
+            min-height: 0;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--log > #logSection {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--log .bottom-info,
+        .layout-dock-shell--custom .layout-dock-panel-content--log .log-wrap {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--log #log {
+            flex: 1 1 auto;
+            min-height: 72px;
+            height: 0;
+            max-height: none;
+            overflow-y: auto;
+        }
+        .layout-dock-panel__header:active {
+            cursor: grabbing;
+        }
+        .layout-dock-panel__label {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .layout-dock-panel__dock-btn {
+            display: none !important;
+        }
+        .layout-dock-panel__dock-btn:hover {
+            display: none !important;
+        }
+        .layout-dock-panel__grip {
+            width: 10px;
+            height: 10px;
+            opacity: 0.65;
+            background:
+                radial-gradient(circle, #9aa3b5 1px, transparent 1px) 0 0 / 4px 4px;
+        }
+        .layout-dock-panel__body {
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            border: 2px dashed rgba(196, 30, 58, 0.85);
+            background: rgba(196, 30, 58, 0.1);
+            z-index: 6;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active[data-layout-drop-zone='top']::after {
+            bottom: 50%;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active[data-layout-drop-zone='bottom']::after {
+            top: 50%;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active[data-layout-drop-zone='left']::after {
+            right: 50%;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active[data-layout-drop-zone='right']::after {
+            left: 50%;
+        }
+        .layout-dock-shell--dragging .layout-dock-panel__body--drop-active[data-layout-drop-zone='swap']::after {
+            inset: 18%;
+            border-style: solid;
+            background: rgba(196, 30, 58, 0.18);
+        }
+        .layout-dock-picker {
+            display: none !important;
+        }
+        .layout-dock-picker__title {
+            display: none !important;
+        }
+        .layout-dock-picker__row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .layout-dock-picker__row:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+        .layout-dock-picker__name {
+            flex: 1 1 100%;
+            font-size: 11px;
+            font-weight: 600;
+            color: #d8dee8;
+            margin-bottom: 2px;
+        }
+        .layout-dock-picker__dir {
+            font: inherit;
+            font-size: 10px;
+            color: #c8d0dc;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 3px 6px;
+            cursor: pointer;
+        }
+        .layout-dock-picker__dir:hover {
+            background: rgba(196, 30, 58, 0.24);
+            border-color: rgba(196, 30, 58, 0.5);
+            color: #fff;
+        }
+        .layout-dock-panel-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content__inner {
+            width: 100%;
+        }
+        .layout-dock-panel--dragging {
+            opacity: 0.55;
+        }
+        body.layout-video-markers-hidden #panelMain,
+        body.layout-video-markers-hidden #markerPanel {
+            display: none !important;
+        }
+        .layout-dock-panel-content--player .player-stage__main {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content--markers {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content--markers .marker-panel {
+            flex: 1 1 auto;
+            width: 100%;
+            max-width: none;
+            min-height: 0;
+            height: 100%;
+        }
+        .layout-dock-panel-content--markers .marker-panel__body {
+            flex: 1 1 auto;
+        }
+        .layout-dock-panel-content--waveform .audio-waveform-composite {
+            flex: 1 1 auto;
+            min-height: 0;
+            margin: 0;
+            height: 100%;
+        }
+        /** 拡張レイアウト: 波形 pane は JS で高さ固定（lane 拡縮で上側を動かさない）。幅は stretch で全幅 */
+        .layout-dock-shell--custom
+            .layout-dock-split__pane:has(> .layout-dock-panel[data-layout-panel-host='waveform']) {
+            align-self: stretch;
+            flex-shrink: 0;
+            min-height: 0;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
+        }
+        .layout-dock-shell--custom
+            .layout-dock-split__pane
+            > .layout-dock-panel[data-layout-panel-host='waveform'] {
+            flex: 1 1 auto;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            min-width: 0;
+            align-self: stretch;
+        }
+        .layout-dock-shell--custom .layout-dock-panel[data-layout-panel-host='waveform'] .layout-dock-panel__body {
+            flex: 1 1 auto;
+            min-height: 0;
+            justify-content: flex-start;
+            align-items: stretch;
+            overflow: hidden;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--waveform {
+            flex: 1 1 auto;
+            width: 100%;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--waveform .audio-waveform-composite {
+            flex: 0 0 auto;
+            width: 100%;
+            height: auto;
+            min-height: 0;
+            min-width: 0;
+            max-height: none;
+            overflow: hidden;
+        }
+        .layout-dock-panel-content--transport > #transportOptionsSection {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content--log > #logSection {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        /** ドッキング時は split gap がブロック間隙間を担う（transport-bar の下マージンは二重になる） */
+        .layout-dock-panel-content--transport .transport-bar {
+            margin-bottom: 0;
+        }
+        /** Options 2・3 行目（Master Vol 系 + Export 系）— 標準は縦 2 行、拡張レイアウトは 1 行に結合 */
+        .transport-bar__options-cluster {
+            display: flex;
+            flex-direction: column;
+            gap: var(--transport-bar-row-gap);
+            width: 100%;
+            min-width: 0;
+        }
+        .layout-dock-shell--custom .transport-bar__options-cluster {
+            flex-flow: row wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px 10px;
+        }
+        .layout-dock-shell--custom .transport-bar__options-cluster .transport-bar__row {
+            display: contents;
+        }
+        .layout-dock-panel-content--monitor .review-mix-monitor {
+            flex: 1 1 auto;
+            min-height: 0;
+            margin: 0;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--monitor .monitor-layout {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        .layout-dock-panel-content--reading .app-reading-area {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .layout-dock-panel-content--reading .app-doc-fold {
+            max-width: none;
+            margin-left: 0;
+            margin-right: 0;
+        }
+        .layout-dock-panel-content--reading .app-doc-fold:first-child {
+            margin-top: 0;
+        }
+        .layout-dock-panel-content--footer {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+        .layout-dock-panel-content--footer .app-site-footer {
+            flex-shrink: 0;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+        }
+        .layout-dock-panel-content--header .app-header {
+            padding-top: 10px;
+        }
+        .layout-dock-panel-content--header .app-header-note {
+            margin-bottom: 0;
+        }
+        /** 拡張レイアウト: Header パネル高の中央にタイトル行・注意書きを配置 */
+        .layout-dock-shell--custom .layout-dock-panel-content--header {
+            flex: 1 1 auto;
+            min-height: 0;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--header .layout-dock-panel-content__inner {
+            flex: 0 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--header .app-header {
+            padding: 0;
+            margin: 0;
+        }
+        .layout-dock-shell--custom .layout-dock-panel-content--header .app-header-note {
+            margin: 0;
         }
 
         .app-header {
@@ -205,10 +850,7 @@
         }
         .video-panel.file-drop-target--dragover {
             border-color: rgba(196, 30, 58, 0.72);
-            box-shadow:
-                0 14px 36px rgba(0, 0, 0, 0.42),
-                0 0 20px var(--accent-glow-weak),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
         }
         .video-panel.file-drop-target--dragover .video-frame {
             outline: 2px dashed rgba(196, 30, 58, 0.65);
@@ -216,33 +858,11 @@
         }
         .audio-waveform-composite.file-drop-target--dragover {
             border-color: rgba(196, 30, 58, 0.55);
-            box-shadow:
-                0 8px 24px rgba(0, 0, 0, 0.38),
-                0 0 18px var(--accent-glow-weak);
+            box-shadow: none;
         }
         .audio-waveform-composite.file-drop-target--dragover .audio-waveform-composite__lanes {
             outline: 2px dashed rgba(196, 30, 58, 0.5);
             outline-offset: -2px;
-        }
-        /** 動画＋マーカー横並びステージ */
-        .player-stage {
-            --marker-table-visible-rows: 10;
-            --marker-table-row-h: 1.85rem;
-            --marker-table-head-h: 2.1rem;
-            --player-panel-min-h: calc(
-                7.5rem + var(--marker-table-head-h) +
-                    var(--marker-table-row-h) * var(--marker-table-visible-rows) +
-                    calc(1.35em * 5 + 12px + 2.5rem)
-            );
-            margin: 0 auto var(--layout-section-gap);
-            width: 100%;
-            box-sizing: border-box;
-            scroll-margin-top: 12px;
-            display: flex;
-            flex-direction: row;
-            align-items: stretch;
-            gap: var(--layout-section-gap);
-            min-height: 0;
         }
         .player-stage__main {
             flex: 1 1 50%;
@@ -251,10 +871,6 @@
             display: flex;
             flex-direction: column;
             align-self: stretch;
-        }
-        .player-stage--video-markers-panels-hidden #panelMain,
-        .player-stage--video-markers-panels-hidden #markerPanel {
-            display: none !important;
         }
         .player-stage__main > .video-panel {
             flex: 0 1 auto;
@@ -274,9 +890,7 @@
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow:
-                0 14px 36px rgba(0, 0, 0, 0.42),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
         }
         .marker-panel::before {
             content: '';
@@ -440,8 +1054,9 @@
             background: rgba(0, 0, 0, 0.35);
             border: 1px solid rgba(255, 255, 255, 0.12);
         }
-        .player-stage .marker-panel .marker-table-wrap {
-            flex: 1 1 0;
+        .layout-dock-panel-content--player .marker-panel .marker-table-wrap,
+        .marker-panel .marker-table-wrap {
+            flex: 1 1 auto;
             min-height: 0;
         }
         .marker-table-wrap {
@@ -612,7 +1227,6 @@
             box-sizing: border-box;
             min-height: 0;
             height: auto;
-            max-height: 2.7em;
             resize: none;
             overflow-y: hidden;
             field-sizing: content;
@@ -672,7 +1286,7 @@
             background: rgba(196, 40, 58, 0.65);
         }
         .marker-panel__body {
-            flex: 1 1 0;
+            flex: 1 1 auto;
             min-height: 0;
             display: flex;
             flex-direction: column;
@@ -904,10 +1518,10 @@
             z-index: 0;
         }
         @media (max-width: 960px) {
-            .player-stage {
+            .layout-dock-split--row {
                 flex-direction: column;
             }
-            .player-stage__main {
+            .layout-dock-panel-content--player .player-stage__main {
                 flex: none;
                 width: 100%;
             }
@@ -958,9 +1572,7 @@
             padding: 16px 14px 18px;
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow:
-                0 14px 36px rgba(0, 0, 0, 0.42),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
             position: relative;
             overflow: hidden;
             display: flex;
@@ -970,12 +1582,12 @@
             height: auto;
             box-sizing: border-box;
         }
-        .player-stage .video-panel__head-row,
-        .player-stage .video-panel .file-name,
-        .player-stage .video-panel .panel-info-line {
+        .layout-dock-panel-content--player .video-panel__head-row,
+        .layout-dock-panel-content--player .video-panel .file-name,
+        .layout-dock-panel-content--player .video-panel .panel-info-line {
             flex-shrink: 0;
         }
-        .player-stage .video-panel__stage {
+        .layout-dock-panel-content--player .video-panel__stage {
             flex: 0 1 auto;
             min-height: 0;
             display: flex;
@@ -1101,7 +1713,7 @@
             border: 1px solid rgba(255, 255, 255, 0.06);
             box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.65);
         }
-        .player-stage .video-panel__stage .video-frame {
+        .layout-dock-panel-content--player .video-panel__stage .video-frame {
             flex: 0 1 auto;
             min-height: 0;
             width: 100%;
@@ -1260,9 +1872,7 @@
         }
         .compare-composite .video-panel--composite {
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow:
-                0 14px 36px rgba(0, 0, 0, 0.42),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
         }
         .compare-composite[hidden] {
             display: none !important;
@@ -1454,9 +2064,7 @@
             padding: 8px;
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow:
-                0 14px 36px rgba(0, 0, 0, 0.42),
-                inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
             position: relative;
             overflow: hidden;
         }
@@ -3234,7 +3842,7 @@
             flex-direction: column;
             gap: var(--transport-bar-row-gap);
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
             overflow: visible;
         }
         .transport-bar__row {
@@ -3275,13 +3883,6 @@
             flex-wrap: wrap;
             justify-content: center;
             overflow: visible;
-        }
-        .player-stage__main .transport-bar--playback {
-            flex: 0 0 auto;
-            width: 100%;
-            margin-top: var(--layout-section-gap);
-            margin-bottom: 0;
-            box-sizing: border-box;
         }
         .transport-bar .session-io-cluster {
             display: inline-flex;
@@ -4648,7 +5249,7 @@
             scroll-margin-top: 16px;
             border-radius: 14px;
             border: 1px solid rgba(255, 255, 255, 0.06);
-            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: none;
             background: linear-gradient(165deg, #32323c 0%, #1f1f26 42%, #26262f 100%);
             overflow: hidden;
         }
@@ -4820,7 +5421,6 @@
             min-height: 148px;
             max-height: 148px;
             resize: none;
-            white-space: pre-line;
             overflow-x: hidden;
             overflow-y: scroll;
             background: #242629;
@@ -4834,6 +5434,23 @@
             border-radius: 4px;
             border: 1px solid #4a4d52;
             box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.55);
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .log-line {
+            white-space: pre-wrap;
+            word-break: break-word;
+            line-height: 1.35;
+        }
+        .log-line--info {
+            color: #f0f0f5;
+        }
+        .log-line--warn {
+            color: #ffff00;
+        }
+        .log-line--error {
+            color: #ff5050;
         }
         .log-actions {
             position: absolute;
@@ -5087,6 +5704,8 @@
         }
         .review-mix-monitor .spectrum-canvas-wrap {
             flex: 0 0 auto;
+            width: 100%;
+            height: var(--spectrum-canvas-outer-px, 324px);
             min-height: var(--spectrum-canvas-outer-px, 324px);
             position: relative;
             box-sizing: border-box;

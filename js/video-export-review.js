@@ -47,6 +47,29 @@
         });
     }
 
+    function captureWebmExportUiState() {
+        return {
+            analyzeWasLive:
+                typeof getAnalyzeOn === 'function' ? !!getAnalyzeOn() : false,
+        };
+    }
+
+    function applyWebmExportUiPrep() {
+        if (typeof setAnalyzeOn === 'function') {
+            setAnalyzeOn(false, { silent: true });
+        }
+        if (typeof resetWaveformTimelineZoom === 'function') {
+            resetWaveformTimelineZoom({ silent: true });
+        }
+    }
+
+    function restoreWebmExportUiState(state) {
+        if (!state || typeof state !== 'object') return;
+        if (state.analyzeWasLive && typeof setAnalyzeOn === 'function') {
+            setAnalyzeOn(true, { silent: true });
+        }
+    }
+
     function getVideoExportDurationSec() {
         if (typeof getMasterTransportDurationSec === 'function') {
             const master = getMasterTransportDurationSec();
@@ -248,11 +271,8 @@
             throw new Error('Could not determine video duration');
         }
 
-        const analyzeWasOn =
-            typeof getAnalyzeOn === 'function' ? getAnalyzeOn() : false;
-        if (analyzeWasOn && typeof setAnalyzeOn === 'function') {
-            setAnalyzeOn(false, { silent: true });
-        }
+        const exportUiState = captureWebmExportUiState();
+        applyWebmExportUiPrep();
 
         if (
             typeof isRangeLoopPlaybackActive === 'function' &&
@@ -295,9 +315,7 @@
         canvas.height = vh;
         const ctx = canvas.getContext('2d', { alpha: false });
         if (!ctx) {
-            if (analyzeWasOn && typeof setAnalyzeOn === 'function') {
-                setAnalyzeOn(true, { silent: true });
-            }
+            restoreWebmExportUiState(exportUiState);
             throw new Error('Canvas 2D is not available');
         }
 
@@ -333,9 +351,7 @@
         } catch (e) {
             if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
             if (typeof endReviewMixExportCapture === 'function') endReviewMixExportCapture();
-            if (analyzeWasOn && typeof setAnalyzeOn === 'function') {
-                setAnalyzeOn(true, { silent: true });
-            }
+            restoreWebmExportUiState(exportUiState);
             throw e;
         }
 
@@ -352,9 +368,7 @@
             exportActive = false;
             if (typeof endReviewMixExportCapture === 'function') endReviewMixExportCapture();
             if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
-            if (analyzeWasOn && typeof setAnalyzeOn === 'function') {
-                setAnalyzeOn(true, { silent: true });
-            }
+            restoreWebmExportUiState(exportUiState);
             videoMain.removeEventListener('ended', onVideoEnded);
             if (typeof setWebmExportEmergencyCleanup === 'function') {
                 setWebmExportEmergencyCleanup(null);
@@ -496,9 +510,6 @@
             recorder.start(1000);
         } catch (e) {
             cleanup();
-            if (analyzeWasOn && typeof setAnalyzeOn === 'function') {
-                setAnalyzeOn(true, { silent: true });
-            }
             throw e;
         }
 

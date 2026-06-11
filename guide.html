@@ -24,6 +24,13 @@
                     </ol>
                 </li>
                 <li class="guide-nav__item"><a href="#overview">画面の構成</a></li>
+                <li class="guide-nav__group" data-section="layout">
+                    <a href="#layout" class="guide-nav__chapter">レイアウトモード</a>
+                    <ol class="guide-nav__sublist">
+                        <li><a href="#layout-modes">3つのモード</a></li>
+                        <li><a href="#layout-edit">編集の操作</a></li>
+                    </ol>
+                </li>
                 <li class="guide-nav__item"><a href="#flow">操作の流れ</a></li>
                 <li class="guide-nav__group" data-section="load">
                     <a href="#load" class="guide-nav__chapter">ファイルの読み込み</a>
@@ -168,12 +175,32 @@
                             <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
                         </li>
                         <li>
-                            <strong>ログ</strong> — 画面最下部。読み込み・エクスポート・エラーなどのメッセージ。
+                            <strong>ログ</strong> — 画面最下部。読み込み・エクスポート・警告・エラーなどのメッセージ。<strong>W/E Only</strong> で警告・エラー行のみ表示。
                         </li>
                     </ol>
                 </div>
 
                 <p>狭い画面幅では、映像とマーカーは縦に積み重なることがあります。それ以外のブロックの上下順序は変わりません。</p>
+            </section>
+
+            <section class="guide-section" id="layout">
+                <h2 class="docs-heading-box">レイアウトモード</h2>
+                <p>画面のパネル配置は<strong>標準レイアウト</strong>と<strong>ユーザーレイアウト</strong>の2系統があります。ユーザーレイアウトでは各パネルの位置・サイズを自由に組み替えられ、設定はブラウザに保存され次回起動時にも復元されます（Import/Export Review にも含まれます）。</p>
+
+                <h3 class="docs-heading-box--sub" id="layout-modes">3つのモード</h3>
+                <ul>
+                    <li><strong>標準レイアウト</strong> — 既定の縦並び構成です。画面中央に最大幅 1300px で表示され、上下に余白があります。<kbd>U</kbd> でユーザーレイアウト表示へ切り替えます。</li>
+                    <li><strong>ユーザーレイアウト</strong> — 保存した配置で画面いっぱいに表示します。通常のレビュー作業はこのモードで行います。<kbd>U</kbd> で標準レイアウトへ戻ります。</li>
+                    <li><strong>ユーザーレイアウト編集</strong> — パネルの移動とスプリッターによるサイズ調整ができます。編集中はレイアウト操作以外（再生・マーカー編集など）は一時的に無効になります。<kbd>Shift</kbd>+<kbd>U</kbd> で編集モードに入り、もう一度 <kbd>Shift</kbd>+<kbd>U</kbd> でユーザーレイアウト表示へ戻ります。編集中に <kbd>U</kbd> を押すと標準レイアウトへ切り替わります。</li>
+                </ul>
+                <p>モード切替時は画面上部にトースト（短い通知）が表示されます。</p>
+
+                <h3 class="docs-heading-box--sub" id="layout-edit">編集の操作</h3>
+                <ul>
+                    <li><strong>パネルの移動</strong> — 編集モードで各パネル本体（枠の余白部分）をドラッグします。別パネルの上では、端に近い位置へドロップすると上下左右へ分割配置、中央付近へドロップすると入れ替えになります。</li>
+                    <li><strong>スプリッター</strong> — パネル境界に現れるハンドルをドラッグして、隣接パネルのサイズを変更します。<strong>縦スプリッター</strong>（左右に分かれる境界）は中央付近で 50:50 にスナップします。<kbd>Alt</kbd> を押しながらドラッグするとスナップしません。<strong>横スプリッター</strong>（上下に分かれる境界）はスナップしません。</li>
+                    <li><strong>保存</strong> — 編集内容は操作のたびに自動保存されます。編集を終了してユーザーレイアウト表示に戻っても配置は維持されます。</li>
+                </ul>
             </section>
 
             <section class="guide-section" id="flow">
@@ -408,7 +435,7 @@
                     <li><strong>How To</strong>/<strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
                     <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd>、Mac では <kbd>Cmd</kbd> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生/停止（<kbd>Space</kbd>）。<kbd>Ctrl</kbd>+<kbd>Space</kbd> はシークバー位置の1秒前から<strong>プリロール再生</strong>（1秒未満の場合は現在位置から）。<kbd>Alt</kbd>+<kbd>Enter</kbd> は直近の再生開始位置から再生し直します（一度も再生していない場合は無効）。右端。初回再生時は Video/Markers 行が見える位置へ自動スクロールします。</li>
-                    <li><kbd>F</kbd> — Video パネルと Markers パネルをまとめて隠す/表示（再生バーは残る。リロード時は常に表示）。</li>
+                    <li><kbd>U</kbd> — 標準レイアウト ↔ ユーザーレイアウトを切替（編集中は標準レイアウトへ）。<kbd>Shift</kbd>+<kbd>U</kbd> — ユーザーレイアウトの編集モードに入る／編集を終了してユーザーレイアウト表示へ戻る。詳細は「<a href="#layout">レイアウトモード</a>」を参照。</li>
                 </ul>
                 <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、映像パネル内の表示を参照してください。</p>
 
@@ -417,7 +444,6 @@
                     <li><strong>現在地（小節・拍）</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
                     <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
                     <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時は、カーソル位置の項目を <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。カンマ区切りの<strong>末尾</strong>（例: <code>1,8</code> の最後）にあるときは、上下どちらでも <code>,8</code> が追加されます（続けて8小節のフレーズを指定）。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
-                    <li><kbd>O</kbd> — 波形直下の<strong>オプションバー全体</strong>（Tempo/Sig・Phrase / Click・Analyze・R. Offset・レビュー入出力 / SAVED・Master Vol 等）とログ欄、およびページ下部のマニュアル（特記事項・使い方等）をまとめて表示/非表示。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-phrase-edit">フレーズの編集（Tempo/Sig 表示中）</h3>
@@ -434,7 +460,7 @@
                 <h3 class="docs-heading-box--sub" id="transport-options-mid">波形直下（オプションバー中段）</h3>
                 <ul>
                     <li><strong>Click</strong> — メトロノームクリック音（<kbd>C</kbd>）。Click ON かつ<strong>再生中</strong>のみ、BPM/拍子グリッド（Tempo/Sig 入力）の拍に同期して鳴ります。Tempo/Sig 表示（<kbd>T</kbd>）のオン/オフとは独立です。ダウンビートは高音、それ以外は低音。音量はマスター出力の RMS に連動し、常に楽曲より大きく聞こえるよう調整されます（Analyze 表示は不要。ミックス経路は通りません）。デフォルト OFF。設定は次回起動時に復元されます（Import/Export には含めません）。</li>
-                    <li><strong>Analyze</strong> — スペクトラム/メーター表示のオン/オフ（<kbd>A</kbd>）。オフでも CLIP PROTECT は動作します。</li>
+                    <li><strong>Analyze</strong> — スペクトラム/メーター枠は<strong>常時表示</strong>です。チェック ON で Live（解析中）、OFF で解析停止（アイドル表示へ戻す）。<kbd>A</kbd> でも Live ↔ 解析停止を切替できます。解析停止中も CLIP PROTECT は動作します。</li>
                     <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
                     <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
@@ -489,6 +515,7 @@
                 <ul>
                     <li><strong>Export WebM</strong> は、現在のレビュー内容を確認しやすいように、<strong>タイムコードとマーカーコメントを映像へ焼き込んだ WebM</strong> を書き出します。</li>
                     <li><strong>Audio</strong> がオンなら、追加音声（読み込み済みの全 Audio Track）をすべてミックス対象に含めます（Mute / Solo 状態は影響しません）。</li>
+                    <li>書き出し開始前に、波形の横倍率を全体表示（1×）へ戻し、アナライザーを解析停止にします（書き出し前が Live だった場合は完了後に Live へ戻ります。横倍率は 1× のままです）。</li>
                     <li>書き出し中は操作ロック用オーバーレイが表示され、<kbd>Esc</kbd> でキャンセルできます。</li>
                     <li>実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。</li>
                 </ul>
@@ -515,7 +542,9 @@
 
             <section class="guide-section" id="log">
                 <h2 class="docs-heading-box">ログ</h2>
-                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。右端の <strong>Debug Log</strong> チェックを ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。<strong>Copy</strong> でログ全文をクリップボードへ、<strong>Clear</strong> でログを消去できます。<kbd>O</kbd> でログ欄・波形直下のオプションバー全体・ページ下部のマニュアル（特記事項・使い方等）をまとめて非表示にできます。うまくいかないときは、まずここを確認してください。</p>
+                <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。重要度に応じて行の色が変わり、ワーニング行の先頭には <code>[Warning]</code>、エラー行には <code>[Error]</code> が付きます（通常の情報行は従来どおり白系）。</p>
+                <p>ログ欄右下の <strong>W/E Only</strong> を ON にすると、<strong>ワーニングとエラーの行だけ</strong>が表示されます（フォールバックや軽微な未適用は黄色、保存失敗やデコード失敗などは赤）。ログが長いときに問題行だけを追う用途です。デフォルトは OFF で、ON/OFF は <strong>localStorage</strong> に保存され<strong>次回起動時に復元</strong>されます（Import/Export 対象外）。<strong>Copy</strong> は、W/E Only ON 時は<strong>表示されている行だけ</strong>をコピーします。</p>
+                <p><strong>Debug Log</strong> を ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。Debug Log を ON にした直後には、W/E Only の動作確認用にテストの <code>[Warning]</code> / <code>[Error]</code> 行がそれぞれ1行ずつ出ます。<strong>Copy</strong>（全文または表示中のみ）・<strong>Clear</strong>（ログ消去）も右端にあります。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -525,7 +554,7 @@
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、ログ欄の <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>O</kbd>（オプション・ログ・マニュアルの表示切替）、<kbd>F</kbd>（Video/Markers 枠の表示切替）、<kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> によるフレーズ編集も利用できます。</p>
+                <p>最近追加した主なキーとして、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、<kbd>U</kbd>（レイアウト切替）/<kbd>Shift</kbd>+<kbd>U</kbd>（ユーザーレイアウト編集）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>

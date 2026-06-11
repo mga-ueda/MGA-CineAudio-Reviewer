@@ -40,7 +40,7 @@
             log('step/ok', Object.assign({ step: label }, detail || null));
             return result;
         } catch (err) {
-            log('step/fail', {
+            log('step/error', {
                 step: label,
                 err: err && err.message ? err.message : String(err),
                 detail: detail || null,
@@ -57,7 +57,7 @@
             log('step/ok', Object.assign({ step: label }, detail || null));
             return result;
         } catch (err) {
-            log('step/fail', {
+            log('step/error', {
                 step: label,
                 err: err && err.message ? err.message : String(err),
                 detail: detail || null,

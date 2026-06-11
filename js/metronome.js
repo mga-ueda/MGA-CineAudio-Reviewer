@@ -14,7 +14,7 @@
     const METRONOME_DB_ABOVE_MIX_RMS = 12;
     /** クリック出力の上限（フルスケール線形） */
     const METRONOME_MAX_GAIN_LEVEL = 0.5;
-    const METRONOME_MIN_GAIN_DB = -30;
+    const METRONOME_MIN_GAIN_DB = -20;
     const METRONOME_MIN_GAIN_LINEAR = Math.pow(10, METRONOME_MIN_GAIN_DB / 20);
     /** Master Vol 変更への追従を遅くする（秒）。 */
     const METRONOME_GAIN_SMOOTH_SEC = 0.85;
@@ -294,12 +294,73 @@
         return Math.max(when, ctx.currentTime + METRONOME_SCHEDULE_MIN_LEAD_SEC);
     }
 
-    async function fetchMetronomeWav(url) {
-        const res = await fetch(url);
-        if (!res.ok) {
-            throw new Error('Metronome WAV fetch failed: ' + url + ' (' + res.status + ')');
+    function resolveMetronomeWavUrl(relativePath) {
+        try {
+            return new URL(relativePath, document.baseURI || window.location.href).href;
+        } catch (_) {
+            return relativePath;
         }
-        return res.arrayBuffer();
+    }
+
+    function fetchMetronomeWavViaXhr(url) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.responseType = 'arraybuffer';
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve(xhr.response);
+                    return;
+                }
+                reject(
+                    new Error(
+                        'Metronome WAV XHR unavailable: ' + url + ' (' + xhr.status + ')',
+                    ),
+                );
+            };
+            xhr.onerror = () => {
+                reject(new Error('Metronome WAV XHR unavailable: ' + url));
+            };
+            xhr.send();
+        });
+    }
+
+    async function fetchMetronomeWav(relativePath) {
+        const url = resolveMetronomeWavUrl(relativePath);
+        try {
+            const res = await fetch(url);
+            if (!res.ok) {
+                throw new Error(
+                    'Metronome WAV fetch unavailable: ' + url + ' (' + res.status + ')',
+                );
+            }
+            return res.arrayBuffer();
+        } catch (fetchErr) {
+            try {
+                return await fetchMetronomeWavViaXhr(url);
+            } catch (xhrErr) {
+                throw fetchErr || xhrErr;
+            }
+        }
+    }
+
+    function decodeEmbeddedMetronomeWavBase64(b64) {
+        const bin = atob(b64);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        return bytes.buffer;
+    }
+
+    function loadEmbeddedMetronomeWavBytes() {
+        const embedded =
+            typeof window !== 'undefined' ? window.METRONOME_WAV_BYTES_EMBEDDED : null;
+        if (!embedded || !embedded.accent || !embedded.beat) {
+            throw new Error('Metronome: embedded WAV bytes unavailable');
+        }
+        return {
+            accentAb: decodeEmbeddedMetronomeWavBase64(embedded.accent),
+            beatAb: decodeEmbeddedMetronomeWavBase64(embedded.beat),
+        };
     }
 
     function prefetchMetronomeWavFiles() {
@@ -307,7 +368,24 @@
             metronomeWavBytesPromise = Promise.all([
                 fetchMetronomeWav(METRONOME_WAV.accent),
                 fetchMetronomeWav(METRONOME_WAV.beat),
-            ]).then(([accentAb, beatAb]) => ({ accentAb, beatAb }));
+            ])
+                .then(([accentAb, beatAb]) => ({ accentAb, beatAb }))
+                .catch((err) => {
+                    try {
+                        const embedded = loadEmbeddedMetronomeWavBytes();
+                        if (typeof writeLog === 'function') {
+                            writeLog(
+                                'Metronome: using embedded WAV (fetch unavailable — ' +
+                                    (err && err.message ? err.message : String(err)) +
+                                    ')',
+                            );
+                        }
+                        return embedded;
+                    } catch (embeddedErr) {
+                        metronomeWavBytesPromise = null;
+                        throw err || embeddedErr;
+                    }
+                });
         }
         return metronomeWavBytesPromise;
     }

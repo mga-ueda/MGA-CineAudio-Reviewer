@@ -1,10 +1,20 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.10';
+    const APP_VERSION = '0.11';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.11',
+            date: '2026年6月11日',
+            items: [
+                'ログパネルに重大度分類（info / warn / error）と行色分けを追加（[Warning] 黄原色、[Error] 赤原色）。W/E Only フィルタで警告・エラー行のみ表示（localStorage 保存、Import/Export 対象外）。',
+                'Debug Log ON 時はログ行数無制限、OFF 時は 500 行上限。Debug Log を ON にした直後に W/E Only 確認用のテスト [Warning] / [Error] 行を各 1 行出力。',
+                'ログメッセージを英語に統一（確認ダイアログは日本語可）。Failed 表現を実際の失敗とフォールバックで区別。CLIP PROTECT を info 扱いに変更。',
+                '使い方・guide を W/E Only・ログ色・Debug Log に合わせて更新。未使用コード削除など JS の軽量リファクタリング。',
+            ],
+        },
         {
             version: '0.10',
             date: '2026年6月11日',

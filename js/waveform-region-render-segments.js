@@ -893,7 +893,7 @@
                 },
             ];
             if (!setTrackSegments(track, seeded, { silent: true })) {
-                writeLog('Playback region: split failed (could not apply segments)');
+                writeLog('Playback region: split not applied (could not apply segments)');
                 flashSeekHint('Region', "Can't split here", 'error');
                 return false;
             }

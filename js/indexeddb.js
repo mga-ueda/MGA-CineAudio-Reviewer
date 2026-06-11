@@ -560,7 +560,7 @@
                             });
                         } catch (err) {
                             writeLog(
-                                'Session: musical slot rebuild after restore failed — ' +
+                                'Session: musical slot rebuild after restore skipped — ' +
                                     (err && err.message ? err.message : String(err)),
                             );
                         }
@@ -575,7 +575,7 @@
                             updateAllPlaybackRegionOverlays();
                         } catch (err) {
                             writeLog(
-                                'Session: overlay refresh after restore failed — ' +
+                                'Session: overlay refresh after restore skipped — ' +
                                     (err && err.message ? err.message : String(err)),
                             );
                         }
@@ -1423,7 +1423,7 @@
                             writeLog(
                                 'Extra audio ' +
                                     (entry.slot + 1) +
-                                    ': clip restore failed — ' +
+                                    ': clip could not restore — ' +
                                     (clipErr && clipErr.message
                                         ? clipErr.message
                                         : String(clipErr)),
@@ -1569,6 +1569,9 @@
             refreshMarkerUi();
         } else if (typeof flushPendingSessionMarkersRestore === 'function') {
             flushPendingSessionMarkersRestore();
+        }
+        if (typeof scheduleTransportUiRefreshAfterLayout === 'function') {
+            scheduleTransportUiRefreshAfterLayout();
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();

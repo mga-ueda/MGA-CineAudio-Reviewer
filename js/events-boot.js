@@ -56,6 +56,9 @@
         if (typeof scheduleMarkersUiRefreshAfterLayout === 'function') {
             scheduleMarkersUiRefreshAfterLayout();
         }
+        if (typeof scheduleTransportUiRefreshAfterLayout === 'function') {
+            scheduleTransportUiRefreshAfterLayout();
+        }
         if (typeof applyShortcutTooltips === 'function') {
             applyShortcutTooltips();
         }

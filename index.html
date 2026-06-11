@@ -41,7 +41,7 @@
         tabindex="-1"
     >
         <div class="export-blocking-overlay__panel">
-            <p class="export-blocking-overlay__title" id="exportBlockingTitle">Exporting WebM</p>
+            <p class="export-blocking-overlay__title" id="exportBlockingTitle">WebM を書き出し中</p>
             <p class="export-blocking-overlay__esc-hint" id="exportBlockingEscHint">
                 操作はロックされています。<kbd>Esc</kbd> キーで書き出しをキャンセルできます。
             </p>
@@ -72,7 +72,11 @@
         </div>
     </div>
 
-    <div class="layout-narrow">
+    <div id="appLayoutShell" class="layout-dock-shell layout-dock-shell--default" aria-label="App layout"></div>
+
+    <div id="layoutDockPanelSource" hidden aria-hidden="true">
+    <div class="layout-dock-panel-content layout-dock-panel-content--header" data-layout-panel="header" id="layoutDockPanelHeader">
+    <div class="layout-dock-panel-content__inner">
     <header class="app-header">
         <div class="app-header-inner">
             <h2 class="app-title">MGA CineAudio Reviewer</h2>
@@ -82,8 +86,9 @@
 
     <p class="app-header-note app-header-note--privacy">動画・音声は<strong>このブラウザ内でのみ</strong>デコード・再生され、いかなるデータもサーバーへは<strong>アップロードされません</strong>。</p>
     </div>
+    </div>
 
-    <div class="player-stage layout-narrow" id="playerStage">
+    <div class="layout-dock-panel-content layout-dock-panel-content--player" data-layout-panel="player" id="layoutDockPanelPlayer">
         <div class="player-stage__main" id="playerStageMain">
             <div class="video-panel file-drop-target file-drop-target--both" id="panelMain" data-side="main" title="動画・追加音声・.mgacr をドロップして読み込み（ページ内どこでも可）">
                 <div class="video-panel__head-row">
@@ -118,6 +123,10 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div class="layout-dock-panel-content layout-dock-panel-content--playback" data-layout-panel="playback" id="layoutDockPanelPlayback">
             <div class="transport-bar transport-bar--playback" id="playerPlaybackBar">
                 <div class="transport-bar__row transport-bar__row--playback" role="group" aria-label="Playback controls">
                     <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
@@ -144,7 +153,9 @@
                     <button type="button" id="playStopBtn" disabled title="再生/停止">Play</button>
                 </div>
             </div>
-        </div>
+    </div>
+
+    <div class="layout-dock-panel-content layout-dock-panel-content--markers" data-layout-panel="markers" id="layoutDockPanelMarkers">
         <aside class="marker-panel" id="markerPanel" aria-label="Marker list">
             <div class="marker-panel__head">
                 <div class="marker-panel__head-row">
@@ -192,6 +203,7 @@
         </aside>
     </div>
 
+    <div class="layout-dock-panel-content layout-dock-panel-content--waveform" data-layout-panel="waveform" id="layoutDockPanelWaveform">
     <section class="audio-waveform-composite file-drop-target file-drop-target--both" id="audioWaveformComposite" aria-label="音声波形" title="動画・追加音声・.mgacr をドロップして読み込み（ページ内どこでも可）">
         <div class="audio-waveform-composite__grid">
             <div class="audio-waveform-composite__sidebar">
@@ -280,8 +292,10 @@
             </div>
         </div>
     </section>
+    </div>
 
-    <div class="layout-narrow" id="transportOptionsSection">
+    <div class="layout-dock-panel-content layout-dock-panel-content--transport" data-layout-panel="transport" id="layoutDockPanelTransport">
+    <div id="transportOptionsSection">
     <div class="transport-bar">
         <div class="transport-bar__row transport-bar__row--grid">
             <div
@@ -329,38 +343,7 @@
                 >
             </div>
         </div>
-        <div class="transport-bar__row transport-bar__row--export">
-            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap" title="Click — 再生中に BPM/拍子グリッドへ同期したクリック音（C で切替）。">
-                <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
-                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)" title="メトロノームクリック音（C で切替）">
-            </div>
-            <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — スペクトラムとレベルメーター（A で切替）。OFF でも CLIP PROTECT は有効。">
-                <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
-                <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze (A to toggle)" title="スペクトラムとレベルメーターを表示（A で切替）">
-            </div>
-            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap" title="R. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（R で切替）。Import/Export Review およびセッション復元に保存。">
-                <label class="transport-opt-label" for="rehearsalMarkOffsetCheckbox">R. Offset</label>
-                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Rehearsal mark offset (R. Offset)" title="ON: 先頭フレーズに練習番号を付けない（R で切替）">
-            </div>
-            <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
-                <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
-                    <span class="transport-opt-label">Include in export</span>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に Video を含める">
-                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export Review に Video を含める">
-                        <span>Video</span>
-                    </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
-                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
-                        <span>Audio</span>
-                    </label>
-                </div>
-            </div>
-            <div class="session-io-actions" role="group" aria-label="Import and export review">
-                <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title=".mgacr を Import Review で復元（ドロップ可・Ctrl+Shift+Alt+I）">Import Review</button>
-                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled title="選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（Ctrl+Shift+Alt+E）">Export Review</button>
-                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" disabled title="タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）">Export WebM</button>
-            </div>
-        </div>
+        <div class="transport-bar__options-cluster">
         <div class="transport-bar__row transport-bar__row--secondary">
             <div
                 class="session-save-indicator-chip"
@@ -397,10 +380,45 @@
                 </select>
             </div>
         </div>
+        <div class="transport-bar__row transport-bar__row--export">
+            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap" title="Click — 再生中に BPM/拍子グリッドへ同期したクリック音（C で切替）。">
+                <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
+                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)" title="メトロノームクリック音（C で切替）">
+            </div>
+            <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — スペクトラムとレベルメーター（常時表示。チェックで Live、A で Live/解析停止の切替）。解析停止中も CLIP PROTECT は有効。">
+                <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
+                <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze（Live のオン/オフ。A で Live/解析停止を切替）" title="ON で Live（解析中）、OFF で解析停止。A キーでも切替">
+            </div>
+            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap" title="R. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（R で切替）。Import/Export Review およびセッション復元に保存。">
+                <label class="transport-opt-label" for="rehearsalMarkOffsetCheckbox">R. Offset</label>
+                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Rehearsal mark offset (R. Offset)" title="ON: 先頭フレーズに練習番号を付けない（R で切替）">
+            </div>
+            <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
+                <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
+                    <span class="transport-opt-label">Include in export</span>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に Video を含める">
+                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export Review に Video を含める">
+                        <span>Video</span>
+                    </label>
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
+                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
+                        <span>Audio</span>
+                    </label>
+                </div>
+            </div>
+            <div class="session-io-actions" role="group" aria-label="Import and export review">
+                <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title=".mgacr を Import Review で復元（ドロップ可・Ctrl+Shift+Alt+I）">Import Review</button>
+                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled title="選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（Ctrl+Shift+Alt+E）">Export Review</button>
+                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video" disabled title="タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）">Export WebM</button>
+            </div>
+        </div>
+        </div>
+    </div>
     </div>
     </div>
 
-    <section class="review-mix-monitor layout-narrow" id="reviewMixMonitor" aria-label="Spectrum and level meters">
+    <div class="layout-dock-panel-content layout-dock-panel-content--monitor" data-layout-panel="monitor" id="layoutDockPanelMonitor">
+    <section class="review-mix-monitor" id="reviewMixMonitor" aria-label="Spectrum and level meters">
         <div class="monitor-layout">
             <div class="analyzer-container">
                 <div class="spectrum-canvas-wrap">
@@ -462,12 +480,18 @@
             </div>
         </div>
     </section>
+    </div>
 
-    <div class="layout-narrow" id="logSection">
+    <div class="layout-dock-panel-content layout-dock-panel-content--log" data-layout-panel="log" id="layoutDockPanelLog">
+    <div id="logSection">
     <div class="bottom-info">
         <div class="log-wrap">
             <div id="log">&gt; System Ready.</div>
             <div class="log-actions" aria-label="Log actions">
+                <label class="log-debug-toggle" title="警告・エラーのみ表示（次回起動時に復元。Import/Export 対象外）">
+                    <input type="checkbox" id="logWeOnlyCheckbox" />
+                    <span>W/E Only</span>
+                </label>
                 <label class="log-debug-toggle" title="診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）">
                     <input type="checkbox" id="logDebugCheckbox" />
                     <span>Debug Log</span>
@@ -476,8 +500,12 @@
                 <button id="logClearBtn" type="button" class="log-action-btn" title="ログを消去">Clear</button>
             </div>
         </div>
+        </div>
     </div>
     </div>
+
+    <div class="layout-dock-panel-content layout-dock-panel-content--reading" data-layout-panel="reading" id="layoutDockPanelReading">
+    <div class="app-reading-area" id="appReadingArea">
 <!-- @manual-doc:start -->
 <!--
   マニュアル HTML の唯一の編集元（特記事項・使い方・改変・再利用・ライセンス）。
@@ -549,11 +577,17 @@
 
 <!-- @manual-doc:end -->
 
+    </div>
+    </div>
+
+    <div class="layout-dock-panel-content layout-dock-panel-content--footer" data-layout-panel="footer" id="layoutDockPanelFooter">
     <footer class="app-site-footer">
         <p class="app-site-footer__copyright">
             © 2026 <a href="https://www.miyabi-ga.co.jp/" target="_blank" rel="noopener noreferrer">MIYABI GAME AUDIO INC.</a>
         </p>
     </footer>
+    </div>
+    </div>
 
     <input
         type="file"
@@ -566,6 +600,7 @@
     <script src="js/version.js"></script>
     <script src="js/constants.js"></script>
     <script src="js/dom-refs.js"></script>
+    <script src="js/layout-dock.js"></script>
     <script src="js/apply-version.js"></script>
     <script src="js/app-runtime.js"></script>
     <script src="js/shortcut-defs.js"></script>
@@ -598,6 +633,7 @@
     <script src="js/waveform-region-phrase.js"></script>
     <script src="js/waveform-region-silent-gaps.js"></script>
     <script src="js/vendor/SignalsmithStretch.js"></script>
+    <script src="js/signalsmith-stretch-main-thread.js"></script>
     <script src="js/waveform-region-fade-gain.js"></script>
     <script src="js/waveform-region-pitch-stretch.js"></script>
     <script src="js/waveform-region-snap-split.js"></script>
@@ -632,6 +668,7 @@
     <script src="js/extra-audio-load.js"></script>
     <script src="js/extra-audio-init.js"></script>
     <script src="js/extra-audio-io.js"></script>
+    <script src="js/metronome-wav-bytes.js"></script>
     <script src="js/metronome.js"></script>
     <script src="js/lane-waveform-loading.js"></script>
     <script src="js/track-lane-controls.js"></script>

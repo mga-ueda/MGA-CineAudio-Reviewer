@@ -10,4 +10,5 @@
     const IDB_KEY_LAST = 'lastSession';
     const IDB_VER = 1;
     const DISPLAY_FPS = 60;
+    /** Debug Log OFF 時のログ行上限（古い行から削除）。Debug Log ON 時は無制限 */
     const LOG_MAX_LINES = 500;

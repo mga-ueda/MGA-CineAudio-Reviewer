@@ -1927,7 +1927,7 @@
         }
 
         if (!applySlotLayoutToSegments(track, slots, layoutOpt)) {
-            return { ok: false, reason: 'layout apply failed' };
+            return { ok: false, reason: 'layout apply incomplete' };
         }
         cacheTrackTimelineSlots(track, slots);
 

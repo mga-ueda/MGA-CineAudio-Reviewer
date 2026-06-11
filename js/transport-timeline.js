@@ -162,7 +162,7 @@
         setPlaybackDriftDisplayUnknown(statEl);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = title || 'Playback Drift: 利用できません';
+        statEl.title = title || '再生ドリフト: 利用できません';
     }
 
     function showPlaybackDriftPanelZero(statEl) {
@@ -171,7 +171,7 @@
         setPlaybackDriftDisplay(statEl, 0);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = 'Playback Drift: セッション未ロード（0 f）';
+        statEl.title = '再生ドリフト: セッション未ロード（0 f）';
     }
 
     function showPlaybackDriftPanelInactive(statEl) {
@@ -180,7 +180,7 @@
         setPlaybackDriftDisplayUnknown(statEl);
         applyPlaybackDriftPanelTone(statEl, 'safe');
         if (driftBox) driftBox.classList.remove('transport-opt-box--drift-correct');
-        statEl.title = 'Playback Drift: 停止・シーク中は監視していません（---- f を表示）';
+        statEl.title = '再生ドリフト: 停止・シーク中は監視していません（---- f を表示）';
     }
 
     function applyPlaybackDriftPanelTone(statEl, tone) {
@@ -242,7 +242,7 @@
         if (!videoReady()) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: 動画なしでは利用不可（---- f を表示）',
+                '再生ドリフト: 動画なしでは利用不可（---- f を表示）',
             );
             return;
         }
@@ -281,7 +281,7 @@
         if (signed == null) {
             showPlaybackDriftPanelUnknown(
                 statEl,
-                'Playback Drift: 測定可能なドリフトなし（---- f を表示）',
+                '再生ドリフト: 測定可能なドリフトなし（---- f を表示）',
             );
             return;
         }
@@ -296,8 +296,8 @@
             driftBox.classList.toggle('transport-opt-box--drift-correct', corrected);
         }
         statEl.title = VIDEO_DRIFT_AUTO_CORRECT_ENABLED
-            ? 'Playback Drift と audio master の差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、video を補正）。'
-            : 'Playback Drift と audio master の差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、自動補正は無効）。';
+            ? '再生ドリフト — 映像と音声マスターの差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、映像を補正）。'
+            : '再生ドリフト — 映像と音声マスターの差（約1秒ごとに更新、2 f 以上で赤・1 f で黄、自動補正は無効）。';
     }
 
     window.refreshVideoDriftPanelStat = refreshVideoDriftPanelStat;

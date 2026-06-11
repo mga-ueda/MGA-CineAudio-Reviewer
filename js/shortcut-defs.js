@@ -28,14 +28,22 @@
 
     const USER_SHORTCUTS = {
         // ---------- 再生・移動 ----------
-        transportOptionsToggle: {
-            code: 'KeyO',
+        layoutModeToggle: {
+            code: 'KeyU',
             primary: false,
             ctrl: false,
             meta: false,
             alt: false,
             shift: false,
-        }, // オプション表示切替
+        }, // レイアウト: 標準 ↔ ユーザーレイアウト
+        layoutEditToggle: {
+            code: 'KeyU',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: true,
+        }, // ユーザーレイアウト編集 ↔ 表示
         transportToggle: { code: 'Space' }, // 再生/停止
         prerollPlay: { code: 'Space', primary: true, alt: false, shift: false }, // Ctrl/Cmd + Space
         replayFromPlaybackStart: { codes: ['Enter', 'NumpadEnter'], alt: true, ctrl: false, meta: false, shift: false }, // Alt + Enter
@@ -85,7 +93,7 @@
             shift: false,
             alt: false,
         },
-        loopToggle: { code: 'KeyL' },
+        loopToggle: { code: 'KeyL', primary: false, ctrl: false, meta: false, alt: false, shift: false },
 
         // ---------- 表示 ----------
         musicalGridToggle: {
@@ -118,14 +126,6 @@
             ctrl: false,
             meta: false,
             alt: true,
-            shift: false,
-        },
-        videoMarkersPanelsToggle: {
-            code: 'KeyF',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
             shift: false,
         },
         analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
@@ -640,8 +640,8 @@
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
             regionFadeIn: formatShortcutDef(s.regionFadeIn),
             regionFadeOut: formatShortcutDef(s.regionFadeOut),
-            transportOptionsToggle: formatShortcutDef(s.transportOptionsToggle),
-            videoMarkersPanelsToggle: formatShortcutDef(s.videoMarkersPanelsToggle),
+            layoutModeToggle: formatShortcutDef(s.layoutModeToggle),
+            layoutEditToggle: formatShortcutDef(s.layoutEditToggle),
         });
     }
 
@@ -664,7 +664,7 @@
             setElementTitle(loopLbl, loopTitle);
         }
 
-        const memoTitle = `Additional Comments — セッション全体の追加メモ（${h.cancelEdit} でフォーカス解除）`;
+        const memoTitle = `追加コメント — セッション全体の追加メモ（${h.cancelEdit} でフォーカス解除）`;
         setElementTitle(document.getElementById('markerMemoTextarea'), memoTitle);
         const memoLbl = document.querySelector('label[for="markerMemoTextarea"]');
         setElementTitle(memoLbl, memoTitle);
@@ -724,11 +724,11 @@
         const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
 
-        const analyzeTitle = `スペクトラムとレベルメーターを表示（${h.analyze} で切替）`;
+        const analyzeTitle = `Live のオン/オフ（${h.analyze} でも Live ↔ 解析停止を切替）`;
         setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);
         setElementTitle(
             document.getElementById('analyzeToggleWrap'),
-            `Analyze — スペクトラムとレベルメーター（${h.analyze} で切替）。OFF でも CLIP PROTECT は有効。`,
+            `Analyze — スペクトラムとレベルメーター（常時表示。チェックで Live、${h.analyze} で Live/解析停止の切替）。解析停止中も CLIP PROTECT は有効。`,
         );
 
         const clickTitle = `メトロノームクリック音（${h.metronomeClick} で切替）。Click ON かつ再生中のみ鳴ります。`;
@@ -792,6 +792,14 @@
 
         setElementTitle(document.getElementById('logCopyBtn'), 'ログ全文をクリップボードへコピー');
         setElementTitle(document.getElementById('logClearBtn'), 'ログを消去');
+        const logWeOnlyTitle =
+            '警告・エラーのみ表示（次回起動時に復元。Import/Export 対象外）';
+        const logWeOnlyCb = document.getElementById('logWeOnlyCheckbox');
+        setElementTitle(logWeOnlyCb, logWeOnlyTitle);
+        if (logWeOnlyCb) {
+            const logWeOnlyLbl = logWeOnlyCb.closest('label');
+            setElementTitle(logWeOnlyLbl, logWeOnlyTitle);
+        }
         const logDebugTitle =
             '診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）';
         const logDebugCb = document.getElementById('logDebugCheckbox');

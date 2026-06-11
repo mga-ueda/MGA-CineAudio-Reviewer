@@ -191,7 +191,7 @@
         } catch (err) {
             if (typeof writeLog === 'function') {
                 writeLog(
-                    'LKFS: measure failed — ' +
+                    'LKFS: could not measure — ' +
                         (err && err.message ? err.message : String(err)),
                 );
             }

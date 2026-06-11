@@ -102,7 +102,7 @@
             writeLog(
                 'Extra audio ' +
                     (slot + 1) +
-                    ': WAV preview failed — ' +
+                    ': WAV preview unavailable — ' +
                     (e && e.message ? e.message : String(e)),
             );
             return false;
@@ -136,7 +136,7 @@
                 );
             } catch (err) {
                 writeLog(
-                    'Extra audio decode: OfflineAudioContext failed — ' +
+                    'Extra audio decode: OfflineAudioContext unavailable — ' +
                         (err && err.message ? err.message : String(err)),
                 );
             }

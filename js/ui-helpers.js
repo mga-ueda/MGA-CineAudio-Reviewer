@@ -11,7 +11,7 @@
         if (!text || !String(text).trim()) return false;
         const t = String(text).trim();
         if (LANE_STATUS_HIDE_RE.test(t)) return false;
-        if (/too large|failed|unavailable/i.test(t)) return true;
+        if (/too large|failed|unavailable|could not decode/i.test(t)) return true;
         return false;
     }
 

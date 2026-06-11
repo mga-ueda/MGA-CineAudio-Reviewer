@@ -37,7 +37,7 @@
                 const msg = e && e.message ? e.message : String(e);
                 writeLog('Import Review: failed — ' + msg);
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('インポートに失敗しました', msg);
+                    showAppAlert('インポートに失敗しました', msg, { log: false });
                 }
             });
         } else {

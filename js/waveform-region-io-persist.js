@@ -167,7 +167,7 @@
                 writeLog(
                     'Extra audio ' +
                         (i + 1) +
-                        ': region finalize failed — ' +
+                        ': region finalize incomplete — ' +
                         (err && err.message ? err.message : String(err)),
                 );
             }

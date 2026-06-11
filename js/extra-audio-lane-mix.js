@@ -1282,7 +1282,7 @@
             };
         } catch (err) {
             if (typeof pitchPlaybackLog === 'function') {
-                pitchPlaybackLog('live-stretch/failed', {
+                pitchPlaybackLog('live-stretch/fallback', {
                     slot,
                     segmentIndex: segHit.segmentIndex,
                     pitch: segmentPitch,

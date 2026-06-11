@@ -299,12 +299,12 @@
             'Video playback and markers still work.';
         writeLog('Waveform: file too large — ' + mb + ' MB (limit ' + limitMb + ' MB)');
         if (typeof showAppAlert === 'function') {
-            showAppAlert(title, body);
+            showAppAlert(title, body, { log: false });
         } else {
             window.alert(title + '\n\n' + body);
         }
         setAudioWaveformLoaded(true);
-        setAudioWaveformStatus('Too large (max ' + limitMb + ' MB)');
+        setAudioWaveformStatus('ファイルが大きすぎます（上限 ' + limitMb + ' MB）');
         drawAudioWaveformCanvas();
         if (audioWaveformPlayheadWrap) audioWaveformPlayheadWrap.hidden = true;
         notifyVideoAudioLoadSettled();
@@ -651,8 +651,23 @@
         }
     }
 
+    let lastWaveformCompositeLaneCount = null;
+
+    function scheduleCustomLayoutWaveformPaneHeightSync() {
+        if (typeof syncCustomLayoutWaveformPaneHeight !== 'function') return;
+        requestAnimationFrame(() => {
+            syncCustomLayoutWaveformPaneHeight();
+        });
+    }
+
     function refreshWaveformLaneHeightLayout() {
+        if (typeof captureCustomLayoutWaveformPaneHeights === 'function') {
+            captureCustomLayoutWaveformPaneHeights();
+        }
         applyWaveformLaneHeightScaleToDom();
+        if (typeof syncCustomLayoutWaveformPaneHeight === 'function') {
+            syncCustomLayoutWaveformPaneHeight();
+        }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -710,8 +725,9 @@
     }
 
     /** 表示中のレーン数に合わせてグリッド高さとコメントラベル帯位置を更新 */
-    function refreshWaveformCompositeLaneLayout() {
+    function refreshWaveformCompositeLaneLayout(opt) {
         if (!audioWaveformComposite) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
         applyWaveformLaneHeightScaleToDom();
         if (typeof syncWaveformLanesViewportWidthCss === 'function') {
             syncWaveformLanesViewportWidthCss();
@@ -726,9 +742,27 @@
             if (metas[i] && !metas[i].hidden) count += 1;
         }
         const laneCount = Math.max(1, count);
+        const laneCountChanged =
+            lastWaveformCompositeLaneCount !== null && lastWaveformCompositeLaneCount !== laneCount;
+        if (
+            laneCountChanged &&
+            typeof captureCustomLayoutWaveformPaneHeights === 'function' &&
+            typeof getLayoutDockMode === 'function' &&
+            getLayoutDockMode() !== 'default'
+        ) {
+            captureCustomLayoutWaveformPaneHeights();
+        }
+        lastWaveformCompositeLaneCount = laneCount;
         audioWaveformComposite.style.setProperty('--wave-lane-count', String(laneCount));
         syncVisibleWaveformLaneGridRows();
         syncTimelineOverlayGridPlacement(laneCount);
+        const syncCustomLayoutWaveform = !!o.syncCustomLayoutWaveform || laneCountChanged;
+        if (
+            syncCustomLayoutWaveform &&
+            typeof syncCustomLayoutWaveformPaneHeight === 'function'
+        ) {
+            syncCustomLayoutWaveformPaneHeight();
+        }
 
         requestAnimationFrame(() => {
             const laneH = getWaveformLaneHeightCss();
@@ -2295,7 +2329,7 @@
             return await fileMain.arrayBuffer();
         }
         const res = await fetch(urlMain);
-        if (!res.ok) throw new Error('fetch failed');
+        if (!res.ok) throw new Error('fetch unavailable');
         const ab = await res.arrayBuffer();
         if (ab.byteLength > WAVEFORM_DECODE_MAX_BYTES) {
             const e = new Error('blob too large for waveform decode');

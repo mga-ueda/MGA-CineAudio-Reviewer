@@ -315,51 +315,96 @@
     let meterDisplayDbMin = DISPLAY_ANALYSIS_FLOOR_DB.includes(DEFAULT_METER_FLOOR_DB)
         ? DEFAULT_METER_FLOOR_DB
         : -50;
-    /** チェックあり = Analyze ON（スペクトラム／メーター表示）。初期は OFF。 */
-    let analyzeOn = false;
+    /** アナライザーは常時表示。チェックボックスと A キーは Live（解析）↔ 解析停止のみ */
+    let analyzeStopped = false;
+
+    function isAnalyzeLive() {
+        return !analyzeStopped;
+    }
+
+    function isAnalyzeStopped() {
+        return !!analyzeStopped;
+    }
 
     const analyzeOnCheckbox = document.getElementById('analyzeOnCheckbox');
     const reviewMixMonitorEl = document.getElementById('reviewMixMonitor');
     const monitorFloorOptionsEl = document.querySelector('.monitor-floor-options');
 
     function applyAnalyzeUiVisibility() {
-        if (analyzeOnCheckbox) analyzeOnCheckbox.checked = !!analyzeOn;
-        if (reviewMixMonitorEl) reviewMixMonitorEl.hidden = !analyzeOn;
-        if (monitorFloorOptionsEl) monitorFloorOptionsEl.hidden = !analyzeOn;
+        if (analyzeOnCheckbox) analyzeOnCheckbox.checked = isAnalyzeLive();
+        if (reviewMixMonitorEl) reviewMixMonitorEl.hidden = false;
+        if (monitorFloorOptionsEl) monitorFloorOptionsEl.hidden = false;
+        if (typeof setLayoutDockPanelHostHidden === 'function') {
+            setLayoutDockPanelHostHidden('monitor', false);
+        }
     }
 
-    function setAnalyzeOn(next, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const prev = analyzeOn;
-        analyzeOn = !!next;
-        applyAnalyzeUiVisibility();
+    function syncAnalyzeMonitorRuntime(prevStopped) {
         syncMasterAnalyserConnectionForAnalyzeState();
-        if (!analyzeOn && prev) extinguishMonitorDisplays();
-        else if (analyzeOn && !prev && !requestAnimId) paintSpectrumIdle();
+        if (isAnalyzeLive()) {
+            if (prevStopped && !requestAnimId) paintSpectrumIdle();
+        } else if (analyzeStopped) {
+            resetMonitorAnalysisDisplayToIdle();
+        }
+    }
+
+    function setAnalyzeStopped(next, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const stopped = !!next;
+        const prevStopped = analyzeStopped;
+        if (stopped === prevStopped && !o.force) return;
+        analyzeStopped = stopped;
+        applyAnalyzeUiVisibility();
+        syncAnalyzeMonitorRuntime(prevStopped);
         if (!o.skipSave) saveUiPrefsToLocalStorage();
         if (!o.silent) {
+            const label = stopped ? 'Stopped' : 'Live';
             if (typeof writeLog === 'function') {
-                writeLog('Analyze: ' + (analyzeOn ? 'ON' : 'OFF'));
+                writeLog('Analyze: ' + (stopped ? 'stopped' : 'live'));
             }
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Analyze', analyzeOn ? 'ON' : 'OFF', 'notice');
+                flashSeekHint('Analyze', label, 'notice');
             }
-            if (analyzeOn !== prev && typeof flashTransportOptBox === 'function') {
+            if (typeof flashTransportOptBox === 'function') {
                 flashTransportOptBox('analyze');
             }
         }
     }
 
-    function toggleAnalyzeOn() {
-        setAnalyzeOn(!analyzeOn);
+    function setAnalyzeOn(next, opt) {
+        setAnalyzeStopped(!next, opt);
     }
 
-    function readAnalyzeOnFromPrefsSnap(snap) {
+    function toggleAnalyzeLiveStopped() {
+        setAnalyzeStopped(!analyzeStopped);
+        return true;
+    }
+
+    function readAnalyzeStateFromPrefsSnap(snap) {
         if (!snap || typeof snap !== 'object') return;
+        if (typeof snap.analyzeStopped === 'boolean') {
+            analyzeStopped = snap.analyzeStopped;
+            return;
+        }
+        if (typeof snap.analyzeVisible === 'boolean') {
+            const wasStopped = !!(snap.analyzeStopped ?? snap.analyzeFrozen);
+            analyzeStopped = !snap.analyzeVisible || wasStopped;
+            return;
+        }
+        if (typeof snap.analyzeMode === 'string') {
+            if (snap.analyzeMode === 'live') {
+                analyzeStopped = false;
+            } else if (snap.analyzeMode === 'frozen' || snap.analyzeMode === 'stopped') {
+                analyzeStopped = true;
+            } else {
+                analyzeStopped = true;
+            }
+            return;
+        }
         if (typeof snap.analyzeOn === 'boolean') {
-            analyzeOn = snap.analyzeOn;
+            analyzeStopped = !snap.analyzeOn;
         } else if (typeof snap.analyzeOff === 'boolean') {
-            analyzeOn = !snap.analyzeOff;
+            analyzeStopped = snap.analyzeOff;
         }
     }
     
@@ -367,7 +412,9 @@
         return {
             spectrumFloor: spectrumDisplayDbMin,
             meterFloor: meterDisplayDbMin,
-            analyzeOn: !!analyzeOn,
+            analyzeVisible: true,
+            analyzeStopped: !!analyzeStopped,
+            analyzeOn: isAnalyzeLive(),
             masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
         };
     }
@@ -383,7 +430,8 @@
         if (typeof snap.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.meterFloor)) {
             meterDisplayDbMin = snap.meterFloor;
         }
-        readAnalyzeOnFromPrefsSnap(snap);
+        const prevStopped = analyzeStopped;
+        readAnalyzeStateFromPrefsSnap(snap);
         const specSel = document.getElementById('spectrumFloorDbSelect');
         const metSel = document.getElementById('meterFloorDbSelect');
         if (specSel) specSel.value = String(spectrumDisplayDbMin);
@@ -392,7 +440,7 @@
             applyMasterVolToMix(snap.masterVol, false);
         }
         applyAnalyzeUiVisibility();
-        syncMasterAnalyserConnectionForAnalyzeState();
+        syncAnalyzeMonitorRuntime(prevStopped);
         saveUiPrefsToLocalStorage();
     }
 
@@ -410,7 +458,9 @@
                 JSON.stringify({
                     spectrumFloor: spectrumDisplayDbMin,
                     meterFloor: meterDisplayDbMin,
-                    analyzeOn: !!analyzeOn,
+                    analyzeVisible: true,
+                    analyzeStopped: !!analyzeStopped,
+                    analyzeOn: isAnalyzeLive(),
                     masterVol: normalizeMasterVolLinear(reviewMixMasterLinearGain),
                 }),
             );
@@ -560,6 +610,11 @@
     
     const canvas = document.getElementById('spectrumCanvas');
     const canvasCtx = canvas ? canvas.getContext('2d') : null;
+    const spectrumCanvasWrapEl = canvas ? canvas.closest('.spectrum-canvas-wrap') : null;
+    if (canvas) {
+        canvas.style.removeProperty('width');
+        canvas.style.removeProperty('height');
+    }
 
     function getReviewMixAudioCtx() {
         return typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
@@ -588,7 +643,7 @@
         }
 
         // スペクトラム描画側（frequency-domain）の masterAnalyser は Analyze ON のときのみ接続。
-        if (analyzeOn) {
+        if (isAnalyzeLive()) {
             if (!masterAnalyser) {
                 masterAnalyser = ctx.createAnalyser();
                 masterAnalyser.fftSize = 2048;
@@ -623,7 +678,7 @@
     function syncMasterAnalyserConnectionForAnalyzeState() {
         const ctx = getReviewMixAudioCtx();
         if (!ctx || !reviewMixMasterNode) return;
-        if (analyzeOn) {
+        if (isAnalyzeLive()) {
             if (!masterAnalyser) {
                 masterAnalyser = ctx.createAnalyser();
                 masterAnalyser.fftSize = 2048;
@@ -681,7 +736,7 @@
         analyzeOnCheckbox.dataset.bound = '1';
         applyAnalyzeUiVisibility();
         analyzeOnCheckbox.addEventListener('change', () => {
-            setAnalyzeOn(!!analyzeOnCheckbox.checked);
+            setAnalyzeStopped(!analyzeOnCheckbox.checked);
         });
     }
     bindAnalyzeOnCheckbox();
@@ -693,7 +748,7 @@
             window.videoAnalyzerDiagLog('monitor/transport', {
                 active: monitorTransportActive,
                 wasActive,
-                analyzeOn,
+                analyzeStopped,
             });
         }
         if (monitorTransportActive) {
@@ -878,7 +933,7 @@
             spectrumPeakHoldDb = null;
             spectrumPeakHoldUntil = null;
             lastSpectrumDrawT = 0;
-            if (analyzeOn && !requestAnimId) paintSpectrumIdle();
+            if (isAnalyzeLive() && !requestAnimId) paintSpectrumIdle();
             writeLog(`Spectrum display floor: ${v} dB`);
             saveUiPrefsToLocalStorage();
         });
@@ -894,14 +949,21 @@
         });
     }
     bindMonitorFloorControls();
-    
-requestAnimationFrame(() => {
-    if (analyzeOn) paintSpectrumIdle();
-});
-window.addEventListener('resize', () => {
-    if (analyzeOn && !requestAnimId) paintSpectrumIdle();
-    else syncMonitorAnalysisLayoutHeights();
-});
+
+    requestAnimationFrame(() => {
+        if (isAnalyzeLive()) paintSpectrumIdle();
+    });
+    window.addEventListener('resize', () => {
+        syncMonitorAnalysisLayoutHeights();
+        if (isAnalyzeLive() && !requestAnimId) scheduleMonitorSpectrumRepaint();
+    });
+    if (spectrumCanvasWrapEl && typeof ResizeObserver === 'function') {
+        const spectrumWrapResizeObserver = new ResizeObserver(() => {
+            syncMonitorAnalysisLayoutHeights();
+            scheduleMonitorSpectrumRepaint();
+        });
+        spectrumWrapResizeObserver.observe(spectrumCanvasWrapEl);
+    }
     
     const getMeterValues = (analyser, side, ctxNow) => {
         const empty = () => ({
@@ -1170,7 +1232,7 @@ window.addEventListener('resize', () => {
         if (!audioCtx) return;
         const ctxNow = audioCtx.currentTime;
 
-        if (!analyzeOn) {
+        if (!isAnalyzeLive()) {
             updateSessionIntegratedLkfsFromAnalysers(audioCtx);
             renderMasterVolDisp();
             let maxPeakDb = -Infinity;
@@ -1465,8 +1527,17 @@ window.addEventListener('resize', () => {
         document.documentElement.style.setProperty('--spectrum-led-track-px', `${trackPx}px`);
         document.documentElement.style.setProperty('--spectrum-canvas-outer-px', `${outerPx}px`);
         syncMasterMeterBarBackgroundStyles(trackPx);
-        const wrap = document.querySelector('.spectrum-canvas-wrap');
-        if (wrap) wrap.style.minHeight = `${outerPx}px`;
+    }
+
+    let monitorSpectrumRepaintRaf = 0;
+
+    function scheduleMonitorSpectrumRepaint() {
+        if (monitorSpectrumRepaintRaf) cancelAnimationFrame(monitorSpectrumRepaintRaf);
+        monitorSpectrumRepaintRaf = requestAnimationFrame(() => {
+            monitorSpectrumRepaintRaf = 0;
+            if (requestAnimId && isAnalyzeLive()) repaintSpectrumLayoutPreserveLiveData();
+            else paintSpectrumIdle();
+        });
     }
     
     installMasterMeterScaleUI();
@@ -1695,14 +1766,14 @@ window.addEventListener('resize', () => {
     /** HiDPI でラベルが滲まないようバッキングストアを DPR 倍にする（描画は CSS ピクセル座標のまま） */
     function spectrumResizeCanvasBackingStore() {
         if (!canvas || !canvasCtx) return null;
-        const wCss = canvas.clientWidth | 0;
+        const wCss = (spectrumCanvasWrapEl && spectrumCanvasWrapEl.clientWidth > 0
+            ? spectrumCanvasWrapEl.clientWidth
+            : canvas.clientWidth) | 0;
         if (wCss < 2) return null;
         const hCss = spectrumCanvasOuterHeightPx();
         const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
         canvas.width = Math.max(1, Math.round(wCss * dpr));
         canvas.height = Math.max(1, Math.round(hCss * dpr));
-        canvas.style.width = `${wCss}px`;
-        canvas.style.height = `${hCss}px`;
         canvasCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
         canvasCtx.imageSmoothingEnabled = false;
         return { w: wCss, h: hCss };
@@ -2032,14 +2103,7 @@ window.addEventListener('resize', () => {
         syncMonitorAnalysisLayoutHeights();
     }
     
-    function extinguishMonitorDisplays() {
-        document.querySelectorAll('.clip-lamp').forEach((l) => {
-            l.classList.remove('clip-on');
-            if (clipTimers[l.id]) clearTimeout(clipTimers[l.id]);
-        });
-        const mvWrapEx = document.querySelector('.master-vol-container');
-        if (mvWrapEx) mvWrapEx.classList.remove('gain-reduce-glow');
-        if (gainReduceGlowTimer) { clearTimeout(gainReduceGlowTimer); gainReduceGlowTimer = null; }
+    function resetMonitorMeterBarsToFloor() {
         const mEx = document.querySelector('.m-meter-container');
         const mExH = mEx && mEx.clientHeight > 8 ? mEx.clientHeight : defaultSpectrumLedTrackHeightPx();
         const exHoldHpx = mExH / Math.abs(METER_DB_MAX - meterDisplayDbMin);
@@ -2047,12 +2111,8 @@ window.addEventListener('resize', () => {
         for (const s of ['l', 'r']) {
             const elPk = document.getElementById(`m-peak-${s}`);
             const elRms = document.getElementById(`m-rms-${s}`);
-            if (elPk) {
-                elPk.style.height = '0%';
-            }
-            if (elRms) {
-                elRms.style.height = '0%';
-            }
+            if (elPk) elPk.style.height = '0%';
+            if (elRms) elRms.style.height = '0%';
             const phl = document.getElementById(`m-peak-${s}-hold`);
             if (phl) {
                 phl.style.height = `${exHoldHpx}px`;
@@ -2080,12 +2140,32 @@ window.addEventListener('resize', () => {
                 vr.style.color = '#ffffff';
             }
         }
+    }
+
+    function resetMonitorAnalysisDisplayToIdle() {
+        resetMonitorMeterBarsToFloor();
+        spectrumBandEnv = null;
+        spectrumPeakHoldDb = null;
+        spectrumPeakHoldUntil = null;
+        lastSpectrumDrawT = 0;
+        paintSpectrumIdle();
+    }
+
+    function extinguishMonitorDisplays() {
+        document.querySelectorAll('.clip-lamp').forEach((l) => {
+            l.classList.remove('clip-on');
+            if (clipTimers[l.id]) clearTimeout(clipTimers[l.id]);
+        });
+        const mvWrapEx = document.querySelector('.master-vol-container');
+        if (mvWrapEx) mvWrapEx.classList.remove('gain-reduce-glow');
+        if (gainReduceGlowTimer) { clearTimeout(gainReduceGlowTimer); gainReduceGlowTimer = null; }
+        resetMonitorMeterBarsToFloor();
         spectrumBandEnv = null;
         spectrumPeakHoldDb = null;
         spectrumPeakHoldUntil = null;
         lastSpectrumDrawT = 0;
         renderMasterVolDisp();
-        if (analyzeOn) paintSpectrumIdle();
+        paintSpectrumIdle();
     }
     function isReviewMixMonitorAnalyzersWired() {
         return !!masterAnalyser;
@@ -2117,7 +2197,7 @@ window.addEventListener('resize', () => {
     }
 
     function getAnalyzeOn() {
-        return !!analyzeOn;
+        return isAnalyzeLive();
     }
 
     function getReviewMixMasterLinearGain() {
@@ -2132,6 +2212,7 @@ window.addEventListener('resize', () => {
     window.resetReviewMixMonitorGain = resetReviewMixMonitorGain;
     window.setAnalyzeOn = setAnalyzeOn;
     window.getAnalyzeOn = getAnalyzeOn;
+    window.isAnalyzeStopped = isAnalyzeStopped;
     window.beginReviewMixExportCapture = beginReviewMixExportCapture;
     window.endReviewMixExportCapture = endReviewMixExportCapture;
 
@@ -2159,11 +2240,47 @@ window.addEventListener('resize', () => {
         if (!matchUserShortcut(e, 'analyzeToggle')) return false;
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
         e.preventDefault();
-        toggleAnalyzeOn();
+        toggleAnalyzeLiveStopped();
         return true;
     }
 
     window.resetMasterVolumeForSessionClear = resetMasterVolumeForSessionClear;
     window.handleMasterVolShortcutKeydown = handleMasterVolShortcutKeydown;
     window.handleAnalyzeShortcutKeydown = handleAnalyzeShortcutKeydown;
+
+    function repaintSpectrumLayoutPreserveLiveData() {
+        if (!canvas || !canvasCtx) return;
+        const sized = spectrumResizeCanvasBackingStore();
+        if (!sized) return;
+        const w = sized.w;
+        const hSpec = sized.h;
+        const audioCtx = getReviewMixAudioCtx();
+        const nyquist =
+            audioCtx && audioCtx.sampleRate ? audioCtx.sampleRate * 0.5 : defaultSpectrumNyquistHz();
+        const g = spectrumComputeGeometry(nyquist, w, hSpec);
+        spectrumDrawChrome(w, hSpec, g);
+        if (!spectrumBandEnv || !spectrumBandEnv.length) return;
+        const bands = spectrumGridBandsForNyquist(nyquist, SPECTRUM_GRID_FLOOR_HZ);
+        const nBands = bands.n;
+        if (spectrumBandEnv.length !== nBands) return;
+        const { plotX, plotY, plotW, plotH } = g;
+        const cellsDraw = spectrumBuildLedCells(plotY, plotH, spectrumDisplayDbMin);
+        const { rects } = spectrumDrawBarsFromEnv(bands, plotX, plotY, plotW, plotH, cellsDraw);
+        spectrumDrawLedInterRowBlack(plotX, plotY, plotW, plotH, spectrumDisplayDbMin);
+        spectrumDrawSpectrumColumnGutters(plotX, plotY, plotW, plotH, rects, nBands);
+        spectrumDrawSpectrumLedPeaks(bands, plotY, plotH, rects, cellsDraw);
+    }
+
+    function refreshMonitorAnalysisLayoutAfterDockChange() {
+        applyAnalyzeUiVisibility();
+        syncMonitorAnalysisLayoutHeights();
+        const mCont = document.querySelector('.m-meter-container');
+        const meterStackH =
+            mCont && mCont.clientHeight > 8 ? mCont.clientHeight : defaultSpectrumLedTrackHeightPx();
+        syncMasterMeterBarBackgroundStyles(meterStackH);
+        scheduleMonitorSpectrumRepaint();
+    }
+
+    window.refreshMonitorAnalysisLayoutAfterDockChange = refreshMonitorAnalysisLayoutAfterDockChange;
+    window.addEventListener('layoutdockchange', refreshMonitorAnalysisLayoutAfterDockChange);
 })();

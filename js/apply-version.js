@@ -7,10 +7,6 @@
     const badge = document.getElementById('appVersionBadge') || document.querySelector('.version-badge');
     if (badge) badge.textContent = APP_VERSION_LABEL;
 
-    if (typeof logEl !== 'undefined' && logEl) {
-        logEl.innerText = '> System Ready. (' + APP_VERSION_LABEL + ')';
-    }
-
     const changelogRoot = document.getElementById('appVersionChangelog');
     if (changelogRoot && APP_CHANGELOG && APP_CHANGELOG.length) {
         const frag = document.createDocumentFragment();

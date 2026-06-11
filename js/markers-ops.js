@@ -82,7 +82,6 @@
         return inField(document.activeElement);
     }
 
-    window.isMarkerAreaKeyboardActive = isMarkerAreaKeyboardActive;
     window.isMarkerListEditableFieldActive = isMarkerListEditableFieldActive;
 
     function isWaveformDrawingAreaActive(opt) {
@@ -240,7 +239,7 @@
     }
 
     function isRegionPitchMarkerComment(comment) {
-        return /^(?:ピッチ|キー)/.test(String(comment || ''));
+        return /^(?:ピッチ|キー|Key|Pitch)\b/i.test(String(comment || ''));
     }
 
     function isRegionVolumeMarkerComment(comment) {
@@ -249,15 +248,10 @@
         return /dB/i.test(c);
     }
 
-    function formatRegionVolumeMarkerComment(gainDb, prevGainDb) {
+    function formatRegionVolumeMarkerComment(gainDb, _prevGainDb) {
         let db = Number(gainDb);
         if (!Number.isFinite(db)) db = 0;
-        let prev = Number(prevGainDb);
-        if (!Number.isFinite(prev)) prev = 0;
         const token = formatRegionVolumeDbToken(db);
-        if (db > prev + 0.0005 || db < prev - 0.0005) {
-            return token + ' dB する';
-        }
         return token + ' dB';
     }
 
@@ -297,7 +291,7 @@
 
     function formatRegionPitchMarkerComment(pitchSemitones) {
         const token = formatRegionPitchToken(pitchSemitones);
-        return 'キーを ' + token + ' する';
+        return 'Key ' + token;
     }
 
     function findRegionPitchMarker(startSec, endSec) {
@@ -493,7 +487,9 @@
 
     function parsePitchFromRegionPitchMarkerComment(comment) {
         const c = String(comment || '');
-        const match = c.match(/(?:ピッチ|キー)を\s*([+-]?\d+)/);
+        let match = c.match(/^Key\s*([+-]?\d+)/i);
+        if (!match) match = c.match(/^Pitch\s*([+-]?\d+)/i);
+        if (!match) match = c.match(/(?:ピッチ|キー)を\s*([+-]?\d+)/);
         if (!match) return 0;
         const pitch = Math.round(Number(match[1]));
         return Number.isFinite(pitch) ? pitch : 0;

@@ -23,11 +23,6 @@
         return document.getElementById('exportBlockingSub');
     }
 
-    function panelEl() {
-        const root = overlayEl();
-        return root ? root.querySelector('.export-blocking-overlay__panel') : null;
-    }
-
     function formatExportProgressClock(sec) {
         const s = Math.max(0, Math.floor(Number(sec) || 0));
         const h = Math.floor(s / 3600);
@@ -54,7 +49,10 @@
     }
 
     function refreshOperationBlockingControlLocks() {
-        const xl = blockingMode !== null;
+        const xl =
+            blockingMode !== null ||
+            (typeof isLayoutDockStructureEditing === 'function' &&
+                isLayoutDockStructureEditing());
         const exportBtn = document.getElementById('sessionExportBtn');
         const importBtn = document.getElementById('sessionImportBtn');
         const exportWebmBtn = document.getElementById('sessionExportVideoBtn');
@@ -111,23 +109,11 @@
             webmExportUserCancel = false;
             webmExportEmergencyCleanup = null;
             applyBlockingOverlayChrome({
-                title: 'Exporting WebM',
+                title: 'WebM を書き出し中',
                 hideEscHint: false,
             });
         }
         refreshOperationBlockingControlLocks();
-    }
-
-    function setExportBlockingVisible(visible) {
-        if (visible) {
-            blockingMode = 'webm-export';
-            setOperationBlockingVisible(true, {
-                title: 'Exporting WebM',
-                hideEscHint: false,
-            });
-        } else if (blockingMode === 'webm-export') {
-            setOperationBlockingVisible(false);
-        }
     }
 
     function updateExportBlockingSub(text) {
@@ -144,6 +130,12 @@
     }
 
     function isOperationBlockingActive() {
+        if (
+            typeof isLayoutDockStructureEditing === 'function' &&
+            isLayoutDockStructureEditing()
+        ) {
+            return true;
+        }
         return blockingMode !== null;
     }
 
@@ -154,7 +146,7 @@
     function tryCancelWebmExportFromEsc() {
         if (!isWebmExportActive()) return;
         webmExportUserCancel = true;
-        updateExportBlockingSub('Cancelling…');
+        updateExportBlockingSub('キャンセルしています…');
         if (typeof webmExportEmergencyCleanup === 'function') {
             webmExportEmergencyCleanup();
         }
@@ -168,7 +160,7 @@
         webmExportEmergencyCleanup = null;
         blockingMode = 'webm-export';
         setOperationBlockingVisible(true, {
-            title: 'Exporting WebM',
+            title: 'WebM を書き出し中',
             hideEscHint: false,
         });
         try {
@@ -195,7 +187,6 @@
         webmExportEmergencyCleanup = typeof fn === 'function' ? fn : null;
     }
 
-    window.setExportBlockingVisible = setExportBlockingVisible;
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;
     window.isWebmExportActive = isWebmExportActive;

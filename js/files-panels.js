@@ -367,7 +367,7 @@
                 revokeAll();
             } catch (err) {
                 writeLog(
-                    'Session: revoke failed — ' +
+                    'Session: revoke skipped — ' +
                         (err && err.message ? err.message : String(err)),
                 );
             }
@@ -809,6 +809,10 @@
                           'Video Clear',
                           '読み込んだ動画をアンロードします。映像に関する情報が失われますが、よろしいですか？',
                           'Video Clear: cancelled',
+                          {
+                              logLine:
+                                  'Video Clear: confirm — loaded video will be unloaded',
+                          },
                       )
                     : Promise.resolve(false);
             void confirmPromise.then((confirmed) => {

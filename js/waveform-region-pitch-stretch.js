@@ -16,11 +16,10 @@
         writeLog('[KeyPlayback] ' + step + ' | ' + JSON.stringify(data || {}));
     }
 
-    function measureChannelArraysPeak(channelArrays) {
-        if (!channelArrays || !channelArrays.length) return 0;
+    function measurePeakFromChannels(getChannelData, channelCount) {
         let peak = 0;
-        for (let c = 0; c < channelArrays.length; c++) {
-            const data = channelArrays[c];
+        for (let c = 0; c < channelCount; c++) {
+            const data = getChannelData(c);
             if (!data) continue;
             for (let i = 0; i < data.length; i++) {
                 peak = Math.max(peak, Math.abs(data[i]));
@@ -29,16 +28,17 @@
         return peak;
     }
 
+    function measureChannelArraysPeak(channelArrays) {
+        if (!channelArrays || !channelArrays.length) return 0;
+        return measurePeakFromChannels((c) => channelArrays[c], channelArrays.length);
+    }
+
     function measureAudioBufferPeak(buffer) {
         if (!buffer) return 0;
-        let peak = 0;
-        for (let c = 0; c < buffer.numberOfChannels; c++) {
-            const data = buffer.getChannelData(c);
-            for (let i = 0; i < data.length; i++) {
-                peak = Math.max(peak, Math.abs(data[i]));
-            }
-        }
-        return peak;
+        return measurePeakFromChannels(
+            (c) => buffer.getChannelData(c),
+            buffer.numberOfChannels,
+        );
     }
 
     function isUsablePitchSliceBuffer(buffer, sourcePeak) {
@@ -67,19 +67,50 @@
         return start;
     }
 
-    function copyRenderedSliceToBuffer(rendered, extractStart, outFrames, channels) {
-        const sampleRate = rendered.sampleRate;
+    function copySliceToBuffer(
+        getChannelData,
+        extractStart,
+        outFrames,
+        channels,
+        sampleRate,
+    ) {
         const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
         const scratch = new OfflineCtx(channels, 1, sampleRate);
         const outBuffer = scratch.createBuffer(channels, outFrames, sampleRate);
         for (let c = 0; c < channels; c++) {
-            const src = rendered.getChannelData(c);
+            const src = getChannelData(c);
             const dst = outBuffer.getChannelData(c);
             for (let i = 0; i < outFrames; i++) {
                 dst[i] = src[extractStart + i] || 0;
             }
         }
         return outBuffer;
+    }
+
+    function copyChannelArraysToBuffer(
+        channelArrays,
+        extractStart,
+        outFrames,
+        channels,
+        sampleRate,
+    ) {
+        return copySliceToBuffer(
+            (c) => channelArrays[c],
+            extractStart,
+            outFrames,
+            channels,
+            sampleRate,
+        );
+    }
+
+    function copyRenderedSliceToBuffer(rendered, extractStart, outFrames, channels) {
+        return copySliceToBuffer(
+            (c) => rendered.getChannelData(c),
+            extractStart,
+            outFrames,
+            channels,
+            rendered.sampleRate,
+        );
     }
 
     /** 結合境界で別 BufferSource（ピッチスライス）が必要 */
@@ -91,14 +122,25 @@
     }
 
     function isSignalsmithPitchStretchAvailable() {
-        if (pitchStretchCapable === false) return false;
-        if (pitchStretchCapable === true) return true;
-        const ok =
-            typeof SignalsmithStretch === 'function' &&
-            typeof OfflineAudioContext !== 'undefined' &&
-            typeof AudioWorkletNode !== 'undefined';
-        pitchStretchCapable = ok;
-        return ok;
+        if (pitchStretchCapable === null) {
+            const hasWorklet =
+                typeof SignalsmithStretch === 'function' &&
+                typeof AudioWorkletNode !== 'undefined';
+            const hasMainThread =
+                typeof renderSignalsmithStretchMainThread === 'function' &&
+                typeof SignalsmithStretchWasmFactory === 'function';
+            pitchStretchCapable =
+                typeof OfflineAudioContext !== 'undefined' &&
+                (hasWorklet || hasMainThread);
+        }
+        return pitchStretchCapable;
+    }
+
+    function pitchStretchUsesWorklet() {
+        return (
+            typeof canUsePitchStretchWorklet === 'function' &&
+            canUsePitchStretchWorklet()
+        );
     }
 
     function pitchSliceCacheKey(sourceInSec, sourceOutSec, semitones) {
@@ -329,18 +371,58 @@
             return { rendered, extractStart: latencySamples, mode: 'live-input' };
         }
 
+        async function renderWithMainThread(stretchRate) {
+            if (typeof renderSignalsmithStretchMainThread !== 'function') {
+                return null;
+            }
+            const mt = await renderSignalsmithStretchMainThread(
+                channelArrays,
+                sampleRate,
+                stretchRate,
+                pitch,
+                targetFrames,
+            );
+            if (!mt || !mt.channelArrays || !mt.channelArrays.length) {
+                return null;
+            }
+            const extractStart = Math.max(0, mt.extractStart | 0);
+            const available = Math.max(
+                0,
+                mt.channelArrays[0].length - extractStart,
+            );
+            const outFrames = Math.min(targetFrames, available);
+            if (outFrames <= 0) return null;
+            const outBuffer = copyChannelArraysToBuffer(
+                mt.channelArrays,
+                extractStart,
+                outFrames,
+                channels,
+                sampleRate,
+            );
+            return {
+                rendered: outBuffer,
+                extractStart: 0,
+                mode: 'main-thread',
+                outBuffer,
+                outFrames,
+            };
+        }
+
         let stretchRate = pitchSliceStretchRateForTimeline(
             inputDurationSec,
             targetDurationSec,
         );
+        const workletAttempts = pitchStretchUsesWorklet()
+            ? [renderWithAddBuffers, renderWithLiveInput]
+            : [];
         let renderResult = null;
         for (let rateAttempt = 0; rateAttempt < 4; rateAttempt++) {
             const lastRateAttempt = rateAttempt === 3;
-            for (const attempt of [renderWithAddBuffers, renderWithLiveInput]) {
+            for (const attempt of workletAttempts) {
                 try {
                     renderResult = await attempt(stretchRate);
                 } catch (err) {
-                    pitchPlaybackLog('render/attempt-failed', {
+                    pitchPlaybackLog('render/attempt-no-output', {
                         semitones: pitch,
                         mode: attempt.name,
                         stretchRate,
@@ -426,6 +508,68 @@
                 });
                 return outBuffer;
             }
+
+            if (!renderResult && typeof renderSignalsmithStretchMainThread === 'function') {
+                try {
+                    const mtResult = await renderWithMainThread(stretchRate);
+                    if (mtResult && mtResult.outBuffer) {
+                        const outBuffer = mtResult.outBuffer;
+                        if (!isUsablePitchSliceBuffer(outBuffer, sourcePeak)) {
+                            pitchPlaybackLog('render/main-thread-silent', {
+                                semitones: pitch,
+                                stretchRate,
+                                outPeak: measureAudioBufferPeak(outBuffer),
+                            });
+                        } else {
+                            const shortfallFrames = targetFrames - mtResult.outFrames;
+                            if (
+                                shortfallFrames > Math.ceil(sampleRate * 0.002) &&
+                                !lastRateAttempt
+                            ) {
+                                pitchPlaybackLog('render/shortfall-retry', {
+                                    semitones: pitch,
+                                    stretchRate,
+                                    targetFrames,
+                                    outFrames: mtResult.outFrames,
+                                    shortfallSec: shortfallFrames / sampleRate,
+                                    inputDurSec: inputDurationSec,
+                                    targetDurSec: targetDurationSec,
+                                    renderMode: 'main-thread',
+                                });
+                                stretchRate *= Math.max(
+                                    0.5,
+                                    mtResult.outFrames / Math.max(1, targetFrames),
+                                );
+                            } else {
+                                pitchPlaybackLog('render/done', {
+                                    semitones: pitch,
+                                    sourceInSec,
+                                    sourceOutSec,
+                                    inputFrames: frameCount,
+                                    outFrames: mtResult.outFrames,
+                                    targetFrames,
+                                    inputDurSec: inputDurationSec,
+                                    targetDurSec: targetDurationSec,
+                                    outDurSec: outBuffer.duration,
+                                    stretchRate,
+                                    extractStartSamples: mtResult.extractStart,
+                                    sourcePeak,
+                                    outPeak: measureAudioBufferPeak(outBuffer),
+                                    renderMode: 'main-thread',
+                                });
+                                return outBuffer;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    pitchPlaybackLog('render/main-thread-no-output', {
+                        semitones: pitch,
+                        stretchRate,
+                        message: err && err.message ? err.message : String(err),
+                    });
+                }
+            }
+
             if (renderResult) break;
         }
 
@@ -621,7 +765,10 @@
             })
             .catch((err) => {
                 if (typeof writeLog === 'function') {
-                    writeLog('Key shift failed: ' + (err && err.message ? err.message : err));
+                    writeLog(
+                        'Key shift not ready: ' +
+                            (err && err.message ? err.message : err),
+                    );
                 }
                 return null;
             })
@@ -763,26 +910,48 @@
 
     let pitchStretchWorkletWarmPromise = null;
 
+    function markPitchStretchWarmSkipped(reason) {
+        pitchStretchWorkletWarmPromise = null;
+        if (typeof writeLog === 'function') {
+            writeLog(
+                '[KeyPlayback] stretch warmup skipped: ' +
+                    (reason && reason.message ? reason.message : String(reason)),
+            );
+        }
+    }
+
     /** 本番 AudioContext 上で Worklet/WASM を先行ロード（初回 Stretch 生成を短縮） */
     function warmupPitchStretchWorklet(ctx) {
         if (!isSignalsmithPitchStretchAvailable() || !ctx) {
             return Promise.resolve(false);
         }
+        if (!pitchStretchUsesWorklet()) {
+            return Promise.resolve(false);
+        }
         if (pitchStretchWorkletWarmPromise) {
             return pitchStretchWorkletWarmPromise;
         }
-        pitchStretchWorkletWarmPromise = SignalsmithStretch(ctx, {
-            numberOfInputs: 1,
-            numberOfOutputs: 1,
-            outputChannelCount: [2],
-        })
-            .then((node) => {
+        pitchStretchWorkletWarmPromise = (async () => {
+            if (ctx.state === 'suspended') {
+                try {
+                    await ctx.resume();
+                } catch (_) {}
+            }
+            try {
+                const node = await SignalsmithStretch(ctx, {
+                    numberOfInputs: 1,
+                    numberOfOutputs: 1,
+                    outputChannelCount: [2],
+                });
                 try {
                     node.disconnect();
                 } catch (_) {}
                 return true;
-            })
-            .catch(() => false);
+            } catch (err) {
+                markPitchStretchWarmSkipped(err);
+                return false;
+            }
+        })();
         return pitchStretchWorkletWarmPromise;
     }
 
@@ -832,7 +1001,6 @@
     window.pitchSliceExitBoundary = pitchSliceExitBoundary;
     window.pitchSplitBoundaryHandoffSec = pitchSplitBoundaryHandoffSec;
     window.pitchSliceTimelineDurationSec = pitchSliceTimelineDurationSec;
-    window.pitchSliceStretchRateForTimeline = pitchSliceStretchRateForTimeline;
     window.pitchSlicePlaybackFitRate = pitchSlicePlaybackFitRate;
     window.isSignalsmithPitchStretchAvailable = isSignalsmithPitchStretchAvailable;
     window.warmupPitchStretchWorklet = warmupPitchStretchWorklet;
