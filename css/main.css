@@ -5618,6 +5618,14 @@
             background: #241414;
             border: 1px solid #e85050;
         }
+        .transport-bar .session-io-btn--export-video.session-io-btn--export-wave {
+            background-color: #1e3226;
+            border: 1px solid #52d068;
+        }
+        .transport-bar .session-io-btn--export-video.session-io-btn--export-wave:hover:not(:disabled) {
+            background-color: #1c2a20;
+            border-color: #5ad86a;
+        }
         .transport-bar .session-io-btn--export-video:hover:not(:disabled) {
             background: #2c1a1a;
             border-color: #ff6868;
@@ -5625,6 +5633,25 @@
         .transport-bar .session-io-btn--export-video:focus-visible {
             outline: 2px solid #f0a0a0;
             outline-offset: 2px;
+        }
+        .transport-bar .session-io-btn--export-video.session-io-btn--export-wave:focus-visible {
+            outline: 2px solid #7ee89a;
+            outline-offset: 2px;
+        }
+        @keyframes sessionExportMediaGlowPulse {
+            0%,
+            100% {
+                box-shadow: none;
+            }
+            50% {
+                box-shadow:
+                    0 0 0 1px rgba(255, 200, 120, 0.34),
+                    0 0 10px rgba(255, 180, 80, 0.28),
+                    0 0 18px rgba(255, 140, 40, 0.18);
+            }
+        }
+        .transport-bar .session-io-btn--export-video.session-io-btn--export-media-glow {
+            animation: sessionExportMediaGlowPulse 0.85s ease-in-out 1;
         }
         .transport-bar .session-io-btn:disabled {
             opacity: 0.45;

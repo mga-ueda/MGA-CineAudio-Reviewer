@@ -4,6 +4,8 @@
 (function videoExportReviewModule() {
     const EXPORT_FPS = 30;
     const VIDEO_BITRATE = 8_000_000;
+    const EXPORT_WAVE_SAMPLE_RATE = 48000;
+    const EXPORT_WAVE_BITS = 24;
 
     function chooseRecorderMimeType() {
         if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) {
@@ -361,7 +363,7 @@
         let lastProgressUiMs = 0;
 
         if (typeof beginWebmExportLock === 'function') {
-            beginWebmExportLock({ durationSec });
+            beginWebmExportLock({ durationSec, kind: 'webm' });
         }
 
         const cleanup = () => {
@@ -564,5 +566,445 @@
         return blob;
     }
 
+    function mergeFloat32Chunks(chunks) {
+        let len = 0;
+        for (let i = 0; i < chunks.length; i++) len += chunks[i].length;
+        const out = new Float32Array(len);
+        let off = 0;
+        for (let i = 0; i < chunks.length; i++) {
+            out.set(chunks[i], off);
+            off += chunks[i].length;
+        }
+        return out;
+    }
+
+    function encodeStereoWavBlob(left, right, sampleRate) {
+        const channels = 2;
+        const frameCount = Math.min(left.length, right.length);
+        const bitsPerSample = EXPORT_WAVE_BITS;
+        const bytesPerSample = bitsPerSample / 8;
+        const blockAlign = channels * bytesPerSample;
+        const dataSize = frameCount * blockAlign;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        const writeStr = (offset, str) => {
+            for (let i = 0; i < str.length; i++) {
+                view.setUint8(offset + i, str.charCodeAt(i));
+            }
+        };
+        const writeInt24 = (offset, sample) => {
+            let v = Math.max(-8388608, Math.min(8388607, sample));
+            view.setUint8(offset, v & 0xff);
+            view.setUint8(offset + 1, (v >> 8) & 0xff);
+            view.setUint8(offset + 2, (v >> 16) & 0xff);
+        };
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + dataSize, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, channels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * blockAlign, true);
+        view.setUint16(32, blockAlign, true);
+        view.setUint16(34, bitsPerSample, true);
+        writeStr(36, 'data');
+        view.setUint32(40, dataSize, true);
+        let offset = 44;
+        for (let i = 0; i < frameCount; i++) {
+            const l = Math.max(-1, Math.min(1, left[i]));
+            const r = Math.max(-1, Math.min(1, right[i]));
+            const li = l < 0 ? Math.round(l * 0x800000) : Math.round(l * 0x7fffff);
+            const ri = r < 0 ? Math.round(r * 0x800000) : Math.round(r * 0x7fffff);
+            writeInt24(offset, li);
+            offset += 3;
+            writeInt24(offset, ri);
+            offset += 3;
+        }
+        return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    async function resampleStereoPcmToRate(left, right, sourceRate, targetRate) {
+        const srcRate = Number(sourceRate);
+        const dstRate = Number(targetRate);
+        if (
+            !Number.isFinite(srcRate) ||
+            srcRate <= 0 ||
+            !Number.isFinite(dstRate) ||
+            dstRate <= 0 ||
+            Math.abs(srcRate - dstRate) < 0.5
+        ) {
+            return { left, right, sampleRate: srcRate };
+        }
+        const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!Ctx) {
+            return { left, right, sampleRate: srcRate };
+        }
+        const frameCount = Math.min(left.length, right.length);
+        if (frameCount <= 0) {
+            return { left, right, sampleRate: srcRate };
+        }
+        const durationSec = frameCount / srcRate;
+        const outFrames = Math.max(1, Math.ceil(durationSec * dstRate));
+        const offline = new Ctx(2, outFrames, dstRate);
+        const buf = offline.createBuffer(2, frameCount, srcRate);
+        buf.copyToChannel(left.subarray(0, frameCount), 0);
+        buf.copyToChannel(right.subarray(0, frameCount), 1);
+        const source = offline.createBufferSource();
+        source.buffer = buf;
+        source.connect(offline.destination);
+        source.start(0);
+        const rendered = await offline.startRendering();
+        return {
+            left: rendered.getChannelData(0),
+            right: rendered.getChannelData(1),
+            sampleRate: dstRate,
+        };
+    }
+
+    function createReviewMixPcmCapture(ctx, audioStream) {
+        if (!ctx || !audioStream) return null;
+        const sampleRate = ctx.sampleRate;
+        const leftChunks = [];
+        const rightChunks = [];
+        let capturing = true;
+        const bufferSize = 4096;
+        const processor = ctx.createScriptProcessor(bufferSize, 2, 2);
+        const silent = ctx.createGain();
+        silent.gain.value = 0;
+        const source = ctx.createMediaStreamSource(audioStream);
+        source.connect(processor);
+        processor.connect(silent);
+        silent.connect(ctx.destination);
+        processor.onaudioprocess = (e) => {
+            if (!capturing) return;
+            const ib = e.inputBuffer;
+            leftChunks.push(new Float32Array(ib.getChannelData(0)));
+            const r =
+                ib.numberOfChannels > 1
+                    ? ib.getChannelData(1)
+                    : ib.getChannelData(0);
+            rightChunks.push(new Float32Array(r));
+        };
+        return {
+            sampleRate,
+            stop() {
+                capturing = false;
+                try {
+                    source.disconnect();
+                } catch (_) {}
+                try {
+                    processor.disconnect();
+                } catch (_) {}
+                try {
+                    silent.disconnect();
+                } catch (_) {}
+            },
+            toWavBlob() {
+                const left = mergeFloat32Chunks(leftChunks);
+                const right = mergeFloat32Chunks(rightChunks);
+                return { left, right, captureSampleRate: sampleRate };
+            },
+            async buildWavBlob() {
+                const raw = this.toWavBlob();
+                const resampled = await resampleStereoPcmToRate(
+                    raw.left,
+                    raw.right,
+                    raw.captureSampleRate,
+                    EXPORT_WAVE_SAMPLE_RATE,
+                );
+                return {
+                    blob: encodeStereoWavBlob(
+                        resampled.left,
+                        resampled.right,
+                        resampled.sampleRate,
+                    ),
+                    captureSampleRate: raw.captureSampleRate,
+                    outputSampleRate: resampled.sampleRate,
+                };
+            },
+        };
+    }
+
+    async function exportReviewWavePackage(opt) {
+        if (
+            typeof hasPlayableWaveformTimeline !== 'function' ||
+            !hasPlayableWaveformTimeline()
+        ) {
+            throw new Error('No audio tracks loaded');
+        }
+
+        const exportMedia =
+            opt && opt.exportMedia
+                ? opt.exportMedia
+                : typeof getExportMediaOptionsFromUi === 'function'
+                  ? getExportMediaOptionsFromUi()
+                  : {
+                        includeVideo: false,
+                        includeExtra: Array.from({ length: getExtraTrackCount() }, () => false),
+                    };
+        if (!exportMedia.includeAudio) {
+            throw new Error('Audio must be included in export');
+        }
+        const extraFlags = Array.isArray(exportMedia.includeExtra)
+            ? exportMedia.includeExtra
+            : [];
+        if (!extraFlags.some(Boolean)) {
+            throw new Error('No audio tracks selected for export');
+        }
+
+        const durationSec = getVideoExportDurationSec();
+        if (!durationSec || durationSec <= 0) {
+            throw new Error('Could not determine audio duration');
+        }
+
+        const exportUiState = captureWebmExportUiState();
+        applyWebmExportUiPrep();
+
+        if (
+            typeof isRangeLoopPlaybackActive === 'function' &&
+            isRangeLoopPlaybackActive() &&
+            typeof clearRangeLoopPlayback === 'function'
+        ) {
+            clearRangeLoopPlayback({ silent: true });
+        }
+
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
+        }
+        if (typeof applySessionTransportAtHead === 'function') {
+            applySessionTransportAtHead();
+        } else if (typeof setTransportSec === 'function') {
+            setTransportSec(0);
+        }
+
+        if (typeof beginVideoExportAudioFilter === 'function') {
+            beginVideoExportAudioFilter(Object.assign({}, exportMedia, { includeVideo: false }));
+        }
+        const mixCtx =
+            typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+        if (mixCtx && mixCtx.state === 'suspended') {
+            try {
+                await mixCtx.resume();
+            } catch (_) {}
+        }
+        if (typeof primeReviewMixForPlayback === 'function') {
+            await primeReviewMixForPlayback();
+        }
+
+        const audioStream =
+            typeof beginReviewMixExportCapture === 'function'
+                ? beginReviewMixExportCapture()
+                : null;
+        if (!audioStream || !mixCtx) {
+            if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
+            restoreWebmExportUiState(exportUiState);
+            throw new Error('Review mix audio capture unavailable');
+        }
+
+        const pcmCapture = createReviewMixPcmCapture(mixCtx, audioStream);
+        if (!pcmCapture) {
+            if (typeof endReviewMixExportCapture === 'function') endReviewMixExportCapture();
+            if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
+            restoreWebmExportUiState(exportUiState);
+            throw new Error('PCM capture unavailable');
+        }
+
+        let exportActive = true;
+        let finished = false;
+        let lastProgressUiMs = 0;
+
+        if (typeof beginWebmExportLock === 'function') {
+            beginWebmExportLock({ durationSec, kind: 'wave' });
+        }
+
+        const cleanup = () => {
+            exportActive = false;
+            pcmCapture.stop();
+            if (typeof endReviewMixExportCapture === 'function') endReviewMixExportCapture();
+            if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
+            restoreWebmExportUiState(exportUiState);
+            if (typeof setWebmExportEmergencyCleanup === 'function') {
+                setWebmExportEmergencyCleanup(null);
+            }
+            if (typeof applySessionTransportAtHead === 'function') {
+                applySessionTransportAtHead();
+            } else if (typeof stopPlaybackReturnTransportToHead === 'function') {
+                stopPlaybackReturnTransportToHead();
+            }
+            if (typeof endWebmExportLock === 'function') endWebmExportLock();
+        };
+
+        const finishExport = () => {
+            if (finished) return;
+            finished = true;
+            exportActive = false;
+            if (typeof transportPlayGeneration !== 'undefined') {
+                transportPlayGeneration += 1;
+            }
+            if (typeof haltTransportForSessionMutation === 'function') {
+                haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
+            }
+            if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
+        };
+
+        if (typeof setWebmExportEmergencyCleanup === 'function') {
+            setWebmExportEmergencyCleanup(finishExport);
+        }
+
+        const mediaSummary = [];
+        for (let i = 0; i < extraFlags.length; i++) {
+            if (extraFlags[i]) mediaSummary.push('Ex' + (i + 1));
+        }
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Export Wave: started (real-time, ' +
+                    durationSec.toFixed(2) +
+                    ' s → ' +
+                    EXPORT_WAVE_SAMPLE_RATE +
+                    ' Hz ' +
+                    EXPORT_WAVE_BITS +
+                    '-bit; audio: ' +
+                    mediaSummary.join(', ') +
+                    ')',
+            );
+        }
+
+        setTimeout(
+            () => {
+                if (!finished) finishExport();
+            },
+            Math.ceil((durationSec + 8) * 1000),
+        );
+
+        const monitorLoop = () => {
+            if (!exportActive) return;
+            if (
+                typeof isWebmExportCancelRequested === 'function' &&
+                isWebmExportCancelRequested()
+            ) {
+                finishExport();
+                return;
+            }
+            const transportSec =
+                typeof getTransportSecForVideoExport === 'function'
+                    ? getTransportSecForVideoExport()
+                    : typeof getTransportSec === 'function'
+                      ? getTransportSec()
+                      : 0;
+            const nowMs = performance.now();
+            if (
+                nowMs - lastProgressUiMs >= 120 &&
+                typeof updateExportBlockingSub === 'function' &&
+                typeof formatMediaExportProgressSub === 'function'
+            ) {
+                lastProgressUiMs = nowMs;
+                updateExportBlockingSub(
+                    formatMediaExportProgressSub(transportSec, durationSec, 'wave'),
+                );
+            }
+            if (transportSec >= durationSec - 0.04) {
+                finishExport();
+                return;
+            }
+            requestAnimationFrame(monitorLoop);
+        };
+
+        if (typeof updateExportBlockingSub === 'function') {
+            updateExportBlockingSub('Starting playback…');
+        }
+        monitorLoop();
+
+        if (typeof startVideoPlayback === 'function') {
+            const ok = await startVideoPlayback({ force: true });
+            if (!ok) {
+                finishExport();
+                cleanup();
+                throw new Error('Playback failed to start for export');
+            }
+        } else {
+            finishExport();
+            cleanup();
+            throw new Error('Playback unavailable for export');
+        }
+        if (typeof forceTransportRafLoop === 'function') forceTransportRafLoop();
+
+        await new Promise((resolve) => {
+            const waitDone = () => {
+                if (finished) {
+                    resolve();
+                    return;
+                }
+                requestAnimationFrame(waitDone);
+            };
+            waitDone();
+        });
+
+        exportActive = false;
+        const cancelled =
+            typeof isWebmExportCancelRequested === 'function' &&
+            isWebmExportCancelRequested();
+        pcmCapture.stop();
+        if (typeof endReviewMixExportCapture === 'function') endReviewMixExportCapture();
+        if (typeof endVideoExportAudioFilter === 'function') endVideoExportAudioFilter();
+        restoreWebmExportUiState(exportUiState);
+        if (typeof setWebmExportEmergencyCleanup === 'function') {
+            setWebmExportEmergencyCleanup(null);
+        }
+        if (typeof applySessionTransportAtHead === 'function') {
+            applySessionTransportAtHead();
+        } else if (typeof stopPlaybackReturnTransportToHead === 'function') {
+            stopPlaybackReturnTransportToHead();
+        }
+
+        if (cancelled) {
+            if (typeof endWebmExportLock === 'function') endWebmExportLock();
+            if (typeof writeLog === 'function') {
+                writeLog('Export Wave: cancelled');
+            }
+            throw new Error('Export cancelled');
+        }
+
+        if (typeof updateExportBlockingSub === 'function') {
+            updateExportBlockingSub('Finalizing…');
+        }
+        const wavResult = await pcmCapture.buildWavBlob();
+        const blob = wavResult.blob;
+        if (!blob || !blob.size) {
+            if (typeof endWebmExportLock === 'function') endWebmExportLock();
+            throw new Error('No recorded audio data');
+        }
+        const filename =
+            typeof buildWaveExportDownloadFilename === 'function'
+                ? buildWaveExportDownloadFilename()
+                : 'export.wav';
+        triggerBlobDownload(blob, filename);
+        if (typeof endWebmExportLock === 'function') endWebmExportLock();
+        if (typeof writeLog === 'function') {
+            const rateNote =
+                Math.abs(wavResult.captureSampleRate - wavResult.outputSampleRate) >= 0.5
+                    ? '; resampled from ' + Math.round(wavResult.captureSampleRate) + ' Hz'
+                    : '';
+            writeLog(
+                'Export Wave: completed — "' +
+                    filename +
+                    '" (' +
+                    (typeof formatByteSize === 'function'
+                        ? formatByteSize(blob.size)
+                        : blob.size + ' bytes') +
+                    '; ' +
+                    wavResult.outputSampleRate +
+                    ' Hz ' +
+                    EXPORT_WAVE_BITS +
+                    '-bit stereo' +
+                    rateNote +
+                    ')',
+            );
+        }
+        return blob;
+    }
+
     window.exportReviewVideoPackage = exportReviewVideoPackage;
+    window.exportReviewWavePackage = exportReviewWavePackage;
 })();

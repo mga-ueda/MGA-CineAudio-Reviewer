@@ -2,7 +2,7 @@
  * export-blocking-lock.js — レビュー WebM 書き出し中の全画面ブロックとキャンセル制御。
  */
 (function exportBlockingLockModule() {
-    /** @type {null | 'webm-export'} */
+    /** @type {null | 'webm-export' | 'wave-export'} */
     let blockingMode = null;
     let webmExportUserCancel = false;
     let webmExportEmergencyCleanup = null;
@@ -33,12 +33,14 @@
         return pad(m) + ':' + pad(ss);
     }
 
-    function formatWebmExportProgressSub(elapsedSec, totalSec) {
+    function formatMediaExportProgressSub(elapsedSec, totalSec, kind) {
         const total = Math.max(0.001, Number(totalSec) || 0);
         const elapsed = Math.max(0, Number(elapsedSec) || 0);
         const pct = Math.min(100, Math.round((elapsed / total) * 100));
+        const label = kind === 'wave' ? 'Exporting WAV…' : 'Exporting WebM…';
         return (
-            'Exporting WebM… ' +
+            label +
+            ' ' +
             pct +
             '% (' +
             formatExportProgressClock(elapsed) +
@@ -46,6 +48,10 @@
             formatExportProgressClock(total) +
             ')'
         );
+    }
+
+    function formatWebmExportProgressSub(elapsedSec, totalSec) {
+        return formatMediaExportProgressSub(elapsedSec, totalSec, 'webm');
     }
 
     function refreshOperationBlockingControlLocks() {
@@ -122,7 +128,11 @@
     }
 
     function isWebmExportActive() {
-        return blockingMode === 'webm-export';
+        return blockingMode === 'webm-export' || blockingMode === 'wave-export';
+    }
+
+    function isWaveExportActive() {
+        return blockingMode === 'wave-export';
     }
 
     function isWaveformRestoreLockActive() {
@@ -151,16 +161,22 @@
             webmExportEmergencyCleanup();
         }
         if (typeof writeLog === 'function') {
-            writeLog('Export WebM: cancel requested (Esc)');
+            writeLog(
+                blockingMode === 'wave-export'
+                    ? 'Export Wave: cancel requested (Esc)'
+                    : 'Export WebM: cancel requested (Esc)',
+            );
         }
     }
 
     function beginWebmExportLock(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const kind = o.kind === 'wave' ? 'wave-export' : 'webm-export';
         webmExportUserCancel = false;
         webmExportEmergencyCleanup = null;
-        blockingMode = 'webm-export';
+        blockingMode = kind;
         setOperationBlockingVisible(true, {
-            title: 'WebM を書き出し中',
+            title: kind === 'wave-export' ? 'WAV を書き出し中' : 'WebM を書き出し中',
             hideEscHint: false,
         });
         try {
@@ -169,16 +185,16 @@
                 ae.blur();
             }
         } catch (_) {}
-        const totalSec = opt && Number.isFinite(opt.durationSec) ? opt.durationSec : 0;
+        const totalSec = o.durationSec != null && Number.isFinite(o.durationSec) ? o.durationSec : 0;
         updateExportBlockingSub(
             totalSec > 0
-                ? formatWebmExportProgressSub(0, totalSec)
+                ? formatMediaExportProgressSub(0, totalSec, o.kind === 'wave' ? 'wave' : 'webm')
                 : 'Preparing export…',
         );
     }
 
     function endWebmExportLock() {
-        if (blockingMode === 'webm-export') {
+        if (blockingMode === 'webm-export' || blockingMode === 'wave-export') {
             setOperationBlockingVisible(false);
         }
     }
@@ -189,6 +205,8 @@
 
     window.updateExportBlockingSub = updateExportBlockingSub;
     window.formatWebmExportProgressSub = formatWebmExportProgressSub;
+    window.formatMediaExportProgressSub = formatMediaExportProgressSub;
+    window.isWaveExportActive = isWaveExportActive;
     window.isWebmExportActive = isWebmExportActive;
     window.isWaveformRestoreLockActive = isWaveformRestoreLockActive;
     window.isOperationBlockingActive = isOperationBlockingActive;

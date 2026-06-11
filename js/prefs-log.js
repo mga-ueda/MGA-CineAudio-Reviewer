@@ -55,6 +55,7 @@
             /\bfailed —/i.test(m) ||
             /Import Review: failed/i.test(m) ||
             /Export WebM: failed/i.test(m) ||
+            /Export Wave: failed/i.test(m) ||
             /Export Review: failed/i.test(m) ||
             /All Clear failed/i.test(m) ||
             /Transport: play failed/i.test(m) ||

@@ -768,10 +768,16 @@
             document.getElementById('sessionExportBtn'),
             `選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（${h.sessionExport}）`,
         );
-        setElementTitle(
-            document.getElementById('sessionExportVideoBtn'),
-            'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）',
-        );
+        if (typeof updateSessionExportMediaBtnUi === 'function') {
+            updateSessionExportMediaBtnUi(
+                typeof fileMain !== 'undefined' && !!fileMain,
+            );
+        } else {
+            setElementTitle(
+                document.getElementById('sessionExportVideoBtn'),
+                'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）',
+            );
+        }
 
         const exportVideoChk = document.getElementById('sessionExportIncludeVideo');
         const exportAudioChk = document.getElementById('sessionExportIncludeAudio');

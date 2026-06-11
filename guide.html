@@ -88,7 +88,7 @@
                     <a href="#export" class="guide-nav__chapter">レビューの保存・共有</a>
                     <ol class="guide-nav__sublist">
                         <li><a href="#export-review">Export Review</a></li>
-                        <li><a href="#export-webm">Export WebM</a></li>
+                        <li><a href="#export-webm">Export WebM / Export Wave</a></li>
                         <li><a href="#import-review">Import Review</a></li>
                     </ol>
                 </li>
@@ -464,7 +464,7 @@
                     <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
                     <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
-                    <li><strong>Export WebM</strong> — タイムコードとマーカーコメントを焼き込んだ WebM を実時間で書き出し。</li>
+                    <li><strong>Export Wave</strong> / <strong>Export WebM</strong> — 動画未読み込み時は <strong>Export Wave</strong>（レビューミックスを WAV で書き出し）。動画読み込み後は <strong>Export WebM</strong>（タイムコードとマーカーコメントを映像へ焼き込み）に切り替わり、ボタンが<strong>発光</strong>してモード変更を知らせます。動画を削除すると再び Export Wave に戻り、同様に発光します。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-options-bottom">波形直下（オプションバー下段）</h3>
@@ -511,10 +511,12 @@
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 
-                <h3 class="docs-heading-box--sub" id="export-webm">Export WebM</h3>
+                <h3 class="docs-heading-box--sub" id="export-webm">Export WebM / Export Wave</h3>
+                <p>オプションバー中段右端のボタンは、<strong>動画の有無</strong>でモードが切り替わります。切り替わった直後はボタンが<strong>短く発光</strong>します。</p>
                 <ul>
-                    <li><strong>Export WebM</strong> は、現在のレビュー内容を確認しやすいように、<strong>タイムコードとマーカーコメントを映像へ焼き込んだ WebM</strong> を書き出します。</li>
-                    <li><strong>Audio</strong> がオンなら、追加音声（読み込み済みの全 Audio Track）をすべてミックス対象に含めます（Mute / Solo 状態は影響しません）。</li>
+                    <li><strong>Export Wave</strong>（動画未読み込み時）— 現在のレビューミックス（追加音声 Audio Track のミックス結果）を<strong>ステレオ WAV</strong> で実時間書き出しします。映像・タイムコード焼き込み・マーカーコメント焼き込みはありません。</li>
+                    <li><strong>Export WebM</strong>（動画読み込み後）— タイムコードとマーカーコメントを<strong>映像へ焼き込んだ WebM</strong> を実時間で書き出します。</li>
+                    <li><strong>Include in export</strong> の <strong>Audio</strong> がオンなら、どちらのモードでも追加音声（読み込み済みの全 Audio Track）をミックス対象に含めます（Mute / Solo 状態は影響しません）。Export WebM では <strong>Video</strong> もオンが必要です。</li>
                     <li>書き出し開始前に、波形の横倍率を全体表示（1×）へ戻し、アナライザーを解析停止にします（書き出し前が Live だった場合は完了後に Live へ戻ります。横倍率は 1× のままです）。</li>
                     <li>書き出し中は操作ロック用オーバーレイが表示され、<kbd>Esc</kbd> でキャンセルできます。</li>
                     <li>実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。</li>

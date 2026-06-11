@@ -498,12 +498,18 @@
         const hasReviewContent =
             typeof sessionHasExportableReviewContent === 'function' &&
             sessionHasExportableReviewContent();
+        const hasPlayableAudio =
+            typeof hasPlayableWaveformTimeline === 'function' &&
+            hasPlayableWaveformTimeline();
+        const canMediaExport = hasVideo || hasPlayableAudio;
         const exportReviewEnabled = !exportLocked && hasReviewContent;
+        const exportMediaEnabled = exportReviewEnabled && canMediaExport;
+        updateSessionExportMediaBtnUi(hasVideo);
         if (exportBtn) {
             exportBtn.disabled = !exportReviewEnabled;
         }
         if (exportVideoBtn) {
-            exportVideoBtn.disabled = !exportReviewEnabled;
+            exportVideoBtn.disabled = !exportMediaEnabled;
         }
         if (importBtn) importBtn.disabled = exportLocked;
     }
@@ -1010,6 +1016,45 @@
         return buildExportDownloadFilename(manifest, '.webm');
     }
 
+    function buildWaveExportDownloadFilename() {
+        return buildExportDownloadFilename({ session: {} }, '.wav');
+    }
+
+    function getSessionExportMediaMode() {
+        return isExportVideoAvailable() ? 'webm' : 'wave';
+    }
+
+    let lastSessionExportMediaBtnMode = null;
+
+    function flashSessionExportMediaBtn(btn) {
+        if (!btn) return;
+        btn.classList.remove('session-io-btn--export-media-glow');
+        void btn.offsetWidth;
+        btn.classList.add('session-io-btn--export-media-glow');
+        setTimeout(() => {
+            btn.classList.remove('session-io-btn--export-media-glow');
+        }, 900);
+    }
+
+    function updateSessionExportMediaBtnUi(hasVideo) {
+        const btn = document.getElementById('sessionExportVideoBtn');
+        if (!btn) return;
+        const mode = hasVideo ? 'webm' : 'wave';
+        const label = hasVideo ? 'Export WebM' : 'Export Wave';
+        const title = hasVideo
+            ? 'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）'
+            : 'レビューミックスを WAV で書き出し（実時間・書き出し中は Esc でキャンセル）';
+        btn.textContent = label;
+        btn.title = title;
+        btn.dataset.exportMediaMode = mode;
+        btn.classList.toggle('session-io-btn--export-webm', mode === 'webm');
+        btn.classList.toggle('session-io-btn--export-wave', mode === 'wave');
+        if (lastSessionExportMediaBtnMode && lastSessionExportMediaBtnMode !== mode) {
+            flashSessionExportMediaBtn(btn);
+        }
+        lastSessionExportMediaBtnMode = mode;
+    }
+
     function triggerDownload(buffer, filename) {
         const blob = new Blob([buffer], { type: 'application/octet-stream' });
         const url = URL.createObjectURL(blob);
@@ -1248,6 +1293,9 @@
     window.runImportReviewFromFile = runImportReviewFromFile;
     window.refreshExportMediaOptionsUi = refreshExportMediaOptionsUi;
     window.buildVideoExportDownloadFilename = buildVideoExportDownloadFilename;
+    window.buildWaveExportDownloadFilename = buildWaveExportDownloadFilename;
+    window.getSessionExportMediaMode = getSessionExportMediaMode;
+    window.updateSessionExportMediaBtnUi = updateSessionExportMediaBtnUi;
     window.getExportMediaOptionsFromUi = getExportMediaOptionsFromUi;
 
     function triggerExportVideo(exportVideoBtn) {
@@ -1255,6 +1303,77 @@
         if (!btn || btn.disabled) return;
         refreshExportMediaOptionsUi();
         const media = getExportMediaOptionsFromUi();
+        const mode = getSessionExportMediaMode();
+        if (mode === 'wave') {
+            if (
+                typeof hasPlayableWaveformTimeline !== 'function' ||
+                !hasPlayableWaveformTimeline()
+            ) {
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert(
+                        '音声をエクスポートできません',
+                        'エクスポートする追加音声（Audio Track）を読み込んでください。',
+                        { logLine: 'Export Wave: no audio tracks loaded' },
+                    );
+                }
+                return;
+            }
+            if (!media.includeAudio) {
+                const noticePromise =
+                    typeof requestAppNotice === 'function'
+                        ? requestAppNotice(
+                              'Export Wave',
+                              'WAV をエクスポートするには、Include in export の Audio にチェックを入れてください。',
+                              {
+                                  logLine:
+                                      'Export Wave: Audio not included in export selection (check Include in export → Audio)',
+                              },
+                          )
+                        : Promise.resolve(true);
+                void noticePromise;
+                return;
+            }
+            const hasIncludedExtra =
+                Array.isArray(media.includeExtra) && media.includeExtra.some(Boolean);
+            if (!hasIncludedExtra) {
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert(
+                        '音声をエクスポートできません',
+                        'Include in export の Audio にチェックを入れ、書き出す Audio Track を読み込んでください。',
+                        { logLine: 'Export Wave: no audio tracks selected for export' },
+                    );
+                }
+                return;
+            }
+            if (typeof exportReviewWavePackage !== 'function') {
+                if (typeof showAppAlert === 'function') {
+                    showAppAlert(
+                        'WAV エクスポート不可',
+                        'このブラウザでは WAV エクスポート機能を利用できません。',
+                        { logLine: 'Export Wave: unavailable in this browser' },
+                    );
+                }
+                return;
+            }
+            btn.disabled = true;
+            exportReviewWavePackage({ exportMedia: media })
+                .catch((e) => {
+                    const msg = e && e.message ? e.message : String(e);
+                    if (msg === 'Export cancelled') return;
+                    writeLog('Export Wave: failed — ' + msg);
+                    if (typeof showAppAlert === 'function') {
+                        showAppAlert('WAV のエクスポートに失敗しました', msg, { log: false });
+                    }
+                })
+                .finally(() => {
+                    if (typeof refreshExportMediaOptionsUi === 'function') {
+                        refreshExportMediaOptionsUi();
+                    } else {
+                        btn.disabled = false;
+                    }
+                });
+            return;
+        }
         if (!isExportVideoAvailable()) {
             if (typeof showAppAlert === 'function') {
                 showAppAlert(
