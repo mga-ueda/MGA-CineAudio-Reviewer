@@ -20,7 +20,7 @@
                     <tr>
                         <td>テキスト入力中は下記の多くが無効</td>
                         <td>—</td>
-                        <td>入力欄・コメント欄・TC 欄など。一部 <kbd>Esc</kbd> は有効（優先順位は末尾参照）。マーカー一覧行への <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> は Comment / In / Out 欄の編集中も有効</td>
+                        <td>入力欄・コメント欄・TC 欄・Additional Comments 欄など。一部 <kbd>Esc</kbd> は有効（優先順位は末尾参照）。マーカー一覧行への <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> は Comment / In / Out 欄の編集中も有効。<strong>Comment</strong> 列や Additional Comments 欄の編集中は <kbd>U</kbd> / <kbd>T</kbd> / <kbd>P</kbd> など多くのグローバルショートカットは無効</td>
                     </tr>
                     <tr>
                         <td>Mac（修飾キー）</td>
@@ -43,7 +43,7 @@
                     <tr>
                         <td>ファイルの読み込み</td>
                         <td>ドロップ</td>
-                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当</td>
+                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当。WAV / WAVE に埋め込まれたマーカー/リージョンがあれば Markers パネルへ自動反映（Import Review / セッション復元時を除く）</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生（動画読込後）</th>
@@ -127,7 +127,7 @@
                     <tr>
                         <td>ユーザーレイアウト編集</td>
                         <td><kbd>Shift</kbd>+<kbd>U</kbd></td>
-                        <td>ユーザーレイアウトの編集モードに入る／編集を終了してユーザーレイアウト表示へ戻る。編集時は UI を直接ドラッグして移動、スプリッターでサイズ調整。縦スプリッターは中央でスナップ（Alt 押下中は無効）</td>
+                        <td>ユーザーレイアウトの編集モードに入る / 編集を終了してユーザーレイアウト表示へ戻る。編集時は UI を直接ドラッグして移動、スプリッターでサイズ調整。縦スプリッターは中央でスナップ（Alt 押下中は無効）</td>
                     </tr>
                     <tr>
                         <td>マスター音量を100%（0dB）に</td>
@@ -153,9 +153,14 @@
                         <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
                     </tr>
                     <tr>
-                        <td>In/Out ドラッグ</td>
-                        <td>ハンドル操作（波形上）</td>
-                        <td>波形タイムライン上のハンドル</td>
+                        <td>ポイントマーカー位置の調整</td>
+                        <td>ドラッグ（波形上の点マーカー）</td>
+                        <td>縦線またはラベルをドラッグして秒単位で微調整（<kbd>Alt</kbd> 押下中は他マーカー/リージョンへのスナップを抑制）。シングルクリックはその位置へシーク</td>
+                    </tr>
+                    <tr>
+                        <td>範囲マーカー In/Out の調整</td>
+                        <td>ドラッグ（波形上の範囲マーカー）</td>
+                        <td>端のハンドルで In / Out を変更。帯の中央付近をドラッグすると In / Out を同時移動（クリックのみのときはその位置へシーク）</td>
                     </tr>
                     <tr>
                         <td>タイムライン上の表示/非表示</td>
@@ -563,6 +568,16 @@
                         <td>Export Review（エクスポート）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd></td>
                         <td>オプションバー中段の Export Review と同じ</td>
+                    </tr>
+                    <tr>
+                        <td>Export Wave（動画未読み込み時）</td>
+                        <td>ボタン（オプションバー）</td>
+                        <td>48 kHz / 24-bit ステレオ WAV。通常はオフラインバウンス（失敗時は実時間キャプチャ）。マーカー/範囲マーカーを Sound Forge 互換形式（cue / LIST(adtl) / plst）で埋め込み。書き出し中は <kbd>Esc</kbd> でキャンセル</td>
+                    </tr>
+                    <tr>
+                        <td>Export WebM（動画読み込み後）</td>
+                        <td>ボタン（オプションバー）</td>
+                        <td>タイムコードとマーカーコメントを映像へ焼き込み。実時間。書き出し中は <kbd>Esc</kbd> でキャンセル</td>
                     </tr>
                     <tr>
                         <td>All Clear（全体クリア）</td>

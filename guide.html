@@ -60,6 +60,8 @@
                         <li><a href="#markers-range">範囲マーカー</a></li>
                         <li><a href="#markers-memo">Additional Comments</a></li>
                         <li><a href="#markers-list">一覧の操作</a></li>
+                        <li><a href="#markers-waveform">波形上の表示</a></li>
+                        <li><a href="#markers-wav">WAV マーカー/リージョン</a></li>
                     </ol>
                 </li>
                 <li class="guide-nav__group" data-section="audio">
@@ -253,7 +255,7 @@
                 <h3 class="docs-heading-box--sub" id="load-formats">対応形式</h3>
                 <ul>
                     <li>動画：ブラウザが再生できる形式（MP4 / WebM / MOV など）。</li>
-                    <li>追加音声：WAV / FLAC / MP3 / OGG / M4A など。</li>
+                    <li>追加音声：WAV / FLAC / MP3 / OGG / M4A など。WAV / WAVE に埋め込まれたマーカー/リージョンがある場合は、読み込み時に Markers パネルへ自動反映されます（「<a href="#markers-wav">WAV マーカー/リージョン</a>」参照）。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="load-loading">読み込み中の表示</h3>
@@ -334,7 +336,7 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="markers-memo">Additional Comments（セッション追加メモ）</h3>
-                <p>Markers パネル<strong>下段</strong>の <strong>Additional Comments</strong> 欄に、セッション全体向けの自由記述メモを入力できます。動画または追加音声を読み込むと有効になります。マーカー表とは独立して保存され、<strong>Copy</strong>/<strong>Paste</strong> および <strong>.mgacr</strong> の Export/Import に含まれます。入力中は <kbd>Esc</kbd> でフォーカスを外せます。</p>
+                <p>Markers パネル<strong>下段</strong>の <strong>Additional Comments</strong> 欄に、セッション全体向けの自由記述メモを入力できます。動画または追加音声を読み込むと有効になります。マーカー表とは独立して保存され、<strong>Copy</strong>/<strong>Paste</strong> および <strong>.mgacr</strong> の Export/Import に含まれます。入力中は <kbd>Esc</kbd> でフォーカスを外せます。<strong>Comment</strong> 列や Additional Comments 欄の編集中は、<kbd>U</kbd> / <kbd>T</kbd> / <kbd>P</kbd> など多くのグローバルショートカットが無効になります（<kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> による一覧行移動など、一部は有効）。</p>
 
                 <h3 class="docs-heading-box--sub" id="markers-list">一覧の操作</h3>
                 <ul>
@@ -344,6 +346,24 @@
                     <li>選択中のマーカーは <kbd>Del</kbd> で削除できます（行末の削除ボタンからも可能）。</li>
                 </ul>
                 <p>波形上のマーカー表示が重なる場合は、縦に段を下げてラベルを並べます。</p>
+
+                <h3 class="docs-heading-box--sub" id="markers-waveform">波形上の表示</h3>
+                <p>Markers パネルの内容は、<strong>音声波形エリア右側のタイムライン</strong>（Video Audio と各 Audio Track をまたぐ共有の時間軸）上にも反映されます。<strong>Hide / View</strong>（<kbd>V</kbd>）で、波形上の縦線・範囲帯・コメントラベルと、シークバー付近のマーカー表示をまとめて隠せます。一覧表の行は残ります。</p>
+                <ul>
+                    <li><strong>ポイントマーカー</strong> — タイムライン上に縦線と、コメントがあればラベルが表示されます。線またはラベルを<strong>シングルクリック</strong>でその位置へシーク、<strong>ドラッグ</strong>で秒単位の位置を微調整できます（「位置の表し方」参照）。</li>
+                    <li><strong>範囲マーカー</strong> — In〜Out の区間が半透明の<strong>帯</strong>として表示されます。端のハンドルをドラッグして In / Out を変更でき、帯の中央付近をドラッグすると In / Out を同時に移動します（クリックのみのときはその位置へシーク）。</li>
+                    <li><strong>再生リージョンとの違い</strong> — Audio Track 上の半透明<strong>リージョン</strong>（クリップの再生範囲）は、追加音声の配置・トリム・ミックス用です（「音声波形・ミックス」の再生リージョンを参照）。<strong>範囲マーカー</strong>はレビュー用の注釈であり、マスタータイムライン上の In / Out として Markers パネルと連動します。見た目は似ていますが用途が異なります。</li>
+                    <li><strong>ラベルの重なり</strong> — 近い位置のマーカーラベルは、縦に段を下げて並べます。拡大表示（32×）中は、マーカー一覧で In / Out TC を編集中を除き、再生ヘッドは画面外に出るときだけ左端へ追従します。</li>
+                    <li><strong>ジャンプ</strong> — <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> で次/前の停止点へ移動するとき、マーカー表示中（Hide でない）は<strong>マーカー位置が最優先</strong>されます（小節/フレーズ・リージョンより先）。</li>
+                </ul>
+
+                <h3 class="docs-heading-box--sub" id="markers-wav">WAV マーカー/リージョン（読み込み・書き出し）</h3>
+                <p>Sound Forge 等と互換の <strong>cue / LIST(adtl) / plst</strong> 形式で、WAV ファイルにマーカー（点）とリージョン（範囲）を埋め込んだり、読み込んだりできます。日本語ラベルは <strong>CP932</strong>（Shift_JIS）で扱います。</p>
+                <ul>
+                    <li><strong>読み込み（インポート）</strong> — <strong>Audio Track</strong> へ WAV / WAVE を読み込んだとき、ファイル内に埋め込まれたマーカー/リージョンがあれば、自動的に Markers パネルと波形上へ反映されます。クリップをタイムライン途中に配置した場合は、その<strong>開始位置に合わせてオフセット</strong>されます。既にマーカーがあるセッションでは<strong>追加（結合）</strong>されます。<strong>Import Review</strong>（<code>.mgacr</code>）やセッション復元時は、パッケージ側のマーカーを優先するため、WAV からの自動取り込みは行いません。</li>
+                    <li><strong>書き出し（エクスポート）</strong> — <strong>Export Wave</strong> で書き出す WAV に、現在のマーカー一覧（点マーカーと範囲マーカー）が同形式で埋め込まれます（「<a href="#export-webm">Export WebM / Export Wave</a>」参照）。同一サンプル位置の点マーカー、同一 In/Out の範囲マーカーは、コメントを <code> / </code> で結合して 1 件として書き込みます。</li>
+                    <li><strong>DAW とのやり取り</strong> — DAW で付けたマーカー付き WAV を Audio Track に読み込んでレビューを続けたり、本アプリで付けたマーカーを Export Wave で DAW に渡したりできます。映像付きレビューでは <strong>Export WebM</strong>（マーカーコメントの映像焼き込み）や <strong>Export Review</strong>（<code>.mgacr</code>）も併用できます。</li>
+                </ul>
             </section>
 
             <section class="guide-section" id="audio">
@@ -364,7 +384,7 @@
 
                 <h3 class="docs-heading-box--sub" id="audio-timeline">右側の波形タイムライン</h3>
                 <ul>
-                    <li>各トラックの波形が横方向に並びます。時間軸は動画の尺に合わせて共有されます。</li>
+                    <li>各トラックの波形が横方向に並びます。時間軸は動画の尺に合わせて共有されます。<strong>マーカー</strong>（点・範囲）は全レーンをまたぐタイムライン上に表示されます（「<a href="#markers-waveform">波形上の表示</a>」参照）。</li>
                     <li><strong>赤い縦線</strong>が再生ヘッドです。再生中は通過軌跡が残る表示があります。</li>
                     <li>マウスを乗せると、再生ヘッドとは別の薄い縦線（ホバー位置）が表示されます。</li>
                     <li><strong>クリック</strong>でその位置へシークします。空のレーン部分を<strong>ドラッグ</strong>すると、押している間その位置で再生しながらシーク（スクラブ）できます。</li>
@@ -435,7 +455,7 @@
                     <li><strong>How To</strong>/<strong>Shortcut</strong> — それぞれ本ページとショートカット一覧を新しいウィンドウで開きます。</li>
                     <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd>、Mac では <kbd>Cmd</kbd> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生/停止（<kbd>Space</kbd>）。<kbd>Ctrl</kbd>+<kbd>Space</kbd> はシークバー位置の1秒前から<strong>プリロール再生</strong>（1秒未満の場合は現在位置から）。<kbd>Alt</kbd>+<kbd>Enter</kbd> は直近の再生開始位置から再生し直します（一度も再生していない場合は無効）。右端。初回再生時は Video/Markers 行が見える位置へ自動スクロールします。</li>
-                    <li><kbd>U</kbd> — 標準レイアウト ↔ ユーザーレイアウトを切替（編集中は標準レイアウトへ）。<kbd>Shift</kbd>+<kbd>U</kbd> — ユーザーレイアウトの編集モードに入る／編集を終了してユーザーレイアウト表示へ戻る。詳細は「<a href="#layout">レイアウトモード</a>」を参照。</li>
+                    <li><kbd>U</kbd> — 標準レイアウト ↔ ユーザーレイアウトを切替（編集中は標準レイアウトへ）。<kbd>Shift</kbd>+<kbd>U</kbd> — ユーザーレイアウトの編集モードに入る / 編集を終了してユーザーレイアウト表示へ戻る。詳細は「<a href="#layout">レイアウトモード</a>」を参照。</li>
                 </ul>
                 <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、映像パネル内の表示を参照してください。</p>
 
@@ -464,13 +484,13 @@
                     <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
                     <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
-                    <li><strong>Export Wave</strong> / <strong>Export WebM</strong> — 動画未読み込み時は <strong>Export Wave</strong>（レビューミックスを WAV で書き出し）。動画読み込み後は <strong>Export WebM</strong>（タイムコードとマーカーコメントを映像へ焼き込み）に切り替わり、ボタンが<strong>発光</strong>してモード変更を知らせます。動画を削除すると再び Export Wave に戻り、同様に発光します。</li>
+                    <li><strong>Export Wave</strong> / <strong>Export WebM</strong> — 動画未読み込み時は <strong>Export Wave</strong>（レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し。マーカー/リージョンを WAV に埋め込み）。動画読み込み後は <strong>Export WebM</strong>（タイムコードとマーカーコメントを映像へ焼き込み）に切り替わり、ボタンが<strong>発光</strong>してモード変更を知らせます。動画を削除すると再び Export Wave に戻り、同様に発光します。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-options-bottom">波形直下（オプションバー下段）</h3>
                 <ul>
                     <li>
-                        <strong>保存インジケーター（SAVED / SAVING）</strong> — オプションバー下段左端の赤い LED 表示です。作業内容がブラウザ内（IndexedDB）へ<strong>自動保存</strong>されているかを示します（押すボタンではありません）。<strong>SAVED</strong> は保存完了、<strong>SAVING</strong> は保存中です。マーカー・リージョン・トラック順などを編集したあと、<strong>リロードやタブを閉じる前に SAVED になるのを待つ</strong>と安全です。<strong>SAVING の最中にリロード</strong>すると、保存の途中だった変更は失われ、<strong>前回までに保存が完了した状態</strong>に戻ることがあります。編集直後でまだ LED が光っていないときも、書き込み前の変更は残らないことがあります。
+                        <strong>保存インジケーター（SAVED / SAVING）</strong> — オプションバー下段左端の赤い LED 表示です。作業内容が<strong>ブラウザ内</strong>へ<strong>自動保存</strong>されているかを示します（押すボタンではありません）。<strong>SAVED</strong> は保存完了、<strong>SAVING</strong> は保存中です。マーカー・リージョン・トラック順などを編集したあと、<strong>リロードやタブを閉じる前に SAVED になるのを待つ</strong>と安全です。<strong>SAVING の最中にリロード</strong>すると、保存の途中だった変更は失われ、<strong>前回までに保存が完了した状態</strong>に戻ることがあります。編集直後でまだ LED が光っていないときも、書き込み前の変更は残らないことがあります。
                     </li>
                     <li>
                         <strong>Master Vol</strong> — ミックス後のマスター音量（%とdB表示）。横の表示には再生開始からの<strong>インテグレーテッド LKFS</strong>も併記されます（停止後も最後の値を保持、再再生で計測し直し）。スペクトラム・メーターのレベルメーターで<strong>クリップ（0dB超え）を検知すると、CLIP PROTECT としてマスター音量が自動で下がります</strong>（スライダーと表示も連動）。ログに <code>CLIP PROTECT</code> と減衰量が出ることがあります。<strong>基本的には触らなくて構いません</strong> — 通常のレビューでは100%（0dB）のまま使い、過大なレベルは各トラックのフェーダーで調整する想定です。意図的に戻すときは <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> またはスライダー二重クリックで100%（0dB）にリセットできます（Mac では <kbd>Cmd</kbd> も可）。自動減衰後の値はブラウザに保存され、次回も復元されます。
@@ -514,12 +534,12 @@
                 <h3 class="docs-heading-box--sub" id="export-webm">Export WebM / Export Wave</h3>
                 <p>オプションバー中段右端のボタンは、<strong>動画の有無</strong>でモードが切り替わります。切り替わった直後はボタンが<strong>短く発光</strong>します。</p>
                 <ul>
-                    <li><strong>Export Wave</strong>（動画未読み込み時）— 現在のレビューミックス（追加音声 Audio Track のミックス結果）を<strong>ステレオ WAV</strong> で実時間書き出しします。映像・タイムコード焼き込み・マーカーコメント焼き込みはありません。</li>
+                    <li><strong>Export Wave</strong>（動画未読み込み時）— 現在のレビューミックス（追加音声 Audio Track のミックス結果）を <strong>48 kHz / 24-bit ステレオ WAV</strong> で書き出します。通常は<strong>オフラインバウンス</strong>（高速）で処理し、失敗時は従来の実時間キャプチャへフォールバックします。タイムライン上の<strong>マーカー/範囲マーカー</strong>は Sound Forge 互換形式（cue / LIST(adtl) / plst）で WAV に埋め込まれます（「<a href="#markers-wav">WAV マーカー/リージョン</a>」参照）。映像・タイムコード焼き込みはありません。</li>
                     <li><strong>Export WebM</strong>（動画読み込み後）— タイムコードとマーカーコメントを<strong>映像へ焼き込んだ WebM</strong> を実時間で書き出します。</li>
                     <li><strong>Include in export</strong> の <strong>Audio</strong> がオンなら、どちらのモードでも追加音声（読み込み済みの全 Audio Track）をミックス対象に含めます（Mute / Solo 状態は影響しません）。Export WebM では <strong>Video</strong> もオンが必要です。</li>
                     <li>書き出し開始前に、波形の横倍率を全体表示（1×）へ戻し、アナライザーを解析停止にします（書き出し前が Live だった場合は完了後に Live へ戻ります。横倍率は 1× のままです）。</li>
                     <li>書き出し中は操作ロック用オーバーレイが表示され、<kbd>Esc</kbd> でキャンセルできます。</li>
-                    <li>実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。</li>
+                    <li>Export WebM は実時間ベースで進行するため、書き出し時間は尺に応じて長くなります。Export Wave のオフラインバウンスは通常、尺より短い時間で完了します。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="import-review">Import Review</h3>
@@ -551,12 +571,12 @@
 
             <section class="guide-section" id="shortcuts">
                 <h2 class="docs-heading-box">キーボードショートカット</h2>
-                <p>テキスト入力中は多くのショートカットが無効になります（一部 <kbd>Esc</kbd> を除く）。Mac では <kbd>Ctrl</kbd> の代わりに <kbd>Cmd</kbd> も使えます。</p>
+                <p>テキスト入力中は多くのショートカットが無効になります（一部 <kbd>Esc</kbd> を除く）。<strong>Comment</strong> 列や Additional Comments 欄の編集中も、<kbd>U</kbd> / <kbd>T</kbd> / <kbd>P</kbd> など多くのグローバルショートカットは無効です。Mac では <kbd>Ctrl</kbd> の代わりに <kbd>Cmd</kbd> も使えます。</p>
                 <p class="guide-link-row">
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主なキーとして、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、<kbd>U</kbd>（レイアウト切替）/<kbd>Shift</kbd>+<kbd>U</kbd>（ユーザーレイアウト編集）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
+                <p>最近追加した主な機能・キーとして、Audio Track への WAV 読み込み時の<strong>マーカー/リージョン自動取り込み</strong>、<strong>Export Wave</strong> による WAV へのマーカー/リージョン埋め込み（48 kHz / 24-bit、オフラインバウンス）、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、Phrase 着色 ON 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、<kbd>U</kbd>（レイアウト切替）/<kbd>Shift</kbd>+<kbd>U</kbd>（ユーザーレイアウト編集）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
                 <p>ショートカットの割り当ては <code>js/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>
@@ -564,11 +584,11 @@
             <section class="guide-section" id="storage">
                 <h2 class="docs-heading-box">データの保存と復元</h2>
                 <ul>
-                    <li>読み込んだ動画は <strong>IndexedDB</strong> にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
+                    <li>読み込んだ動画は<strong>ブラウザ内</strong>にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
                     <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。オプションバー下段の <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
                     <li>Loop のオン/オフ、Click、Analyze、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには、ページ内のどこへでも再度ドロップしてください。</li>
-                    <li>ブラウザのストレージ整理で IndexedDB が消えると、前回のセッションは復元できません。</li>
+                    <li>ブラウザのストレージ整理で保存データが消えると、前回のセッションは復元できません。</li>
                 </ul>
             </section>
 

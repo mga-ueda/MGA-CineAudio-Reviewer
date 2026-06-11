@@ -775,7 +775,7 @@
         } else {
             setElementTitle(
                 document.getElementById('sessionExportVideoBtn'),
-                'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）',
+                'レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し（オフラインバウンス・マーカー/リージョン埋め込み・書き出し中は Esc でキャンセル）',
             );
         }
 
