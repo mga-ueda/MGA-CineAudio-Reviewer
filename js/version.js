@@ -1,10 +1,20 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.11';
+    const APP_VERSION = '0.12';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.12',
+            date: '2026年6月12日',
+            items: [
+                'Export Wave をオフラインバウンスに変更（実時間キャプチャから高速書き出しへ。失敗時は従来のリアルタイム方式へフォールバック）。48 kHz 24-bit ステレオ WAV。',
+                '書き出し WAV にマーカー／リージョンを Sound Forge 互換形式（cue / LIST(adtl) / plst）で埋め込み。日本語ラベルは CP932（tiny-sjis-encoder）でエンコード。',
+                '同一サンプル位置の点マーカー・同一 In/Out のリージョンはコメントを「 / 」で結合して 1 件として書き込み。',
+                'マーカー Comment / Memo 入力中にグローバルショートカット（U / T / P 等）が横取りされないよう抑止。サードパーティライセンス表記（THIRD-PARTY-NOTICES）を追加。',
+            ],
+        },
         {
             version: '0.11',
             date: '2026年6月11日',

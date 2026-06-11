@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.11 |
+| **バージョン** | v0.12 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,13 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.12 - 2026年6月12日
+
+- Export Wave をオフラインバウンスに変更（実時間キャプチャから高速書き出しへ。失敗時は従来のリアルタイム方式へフォールバック）。48 kHz 24-bit ステレオ WAV。
+- 書き出し WAV にマーカー／リージョンを Sound Forge 互換形式（cue / LIST(adtl) / plst）で埋め込み。日本語ラベルは CP932（tiny-sjis-encoder）でエンコード。
+- 同一サンプル位置の点マーカー・同一 In/Out のリージョンはコメントを「 / 」で結合して 1 件として書き込み。
+- マーカー Comment / Memo 入力中にグローバルショートカット（U / T / P 等）が横取りされないよう抑止。サードパーティライセンス表記（THIRD-PARTY-NOTICES）を追加。
 
 ### v0.11 - 2026年6月11日
 
