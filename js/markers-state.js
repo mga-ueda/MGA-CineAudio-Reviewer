@@ -495,6 +495,96 @@
     window.syncAudioOnlyMarkersUi = syncAudioOnlyMarkersUi;
     window.getMarkersSnapshot = getMarkersSnapshot;
 
+    function offsetImportedFileMarker(m, offsetSec, fileDurationSec) {
+        const offset = Number(offsetSec) || 0;
+        const fileDur = Number(fileDurationSec);
+        const clampSource = (sec) => {
+            let v = Number(sec);
+            if (!Number.isFinite(v)) v = 0;
+            if (v < 0) v = 0;
+            if (fileDur > 0) v = Math.min(v, fileDur);
+            return v + offset;
+        };
+        if (m.type === 'range') {
+            let startSec = clampSource(m.startSec);
+            let endSec = clampSource(m.endSec);
+            if (endSec <= startSec) {
+                endSec = startSec + 1 / 48000;
+            }
+            return normalizeMarker({
+                type: 'range',
+                startSec,
+                endSec,
+                comment: typeof m.comment === 'string' ? m.comment : '',
+            });
+        }
+        return normalizeMarker({
+            type: 'point',
+            timeSec: clampSource(m.timeSec),
+            comment: typeof m.comment === 'string' ? m.comment : '',
+        });
+    }
+
+    /** 読み込んだファイル内のマーカーをタイムライン上へ反映（既存マーカーがある場合は結合） */
+    function applyImportedFileMarkers(imported, opt) {
+        if (!Array.isArray(imported) || !imported.length) return 0;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const mapped = imported
+            .map((m) =>
+                offsetImportedFileMarker(
+                    m,
+                    o.timelineOffsetSec,
+                    o.fileDurationSec,
+                ),
+            )
+            .filter(Boolean);
+        if (!mapped.length) return 0;
+
+        if (o.replace || !currentMarkers.length) {
+            setMarkersFromSnapshot(mapped);
+        } else if (o.merge !== false) {
+            const combined = getMarkersSnapshot()
+                .concat(
+                    mapped.map((m) => {
+                        if (m.type === 'range') {
+                            return {
+                                type: 'range',
+                                startSec: m.startSec,
+                                endSec: m.endSec,
+                                comment: m.comment || '',
+                            };
+                        }
+                        return {
+                            type: 'point',
+                            timeSec: m.timeSec,
+                            comment: m.comment || '',
+                        };
+                    }),
+                )
+                .map(normalizeMarker)
+                .filter(Boolean);
+            setMarkersFromSnapshot(combined);
+        } else {
+            setMarkersFromSnapshot(mapped);
+        }
+
+        if (typeof videoReady === 'function' && !videoReady()) {
+            adoptMarkersForAudioOnlySession();
+            if (typeof scheduleWaveformMarkersRenderRetry === 'function') {
+                scheduleWaveformMarkersRenderRetry();
+            }
+        }
+        if (typeof renderAudioWaveformMarkers === 'function') {
+            renderAudioWaveformMarkers();
+        }
+        if (typeof updateSessionAllClearButton === 'function') {
+            updateSessionAllClearButton();
+        }
+        return mapped.length;
+    }
+
+    window.applyImportedFileMarkers = applyImportedFileMarkers;
+
     function sortMarkersInPlace() {
         currentMarkers.sort((a, b) => {
             const ta = a.type === 'range' ? a.startSec : a.timeSec;

@@ -1,9 +1,9 @@
 /**
- * wave-export-wav-markers.js — Wave 書き出し後の cue / LIST(adtl) マーカー・リージョン埋め込み。
- * Sound Forge 等互換: fmt → cue → LIST(adtl) → plst → data の順（data より前に配置）。
+ * wav-markers.js — WAV cue / LIST(adtl) / plst マーカー・リージョンの読み取りと書き込み。
+ * Sound Forge 等互換: fmt → cue → LIST(adtl) → plst → data の順（書き込み時は data より前に配置）。
  * 日本語ラベルは js/vendor/tiny-sjis-encoder.js（MIT, t-kouyama）で CP932 エンコード。
  */
-(function waveExportWavMarkersModule() {
+(function wavMarkersModule() {
     const DATA_FCC = 0x61746164; /* 'data' */
 
     function writeFourCc(target, offset, str) {
@@ -458,6 +458,283 @@
         return new Uint8Array(await blob.arrayBuffer());
     }
 
+    let wavMarkerTextDecoder = null;
+
+    function resolveWavMarkerTextDecoder() {
+        if (wavMarkerTextDecoder) return wavMarkerTextDecoder;
+        const labels = ['ms932', 'shift_jis', 'windows-31j', 'shift-jis'];
+        for (let i = 0; i < labels.length; i++) {
+            try {
+                wavMarkerTextDecoder = new TextDecoder(labels[i]);
+                return wavMarkerTextDecoder;
+            } catch (_) {
+                wavMarkerTextDecoder = null;
+            }
+        }
+        return null;
+    }
+
+    function decodeWavMarkerTextBytes(bytes, start, end) {
+        if (!bytes || start >= end) return '';
+        let term = start;
+        while (term < end && bytes[term] !== 0) term += 1;
+        const slice = bytes.subarray(start, term);
+        if (!slice.length) return '';
+        const dec = resolveWavMarkerTextDecoder();
+        if (dec) {
+            try {
+                return String(dec.decode(slice)).trim();
+            } catch (_) {}
+        }
+        let out = '';
+        for (let i = 0; i < slice.length; i++) {
+            const cp = slice[i];
+            out += cp <= 0x7f ? String.fromCharCode(cp) : '?';
+        }
+        return out.trim();
+    }
+
+    function readFmtSampleRate(fmtChunkBytes) {
+        const body = fmtChunkBytes.subarray(8);
+        if (body.length < 8) return 0;
+        const rate = new DataView(
+            body.buffer,
+            body.byteOffset,
+            body.byteLength,
+        ).getUint32(4, true);
+        return rate > 0 ? rate : 0;
+    }
+
+    function estimateFrameCountFromWavParsed(parsed) {
+        if (!parsed || !parsed.fmt || !parsed.data) return 0;
+        const body = parsed.fmt.bytes.subarray(8);
+        if (body.length < 16) return 0;
+        const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+        const channels = view.getUint16(2, true);
+        const bitsPerSample = view.getUint16(14, true);
+        const dataSize = parsed.data.bytes.length - 8;
+        const blockAlign = channels * (bitsPerSample / 8);
+        if (!(blockAlign > 0)) return 0;
+        return Math.floor(dataSize / blockAlign);
+    }
+
+    function parseCueChunkMap(cueChunkBytes) {
+        const body = cueChunkBytes.subarray(8);
+        if (body.length < 4) return new Map();
+        const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+        const count = view.getUint32(0, true);
+        const out = new Map();
+        let off = 4;
+        for (let i = 0; i < count; i++) {
+            if (off + 24 > body.length) break;
+            const id = view.getUint32(off, true);
+            const sampleOffset = view.getUint32(off + 4, true);
+            out.set(id, sampleOffset);
+            off += 24;
+        }
+        return out;
+    }
+
+    function parsePlstSegments(plstChunkBytes) {
+        const body = plstChunkBytes.subarray(8);
+        if (body.length < 4) return [];
+        const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+        const count = view.getUint32(0, true);
+        const out = [];
+        let off = 4;
+        for (let i = 0; i < count; i++) {
+            if (off + 12 > body.length) break;
+            out.push({
+                cueId: view.getUint32(off, true),
+                sampleLength: view.getUint32(off + 4, true),
+            });
+            off += 12;
+        }
+        return out;
+    }
+
+    function parseAdtlListChunk(listChunkBytes) {
+        const body = listChunkBytes.subarray(8);
+        if (body.length < 4 || readFourCc(body, 0) !== 'adtl') {
+            return { labl: new Map(), note: new Map(), ltxt: new Map() };
+        }
+        const labl = new Map();
+        const note = new Map();
+        const ltxt = new Map();
+        let off = 4;
+        while (off + 8 <= body.length) {
+            const id = readFourCc(body, off);
+            const size = new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(
+                off + 4,
+                true,
+            );
+            const dataStart = off + 8;
+            const dataEnd = Math.min(body.length, dataStart + size);
+            if (dataEnd - dataStart >= 4) {
+                const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
+                const cueId = view.getUint32(dataStart, true);
+                if (id === 'labl') {
+                    labl.set(cueId, decodeWavMarkerTextBytes(body, dataStart + 4, dataEnd));
+                } else if (id === 'note') {
+                    note.set(cueId, decodeWavMarkerTextBytes(body, dataStart + 4, dataEnd));
+                } else if (id === 'ltxt' && dataEnd - dataStart >= 20) {
+                    ltxt.set(cueId, view.getUint32(dataStart + 4, true));
+                }
+            }
+            off += 8 + size + (size & 1);
+        }
+        return { labl, note, ltxt };
+    }
+
+    function markerCommentFromAdtl(cueId, adtl) {
+        const fromLabl = adtl.labl.get(cueId);
+        if (typeof fromLabl === 'string' && fromLabl.trim()) return fromLabl.trim();
+        const fromNote = adtl.note.get(cueId);
+        if (typeof fromNote === 'string' && fromNote.trim()) return fromNote.trim();
+        return '';
+    }
+
+    function sampleOffsetToSec(sampleOffset, sampleRate, frameCount) {
+        if (!Number.isFinite(sampleRate) || sampleRate <= 0) return 0;
+        let frame = Math.max(0, Math.round(Number(sampleOffset) || 0));
+        if (frameCount > 0) frame = Math.min(frame, frameCount - 1);
+        return frame / sampleRate;
+    }
+
+    /** RIFF WAVE の cue / LIST(adtl) / plst から点マーカー・リージョンを読み取る */
+    function parseMarkersFromWavBytes(wavBytes) {
+        const parsed = parsePcmWavChunks(wavBytes);
+        if (!parsed) {
+            return {
+                markers: [],
+                sampleRate: 0,
+                durationSec: 0,
+                pointCount: 0,
+                regionCount: 0,
+            };
+        }
+        const cueChunk = parsed.all.find((c) => c.id === 'cue ');
+        if (!cueChunk) {
+            return {
+                markers: [],
+                sampleRate: readFmtSampleRate(parsed.fmt.bytes),
+                durationSec: 0,
+                pointCount: 0,
+                regionCount: 0,
+            };
+        }
+        const sampleRate = readFmtSampleRate(parsed.fmt.bytes);
+        const frameCount = estimateFrameCountFromWavParsed(parsed);
+        const durationSec =
+            sampleRate > 0 && frameCount > 0 ? frameCount / sampleRate : 0;
+        const cueMap = parseCueChunkMap(cueChunk.bytes);
+        const plstChunk = parsed.all.find((c) => c.id === 'plst');
+        const plstSegments = plstChunk ? parsePlstSegments(plstChunk.bytes) : [];
+        const listChunk = parsed.all.find((c) => c.id === 'LIST');
+        const adtl = listChunk ? parseAdtlListChunk(listChunk.bytes) : {
+            labl: new Map(),
+            note: new Map(),
+            ltxt: new Map(),
+        };
+
+        const regionCueIds = new Set();
+        const markers = [];
+        let regionCount = 0;
+
+        for (let i = 0; i < plstSegments.length; i++) {
+            const seg = plstSegments[i];
+            const startFrame = cueMap.get(seg.cueId);
+            if (!Number.isFinite(startFrame)) continue;
+            const sampleLength = Math.max(1, Number(seg.sampleLength) || 0);
+            const startSec = sampleOffsetToSec(startFrame, sampleRate, frameCount);
+            const endSec = sampleOffsetToSec(
+                startFrame + sampleLength,
+                sampleRate,
+                frameCount,
+            );
+            if (endSec <= startSec) continue;
+            regionCueIds.add(seg.cueId);
+            markers.push({
+                type: 'range',
+                startSec,
+                endSec,
+                comment: markerCommentFromAdtl(seg.cueId, adtl),
+            });
+            regionCount += 1;
+        }
+
+        adtl.ltxt.forEach((sampleLength, cueId) => {
+            if (regionCueIds.has(cueId)) return;
+            const startFrame = cueMap.get(cueId);
+            if (!Number.isFinite(startFrame)) return;
+            const len = Math.max(1, Number(sampleLength) || 0);
+            const startSec = sampleOffsetToSec(startFrame, sampleRate, frameCount);
+            const endSec = sampleOffsetToSec(startFrame + len, sampleRate, frameCount);
+            if (endSec <= startSec) return;
+            regionCueIds.add(cueId);
+            markers.push({
+                type: 'range',
+                startSec,
+                endSec,
+                comment: markerCommentFromAdtl(cueId, adtl),
+            });
+            regionCount += 1;
+        });
+
+        let pointCount = 0;
+        cueMap.forEach((startFrame, cueId) => {
+            if (regionCueIds.has(cueId)) return;
+            markers.push({
+                type: 'point',
+                timeSec: sampleOffsetToSec(startFrame, sampleRate, frameCount),
+                comment: markerCommentFromAdtl(cueId, adtl),
+            });
+            pointCount += 1;
+        });
+
+        markers.sort((a, b) => markerSortSec(a) - markerSortSec(b));
+        return {
+            markers,
+            sampleRate,
+            durationSec,
+            pointCount,
+            regionCount,
+        };
+    }
+
+    function importWavMarkersOnWaveformLoad(ab, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.fromSessionRestore || o.skipWavMarkerImport) return null;
+        if (
+            typeof hasSessionMarkersPendingRestore === 'function' &&
+            hasSessionMarkersPendingRestore()
+        ) {
+            return null;
+        }
+        const parsed = parseMarkersFromWavBytes(ab);
+        if (!parsed || !parsed.markers.length) return parsed;
+        if (typeof applyImportedFileMarkers !== 'function') return parsed;
+        const applied = applyImportedFileMarkers(parsed.markers, {
+            timelineOffsetSec: o.timelineOffsetSec,
+            fileDurationSec: o.fileDurationSec != null ? o.fileDurationSec : parsed.durationSec,
+            merge: o.merge,
+            replace: o.replace,
+            logLabel: o.logLabel,
+        });
+        if (applied > 0 && typeof writeLog === 'function') {
+            const label = o.logLabel ? o.logLabel + ': ' : '';
+            writeLog(
+                label +
+                    'imported WAV markers — ' +
+                    parsed.pointCount +
+                    ' marker(s), ' +
+                    parsed.regionCount +
+                    ' region(s)',
+            );
+        }
+        return parsed;
+    }
+
     async function finalizeWaveExportBlobWithMarkers(blob, sampleRate, frameCount, markersOpt) {
         if (!blob) return blob;
         const blobSize = blob.size != null ? blob.size : blob.byteLength;
@@ -505,5 +782,7 @@
     window.coalesceMarkersForWaveExport = coalesceMarkersForWaveExport;
     window.buildWavMarkerCueChunks = buildWavMarkerChunks;
     window.embedMarkerChunksInWavBytes = embedMarkerChunksInWavBytes;
+    window.parseMarkersFromWavBytes = parseMarkersFromWavBytes;
+    window.importWavMarkersOnWaveformLoad = importWavMarkersOnWaveformLoad;
     window.finalizeWaveExportBlobWithMarkers = finalizeWaveExportBlobWithMarkers;
 })();

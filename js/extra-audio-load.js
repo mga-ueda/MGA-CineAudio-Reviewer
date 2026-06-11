@@ -47,8 +47,10 @@
             syncExtraTrackWaveformLoading(slot);
         }
         let buffer = null;
+        let fileArrayBuffer = null;
         try {
             const ab = await file.arrayBuffer();
+            fileArrayBuffer = ab;
             if (gen !== tr.loadGen) {
                 if (opt && opt.fromSessionRestore) {
                     writeLog('Extra audio ' + (slot + 1) + ': restore aborted (superseded)');
@@ -253,6 +255,38 @@
                 } else if (typeof ensureDefaultTrackRegion === 'function') {
                     ensureDefaultTrackRegion({ type: 'extra', slot }, { silent: true });
                 }
+            }
+            if (
+                !(opt && opt.fromSessionRestore) &&
+                fileArrayBuffer &&
+                typeof importWavMarkersOnWaveformLoad === 'function'
+            ) {
+                let timelineOffsetSec = 0;
+                if (typeof getTrackSegments === 'function') {
+                    const trackRef = { type: 'extra', slot };
+                    const segs = getTrackSegments(trackRef);
+                    for (let si = 0; si < segs.length; si++) {
+                        const seg = segs[si];
+                        if (clipId && seg.clipId !== clipId) continue;
+                        const sourceIn = Number(seg.sourceInSec) || 0;
+                        let timelineIn = Number(seg.timelineStartSec);
+                        if (
+                            !Number.isFinite(timelineIn) &&
+                            typeof getSegmentRegionTimelineIn === 'function'
+                        ) {
+                            timelineIn = getSegmentRegionTimelineIn(trackRef, si);
+                        }
+                        if (Number.isFinite(timelineIn)) {
+                            timelineOffsetSec = timelineIn - sourceIn;
+                            break;
+                        }
+                    }
+                }
+                importWavMarkersOnWaveformLoad(fileArrayBuffer, {
+                    timelineOffsetSec,
+                    fileDurationSec: buffer.duration,
+                    logLabel: 'Extra audio ' + (slot + 1),
+                });
             }
             const ch = buffer.numberOfChannels;
             const rate = buffer.sampleRate | 0;
