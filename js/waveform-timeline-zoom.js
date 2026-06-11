@@ -915,6 +915,24 @@
         centerWaveformTimelineOnMasterSec(transportSecForWaveformZoomCenter(), opt);
     }
 
+    /** 一瞬センターロック → シークバーを画面中央へ → 即解除（通常の左端追従に戻す） */
+    function pulseWaveformTimelineCenterOnTransport(opt) {
+        if (markerTcEditWaveformZoomActive) return false;
+        if (isWaveformTimelineAtFitZoom()) return false;
+        if (!isWaveformTimelineInteractionReady()) return false;
+        setWaveformTimelineCenterLock(true);
+        try {
+            if (typeof syncWaveformTimelineScrollToTransport === 'function') {
+                syncWaveformTimelineScrollToTransport({ force: true, ...(opt || {}) });
+            } else {
+                centerWaveformTimelineOnTransport({ force: true, ...(opt || {}) });
+            }
+        } finally {
+            setWaveformTimelineCenterLock(false);
+        }
+        return true;
+    }
+
     function beginMarkerTcEditWaveformZoom() {
         setWaveformTimelineCenterLock(true);
         if (markerTcEditWaveformZoomActive) {
@@ -938,6 +956,11 @@
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
 
         if (!isWaveformTimelineZoomKeyboardBlocked(e)) {
+            if (matchUserShortcut(e, 'waveformTimelineCenterSeekbar')) {
+                e.preventDefault();
+                pulseWaveformTimelineCenterOnTransport();
+                return true;
+            }
             if (matchUserShortcut(e, 'waveformTimelineZoomMax')) {
                 e.preventDefault();
                 setWaveformTimelineZoom(WAVEFORM_TIMELINE_ZOOM_MAX, true);
@@ -1022,6 +1045,7 @@
     window.endMarkerTcEditWaveformZoom = endMarkerTcEditWaveformZoom;
     window.centerWaveformTimelineOnTransport = centerWaveformTimelineOnTransport;
     window.centerWaveformTimelineOnMasterSec = centerWaveformTimelineOnMasterSec;
+    window.pulseWaveformTimelineCenterOnTransport = pulseWaveformTimelineCenterOnTransport;
     window.syncWaveformTimelineScrollToTransport = syncWaveformTimelineScrollToTransport;
     window.syncWaveformTimelineScrollToMasterSec = syncWaveformTimelineScrollToMasterSec;
     window.syncWaveformTimelineAfterTransportSeek = syncWaveformTimelineAfterTransportSeek;

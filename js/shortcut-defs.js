@@ -299,6 +299,15 @@
         waveformLaneSeekEnd: { code: 'End' },
         waveformLaneSeekPrev: { code: 'ArrowLeft' },
         waveformLaneSeekNext: { code: 'ArrowRight' },
+        waveformTimelineCenterSeekbar: {
+            codes: ['Period', 'NumpadDecimal', 'Comma'],
+            keys: ['.', ','],
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
 
         // ---------- マーカー時刻入力 ----------
         markerPanelTcNudgePlus: { codes: ['NumpadAdd'], keys: ['+'] },
@@ -559,6 +568,9 @@
         NumpadSubtract: '−',
         Escape: 'Esc',
         Enter: 'Enter',
+        Period: '.',
+        NumpadDecimal: '.',
+        Comma: ',',
     });
 
     function shortcutKeyLabel(def) {
@@ -634,6 +646,7 @@
             waveformZoomExtreme: chordWithArrows(['Ctrl'], 'ArrowUp', 'ArrowDown'),
             waveformVerticalZoom: chordWithArrows(['Shift'], 'ArrowUp', 'ArrowDown'),
             waveformLaneHeight: chordWithArrows(['Shift', 'Ctrl'], 'ArrowUp', 'ArrowDown'),
+            waveformTimelineCenterSeekbar: formatShortcutDef(s.waveformTimelineCenterSeekbar),
             markerStopJump: chordWithArrows(['Ctrl'], 'ArrowLeft', 'ArrowRight'),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
@@ -700,7 +713,7 @@
         const lanes = document.getElementById('audioWaveformLanesTracks');
         setElementTitle(
             lanes,
-            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} またはホイール上/下で横倍率変更（${h.waveformZoomExtreme} または Ctrl+ホイール上/下で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} または Shift+Ctrl+ホイール上/下でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。`,
+            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} またはホイール上/下で横倍率変更（${h.waveformZoomExtreme} または Ctrl+ホイール上/下で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} または Shift+Ctrl+ホイール上/下でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。${h.waveformTimelineCenterSeekbar} で再生ヘッドを画面中央へ（一瞬センターロック）。`,
         );
 
         const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
