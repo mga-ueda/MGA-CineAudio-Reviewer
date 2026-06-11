@@ -1065,7 +1065,7 @@
                 var(--marker-table-head-h) +
                     var(--marker-table-row-h) * var(--marker-table-visible-rows)
             );
-            overflow-x: auto;
+            overflow-x: hidden;
             overflow-y: auto;
             scroll-padding-top: var(--marker-table-head-h);
             scrollbar-gutter: stable;
@@ -1143,10 +1143,9 @@
             text-align: center;
             white-space: nowrap;
         }
-        .marker-table tbody td.marker-table__cell-comment {
-            width: 100%;
-            min-width: 0;
-            text-align: left;
+        .marker-table tbody tr {
+            height: var(--marker-table-row-h);
+            max-height: var(--marker-table-row-h);
         }
         .marker-table tbody td {
             padding: 4px 5px;
@@ -1154,6 +1153,17 @@
             border-bottom: 1px solid rgba(255, 255, 255, 0.06);
             border-right: 1px solid rgba(255, 255, 255, 0.04);
             line-height: 1.35;
+            max-height: var(--marker-table-row-h);
+            overflow: hidden;
+            box-sizing: border-box;
+        }
+        .marker-table tbody td.marker-table__cell-comment {
+            width: 100%;
+            min-width: 0;
+            text-align: left;
+            vertical-align: top;
+            padding-top: 2px;
+            padding-bottom: 2px;
         }
         .marker-table tbody td:last-child {
             border-right: none;
@@ -1224,23 +1234,38 @@
         .marker-table__comment {
             display: block;
             width: 100%;
+            max-width: 100%;
             box-sizing: border-box;
+            height: calc(var(--marker-table-row-h) - 4px);
+            max-height: calc(var(--marker-table-row-h) - 4px);
             min-height: 0;
-            height: auto;
+            min-width: 0;
             resize: none;
-            overflow-y: hidden;
-            field-sizing: content;
+            overflow-x: hidden;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255, 255, 255, 0.22) rgba(0, 0, 0, 0.45);
             font-family: inherit;
             font-size: 0.72rem;
             font-weight: 400;
             line-height: 1.35;
             text-align: left;
+            white-space: pre-wrap;
+            overflow-wrap: break-word;
+            word-break: break-word;
             color: inherit;
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 4px;
             padding: 2px 5px;
             ime-mode: auto;
+        }
+        .marker-table__comment::-webkit-scrollbar {
+            width: 8px;
+        }
+        .marker-table__comment::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
         }
         .marker-table__comment:focus {
             outline: none;

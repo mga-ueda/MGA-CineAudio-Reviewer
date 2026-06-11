@@ -2,6 +2,8 @@
  * wav-markers.js — WAV cue / LIST(adtl) / plst マーカー・リージョンの読み取りと書き込み。
  * Sound Forge 等互換: fmt → cue → LIST(adtl) → plst → data の順（書き込み時は data より前に配置）。
  * 日本語ラベルは js/vendor/tiny-sjis-encoder.js（MIT, t-kouyama）で CP932 エンコード。
+ * 読み込み時は labl/note/ltxt の生バイトと ltxt の code page から文字コードを推定（UTF-8 / CP932 / UTF-16 LE 等）。
+ * Logic Pro 等の UTF-8 書き出しでは chunk 末尾の欠損バイトも補正してからデコードする。
  */
 (function wavMarkersModule() {
     const DATA_FCC = 0x61746164; /* 'data' */
@@ -458,32 +460,556 @@
         return new Uint8Array(await blob.arrayBuffer());
     }
 
-    let wavMarkerTextDecoder = null;
+    const WAV_MARKER_CODE_PAGE_LABELS = {
+        65001: 'utf-8',
+        1200: 'utf-16le',
+        932: 'ms932',
+        1252: 'windows-1252',
+        28591: 'iso-8859-1',
+    };
 
-    function resolveWavMarkerTextDecoder() {
-        if (wavMarkerTextDecoder) return wavMarkerTextDecoder;
-        const labels = ['ms932', 'shift_jis', 'windows-31j', 'shift-jis'];
+    const MARKER_TEXT_IMPORT_ENCODING_CANDIDATES = ['utf-8', 'ms932'];
+
+    const MARKER_TEXT_WESTERN_ENCODING_CANDIDATES = ['windows-1252', 'iso-8859-1'];
+
+    const MARKER_TEXT_IMPORT_ENCODING_LABELS = {
+        'utf-8': ['utf-8'],
+        ms932: ['ms932', 'shift_jis', 'windows-31j', 'shift-jis'],
+        'utf-16le': ['utf-16le'],
+        'utf-16be': ['utf-16be'],
+        'windows-1252': ['windows-1252'],
+        'iso-8859-1': ['iso-8859-1', 'latin1'],
+    };
+
+    const markerTextDecoderCache = new Map();
+
+    function resolveMarkerTextDecoderLabel(encodingKey) {
+        const key = encodingKey || 'ms932';
+        const labels =
+            MARKER_TEXT_IMPORT_ENCODING_LABELS[key] ||
+            MARKER_TEXT_IMPORT_ENCODING_LABELS.ms932;
         for (let i = 0; i < labels.length; i++) {
-            try {
-                wavMarkerTextDecoder = new TextDecoder(labels[i]);
-                return wavMarkerTextDecoder;
-            } catch (_) {
-                wavMarkerTextDecoder = null;
+            if (markerTextDecoderCache.has(labels[i])) {
+                return labels[i];
             }
+            try {
+                const dec = new TextDecoder(labels[i]);
+                dec.decode(new Uint8Array([0x41]));
+                markerTextDecoderCache.set(labels[i], dec);
+                return labels[i];
+            } catch (_) {}
         }
         return null;
     }
 
-    function decodeWavMarkerTextBytes(bytes, start, end) {
-        if (!bytes || start >= end) return '';
+    function getMarkerTextDecoder(encodingKey) {
+        const resolved = resolveMarkerTextDecoderLabel(encodingKey);
+        if (resolved && markerTextDecoderCache.has(resolved)) {
+            return markerTextDecoderCache.get(resolved);
+        }
+        return null;
+    }
+
+    function extractNullTerminatedMarkerBytes(bytes, start, end) {
+        if (!bytes || start >= end) return new Uint8Array(0);
         let term = start;
         while (term < end && bytes[term] !== 0) term += 1;
-        const slice = bytes.subarray(start, term);
+        return bytes.subarray(start, term);
+    }
+
+    function hasUtf16LeBom(bytes, offset) {
+        const off = offset || 0;
+        return bytes.length >= off + 2 && bytes[off] === 0xff && bytes[off + 1] === 0xfe;
+    }
+
+    function extractNullTerminatedUtf16LeBytes(bytes, start, end) {
+        if (!bytes || start >= end) return new Uint8Array(0);
+        if (hasUtf16LeBom(bytes, start)) start += 2;
+        let term = start;
+        while (term + 1 < end) {
+            if (bytes[term] === 0 && bytes[term + 1] === 0) break;
+            term += 2;
+        }
+        if (term <= start && end > start) {
+            return bytes.subarray(start, end - (end & 1));
+        }
+        return bytes.subarray(start, term);
+    }
+
+    /** UTF-16 LE は BOM または ASCII が (char,0x00) 連続のときだけ（UTF-8 日本語を誤判定しない） */
+    function looksLikeUtf16LeMarkerBytes(bytes) {
+        if (!bytes || bytes.length < 4) return false;
+        if (hasUtf16LeBom(bytes, 0)) return true;
+        if (bytes.length % 2 !== 0) return false;
+        let pairs = 0;
+        let asciiNullPairs = 0;
+        for (let i = 1; i < bytes.length; i += 2) {
+            pairs += 1;
+            const lo = bytes[i - 1];
+            const hi = bytes[i];
+            if (hi === 0 && lo >= 0x20 && lo <= 0x7e) asciiNullPairs += 1;
+        }
+        return pairs >= 4 && asciiNullPairs / pairs >= 0.85;
+    }
+
+    function extractMarkerTextBytes(bytes, start, end) {
+        if (!bytes || start >= end) return new Uint8Array(0);
+        const range = bytes.subarray(start, end);
+        if (hasUtf16LeBom(bytes, start) || looksLikeUtf16LeMarkerBytes(range)) {
+            return extractNullTerminatedUtf16LeBytes(bytes, start, end);
+        }
+        let raw = extractNullTerminatedMarkerBytes(bytes, start, end);
+        if (!raw.length && end > start) {
+            raw = bytes.subarray(start, end);
+        }
+        return stripTrailingNullBytes(raw);
+    }
+
+    function stripTrailingNullBytes(bytes) {
+        let end = bytes.length;
+        while (end > 0 && bytes[end - 1] === 0) end -= 1;
+        return bytes.subarray(0, end);
+    }
+
+    function stripUtf8Bom(bytes) {
+        if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+            return bytes.subarray(3);
+        }
+        return bytes;
+    }
+
+    /** 末尾の未完成 UTF-8 バイト列を落とす（Logic 等で chunk サイズが 1 バイト短いケース） */
+    function trimIncompleteUtf8Tail(bytes) {
+        if (!bytes.length) return bytes;
+        for (let end = bytes.length; end > 0; end--) {
+            if (isValidUtf8ByteSequence(bytes.subarray(0, end))) {
+                return bytes.subarray(0, end);
+            }
+        }
+        return new Uint8Array(0);
+    }
+
+    function isCjkCodePoint(cp) {
+        return (
+            (cp >= 0x3040 && cp <= 0x30ff) ||
+            (cp >= 0x4e00 && cp <= 0x9fff) ||
+            (cp >= 0x3400 && cp <= 0x4dbf) ||
+            cp === 0xff01 ||
+            cp === 0x3001 ||
+            cp === 0x3002
+        );
+    }
+
+    /** Logic 等: chunk 末尾に混ざる孤立 ASCII（0x45 'E' 等）。有効 UTF-8 でも除去する */
+    function trimTrailingStrayAsciiMarkerByte(bytes) {
+        if (!bytes || bytes.length < 2) return bytes;
+        const utf8Dec = getMarkerTextDecoder('utf-8');
+        if (!utf8Dec) return bytes;
+        let out = bytes;
+        while (out.length >= 2) {
+            const last = out[out.length - 1];
+            if (last < 0x41 || last > 0x7a) break;
+            const without = out.subarray(0, out.length - 1);
+            if (!isValidUtf8ByteSequence(without)) break;
+            const withText = utf8Dec.decode(out);
+            const withoutText = utf8Dec.decode(without);
+            if (withoutText.includes('\uFFFD')) break;
+            const lastCp = withText.charCodeAt(withText.length - 1);
+            const prevCp = withText.length >= 2 ? withText.charCodeAt(withText.length - 2) : 0;
+            const strayAfterCjk =
+                lastCp >= 0x41 &&
+                lastCp <= 0x7a &&
+                (isCjkCodePoint(prevCp) ||
+                    prevCp === 0xfffd ||
+                    prevCp === 0x29 ||
+                    prevCp === 0xff01);
+            if (!strayAfterCjk) break;
+            out = without;
+        }
+        return out;
+    }
+
+    /** chunk 境界の余分な 1 バイト（例: �E / ！E）を除去 */
+    function trimTrailingMarkerGarbageBytes(bytes) {
+        let out = stripUtf8Bom(bytes);
+        out = trimIncompleteUtf8Tail(out);
+        out = trimTrailingStrayAsciiMarkerByte(out);
+        if (!out.length) return out;
+        const utf8Dec = getMarkerTextDecoder('utf-8');
+        if (!utf8Dec) return out;
+        while (out.length > 0) {
+            const trimmed = trimIncompleteUtf8Tail(out);
+            if (trimmed.length !== out.length) {
+                out = trimmed;
+                out = trimTrailingStrayAsciiMarkerByte(out);
+                continue;
+            }
+            if (out.length < 2) break;
+            const withoutLast = out.subarray(0, out.length - 1);
+            if (!isValidUtf8ByteSequence(withoutLast)) break;
+            const withText = utf8Dec.decode(out);
+            const withoutText = utf8Dec.decode(withoutLast);
+            if (withoutText.includes('\uFFFD')) break;
+            const lastCp = withText.charCodeAt(withText.length - 1);
+            const prevCp = withText.charCodeAt(withText.length - 2);
+            const strayAsciiTail =
+                lastCp >= 0x41 &&
+                lastCp <= 0x7a &&
+                (prevCp === 0xfffd ||
+                    isCjkCodePoint(prevCp) ||
+                    (prevCp >= 0x41 && prevCp <= 0x7a && withoutText.length < withText.length - 1));
+            const replacementAsciiTail =
+                withText.endsWith('\uFFFD' + String.fromCharCode(lastCp)) ||
+                /\uFFFD[A-Za-z0-9]$/.test(withText);
+            if (strayAsciiTail || replacementAsciiTail) {
+                out = withoutLast;
+                continue;
+            }
+            break;
+        }
+        return out;
+    }
+
+    function sanitizeMarkerTextBytes(bytes, encodingKey) {
+        const slice = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
+        if (!slice.length) return slice;
+        if (encodingKey === 'utf-16le' || encodingKey === 'utf-16be') return slice;
+        let out = stripUtf8Bom(slice);
+        if (encodingKey === 'utf-8') {
+            out = trimTrailingStrayAsciiMarkerByte(out);
+            if (isValidUtf8ByteSequence(out)) return out;
+            out = trimIncompleteUtf8Tail(out);
+            out = trimTrailingStrayAsciiMarkerByte(out);
+            if (isValidUtf8ByteSequence(out)) return out;
+            return trimTrailingMarkerGarbageBytes(out);
+        }
+        return out;
+    }
+
+    function cleanupMarkerDecodedText(text) {
+        let out = String(text == null ? '' : text);
+        if (out.indexOf('\uFFFD') >= 0) {
+            out = out.replace(/^[A-Za-z]\uFFFD[A-Za-z]?(?=[\u3040-\u9fff\u4e00-\u9fff])/u, '');
+            out = out.replace(/^\uFFFD+/, '');
+            out = out.replace(/\uFFFD+$/g, '');
+            out = out.replace(
+                /([\u3040-\u9fff\u4e00-\u9fff\u3000-\u303f\uff00-\uffef])\uFFFD?([A-Za-z0-9])$/u,
+                '$1',
+            );
+        }
+        out = out.replace(/([\u3040-\u9fff\u4e00-\u9fff\uff00-\uffef])([A-Za-z])$/u, '$1');
+        return out.trim();
+    }
+
+    function markerCommentCorruptionPenalty(text) {
+        if (!text) return 0;
+        let penalty = 0;
+        if (text.indexOf('\uFFFD') >= 0) penalty += 5000;
+        if (/[\u3040-\u9fff\u4e00-\u9fff\uff00-\uffef][A-Za-z]$/.test(text)) penalty += 800;
+        return penalty;
+    }
+
+    function markerDecodedTextQuality(text) {
+        const cleaned = cleanupMarkerDecodedText(text);
+        if (!cleaned) return -10000;
+        let score = cleaned.length;
+        score -= markerCommentCorruptionPenalty(cleaned);
+        score -= countUtf8AsLatin1MojibakeSignals(cleaned) * 8;
+        score -= countUtf8AsSjisMojibakeSignals(cleaned) * 8;
+        score += countCjkChars(cleaned) * 3;
+        return score;
+    }
+
+    function isValidUtf8ByteSequence(bytes, allowTruncatedTail) {
+        let i = 0;
+        while (i < bytes.length) {
+            const b = bytes[i];
+            if (b <= 0x7f) {
+                i += 1;
+                continue;
+            }
+            let need = 0;
+            if ((b & 0xe0) === 0xc0) need = 1;
+            else if ((b & 0xf0) === 0xe0) need = 2;
+            else if ((b & 0xf8) === 0xf0) need = 3;
+            else return false;
+            if (i + need >= bytes.length) return !!allowTruncatedTail;
+            for (let j = 1; j <= need; j++) {
+                if ((bytes[i + j] & 0xc0) !== 0x80) return false;
+            }
+            i += need + 1;
+        }
+        return true;
+    }
+
+    function isMostlyValidUtf8ByteSequence(bytes) {
+        return isValidUtf8ByteSequence(bytes, true);
+    }
+
+    function bytesLookLikeUtf8Structure(bytes) {
+        let i = 0;
+        let structured = 0;
+        let high = 0;
+        while (i < bytes.length) {
+            const b = bytes[i];
+            if (b <= 0x7f) {
+                i += 1;
+                continue;
+            }
+            high += 1;
+            let need = 0;
+            if ((b & 0xe0) === 0xc0) need = 1;
+            else if ((b & 0xf0) === 0xe0) need = 2;
+            else if ((b & 0xf8) === 0xf0) need = 3;
+            else return false;
+            if (i + need >= bytes.length) {
+                structured += 1;
+                break;
+            }
+            let ok = true;
+            for (let j = 1; j <= need; j++) {
+                if ((bytes[i + j] & 0xc0) !== 0x80) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) return false;
+            structured += need + 1;
+            i += need + 1;
+        }
+        return high > 0 && structured >= high;
+    }
+
+    function markerBytesLookLikeShiftJis(bytes) {
+        for (let i = 0; i < bytes.length; i++) {
+            const b = bytes[i];
+            if (b <= 0x7f || (b >= 0xa1 && b <= 0xdf)) continue;
+            if ((b >= 0x81 && b <= 0x9f) || (b >= 0xe0 && b <= 0xfc)) {
+                if (i + 1 >= bytes.length) return false;
+                const b2 = bytes[i + 1];
+                if ((b2 >= 0x40 && b2 <= 0x7e) || (b2 >= 0x80 && b2 <= 0xfc)) {
+                    i += 1;
+                    continue;
+                }
+                return false;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /** UTF-8 バイト列を Latin-1 / Windows-1252 として読んだときに出やすい文字（例: æˆ¦é—˜ãŒ…） */
+    function countUtf8AsLatin1MojibakeSignals(text) {
+        if (!text) return 0;
+        let signals = 0;
+        for (let i = 0; i < text.length; i++) {
+            const cp = text.charCodeAt(i);
+            if (
+                cp === 0x00e3 ||
+                cp === 0x00e6 ||
+                cp === 0x00e9 ||
+                cp === 0x00e5 ||
+                cp === 0x00e7 ||
+                cp === 0x00ef ||
+                cp === 0x00ee
+            ) {
+                signals += 4;
+            } else if (cp >= 0x00c0 && cp <= 0x00ff) {
+                signals += 1;
+            }
+        }
+        return signals;
+    }
+
+    function countCjkChars(text) {
+        if (!text) return 0;
+        let count = 0;
+        for (let i = 0; i < text.length; i++) {
+            const cp = text.charCodeAt(i);
+            if (
+                (cp >= 0x3040 && cp <= 0x30ff) ||
+                (cp >= 0x4e00 && cp <= 0x9fff) ||
+                (cp >= 0x3400 && cp <= 0x4dbf)
+            ) {
+                count += 1;
+            }
+        }
+        return count;
+    }
+
+    /** UTF-8 バイト列を CP932 として読んだときに出やすい文字（例: 縺｣…） */
+    function countUtf8AsSjisMojibakeSignals(text) {
+        if (!text) return 0;
+        let signals = 0;
+        for (let i = 0; i < text.length; i++) {
+            const cp = text.charCodeAt(i);
+            if (cp >= 0x7e00 && cp <= 0x7eff) signals += 3;
+            if (cp === 0x2032 || cp === 0x222a) signals += 2;
+        }
+        return signals;
+    }
+
+    function markerSliceHasHighBytes(bytes) {
+        for (let i = 0; i < bytes.length; i++) {
+            if (bytes[i] > 0x7f) return true;
+        }
+        return false;
+    }
+
+    function scoreMarkerDecodedText(text, bytes, encodingKey) {
+        if (!text) return -1000;
+        let score = 0;
+        const replacementCount = text.split('\uFFFD').length - 1;
+        if (replacementCount > 1) score -= 10000;
+        else if (replacementCount === 1) score -= 120;
+        const sjisMojibakeSignals = countUtf8AsSjisMojibakeSignals(text);
+        const latinMojibakeSignals = countUtf8AsLatin1MojibakeSignals(text);
+        if (encodingKey === 'ms932') score -= sjisMojibakeSignals * 25;
+        if (encodingKey === 'windows-1252' || encodingKey === 'iso-8859-1') {
+            score -= latinMojibakeSignals * 30;
+        }
+        for (let i = 0; i < text.length; i++) {
+            const cp = text.charCodeAt(i);
+            if (cp < 0x20 && cp !== 0x09 && cp !== 0x0a && cp !== 0x0d) score -= 40;
+            if (
+                (cp >= 0x3040 && cp <= 0x30ff) ||
+                (cp >= 0x4e00 && cp <= 0x9fff) ||
+                (cp >= 0x3400 && cp <= 0x4dbf)
+            ) {
+                score += 4;
+            }
+        }
+        const hasHighBytes = markerSliceHasHighBytes(bytes);
+        const validUtf8 = isValidUtf8ByteSequence(bytes);
+        const mostlyValidUtf8 = isMostlyValidUtf8ByteSequence(bytes);
+        const looksUtf8 = bytesLookLikeUtf8Structure(bytes);
+        if (encodingKey === 'utf-8') {
+            if (validUtf8 || mostlyValidUtf8 || looksUtf8) {
+                score += hasHighBytes ? 500 : 40;
+            } else if (countCjkChars(text) > 0 && replacementCount <= 1) {
+                score += 280;
+            } else {
+                score -= 5000;
+            }
+        } else if (encodingKey === 'ms932') {
+            if ((validUtf8 || mostlyValidUtf8 || looksUtf8) && hasHighBytes) {
+                score -= 800;
+            } else if (!validUtf8 && !mostlyValidUtf8 && markerBytesLookLikeShiftJis(bytes)) {
+                score += hasHighBytes ? 220 : 20;
+            }
+        } else if (hasHighBytes && (validUtf8 || mostlyValidUtf8 || looksUtf8)) {
+            score -= 900;
+        } else if (hasHighBytes && !validUtf8 && !mostlyValidUtf8) {
+            score += 40;
+        }
+        return score;
+    }
+
+    function codePageHintToEncodingKey(codePage) {
+        const cp = Number(codePage);
+        if (!Number.isFinite(cp) || cp <= 0) return null;
+        return WAV_MARKER_CODE_PAGE_LABELS[cp] || null;
+    }
+
+    function buildMarkerTextImportCandidates(uniqueHints) {
+        const candidates = MARKER_TEXT_IMPORT_ENCODING_CANDIDATES.slice();
+        for (let i = 0; i < MARKER_TEXT_WESTERN_ENCODING_CANDIDATES.length; i++) {
+            const key = MARKER_TEXT_WESTERN_ENCODING_CANDIDATES[i];
+            if (uniqueHints.indexOf(key) >= 0 && candidates.indexOf(key) < 0) {
+                candidates.push(key);
+            }
+        }
+        return candidates;
+    }
+
+    function shouldPreferUtf8MarkerEncoding(slices) {
+        const utf8Dec = getMarkerTextDecoder('utf-8');
+        if (!utf8Dec) return false;
+        for (let i = 0; i < slices.length; i++) {
+            const slice = slices[i];
+            if (!markerSliceHasHighBytes(slice)) continue;
+            if (
+                isValidUtf8ByteSequence(slice) ||
+                isMostlyValidUtf8ByteSequence(slice) ||
+                bytesLookLikeUtf8Structure(slice)
+            ) {
+                return true;
+            }
+            const text = utf8Dec.decode(slice);
+            if (countCjkChars(text) > 0 && text.split('\uFFFD').length - 1 <= 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 外部 WAV 向け: labl/note/ltxt の生バイト列と ltxt の code page から文字コードを推定 */
+    function detectMarkerTextImportEncoding(rawSlices, codePageHints) {
+        const slices = Array.isArray(rawSlices)
+            ? rawSlices.filter((s) => s && s.length)
+            : [];
+        const hintedKeys = [];
+        if (Array.isArray(codePageHints)) {
+            for (let i = 0; i < codePageHints.length; i++) {
+                const key = codePageHintToEncodingKey(codePageHints[i]);
+                if (key) hintedKeys.push(key);
+            }
+        }
+        const uniqueHints = Array.from(new Set(hintedKeys));
+
+        if (!slices.length) {
+            return uniqueHints.length === 1 ? uniqueHints[0] : 'ms932';
+        }
+
+        if (uniqueHints.indexOf('utf-16le') >= 0) {
+            return 'utf-16le';
+        }
+        for (let i = 0; i < slices.length; i++) {
+            if (hasUtf16LeBom(slices[i], 0) || looksLikeUtf16LeMarkerBytes(slices[i])) {
+                return 'utf-16le';
+            }
+        }
+
+        const nonAsciiSlices = slices.filter((s) => markerSliceHasHighBytes(s));
+        if (nonAsciiSlices.length > 0 && shouldPreferUtf8MarkerEncoding(nonAsciiSlices)) {
+            return 'utf-8';
+        }
+
+        const candidates = buildMarkerTextImportCandidates(uniqueHints);
+        let bestKey = 'ms932';
+        let bestScore = -Infinity;
+        for (let i = 0; i < candidates.length; i++) {
+            const key = candidates[i];
+            const dec = getMarkerTextDecoder(key);
+            if (!dec) continue;
+            let total = 0;
+            for (let j = 0; j < slices.length; j++) {
+                let text = '';
+                try {
+                    text = dec.decode(slices[j]);
+                } catch (_) {
+                    total -= 10000;
+                    continue;
+                }
+                total += scoreMarkerDecodedText(text, slices[j], key);
+            }
+            if (uniqueHints.indexOf(key) >= 0) total += 40;
+            if (total > bestScore) {
+                bestScore = total;
+                bestKey = key;
+            }
+        }
+        return bestKey;
+    }
+
+    function decodeMarkerTextBytesRaw(bytes, encodingKey) {
+        const slice =
+            bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || 0);
         if (!slice.length) return '';
-        const dec = resolveWavMarkerTextDecoder();
+        const dec = getMarkerTextDecoder(encodingKey);
         if (dec) {
             try {
-                return String(dec.decode(slice)).trim();
+                return String(dec.decode(slice));
             } catch (_) {}
         }
         let out = '';
@@ -491,7 +1017,13 @@
             const cp = slice[i];
             out += cp <= 0x7f ? String.fromCharCode(cp) : '?';
         }
-        return out.trim();
+        return out;
+    }
+
+    function decodeMarkerTextBytes(bytes, encodingKey) {
+        const key = encodingKey || 'ms932';
+        const sanitized = sanitizeMarkerTextBytes(bytes, key);
+        return cleanupMarkerDecodedText(decodeMarkerTextBytesRaw(sanitized, key));
     }
 
     function readFmtSampleRate(fmtChunkBytes) {
@@ -556,11 +1088,18 @@
     function parseAdtlListChunk(listChunkBytes) {
         const body = listChunkBytes.subarray(8);
         if (body.length < 4 || readFourCc(body, 0) !== 'adtl') {
-            return { labl: new Map(), note: new Map(), ltxt: new Map() };
+            return {
+                labl: new Map(),
+                note: new Map(),
+                ltxt: new Map(),
+                encodingLabel: 'ms932',
+            };
         }
-        const labl = new Map();
-        const note = new Map();
-        const ltxt = new Map();
+        const lablRaw = new Map();
+        const noteRaw = new Map();
+        const ltxtRaw = new Map();
+        const rawTextSlices = [];
+        const codePageHints = [];
         let off = 4;
         while (off + 8 <= body.length) {
             const id = readFourCc(body, off);
@@ -574,24 +1113,74 @@
                 const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
                 const cueId = view.getUint32(dataStart, true);
                 if (id === 'labl') {
-                    labl.set(cueId, decodeWavMarkerTextBytes(body, dataStart + 4, dataEnd));
+                    const raw = extractMarkerTextBytes(body, dataStart + 4, dataEnd);
+                    lablRaw.set(cueId, raw);
+                    if (raw.length) rawTextSlices.push(raw);
                 } else if (id === 'note') {
-                    note.set(cueId, decodeWavMarkerTextBytes(body, dataStart + 4, dataEnd));
+                    const raw = extractMarkerTextBytes(body, dataStart + 4, dataEnd);
+                    noteRaw.set(cueId, raw);
+                    if (raw.length) rawTextSlices.push(raw);
                 } else if (id === 'ltxt' && dataEnd - dataStart >= 20) {
-                    ltxt.set(cueId, view.getUint32(dataStart + 4, true));
+                    const sampleLength = view.getUint32(dataStart + 4, true);
+                    const codePage = view.getUint16(dataStart + 18, true);
+                    const textRaw = extractMarkerTextBytes(body, dataStart + 20, dataEnd);
+                    ltxtRaw.set(cueId, { sampleLength, codePage, textRaw });
+                    if (codePage) codePageHints.push(codePage);
+                    if (textRaw.length) rawTextSlices.push(textRaw);
                 }
             }
             off += 8 + size + (size & 1);
         }
-        return { labl, note, ltxt };
+
+        const encodingLabel = detectMarkerTextImportEncoding(rawTextSlices, codePageHints);
+        const labl = new Map();
+        const note = new Map();
+        const ltxt = new Map();
+        lablRaw.forEach((raw, cueId) => {
+            labl.set(cueId, decodeMarkerTextBytes(raw, encodingLabel));
+        });
+        noteRaw.forEach((raw, cueId) => {
+            note.set(cueId, decodeMarkerTextBytes(raw, encodingLabel));
+        });
+        ltxtRaw.forEach((entry, cueId) => {
+            ltxt.set(cueId, {
+                sampleLength: entry.sampleLength,
+                comment: decodeMarkerTextBytes(entry.textRaw, encodingLabel),
+            });
+        });
+        return { labl, note, ltxt, encodingLabel };
     }
 
     function markerCommentFromAdtl(cueId, adtl) {
-        const fromLabl = adtl.labl.get(cueId);
-        if (typeof fromLabl === 'string' && fromLabl.trim()) return fromLabl.trim();
-        const fromNote = adtl.note.get(cueId);
-        if (typeof fromNote === 'string' && fromNote.trim()) return fromNote.trim();
-        return '';
+        const candidates = [];
+        const noteText = adtl.note.get(cueId);
+        if (typeof noteText === 'string' && noteText.trim()) {
+            candidates.push({ text: noteText.trim(), kind: 'note' });
+        }
+        const lablText = adtl.labl.get(cueId);
+        if (typeof lablText === 'string' && lablText.trim()) {
+            candidates.push({ text: lablText.trim(), kind: 'labl' });
+        }
+        const ltxtEntry = adtl.ltxt.get(cueId);
+        if (ltxtEntry && typeof ltxtEntry.comment === 'string' && ltxtEntry.comment.trim()) {
+            candidates.push({ text: ltxtEntry.comment.trim(), kind: 'ltxt' });
+        }
+        if (!candidates.length) return '';
+
+        let best = candidates[0].text;
+        let bestScore = markerDecodedTextQuality(best);
+        for (let i = 1; i < candidates.length; i++) {
+            const score = markerDecodedTextQuality(candidates[i].text);
+            if (score > bestScore) {
+                bestScore = score;
+                best = candidates[i].text;
+                continue;
+            }
+            if (score === bestScore && candidates[i].kind === 'note') {
+                best = candidates[i].text;
+            }
+        }
+        return best;
     }
 
     function sampleOffsetToSec(sampleOffset, sampleRate, frameCount) {
@@ -631,11 +1220,14 @@
         const plstChunk = parsed.all.find((c) => c.id === 'plst');
         const plstSegments = plstChunk ? parsePlstSegments(plstChunk.bytes) : [];
         const listChunk = parsed.all.find((c) => c.id === 'LIST');
-        const adtl = listChunk ? parseAdtlListChunk(listChunk.bytes) : {
-            labl: new Map(),
-            note: new Map(),
-            ltxt: new Map(),
-        };
+        const adtl = listChunk
+            ? parseAdtlListChunk(listChunk.bytes)
+            : {
+                labl: new Map(),
+                note: new Map(),
+                ltxt: new Map(),
+                encodingLabel: 'ms932',
+            };
 
         const regionCueIds = new Set();
         const markers = [];
@@ -663,11 +1255,11 @@
             regionCount += 1;
         }
 
-        adtl.ltxt.forEach((sampleLength, cueId) => {
+        adtl.ltxt.forEach((entry, cueId) => {
             if (regionCueIds.has(cueId)) return;
             const startFrame = cueMap.get(cueId);
             if (!Number.isFinite(startFrame)) return;
-            const len = Math.max(1, Number(sampleLength) || 0);
+            const len = Math.max(1, Number(entry.sampleLength) || 0);
             const startSec = sampleOffsetToSec(startFrame, sampleRate, frameCount);
             const endSec = sampleOffsetToSec(startFrame + len, sampleRate, frameCount);
             if (endSec <= startSec) return;
@@ -699,6 +1291,7 @@
             durationSec,
             pointCount,
             regionCount,
+            markerTextEncoding: adtl.encodingLabel || 'ms932',
         };
     }
 
@@ -723,13 +1316,18 @@
         });
         if (applied > 0 && typeof writeLog === 'function') {
             const label = o.logLabel ? o.logLabel + ': ' : '';
+            const enc =
+                parsed.markerTextEncoding && parsed.markerTextEncoding !== 'ms932'
+                    ? ' (' + parsed.markerTextEncoding + ')'
+                    : '';
             writeLog(
                 label +
                     'imported WAV markers — ' +
                     parsed.pointCount +
                     ' marker(s), ' +
                     parsed.regionCount +
-                    ' region(s)',
+                    ' region(s)' +
+                    enc,
             );
         }
         return parsed;

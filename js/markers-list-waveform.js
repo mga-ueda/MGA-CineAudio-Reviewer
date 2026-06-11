@@ -899,19 +899,6 @@
         return best;
     }
 
-    function fitMarkerCommentHeight(ta) {
-        if (!ta) return;
-        const cs = getComputedStyle(ta);
-        const lineH = parseFloat(cs.lineHeight) || 16;
-        const padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-        const borderV =
-            (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
-        const minH = lineH + padV + borderV;
-        ta.style.overflowY = 'hidden';
-        ta.style.height = '0';
-        ta.style.height = Math.max(minH, ta.scrollHeight) + 'px';
-    }
-
     function focusMarkerCommentField(id, opt) {
         const m = currentMarkers.find((x) => x.id === id);
         const run = () => {
@@ -2374,6 +2361,8 @@
             const comment = document.createElement('textarea');
             comment.className = 'marker-table__comment';
             comment.rows = 1;
+            comment.cols = 1;
+            comment.wrap = 'soft';
             comment.placeholder = '';
             comment.value = m.comment || '';
             const th =
@@ -2396,7 +2385,6 @@
             });
             comment.addEventListener('input', () => {
                 updateMarkerComment(m.id, comment.value);
-                fitMarkerCommentHeight(comment);
             });
             comment.addEventListener('keydown', (ev) => {
                 if (!matchUserShortcut(ev, 'cancelEditing', { allowRepeat: true })) return;
@@ -2407,7 +2395,6 @@
                 }
             });
             tdComment.appendChild(comment);
-            requestAnimationFrame(() => fitMarkerCommentHeight(comment));
 
             const tdAct = document.createElement('td');
             tdAct.className = 'marker-table__act';
