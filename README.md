@@ -55,6 +55,7 @@
 - **ソースの配布・フォークのとき**は、[LICENSE](LICENSE)（英文）を配布物に同梱してください。`Copyright (c) 2026 MIYABI GAME AUDIO INC.` および利用許諾の条文が含まれています。
 - **画面上のフッター**と `LICENSE` ファイルは別です。フッターは表示上の出典表記であり、削除しても MIT の同梱条件は変わりません。
 - MIT License では、改変・複製・配布などが認められます。ソフトウェアは現状有姿（「AS IS」）で提供され、作者による保証はありません。条文の全文は [LICENSE](LICENSE) を参照してください。
+- **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
 

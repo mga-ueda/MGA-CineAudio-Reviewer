@@ -4,6 +4,12 @@
     document.addEventListener(
         'keydown',
         (e) => {
+            if (
+                typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+                isGlobalShortcutBlockedForTextInput(e)
+            ) {
+                return;
+            }
             if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(true);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
@@ -16,6 +22,12 @@
     document.addEventListener(
         'keyup',
         (e) => {
+            if (
+                typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+                isGlobalShortcutBlockedForTextInput(e)
+            ) {
+                return;
+            }
             if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
                 setAltKeySnapSuppressed(false);
                 if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
@@ -35,6 +47,12 @@
     });
 
     window.addEventListener('keyup', (e) => {
+        if (
+            typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+            isGlobalShortcutBlockedForTextInput(e)
+        ) {
+            return;
+        }
         if (typeof handleMarkerKeyup === 'function' && handleMarkerKeyup(e)) {
             return;
         }

@@ -727,7 +727,149 @@
         };
     }
 
-    async function exportReviewWavePackage(opt) {
+    function waveExportMediaSummary(extraFlags) {
+        const mediaSummary = [];
+        for (let i = 0; i < extraFlags.length; i++) {
+            if (extraFlags[i]) mediaSummary.push('Ex' + (i + 1));
+        }
+        return mediaSummary;
+    }
+
+    async function exportReviewWavePackageOffline(opt) {
+        if (
+            typeof hasPlayableWaveformTimeline !== 'function' ||
+            !hasPlayableWaveformTimeline()
+        ) {
+            throw new Error('No audio tracks loaded');
+        }
+
+        const exportMedia =
+            opt && opt.exportMedia
+                ? opt.exportMedia
+                : typeof getExportMediaOptionsFromUi === 'function'
+                  ? getExportMediaOptionsFromUi()
+                  : {
+                        includeVideo: false,
+                        includeExtra: Array.from({ length: getExtraTrackCount() }, () => false),
+                    };
+        if (!exportMedia.includeAudio) {
+            throw new Error('Audio must be included in export');
+        }
+        const extraFlags = Array.isArray(exportMedia.includeExtra)
+            ? exportMedia.includeExtra
+            : [];
+        if (!extraFlags.some(Boolean)) {
+            throw new Error('No audio tracks selected for export');
+        }
+
+        const durationSec = getVideoExportDurationSec();
+        if (!durationSec || durationSec <= 0) {
+            throw new Error('Could not determine audio duration');
+        }
+
+        const exportUiState = captureWebmExportUiState();
+        applyWebmExportUiPrep();
+
+        if (
+            typeof isRangeLoopPlaybackActive === 'function' &&
+            isRangeLoopPlaybackActive() &&
+            typeof clearRangeLoopPlayback === 'function'
+        ) {
+            clearRangeLoopPlayback({ silent: true });
+        }
+
+        if (typeof haltTransportForSessionMutation === 'function') {
+            haltTransportForSessionMutation({ silent: true, clearLoopAndRegion: false });
+        }
+        if (typeof applySessionTransportAtHead === 'function') {
+            applySessionTransportAtHead();
+        } else if (typeof setTransportSec === 'function') {
+            setTransportSec(0);
+        }
+
+        if (typeof beginWebmExportLock === 'function') {
+            beginWebmExportLock({ durationSec, kind: 'wave' });
+        }
+        if (typeof setWebmExportEmergencyCleanup === 'function') {
+            setWebmExportEmergencyCleanup(null);
+        }
+
+        const mediaSummary = waveExportMediaSummary(extraFlags);
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Export Wave: started (offline, ' +
+                    durationSec.toFixed(2) +
+                    ' s → ' +
+                    EXPORT_WAVE_SAMPLE_RATE +
+                    ' Hz ' +
+                    EXPORT_WAVE_BITS +
+                    '-bit; audio: ' +
+                    mediaSummary.join(', ') +
+                    ')',
+            );
+        }
+
+        try {
+            if (typeof bounceReviewMixOffline !== 'function') {
+                throw new Error('Offline bounce unavailable');
+            }
+            const markersForExport =
+                typeof resolveWaveExportMarkers === 'function'
+                    ? resolveWaveExportMarkers()
+                    : typeof getMarkersSnapshot === 'function'
+                      ? getMarkersSnapshot()
+                      : [];
+            const result = await bounceReviewMixOffline({
+                exportMedia,
+                durationSec,
+                markers: markersForExport,
+            });
+            if (
+                typeof isWebmExportCancelRequested === 'function' &&
+                isWebmExportCancelRequested()
+            ) {
+                if (typeof writeLog === 'function') {
+                    writeLog('Export Wave: cancelled');
+                }
+                throw new Error('Export cancelled');
+            }
+            if (typeof updateExportBlockingSub === 'function') {
+                updateExportBlockingSub('Finalizing…');
+            }
+            const blob = result.blob;
+            const filename =
+                typeof buildWaveExportDownloadFilename === 'function'
+                    ? buildWaveExportDownloadFilename()
+                    : 'export.wav';
+            triggerBlobDownload(blob, filename);
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Export Wave: completed — "' +
+                        filename +
+                        '" (' +
+                        (typeof formatByteSize === 'function'
+                            ? formatByteSize(blob.size)
+                            : blob.size + ' bytes') +
+                        '; ' +
+                        result.sampleRate +
+                        ' Hz ' +
+                        EXPORT_WAVE_BITS +
+                        '-bit stereo; offline bounce)',
+                );
+            }
+            return blob;
+        } finally {
+            restoreWebmExportUiState(exportUiState);
+            if (typeof applySessionTransportAtHead === 'function') {
+                applySessionTransportAtHead();
+            } else if (typeof stopPlaybackReturnTransportToHead === 'function') {
+                stopPlaybackReturnTransportToHead();
+            }
+            if (typeof endWebmExportLock === 'function') endWebmExportLock();
+        }
+    }
+
+    async function exportReviewWavePackageRealtime(opt) {
         if (
             typeof hasPlayableWaveformTimeline !== 'function' ||
             !hasPlayableWaveformTimeline()
@@ -853,10 +995,7 @@
             setWebmExportEmergencyCleanup(finishExport);
         }
 
-        const mediaSummary = [];
-        for (let i = 0; i < extraFlags.length; i++) {
-            if (extraFlags[i]) mediaSummary.push('Ex' + (i + 1));
-        }
+        const mediaSummary = waveExportMediaSummary(extraFlags);
         if (typeof writeLog === 'function') {
             writeLog(
                 'Export Wave: started (real-time, ' +
@@ -970,10 +1109,24 @@
             updateExportBlockingSub('Finalizing…');
         }
         const wavResult = await pcmCapture.buildWavBlob();
-        const blob = wavResult.blob;
+        let blob = wavResult.blob;
         if (!blob || !blob.size) {
             if (typeof endWebmExportLock === 'function') endWebmExportLock();
             throw new Error('No recorded audio data');
+        }
+        if (typeof finalizeWaveExportBlobWithMarkers === 'function') {
+            const markersForExport =
+                typeof resolveWaveExportMarkers === 'function'
+                    ? resolveWaveExportMarkers()
+                    : typeof getMarkersSnapshot === 'function'
+                      ? getMarkersSnapshot()
+                      : [];
+            blob = await finalizeWaveExportBlobWithMarkers(
+                blob,
+                wavResult.outputSampleRate,
+                durationSec * wavResult.outputSampleRate,
+                markersForExport,
+            );
         }
         const filename =
             typeof buildWaveExportDownloadFilename === 'function'
@@ -1005,6 +1158,29 @@
         return blob;
     }
 
+    async function exportReviewWavePackage(opt) {
+        if (typeof bounceReviewMixOffline === 'function') {
+            try {
+                return await exportReviewWavePackageOffline(opt);
+            } catch (err) {
+                const msg = err && err.message ? err.message : String(err);
+                if (msg === 'Export cancelled') throw err;
+                if (typeof writeLog === 'function') {
+                    writeLog(
+                        'Export Wave: offline bounce failed — ' +
+                            msg +
+                            '; falling back to real-time capture',
+                    );
+                }
+            }
+        }
+        return exportReviewWavePackageRealtime(opt);
+    }
+
     window.exportReviewVideoPackage = exportReviewVideoPackage;
     window.exportReviewWavePackage = exportReviewWavePackage;
+    window.exportReviewWavePackageOffline = exportReviewWavePackageOffline;
+    window.exportReviewWavePackageRealtime = exportReviewWavePackageRealtime;
+    window.getVideoExportDurationSec = getVideoExportDurationSec;
+    window.encodeStereoWavBlob = encodeStereoWavBlob;
 })();

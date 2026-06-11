@@ -55,4 +55,11 @@
         return el.isContentEditable === true;
     }
 
+    /** テキスト入力フォーカス中はグローバルショートカットを抑止する */
+    function isGlobalShortcutBlockedForTextInput(e) {
+        if (!e) return false;
+        return isTypingTarget(e.target) || isTypingTarget(document.activeElement);
+    }
+
     window.isTypingTarget = isTypingTarget;
+    window.isGlobalShortcutBlockedForTextInput = isGlobalShortcutBlockedForTextInput;

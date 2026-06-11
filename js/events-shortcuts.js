@@ -189,6 +189,14 @@
                 ? window.isNumpadDigitKeyCode
                 : (code) => /^Numpad[0-9]$/.test(code || '');
 
+        // マーカー Comment / Memo 等の入力中は文字・修飾キーを編集優先（U/T/P 等の横取り防止）
+        if (
+            typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+            isGlobalShortcutBlockedForTextInput(e)
+        ) {
+            return;
+        }
+
         if (matchUserShortcut(e, 'layoutEditToggle')) {
             if (typeof toggleLayoutDockEditMode === 'function') {
                 e.preventDefault();
@@ -236,11 +244,6 @@
             e.preventDefault();
             return;
         }
-
-        // 入力欄フォーカス中はグローバルショートカットを抑止し、文字入力を優先する。
-        // target 取りこぼし対策として activeElement も併用して判定する。
-        // （例: Musical Grid の meter/phrase 入力で Del/Backspace や O/T/P が横取りされないようにする）
-        if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
 
         if (
             dispatchShortcutHandlers(

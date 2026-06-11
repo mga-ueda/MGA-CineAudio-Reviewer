@@ -1043,7 +1043,7 @@
         const label = hasVideo ? 'Export WebM' : 'Export Wave';
         const title = hasVideo
             ? 'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）'
-            : 'レビューミックスを WAV で書き出し（実時間・書き出し中は Esc でキャンセル）';
+            : 'レビューミックスを WAV で書き出し（オフラインバウンス・書き出し中は Esc でキャンセル）';
         btn.textContent = label;
         btn.title = title;
         btn.dataset.exportMediaMode = mode;

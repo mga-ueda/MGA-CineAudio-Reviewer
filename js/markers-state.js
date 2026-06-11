@@ -493,6 +493,7 @@
     }
 
     window.syncAudioOnlyMarkersUi = syncAudioOnlyMarkersUi;
+    window.getMarkersSnapshot = getMarkersSnapshot;
 
     function sortMarkersInPlace() {
         currentMarkers.sort((a, b) => {
