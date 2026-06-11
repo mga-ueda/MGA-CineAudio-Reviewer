@@ -1,10 +1,18 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.12';
+    const APP_VERSION = '0.13';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.13',
+            date: '2026年6月12日',
+            items: [
+                '波形読み込み時に WAV 埋め込みマーカー／リージョンをタイムラインへ取り込み（Sound Forge 互換 cue / LIST(adtl) / plst）。クリップ配置位置に合わせてオフセット。',
+                '書き出し・読み取り共通モジュールを wav-markers.js に整理（旧 wave-export-wav-markers.js）。',
+            ],
+        },
         {
             version: '0.12',
             date: '2026年6月12日',
