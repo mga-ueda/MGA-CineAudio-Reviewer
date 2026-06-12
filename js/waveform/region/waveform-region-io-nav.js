@@ -212,32 +212,6 @@
         return code - 65;
     }
 
-    function resolveSegmentIndexForRehearsalMarkKey(track, markIndex) {
-        const mi = markIndex | 0;
-        if (mi < 0) return null;
-        const phraseSlot = phraseSlotIndexForRehearsalMarkKeyIndex(mi);
-        const ranges =
-            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
-                ? getPhraseGroupRangesForRegionRehearsalMarks()
-                : [];
-        if (phraseSlot < 0 || phraseSlot >= ranges.length) return null;
-        const r = ranges[phraseSlot];
-        const eps = segmentBoundaryJoinEpsilonSec();
-        const count = getSegmentCount(track);
-        let bestIdx = null;
-        let bestIn = Infinity;
-        for (let si = 0; si < count; si++) {
-            const inSec = getSegmentRegionTimelineIn(track, si);
-            if (inSec >= r.startSec - eps && inSec < r.endSec - eps) {
-                if (inSec < bestIn) {
-                    bestIn = inSec;
-                    bestIdx = si;
-                }
-            }
-        }
-        return bestIdx;
-    }
-
     function resolveRegionRehearsalJumpTrack() {
         for (let i = 0; i < regionSelectionEntries.length; i++) {
             const entry = regionSelectionEntries[i];
@@ -267,26 +241,19 @@
                 : [];
         if (phraseSlot < 0 || phraseSlot >= ranges.length) return false;
         const r = ranges[phraseSlot];
-        const segIdx = resolveSegmentIndexForRehearsalMarkKey(track, markIndex);
-        const inSec =
-            segIdx != null && segIdx >= 0
-                ? getSegmentRegionTimelineIn(track, segIdx)
-                : r && Number.isFinite(r.startSec)
-                  ? r.startSec
-                  : null;
-        if (!Number.isFinite(inSec)) return false;
+        if (!r || !Number.isFinite(r.startSec)) return false;
         const mark = rehearsalMarkLabelForPhraseSlotIndex(phraseSlot);
         const markHint = rehearsalMarkDisplayLabel(mark) || mark;
         return seekToRegionNavStop(
             {
-                sec: inSec,
+                sec: r.startSec,
                 edge: 'in',
                 slot: track.slot,
-                segmentIndex: segIdx != null ? segIdx : -1,
+                segmentIndex: -1,
             },
             {
                 resumeAfterSeek: !!(opt && opt.resumeAfterSeek),
-                hintTitle: 'Region ' + markHint,
+                hintTitle: markHint,
                 discreteStopNav: true,
             },
         );
