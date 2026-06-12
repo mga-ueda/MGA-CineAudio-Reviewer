@@ -936,7 +936,8 @@
         .marker-panel.marker-panel--ready .marker-panel__title {
             color: var(--app-accent);
         }
-        .marker-panel:not(.marker-panel--ready) .marker-panel__body {
+        .marker-panel:not(.marker-panel--ready) .marker-table-wrap,
+        .marker-panel:not(.marker-panel--ready) .marker-list-empty {
             opacity: 0.72;
         }
         .marker-panel__head-actions {
@@ -1348,9 +1349,6 @@
             font-weight: 400;
             letter-spacing: 0.12em;
             text-transform: uppercase;
-            color: #8e96a8;
-        }
-        .marker-panel.marker-panel--ready .marker-panel__memo-label {
             color: var(--app-accent);
         }
         .marker-panel__memo-textarea {
