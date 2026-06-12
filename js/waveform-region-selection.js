@@ -133,6 +133,14 @@
         return false;
     }
 
+    function hasSilentGapRegionSelection() {
+        for (let i = 0; i < regionSelectionEntries.length; i++) {
+            const e = regionSelectionEntries[i];
+            if (e.segmentIndex < 0 && e.silentGapIndex >= 0) return true;
+        }
+        return false;
+    }
+
     function syncRegionSelectionClasses() {
         pruneInvalidSilentGapSelectionEntries();
         document

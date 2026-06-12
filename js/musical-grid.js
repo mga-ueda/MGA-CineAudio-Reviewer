@@ -3274,14 +3274,67 @@
         next.splice(g, 1);
         return next.length ? next : null;
     }
+    function silentGapDeleteDiagFromGrid(stage, payload) {
+        if (typeof window.silentGapDeleteDiagLog === 'function') {
+            window.silentGapDeleteDiagLog('grid/' + stage, payload);
+        }
+    }
     function deletePhraseAtWaveformPointer() {
-        if (!getMusicalGridVisible()) return false;
-        if (phraseBoundaryDragActive) return false;
+        silentGapDeleteDiagFromGrid('phrase-delete/begin', {
+            gridVisible: getMusicalGridVisible(),
+            phraseFillVisible: getMusicalGridPhraseFillVisible(),
+            boundaryDrag: !!phraseBoundaryDragActive,
+            silentGapSelected:
+                typeof window.hasSilentGapRegionSelection === 'function' &&
+                window.hasSilentGapRegionSelection(),
+        });
+        if (!getMusicalGridVisible()) {
+            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'grid-off' });
+            return false;
+        }
+        if (phraseBoundaryDragActive) {
+            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'boundary-drag' });
+            return false;
+        }
+        if (
+            typeof window.hasSilentGapRegionSelection === 'function' &&
+            window.hasSilentGapRegionSelection()
+        ) {
+            silentGapDeleteDiagFromGrid('phrase-delete/defer', {
+                reason: 'silent-gap-selected',
+                to: 'region-delete',
+            });
+            return false;
+        }
         const target = resolvePhraseEditTransportSec();
-        if (!target) return false;
+        if (!target) {
+            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'transport-unresolved' });
+            return false;
+        }
         const { transportSec, useSeekbar } = target;
+        if (
+            typeof window.tryDeleteSilentGapAtPhraseEditPointer === 'function' &&
+            window.tryDeleteSilentGapAtPhraseEditPointer(transportSec)
+        ) {
+            silentGapDeleteDiagFromGrid('phrase-delete/path', {
+                path: 'silent-gap-pointer',
+                useSeekbar,
+                transportSec,
+            });
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint(
+                    'Region',
+                    'Silent gap removed' + (useSeekbar ? ' (seekbar)' : ''),
+                    'notice',
+                );
+            }
+            return true;
+        }
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return false;
+        if (!settings || !settings.phraseSpec) {
+            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'phrase-spec-missing' });
+            return false;
+        }
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
@@ -3306,10 +3359,29 @@
             return true;
         }
         const nextCounts = deletePhraseGroupAtIndex(counts, groupIndex);
-        if (!nextCounts) return false;
+        if (!nextCounts) {
+            silentGapDeleteDiagFromGrid('phrase-delete/reject', {
+                reason: 'delete-group-failed',
+                groupIndex,
+            });
+            return false;
+        }
         const label = phraseGroupLabelForIndex(groupIndex);
+        silentGapDeleteDiagFromGrid('phrase-delete/path', {
+            path: 'phrase-grid-relayout',
+            useSeekbar,
+            transportSec,
+            groupIndex,
+            countsBefore: counts.slice(0, 12),
+            countsAfter: nextCounts.slice(0, 12),
+            phraseBefore: musicalGridPhraseText,
+        });
         applyExplicitPhraseGroupBarCounts(nextCounts);
         persistPhraseWaveformEditAndRedraw({ skipUndo: true });
+        silentGapDeleteDiagFromGrid('phrase-delete/done', {
+            path: 'phrase-grid-relayout',
+            phraseAfter: musicalGridPhraseText,
+        });
         if (typeof writeLog === 'function') {
             writeLog(
                 'Phrase ' +
@@ -3336,7 +3408,15 @@
         if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
             return false;
         }
-        if (!deletePhraseAtWaveformPointer()) return false;
+        silentGapDeleteDiagFromGrid('keydown/begin', { handler: 'musical-grid' });
+        if (!deletePhraseAtWaveformPointer()) {
+            silentGapDeleteDiagFromGrid('keydown/miss', {
+                handler: 'musical-grid',
+                fallthrough: 'region-delete',
+            });
+            return false;
+        }
+        silentGapDeleteDiagFromGrid('keydown/handled', { handler: 'musical-grid' });
         e.preventDefault();
         return true;
     }
@@ -4795,6 +4875,8 @@
     window.clearMusicalGridPositionCache = clearMusicalGridPositionCache;
     window.clearPhraseGroupBarCountsOverride = clearPhraseGroupBarCountsOverride;
     window.setPhraseGroupBarCountsOverride = setPhraseGroupBarCountsOverride;
+    window.compressPhraseDefinitionFromExpandedCounts =
+        compressPhraseDefinitionFromExpandedCounts;
     window.repairPhraseSpecToSizes = repairPhraseSpecToSizes;
     /** RegionSwap — 展開 counts から Phrase 欄テキストを再構成して反映 */
     window.applyPhraseGroupBarCountsForRegionSwap = function applyPhraseGroupBarCountsForRegionSwap(

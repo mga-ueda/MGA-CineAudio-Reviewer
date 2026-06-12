@@ -1743,12 +1743,24 @@
     }
 
     function deleteRegionSegmentUnderCursor() {
-        if (!regionSelectionEntries.length) return false;
+        if (!regionSelectionEntries.length) {
+            if (typeof window.silentGapDeleteDiagLog === 'function') {
+                window.silentGapDeleteDiagLog('region-delete/reject', {
+                    reason: 'no-selection',
+                });
+            }
+            return false;
+        }
         const entries = regionSelectionEntries.map((e) => ({
             slot: e.slot,
             segmentIndex: e.segmentIndex,
             silentGapIndex: e.silentGapIndex,
         }));
+        if (typeof window.silentGapDeleteDiagLog === 'function') {
+            window.silentGapDeleteDiagLog('region-delete/begin', {
+                entries,
+            });
+        }
         if (typeof clearRegionSelection === 'function') clearRegionSelection();
         const gapEntries = entries.filter((e) => e.segmentIndex < 0);
         const phraseFillOn =
@@ -1781,6 +1793,12 @@
             noteRegionShrinkPersistIntent(slot);
             const indices = gapBySlot[slot].sort((a, b) => b - a);
             for (let i = 0; i < indices.length; i++) {
+                if (typeof window.silentGapDeleteDiagLog === 'function') {
+                    window.silentGapDeleteDiagLog('region-delete/gap-attempt', {
+                        ex: slot + 1,
+                        gapIndex: indices[i],
+                    });
+                }
                 if (
                     typeof deleteSilentGapAt === 'function' &&
                     deleteSilentGapAt(track, indices[i], {
@@ -1810,6 +1828,13 @@
             noteRegionShrinkPersistIntent(slot);
             const indices = bySlot[slot].sort((a, b) => b - a);
             for (let i = 0; i < indices.length; i++) {
+                if (typeof window.silentGapDeleteDiagLog === 'function') {
+                    window.silentGapDeleteDiagLog('region-delete/segment-attempt', {
+                        ex: slot + 1,
+                        segmentIndex: indices[i],
+                        region: indices[i] + 1,
+                    });
+                }
                 if (
                     deleteRegionSegmentAt(track, indices[i], {
                         skipClearSelection: true,
@@ -1819,6 +1844,13 @@
                     anyDeleted = true;
                 }
             }
+        }
+        if (typeof window.silentGapDeleteDiagLog === 'function') {
+            window.silentGapDeleteDiagLog('region-delete/done', {
+                anyDeleted: !!anyDeleted,
+                gapSlots: gapSlotKeys.length,
+                segSlots: slotKeys.length,
+            });
         }
         return anyDeleted;
     }

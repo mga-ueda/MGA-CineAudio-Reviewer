@@ -174,6 +174,10 @@
     window.toggleRegionSelection = toggleRegionSelection;
     window.toggleSilentGapSelection = toggleSilentGapSelection;
     window.deleteSilentGapAt = deleteSilentGapAt;
+    window.tryDeleteSilentGapAtPhraseEditPointer = tryDeleteSilentGapAtPhraseEditPointer;
+    window.hasSilentGapRegionSelection = hasSilentGapRegionSelection;
+    window.silentGapDeleteDiagLog = silentGapDeleteDiagLog;
+    window.silentGapDeleteDiagSnapshotTrack = silentGapDeleteDiagSnapshotTrack;
     window.clearRegionSelection = clearRegionSelection;
     window.collectRegionGroupMembers = collectRegionGroupMembers;
     window.flashRegionGroupMembers = flashRegionGroupMembers;

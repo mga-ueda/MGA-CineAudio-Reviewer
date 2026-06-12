@@ -57,7 +57,18 @@
         if (!matchUserShortcut(e, 'regionDelete')) return false;
         if (e.shiftKey) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
-        if (!deleteRegionSegmentUnderCursor()) return false;
+        if (typeof window.silentGapDeleteDiagLog === 'function') {
+            window.silentGapDeleteDiagLog('keydown/begin', { handler: 'region-delete' });
+        }
+        if (!deleteRegionSegmentUnderCursor()) {
+            if (typeof window.silentGapDeleteDiagLog === 'function') {
+                window.silentGapDeleteDiagLog('keydown/miss', { handler: 'region-delete' });
+            }
+            return false;
+        }
+        if (typeof window.silentGapDeleteDiagLog === 'function') {
+            window.silentGapDeleteDiagLog('keydown/handled', { handler: 'region-delete' });
+        }
         e.preventDefault();
         return true;
     }

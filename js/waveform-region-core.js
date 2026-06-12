@@ -787,6 +787,78 @@
             window.musicalSlotDiagLog(stage, payload);
         }
     }
+    /** 無音リージョン削除調査用 — Debug Log OFF でも常に出力 */
+    function silentGapDeleteDiagFmtPayload(payload) {
+        if (payload == null) return '';
+        if (typeof payload === 'string') return payload;
+        return JSON.stringify(payload, (_, v) =>
+            Number.isFinite(v) && Math.abs(v) < 1e6 && Math.abs(v) > 0.0001
+                ? Math.round(v * 10000) / 10000
+                : v,
+        );
+    }
+    function silentGapDeleteDiagLog(stage, payload) {
+        if (typeof writeLog !== 'function') return;
+        const tail = silentGapDeleteDiagFmtPayload(payload);
+        writeLog('[SilentGapDel] ' + stage + (tail ? ' | ' + tail : ''));
+        if (typeof window.musicalSlotDiagLog === 'function') {
+            window.musicalSlotDiagLog('silent-del/' + stage, payload);
+        }
+    }
+    function silentGapDeleteDiagSnapshotTrack(track) {
+        const snap = {
+            ex: isExtraTrackRef(track) ? (track.slot | 0) + 1 : null,
+            active: isExtraTrackRef(track) ? isTrackRegionActive(track) : false,
+            segCount: 0,
+            segments: [],
+            gaps: [],
+            slots: [],
+            phrase: regionSwapDiagPhraseText(),
+        };
+        if (!isExtraTrackRef(track) || !isTrackRegionActive(track)) return snap;
+        const segments = getTrackSegments(track);
+        snap.segCount = segments.length;
+        for (let i = 0; i < segments.length; i++) {
+            snap.segments.push({
+                region: i + 1,
+                in: regionSwapDiagFmtSec(getSegmentRegionTimelineIn(track, i)),
+                out: regionSwapDiagFmtSec(getSegmentRegionTimelineOut(track, i)),
+            });
+        }
+        const gaps = collectTrackSilentGaps(track);
+        for (let gi = 0; gi < gaps.length; gi++) {
+            const g = gaps[gi];
+            snap.gaps.push({
+                gapIndex: gi,
+                phraseSlot: Number.isFinite(g.phraseIndex) ? (g.phraseIndex | 0) + 1 : null,
+                partial: !!g.partial,
+                start: regionSwapDiagFmtSec(g.startSec),
+                end: regionSwapDiagFmtSec(g.endSec),
+                beforeSeg: Number.isFinite(g.beforeSegmentIndex) ? g.beforeSegmentIndex + 1 : null,
+                afterSeg: Number.isFinite(g.afterSegmentIndex) ? g.afterSegmentIndex + 1 : null,
+            });
+        }
+        if (typeof window.getTrackTimelineSlots === 'function') {
+            const slots = window.getTrackTimelineSlots(track, { writeCache: false });
+            for (let si = 0; si < slots.length; si++) {
+                const s = slots[si];
+                snap.slots.push({
+                    unit: si,
+                    kind: s.kind,
+                    phraseSlot:
+                        s.musical && Number.isFinite(s.musical.phraseSlotIndex)
+                            ? (s.musical.phraseSlotIndex | 0) + 1
+                            : null,
+                    meta:
+                        s.musical &&
+                        typeof window.formatSwapUnitStoredMusicalMetaText === 'function'
+                            ? window.formatSwapUnitStoredMusicalMetaText(s.musical)
+                            : null,
+                });
+            }
+        }
+        return snap;
+    }
     function resolveRegionSwapDiagTrackRef(trackOrSlot) {
         if (trackOrSlot != null && typeof trackOrSlot === 'object' && isExtraTrackRef(trackOrSlot)) {
             return trackOrSlot;
@@ -1061,38 +1133,292 @@
         // syncTrackHeadPadFromFirstSegment へ委譲 — プレビュー配置中の live 更新は
         // 入れ替えアニメの「旧位置」取得を壊すため行わない
     }
-    /** 無音 gap 削除に伴う Phrase 展開 counts から当該グループを除去 */
-    function syncPhraseGridAfterSilentGapDelete(gap) {
+    /** Phrase グループ除去後 — 残存 timelineSlots の phraseSlotIndex を詰める */
+    function remapTimelineSlotPhraseIndicesAfterGroupRemoval(track, removedIndex) {
+        if (!isExtraTrackRef(track)) return;
+        const state = getPlaybackRegionsState(track);
+        const slots =
+            state && Array.isArray(state.timelineSlots) ? state.timelineSlots : null;
+        if (!slots || !slots.length) return;
+        const ri = removedIndex | 0;
+        const remapped = [];
+        for (let i = 0; i < slots.length; i++) {
+            const slot = slots[i];
+            if (!slot || !slot.musical) continue;
+            const psi = slot.musical.phraseSlotIndex | 0;
+            if (psi > ri) {
+                remapped.push({ unit: i, from: psi + 1, to: psi });
+                slot.musical.phraseSlotIndex = psi - 1;
+            }
+        }
+        silentGapDeleteDiagLog('remap/phrase-slot-index', {
+            ex: track.slot + 1,
+            removedPhraseSlot: ri + 1,
+            remapped,
+        });
+    }
+
+    /** 波形ポインタ位置の無音 gap を削除（Phrase 欄 Delete の全切り直しを避ける） */
+    function tryDeleteSilentGapAtPhraseEditPointer(transportSec) {
+        silentGapDeleteDiagLog('pointer/begin', {
+            transportSec: regionSwapDiagFmtSec(transportSec),
+            phraseFillOn:
+                typeof getMusicalGridPhraseFillVisible === 'function' &&
+                getMusicalGridPhraseFillVisible(),
+        });
         if (
             typeof getMusicalGridPhraseFillVisible !== 'function' ||
             !getMusicalGridPhraseFillVisible()
         ) {
+            silentGapDeleteDiagLog('pointer/reject', { reason: 'phrase-fill-off' });
+            return false;
+        }
+        if (!Number.isFinite(transportSec)) {
+            silentGapDeleteDiagLog('pointer/reject', { reason: 'transport-invalid' });
+            return false;
+        }
+        const n = getExtraTrackCount();
+        let slot = -1;
+        if (typeof getWaveformPointerClientY === 'function') {
+            const clientY = getWaveformPointerClientY();
+            if (Number.isFinite(clientY) && typeof extraSlotFromPointerY === 'function') {
+                slot = extraSlotFromPointerY(clientY);
+            }
+        }
+        const tryTrack = (track) => {
+            const probe = silentGapDeleteDiagSnapshotTrack(track);
+            if (!isTrackRegionActive(track)) {
+                silentGapDeleteDiagLog('pointer/track-skip', {
+                    ex: track.slot + 1,
+                    reason: 'region-inactive',
+                    probe,
+                });
+                return false;
+            }
+            const gapIdx = resolveSilentGapListIndexAtTransport(track, transportSec);
+            silentGapDeleteDiagLog('pointer/track-probe', {
+                ex: track.slot + 1,
+                gapIndex: gapIdx,
+                probe,
+            });
+            if (gapIdx < 0) return false;
+            const ok = deleteSilentGapAt(track, gapIdx, { skipClearSelection: true });
+            silentGapDeleteDiagLog('pointer/track-delete', {
+                ex: track.slot + 1,
+                gapIndex: gapIdx,
+                ok: !!ok,
+                after: silentGapDeleteDiagSnapshotTrack(track),
+            });
+            return ok;
+        };
+        if (slot >= 0) {
+            silentGapDeleteDiagLog('pointer/lane', { ex: slot + 1 });
+            return tryTrack({ type: 'extra', slot });
+        }
+        silentGapDeleteDiagLog('pointer/scan-all-tracks', { extraCount: n });
+        for (let s = 0; s < n; s++) {
+            if (tryTrack({ type: 'extra', slot: s })) return true;
+        }
+        silentGapDeleteDiagLog('pointer/miss', { reason: 'no-gap-at-transport' });
+        return false;
+    }
+
+    /** gap 区間の内部に音源リージョンが無い（境界のみ）= 専用無音フレーズ削除 */
+    function isDedicatedSilentPhraseGapDelete(track, gap) {
+        if (!gap || !isExtraTrackRef(track)) return false;
+        const eps = segmentBoundaryJoinEpsilonSec();
+        const segments = getTrackSegments(track);
+        for (let si = 0; si < segments.length; si++) {
+            const regionIn = getSegmentRegionTimelineIn(track, si);
+            if (regionIn > gap.startSec + eps * 4 && regionIn < gap.endSec - eps * 4) {
+                return false;
+            }
+            const regionOut = getSegmentRegionTimelineOut(track, si);
+            const lo = Math.max(regionIn, gap.startSec);
+            const hi = Math.min(regionOut, gap.endSec);
+            if (hi - lo > eps * 8) return false;
+        }
+        return true;
+    }
+
+    /** フレーズ欄テキスト優先でグループ除去後の counts を構築 */
+    function buildPhraseCountsAfterSilentGapSplice(pi, fallbackCounts) {
+        const phraseText = regionSwapDiagPhraseText();
+        if (phraseText && typeof window.parsePhraseGroupingSpec === 'function') {
+            const spec = window.parsePhraseGroupingSpec(phraseText);
+            if (spec && spec.sizes && spec.sizes.length >= 2 && pi < spec.sizes.length) {
+                const sizes = spec.sizes.slice();
+                sizes.splice(pi, 1);
+                if (sizes.length) {
+                    return { next: sizes.slice(), source: 'phrase-spec' };
+                }
+            }
+        }
+        if (typeof window.splicePhraseGroupAtIndex === 'function') {
+            const next = window.splicePhraseGroupAtIndex(fallbackCounts, pi);
+            if (next) return { next, source: 'expanded-counts' };
+        }
+        return null;
+    }
+
+    /** 無音 gap 削除時の Phrase counts 更新方針（リップル前のトラック状態で判定） */
+    function resolveSilentGapPhraseCountUpdate(gap, track, counts, pi) {
+        const slotBars = counts[pi] | 0;
+        const spanBars =
+            typeof estimateSilentGapBarSpan === 'function'
+                ? estimateSilentGapBarSpan(gap) | 0
+                : 0;
+        const dedicatedSilent = isDedicatedSilentPhraseGapDelete(track, gap);
+
+        if (gap.partial && !dedicatedSilent) {
+            return {
+                mode: 'ripple-only',
+                next: counts.slice(),
+                shrinkOnly: false,
+                skipPhraseApply: true,
+                dedicatedSilent,
+                spanBars,
+                slotBars,
+                countsSource: 'unchanged',
+            };
+        }
+        if (
+            gap.partial &&
+            dedicatedSilent &&
+            spanBars > 0 &&
+            slotBars > 0 &&
+            spanBars < slotBars
+        ) {
+            const next = counts.slice();
+            next[pi] = Math.max(1, slotBars - spanBars);
+            return {
+                mode: 'shrink-partial',
+                next,
+                shrinkOnly: true,
+                skipPhraseApply: false,
+                dedicatedSilent,
+                spanBars,
+                slotBars,
+                countsSource: 'shrink',
+            };
+        }
+        const spliced = buildPhraseCountsAfterSilentGapSplice(pi, counts);
+        if (!spliced || !spliced.next) return null;
+        return {
+            mode: dedicatedSilent ? 'splice-dedicated' : 'splice',
+            next: spliced.next,
+            shrinkOnly: false,
+            skipPhraseApply: false,
+            dedicatedSilent,
+            spanBars,
+            slotBars,
+            countsSource: spliced.source,
+        };
+    }
+
+    /** 無音 gap 削除に伴う Phrase 展開 counts を更新（リージョン全体の切り直しは行わない） */
+    function syncPhraseGridAfterSilentGapDelete(gap, track, precomputedPlan) {
+        silentGapDeleteDiagLog('phrase-sync/begin', {
+            ex: isExtraTrackRef(track) ? track.slot + 1 : null,
+            gap: gap
+                ? {
+                      phraseSlot: Number.isFinite(gap.phraseIndex)
+                          ? (gap.phraseIndex | 0) + 1
+                          : null,
+                      partial: !!gap.partial,
+                      start: regionSwapDiagFmtSec(gap.startSec),
+                      end: regionSwapDiagFmtSec(gap.endSec),
+                  }
+                : null,
+            before: silentGapDeleteDiagSnapshotTrack(track),
+        });
+        if (
+            typeof getMusicalGridPhraseFillVisible !== 'function' ||
+            !getMusicalGridPhraseFillVisible()
+        ) {
+            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'phrase-fill-off' });
             return false;
         }
         if (!gap || !Number.isFinite(gap.phraseIndex) || gap.phraseIndex < 0) {
+            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'gap-phrase-missing' });
             return false;
         }
         const pi = gap.phraseIndex | 0;
-        const counts =
-            typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
-                ? window.getExpandedPhraseGroupBarCountsSnapshot()
-                : [];
-        if (!counts.length || pi >= counts.length) return false;
-        if (typeof window.splicePhraseGroupAtIndex !== 'function') return false;
-        const next = window.splicePhraseGroupAtIndex(counts, pi);
-        if (!next) return false;
-        const phraseBefore = regionSwapDiagPhraseText();
-        if (typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function') {
-            window.applyPhraseGroupBarCountsForRegionSwap(next, { skipUndo: true });
-        } else if (typeof window.clearPhraseGroupBarCountsOverride === 'function') {
-            window.clearPhraseGroupBarCountsOverride();
+        const plan =
+            precomputedPlan && precomputedPlan.next
+                ? precomputedPlan
+                : (() => {
+                      const counts =
+                          typeof window.getExpandedPhraseGroupBarCountsSnapshot ===
+                          'function'
+                              ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                              : [];
+                      if (!counts.length || pi >= counts.length) return null;
+                      return resolveSilentGapPhraseCountUpdate(gap, track, counts, pi);
+                  })();
+        if (!plan || !plan.next) {
+            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'counts-update-failed' });
+            return false;
         }
+        const phraseBefore = regionSwapDiagPhraseText();
+        silentGapDeleteDiagLog('phrase-sync/plan', {
+            mode: plan.mode,
+            dedicatedSilent: plan.dedicatedSilent,
+            partial: !!gap.partial,
+            spanBars: plan.spanBars || null,
+            slotBars: plan.slotBars || null,
+            countsSource: plan.countsSource || null,
+            countsAfter: plan.next.slice(0, 12),
+            skipPhraseApply: !!plan.skipPhraseApply,
+            precomputed: !!precomputedPlan,
+        });
+        if (!plan.skipPhraseApply) {
+            silentGapDeleteDiagLog('phrase-sync/apply', {
+                mode: plan.mode,
+                shrinkOnly: !!plan.shrinkOnly,
+                relayoutRegions: false,
+                optimize: false,
+                compress: true,
+            });
+            if (typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function') {
+                window.applyPhraseGroupBarCountsForRegionSwap(plan.next, {
+                    skipUndo: true,
+                    relayoutRegions: false,
+                    optimize: false,
+                });
+            } else if (typeof window.clearPhraseGroupBarCountsOverride === 'function') {
+                window.clearPhraseGroupBarCountsOverride();
+            }
+            if (!plan.shrinkOnly && isExtraTrackRef(track)) {
+                remapTimelineSlotPhraseIndicesAfterGroupRemoval(track, pi);
+            }
+            if (typeof window.compressPhraseDefinitionFromExpandedCounts === 'function') {
+                const phraseMid = regionSwapDiagPhraseText();
+                const compressed = window.compressPhraseDefinitionFromExpandedCounts({
+                    skipUndo: true,
+                });
+                silentGapDeleteDiagLog('phrase-sync/compress', {
+                    changed: !!compressed,
+                    phraseMid,
+                    phraseAfter: regionSwapDiagPhraseText(),
+                });
+            }
+        }
+        silentGapDeleteDiagLog('phrase-sync/done', {
+            phraseBefore,
+            phraseAfter: regionSwapDiagPhraseText(),
+            after: silentGapDeleteDiagSnapshotTrack(track),
+        });
         regionSwapDiagLog('phrase/silent-gap-delete', {
             phraseIndex: pi + 1,
             partial: !!gap.partial,
+            mode: plan.mode,
+            shrinkOnly: !!plan.shrinkOnly,
+            spanBars: plan.spanBars || null,
+            slotBars: plan.slotBars || null,
             before: phraseBefore,
             after: regionSwapDiagPhraseText(),
-            countsHead: next.slice(0, 8),
+            countsHead: plan.next.slice(0, 8),
         });
         if (typeof writeLog === 'function') {
             writeLog(
@@ -1105,20 +1431,71 @@
         return true;
     }
     function deleteSilentGapAt(track, gapIndex, opt) {
+        silentGapDeleteDiagLog('delete/begin', {
+            ex: isExtraTrackRef(track) ? track.slot + 1 : null,
+            gapIndex: gapIndex | 0,
+            opt: opt || null,
+            before: silentGapDeleteDiagSnapshotTrack(track),
+        });
         const gaps = collectTrackSilentGaps(track);
         const gap = gaps[gapIndex | 0];
-        if (!gap) return false;
+        if (!gap) {
+            silentGapDeleteDiagLog('delete/reject', {
+                reason: 'gap-not-found',
+                gapCount: gaps.length,
+            });
+            return false;
+        }
         const gapDur = gap.endSec - gap.startSec;
         const eps = segmentBoundaryJoinEpsilonSec();
-        if (!(gapDur > eps)) return false;
+        if (!(gapDur > eps)) {
+            silentGapDeleteDiagLog('delete/reject', {
+                reason: 'gap-too-small',
+                gapDur: regionSwapDiagFmtSec(gapDur),
+            });
+            return false;
+        }
         const phraseFillOn =
             typeof getMusicalGridPhraseFillVisible === 'function' &&
             getMusicalGridPhraseFillVisible();
+        let phrasePlanBeforeRipple = null;
+        if (phraseFillOn && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
+            const pi = gap.phraseIndex | 0;
+            const counts =
+                typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
+                    ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                    : [];
+            if (counts.length && pi < counts.length) {
+                phrasePlanBeforeRipple = resolveSilentGapPhraseCountUpdate(
+                    gap,
+                    track,
+                    counts,
+                    pi,
+                );
+                silentGapDeleteDiagLog('delete/phrase-plan-pre-ripple', {
+                    ex: track.slot + 1,
+                    gapIndex: gapIndex | 0,
+                    phraseSlot: pi + 1,
+                    plan: phrasePlanBeforeRipple
+                        ? {
+                              mode: phrasePlanBeforeRipple.mode,
+                              dedicatedSilent: phrasePlanBeforeRipple.dedicatedSilent,
+                              countsSource: phrasePlanBeforeRipple.countsSource,
+                              countsAfter: phrasePlanBeforeRipple.next.slice(0, 12),
+                              skipPhraseApply: !!phrasePlanBeforeRipple.skipPhraseApply,
+                          }
+                        : null,
+                });
+            }
+        }
         if (!(opt && opt.skipUndoCapture) && !regionUndoPaused) {
             requestRegionUndoCapture({ includePhrase: !!phraseFillOn });
         }
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
-        if (!segments.length) return false;
+        if (!segments.length) {
+            silentGapDeleteDiagLog('delete/reject', { reason: 'no-segments' });
+            return false;
+        }
         let fromIndex = gap.beforeSegmentIndex;
         if (!(fromIndex >= 0)) {
             fromIndex = 0;
@@ -1146,20 +1523,49 @@
         const normalized = segments.map((s) =>
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
         );
+        silentGapDeleteDiagLog('delete/ripple', {
+            ex: track.slot + 1,
+            gapIndex: gapIndex | 0,
+            gapDur: regionSwapDiagFmtSec(gapDur),
+            fromIndex: fromIndex >= 0 ? fromIndex + 1 : null,
+            segCount: segments.length,
+        });
         applySegmentsToState(track, normalized, {
             skipUndo: true,
+            skipMusicalRefresh: phraseFillOn,
             segmentStructureChanged: false,
             affectedSegmentIndices: normalized.map((_, i) => i),
         });
+        silentGapDeleteDiagLog('delete/after-ripple', {
+            ex: track.slot + 1,
+            after: silentGapDeleteDiagSnapshotTrack(track),
+        });
         if (phraseFillOn) {
-            syncPhraseGridAfterSilentGapDelete(gap);
+            syncPhraseGridAfterSilentGapDelete(gap, track, phrasePlanBeforeRipple);
+            if (typeof window.scheduleMusicalGridRedraw === 'function') {
+                window.scheduleMusicalGridRedraw();
+            }
             if (typeof window.rebuildAllTrackTimelineSlots === 'function') {
                 window.rebuildAllTrackTimelineSlots({ infer: true });
             }
+            if (typeof window.refreshAllRegionMusicalMetaPresentation === 'function') {
+                window.refreshAllRegionMusicalMetaPresentation();
+            } else if (typeof window.refreshAllRegionRehearsalMarkLabels === 'function') {
+                window.refreshAllRegionRehearsalMarkLabels();
+            }
+            silentGapDeleteDiagLog('delete/after-phrase-rebuild', {
+                ex: track.slot + 1,
+                after: silentGapDeleteDiagSnapshotTrack(track),
+            });
         }
         if (!(opt && opt.skipClearSelection) && typeof clearRegionSelection === 'function') {
             clearRegionSelection();
         }
+        silentGapDeleteDiagLog('delete/done', {
+            ex: track.slot + 1,
+            gapIndex: gapIndex | 0,
+            after: silentGapDeleteDiagSnapshotTrack(track),
+        });
         const label = Number.isFinite(gap.phraseIndex)
             ? 'phrase ' + (gap.phraseIndex + 1)
             : 'gap @ ' + gap.startSec.toFixed(2) + 's';
