@@ -52,6 +52,8 @@
     let phraseUndoPaused = false;
     let phraseInputFocusSnapshot = null;
     let phraseInputCommitViaEnter = false;
+    /** Tempo/Sig 確定時のリージョン切り直し判定 — 編集開始時の確定値（編集中の musicalGridMeterText 更新と区別） */
+    let meterEditorLayoutBaseline = null;
     function capturePhraseUndoSnapshot() {
         readMusicalGridFromInputs();
         return normalizeMusicalGridPhraseText(musicalGridPhraseText);
@@ -768,11 +770,71 @@
 
     function readMusicalGridFromInputs() {
         if (musicalGridMeterInput) {
-            musicalGridMeterText = normalizeMusicalGridMeterText(musicalGridMeterInput.value);
+            const draft = normalizeMusicalGridMeterText(musicalGridMeterInput.value);
+            if (draft && parseMeterSpec(draft)) {
+                musicalGridMeterText = draft;
+            }
         }
         if (musicalGridPhraseInput) {
             musicalGridPhraseText = normalizeMusicalGridPhraseText(musicalGridPhraseInput.value);
         }
+    }
+
+    function getCommittedMusicalGridMeterText() {
+        const s = normalizeMusicalGridMeterText(musicalGridMeterText);
+        if (s && parseMeterSpec(s)) return s;
+        return MUSICAL_GRID_DEFAULT_METER_TEXT;
+    }
+
+    function getMusicalGridMeterLayoutBaseline() {
+        if (meterEditorLayoutBaseline != null && meterEditorLayoutBaseline !== '') {
+            const spec = parseMeterSpec(meterEditorLayoutBaseline);
+            if (spec) return formatMeterSpec(spec);
+        }
+        return getCommittedMusicalGridMeterText();
+    }
+
+    function syncMusicalGridMeterLayoutBaseline(text) {
+        const spec = parseMeterSpec(text);
+        meterEditorLayoutBaseline = spec ? formatMeterSpec(spec) : getCommittedMusicalGridMeterText();
+    }
+
+    /** @returns {{ accepted: boolean, changed: boolean }} */
+    function applyMusicalGridMeterCommitFromInputs(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const draft = musicalGridMeterInput
+            ? normalizeMusicalGridMeterText(musicalGridMeterInput.value)
+            : normalizeMusicalGridMeterText(musicalGridMeterText);
+        const prevCommitted = getCommittedMusicalGridMeterText();
+        const prevStored = musicalGridMeterText;
+        const layoutBaseline = getMusicalGridMeterLayoutBaseline();
+
+        if (!draft) {
+            musicalGridMeterText = prevCommitted;
+            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
+            return { accepted: false, changed: prevStored !== musicalGridMeterText };
+        }
+
+        const spec = parseMeterSpec(draft);
+        if (!spec) {
+            musicalGridMeterText = prevCommitted;
+            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
+            if (
+                o.notifyReject &&
+                typeof flashSeekHint === 'function' &&
+                draft !== prevCommitted
+            ) {
+                flashSeekHint('Tempo/Sig', '入力が不正のため前の値を維持', 'notice');
+            }
+            return { accepted: false, changed: false };
+        }
+
+        const next = formatMeterSpec(spec);
+        const changed = next !== layoutBaseline;
+        musicalGridMeterText = next;
+        if (musicalGridMeterInput) musicalGridMeterInput.value = next;
+        if (changed) syncMusicalGridMeterLayoutBaseline(next);
+        return { accepted: true, changed };
     }
     function clearMusicalGridPositionCache() {
         musicalGridPosCache = null;
@@ -909,8 +971,7 @@
     }
     function musicalGridDrawSettings() {
         readMusicalGridFromInputs();
-        if (!musicalGridMeterText) return null;
-        const meterSpec = parseMeterSpec(musicalGridMeterText);
+        const meterSpec = parseMeterSpec(getCommittedMusicalGridMeterText());
         if (!meterSpec) return null;
         const phraseSpec = parsePhraseGroupingSpec(musicalGridPhraseText);
         return { meterSpec, phraseSpec };
@@ -918,7 +979,7 @@
     function musicalGridPersistSnapshot() {
         readMusicalGridFromInputs();
         const snap = {
-            meter: musicalGridMeterText,
+            meter: getCommittedMusicalGridMeterText(),
             phrase: musicalGridPhraseText,
             gridVisible: getMusicalGridVisible(),
             phraseFillVisible: getMusicalGridPhraseFillVisible(),
@@ -1051,6 +1112,7 @@
             musicalGridPhraseFillVisible = s.phraseFillVisible !== false;
         }
         clearPhraseUndoStack();
+        meterEditorLayoutBaseline = null;
         syncMusicalGridVisibilityUi();
         scheduleMusicalGridRedraw();
     }
@@ -1111,16 +1173,9 @@
     }
     function persistMusicalGridAndRedraw(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        readMusicalGridFromInputs();
-        // 空欄や不正フォーマットは既定値へフォールバックして保存・復元を安定させる。
-        let meterSpec = parseMeterSpec(musicalGridMeterText);
-        if (!musicalGridMeterText || !meterSpec) {
-            musicalGridMeterText = MUSICAL_GRID_DEFAULT_METER_TEXT;
-            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
-        } else {
-            musicalGridMeterText = formatMeterSpec(meterSpec);
-            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
-        }
+        const meterCommit = applyMusicalGridMeterCommitFromInputs({
+            notifyReject: !!o.strictMeterCommit,
+        });
         if (!musicalGridPhraseText || !parsePhraseGroupingSpec(musicalGridPhraseText)) {
             musicalGridPhraseText = MUSICAL_GRID_DEFAULT_PHRASE_TEXT;
             if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
@@ -1128,11 +1183,13 @@
         const shouldRelayout = !!(o.relayoutRegions && canCommitPhraseCompositionLayout());
         const shouldRelayoutFromMeter = !!(
             o.relayoutSlotsFromMeter &&
+            meterCommit.changed &&
             canCommitPhraseCompositionLayout() &&
             !shouldRelayout
         );
         const shouldRelayoutRegions = shouldRelayout || shouldRelayoutFromMeter;
-        if (o.compressPhrase) {
+        const shouldCompressPhrase = !!(o.compressPhrase || shouldRelayoutFromMeter);
+        if (shouldCompressPhrase) {
             compressPhraseDefinitionFromExpandedCounts({ skipUndo: !!o.skipUndo });
         }
         clearMusicalGridPositionCache();
@@ -1141,7 +1198,8 @@
         if (shouldRelayoutRegions) {
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
-                preservePhraseBarCountsOverride: shouldRelayoutFromMeter,
+                preservePhraseBarCountsOverride:
+                    shouldRelayoutFromMeter && !shouldCompressPhrase,
                 skipUndo: !!o.skipUndo,
             });
         }
@@ -1387,12 +1445,12 @@
                 caretSegIdx = 0;
             }
         }
-        if (!nextText && spec) {
+        if (!nextText && spec && !trailingDelimiter) {
             const idx = Math.min(Math.max(0, entryIndex), spec.entries.length - 1);
             const entry = spec.entries[idx];
             if (field === 'bpm') {
                 entry.bpm = Math.max(1, Math.min(999, entry.bpm + step));
-            } else if (!trailingDelimiter) {
+            } else {
                 bumpMeterSigField(entry.sig, field, step, segIdx);
             }
             nextText = formatMeterSpec(spec);
@@ -1404,6 +1462,12 @@
                 bumpMeterSigField(token.sig, field, step, segIdx);
             }
             nextText = replaceCommaListEntry(raw, entryIndex, formatMeterEntryToken(token));
+            if (trailingDelimiter) {
+                const completedSpan = commaListEntrySpan(nextText, entryIndex);
+                const caretAtEnd = completedSpan.text.length;
+                caretSegIdx = meterSigSegmentIndexAtCaret(completedSpan.text, caretAtEnd);
+                caretField = meterFieldAtCaretInEntry(completedSpan.text, caretAtEnd);
+            }
         }
         musicalGridMeterText = nextText;
         setMeterInputValuePreserveFieldCaret(
@@ -1848,7 +1912,7 @@
 
     function getMusicalGridMeterDisplayText() {
         readMusicalGridFromInputs();
-        return String(musicalGridMeterText == null ? '' : musicalGridMeterText).trim();
+        return getCommittedMusicalGridMeterText();
     }
 
     function drawPhraseGroupLabels(ctx, w, h, master, settings) {
@@ -4387,7 +4451,20 @@
     }
 
     function commitMusicalGridMeterEditor() {
-        persistMusicalGridAndRedraw({ relayoutSlotsFromMeter: true });
+        persistMusicalGridAndRedraw({
+            relayoutSlotsFromMeter: true,
+            strictMeterCommit: true,
+        });
+        if (musicalGridMeterInput) musicalGridMeterInput.blur();
+        if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
+    }
+
+    function cancelMusicalGridMeterEditor() {
+        const restore = getMusicalGridMeterLayoutBaseline();
+        musicalGridMeterText = restore;
+        if (musicalGridMeterInput) musicalGridMeterInput.value = restore;
+        clearMusicalGridPositionCache();
+        scheduleMusicalGridRedraw();
         if (musicalGridMeterInput) musicalGridMeterInput.blur();
         if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
     }
@@ -4440,9 +4517,15 @@
             scheduleMusicalGridAutosave();
         };
         if (musicalGridMeterInput) {
+            musicalGridMeterInput.addEventListener('focus', () => {
+                syncMusicalGridMeterLayoutBaseline(getCommittedMusicalGridMeterText());
+            });
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', () => {
-                persistMusicalGridAndRedraw({ relayoutSlotsFromMeter: true });
+                persistMusicalGridAndRedraw({
+                    relayoutSlotsFromMeter: true,
+                    strictMeterCommit: true,
+                });
             });
             musicalGridMeterInput.addEventListener('keydown', (e) => {
                 if (handleMusicalGridEditorTabKeydown(e, 'meter')) return;
@@ -4457,8 +4540,12 @@
                     bumpMeterFieldBy(bpmStep, sigStep);
                     return;
                 }
-                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true }) ||
-                    matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
+                if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
+                    e.preventDefault();
+                    cancelMusicalGridMeterEditor();
+                    return;
+                }
+                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true })) {
                     e.preventDefault();
                     commitMusicalGridMeterEditor();
                     return;
@@ -4478,7 +4565,10 @@
                 }
                 clearPhraseGroupBarCountsOverride();
                 commitPhraseInputUndoIfChanged();
-                persistMusicalGridAndRedraw({ skipUndo: true });
+                persistMusicalGridAndRedraw({
+                    skipUndo: true,
+                    compressPhrase: true,
+                });
             });
             musicalGridPhraseInput.addEventListener('keydown', async (e) => {
                 if (handleMusicalGridEditorTabKeydown(e, 'phrase')) return;

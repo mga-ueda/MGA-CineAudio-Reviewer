@@ -732,7 +732,7 @@
             setElementTitle(phraseLbl, phraseTitle);
         }
 
-        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4、変拍子 140-3/8+5/8、拍子繰り返し 140-3/4:5/4）。${h.musicalGridMeterFocus} で編集、Tab で Phrase 欄へ、Enter/Esc で確定`;
+        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4、変拍子 140-3/8+5/8、拍子繰り返し 140-3/4:5/4）。1 要素内で + と : は併用不可（確定時は直前の有効値）。${h.musicalGridMeterFocus} で編集、Tab で Phrase 欄へ、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
         const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Tab で Tempo/Sig 欄へ、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
