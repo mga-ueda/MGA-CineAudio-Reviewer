@@ -449,6 +449,13 @@
     }
 
     function tryAnimateRegionHistoryRestore(targetSnap, onDone, swapHint, animWaitRetries) {
+        const phraseFillOn =
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible();
+        if (!phraseFillOn) {
+            finishDeferredRegionHistoryRestore(targetSnap, onDone);
+            return false;
+        }
         if (typeof window.playPlaybackRegionSwapAnimation !== 'function') {
             finishDeferredRegionHistoryRestore(targetSnap, onDone);
             return false;
