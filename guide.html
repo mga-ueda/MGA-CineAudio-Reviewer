@@ -415,15 +415,15 @@
                     <li>各レーン右端付近には、読み込み済みクリップの<strong>インテグレーテッド LKFS</strong>（ITU-R BS.1770 系）が表示されます（デコード完了後に計測）。</li>
                 </ul>
 
-                <h3 class="docs-heading-box--sub" id="audio-phrase-overlay">Phrase 着色時のオーバーレイ（練習番号・無音スロット）</h3>
-                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track レーン上にフレーズ枠ごとの<strong>練習番号</strong>が重なって表示されます。各リージョン・無音スロットの左下には、その枠が保持する <strong>Tempo/Sig・小節数</strong>（例: <code>140-4/4 · 8</code>）が併記されることがあります。リージョン間の<strong>無音スロット</strong>は <kbd>Ctrl</kbd>+クリックで選択できます。冒頭小節をアウフタクト（弱起）として練習番号を付けない場合は、オプションバー中段の <strong>R. Offset</strong>（リハーサルマークオフセット）を ON にしてください。</p>
+                <h3 class="docs-heading-box--sub" id="audio-phrase-overlay">Phrase 着色時のオーバーレイ（リハーサル名・無音スロット）</h3>
+                <p><strong>Phrase 着色（<kbd>P</kbd>）が ON</strong> で Tempo/Sig・Phrase 定義が有効なとき、Audio Track レーン上にフレーズ枠ごとの<strong>リハーサル名</strong>が重なって表示されます。各リージョン・無音スロットの左下には、その枠が保持する <strong>Tempo/Sig・小節数</strong>（例: <code>140-4/4 · 8</code>）が併記されることがあります。リージョン間の<strong>無音スロット</strong>は <kbd>Ctrl</kbd>+クリックで選択できます。冒頭小節をアウフタクト（弱起）としてリハーサル名を付けない場合は、オプションバー中段の <strong>R. Offset</strong>（リハーサルマークオフセット）を ON にしてください。</p>
                 <ul>
-                    <li><strong>練習番号（A / B / C …）</strong> — フレーズ枠ごとの練習用番号。Phrase 着色 ON では各枠の中央付近に大きく表示されます（入れ替え後は現在の枠位置に合わせて更新されます）。Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でその練習番号の先頭へジャンプできます（Phrase 着色の表示は不要）。</li>
+                    <li><strong>リハーサル名（A / B / C …）</strong> — フレーズ枠ごとのリハーサル名。Phrase 着色 ON では各枠の中央付近に大きく表示されます（入れ替え後は現在の枠位置に合わせて更新されます）。Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、<kbd>Shift</kbd> + 対応する英文字（例: <kbd>Shift</kbd>+<kbd>A</kbd>）でそのリハーサル名の先頭へジャンプできます（Phrase 着色の表示は不要）。</li>
                     <li><strong>Tempo/Sig メタ（左下）</strong> — 各リージョン・無音スロットが保持する Tempo/Sig と小節数（音源小節数と枠小節数が異なるときは <code>16→8</code> のように表示）。</li>
                     <li><strong>無音スロット</strong> — 隣接リージョンの間に隙間がある区間。<kbd>Ctrl</kbd>+クリックで選択できます（シアン枠）。無音スロット 1 つ＋リージョン 1 つを選んで <kbd>E</kbd> すると、リージョンをその無音区間へ移動する入れ替えができます。</li>
-                    <li><strong>R. Offset</strong> — 上記の <strong>リハーサルマークオフセット</strong>。先頭フレーズをアウフタクトとして番号なしにし、本編から A を始めます（詳細は「トランスポート」の R. Offset を参照）。</li>
+                    <li><strong>R. Offset</strong> — 上記の <strong>リハーサルマークオフセット</strong>。先頭フレーズをアウフタクトとしてリハーサル名なしにし、本編から A を始めます（詳細は「トランスポート」の R. Offset を参照）。</li>
                 </ul>
-                <p>Phrase 着色 OFF のときは、練習番号オーバーレイと Tempo/Sig メタは非表示です（リージョン操作自体は従来どおり可能）。</p>
+                <p>Phrase 着色 OFF のときは、リハーサル名オーバーレイと Tempo/Sig メタは非表示です（リージョン操作自体は従来どおり可能）。</p>
 
                 <h3 class="docs-heading-box--sub" id="audio-range-loop">範囲ループ（波形上）</h3>
                 <ul>
@@ -491,7 +491,7 @@
                 <ul>
                     <li><strong>Click</strong> — メトロノームクリック音（<kbd>C</kbd>）。Click ON かつ<strong>再生中</strong>のみ、BPM/拍子グリッド（Tempo/Sig 入力）の拍に同期して鳴ります。Tempo/Sig 表示（<kbd>T</kbd>）のオン/オフとは独立です。通常拍子では小節の 1 拍目が高音（High）、それ以外は低音（Low）。<strong>変拍子</strong>（例: <code>120-3/8+5/8</code>）では各拍子グループの先頭拍（1 拍目・4 拍目）が高音、それ以外は低音。音量はマスター出力の RMS に連動し、常に楽曲より大きく聞こえるよう調整されます（Analyze 表示は不要。ミックス経路は通りません）。デフォルト OFF。設定は次回起動時に復元されます（Import/Export には含めません）。</li>
                     <li><strong>Analyze</strong> — スペクトラム/メーター枠は<strong>常時表示</strong>です。チェック ON で Live（解析中）、OFF で解析停止（アイドル表示へ戻す）。<kbd>A</kbd> でも Live ↔ 解析停止を切替できます。解析停止中も CLIP PROTECT は動作します。</li>
-                    <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
+                    <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分にはリハーサル名を付けません。ON にすると先頭フレーズはリハーサル名なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>
                     <li><strong>Import Review</strong>/<strong>Export Review</strong> — .mgacr の読み込み（ドロップ可）・保存。</li>
                     <li><strong>Export Wave</strong> / <strong>Export WebM</strong> — 動画未読み込み時は <strong>Export Wave</strong>（レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し。マーカー/リージョンを WAV に埋め込み）。動画読み込み後は <strong>Export WebM</strong>（タイムコードとマーカーコメントを映像へ焼き込み）に切り替わり、ボタンが<strong>発光</strong>してモード変更を知らせます。動画を削除すると再び Export Wave に戻り、同様に発光します。</li>
@@ -518,7 +518,7 @@
                     <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd>：タイムライン上の停止点へ移動（マーカー表示中（Hide でない）＞小節/フレーズ（Tempo/Sig または Phrase 着色。拍線は含まない）＞リージョンの優先順。キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開）</li>
                     <li><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
                     <li>テンキー <kbd>0</kbd>〜<kbd>9</kbd>、または <kbd>Shift</kbd> + 上段 <kbd>0</kbd>〜<kbd>9</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。テンキーは <kbd>Shift</kbd> 不要（Windows ではテンキーに Shift が届かないため）。数字を続けて入力し、入力が途切れてから約 0.3 秒で確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。Tempo/Sig OFF 時にテンキーを押した場合は % ジャンプにフォールバック。再生中はシーク後に再生を再開</li>
-                    <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、練習番号（A / B / C …）の先頭へジャンプ（Phrase 着色の表示は不要）</li>
+                    <li><kbd>Shift</kbd> + <kbd>A</kbd>〜<kbd>Z</kbd>：Tempo/Sig・Phrase 定義が有効で Audio Track にリージョンがあるとき、リハーサル名（A / B / C …）の先頭へジャンプ（Phrase 着色の表示は不要）</li>
                 </ul>
                 <p>シーク時には画面中央付近に大きなタイムコード表示（シークフラッシュ）が一瞬出ることがあります。</p>
             </section>

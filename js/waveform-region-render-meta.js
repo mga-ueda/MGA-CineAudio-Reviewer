@@ -1,11 +1,11 @@
 /**
- * waveform-region-render-meta.js — 練習番号・フェード三角・dense 境界表示
+ * waveform-region-render-meta.js — リハーサル名・フェード三角・dense 境界表示
  */
     const REGION_OVERLAY_NARROW_PX = 22;
     /** CSS .audio-waveform-lane__playback-region { min-width: 28px } と揃える */
     const REGION_OVERLAY_MIN_CSS_PX = 28;
 
-    /** リージョン練習番号（0→A, 1→B … 26→AA）— phraseGroupLabelForIndex へ委譲 */
+    /** リージョンリハーサル名（0→A, 1→B … 26→AA）— phraseGroupLabelForIndex へ委譲 */
     function formatRegionRehearsalMarkLabel(markIndex) {
         if (typeof phraseGroupLabelForIndex === 'function') {
             return phraseGroupLabelForIndex(markIndex | 0);
@@ -410,7 +410,7 @@
         el.appendChild(nextEl);
     }
 
-    /** 大元チェーン上、このコンテンツの直後に繋がる練習番号（末尾は End） */
+    /** 大元チェーン上、このコンテンツの直後に繋がるリハーサル名（末尾は End） */
     function chainSuccessorRehearsalMarkDisplay(contentPhraseSlotIndex, phraseSlotCount) {
         const nextIdx = (contentPhraseSlotIndex | 0) + 1;
         if (nextIdx < 0 || nextIdx >= (phraseSlotCount | 0)) return 'End';
@@ -441,7 +441,7 @@
                 labelEl.className = 'audio-waveform-lane__rehearsal-mark__label';
                 labelEl.textContent = markDisplay;
                 labelEl.title =
-                    '練習番号 ' + markDisplay + '（Shift+' + markDisplay + ' で先頭へジャンプ）';
+                    'リハーサル名 ' + markDisplay + '（Shift+' + markDisplay + ' で先頭へジャンプ）';
                 labelEl.setAttribute('aria-hidden', 'true');
                 slotEl.appendChild(labelEl);
             }

@@ -1,5 +1,5 @@
 /**
- * waveform-region-io-nav.js — リージョンナビ・練習番号ジャンプ
+ * waveform-region-io-nav.js — リージョンナビ・リハーサル名ジャンプ
  */
     function sortRegionNavStops(stops) {
         stops.sort((a, b) => {
@@ -171,14 +171,14 @@
 
     let rehearsalMarkOffsetEnabled = false;
 
-    /** Offset ON 時、番号なしフレーズの内部表現 */
+    /** Offset ON 時、リハーサル名なしフレーズの内部表現 */
     const REHEARSAL_MARK_UNLABELED = '_';
 
     function rehearsalMarkOffsetSlotAdjustment() {
         return rehearsalMarkOffsetEnabled ? 1 : 0;
     }
 
-    /** フレーズスロット index（0 始まり）→ 練習番号（A/B/… または REHEARSAL_MARK_UNLABELED） */
+    /** フレーズスロット index（0 始まり）→ リハーサル名（A/B/… または REHEARSAL_MARK_UNLABELED） */
     function rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex) {
         const phraseSlot = phraseSlotIndex | 0;
         if (phraseSlot < 0) return REHEARSAL_MARK_UNLABELED;
@@ -193,12 +193,12 @@
         return 'A';
     }
 
-    /** 内部ラベル → UI 表示用文字（番号なしは空文字） */
+    /** 内部ラベル → UI 表示用文字（リハーサル名なしは空文字） */
     function rehearsalMarkDisplayLabel(internalLabel) {
         return internalLabel === REHEARSAL_MARK_UNLABELED ? '' : internalLabel;
     }
 
-    /** キーボード練習番号 index（A=0）→ フレーズスロット index */
+    /** キーボードリハーサル名 index（A=0）→ フレーズスロット index */
     function phraseSlotIndexForRehearsalMarkKeyIndex(markIndex) {
         return (markIndex | 0) + rehearsalMarkOffsetSlotAdjustment();
     }

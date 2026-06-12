@@ -751,7 +751,7 @@
             `Click — 再生中に BPM/拍子グリッドへ同期したクリック音（${h.metronomeClick} で切替）。音量はミックス RMS に連動（楽曲より大きく、Analyze 不要）。設定は次回起動時に復元。`,
         );
 
-        const offsetTitle = `R. Offset — 冒頭小節をアウフタクトとして練習番号を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review およびセッション復元に保存。`;
+        const offsetTitle = `R. Offset — 冒頭小節をアウフタクトとしてリハーサル名を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review およびセッション復元に保存。`;
         setElementTitle(document.getElementById('rehearsalMarkOffsetWrap'), offsetTitle);
         const offsetChk = document.getElementById('rehearsalMarkOffsetCheckbox');
         setElementTitle(offsetChk, offsetTitle);

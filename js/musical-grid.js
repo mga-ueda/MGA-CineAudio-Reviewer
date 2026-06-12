@@ -1424,7 +1424,7 @@
         return out;
     }
 
-    /** フレーズスロット index → 練習番号表示（R. Offset 時の番号なしは空文字） */
+    /** フレーズスロット index → リハーサル名表示（R. Offset 時のリハーサル名なしは空文字） */
     function phraseRehearsalDisplayMarkForSlot(phraseSlotIndex) {
         if (typeof rehearsalMarkLabelForPhraseSlotIndex === 'function') {
             const internal = rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex);
@@ -1475,7 +1475,7 @@
         );
     }
 
-    /** Phrase 着色 OFF でも練習番号用 — フレーズ定義から展開した範囲 */
+    /** Phrase 着色 OFF でもリハーサル名用 — フレーズ定義から展開した範囲 */
     function getPhraseGroupRangesForRegionRehearsalMarks() {
         return resolvePhraseGroupRanges({ requireFillVisible: false });
     }
@@ -2080,7 +2080,7 @@
         return sec;
     }
 
-    /** Phrase 定義があるとき — 練習番号（A/B/C…）内の localBar 小節の開始秒 */
+    /** Phrase 定義があるとき — リハーサル名（A/B/C…）内の localBar 小節の開始秒 */
     function secForPhraseLocalBarNumber(phraseRange, localBar, barBoundaries) {
         const n = localBar | 0;
         if (!phraseRange || n < 1 || !barBoundaries || !barBoundaries.length) return null;
@@ -3697,7 +3697,7 @@
         return null;
     }
 
-    /** 境界の後ろ側（右／先）に属する練習番号（A/B/…）。R. Offset 時の番号なしは空文字 */
+    /** 境界の後ろ側（右／先）に属するリハーサル名（A/B/…）。R. Offset 時のリハーサル名なしは空文字 */
     function phraseRehearsalMarkAfterGridBoundarySec(sec) {
         const range = phraseRangeAfterGridBoundarySec(sec);
         return range ? phraseRehearsalDisplayMarkForSlot(range.paletteIndex) : '';

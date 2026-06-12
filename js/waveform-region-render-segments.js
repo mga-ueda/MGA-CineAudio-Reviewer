@@ -1124,7 +1124,7 @@
         if (Number.isFinite(gap.phraseIndex)) {
             if (typeof phraseGroupLabelForIndex === 'function') {
                 const mark = phraseGroupLabelForIndex(gap.phraseIndex);
-                if (mark) title += '（練習番号 ' + mark + ' 付近）';
+                if (mark) title += '（リハーサル名 ' + mark + ' 付近）';
             }
             if (gap.partial) title += '（部分無音）';
         }
