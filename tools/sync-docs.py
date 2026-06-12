@@ -5,7 +5,7 @@ Sync manual HTML fragment -> index.html + README.md.
 Single source of truth: tools/_manual_fragment.html
   - Edit the fragment when changing 特記事項 / 使い方 / 改変・再利用 / ライセンス.
   - Run: python tools/sync-docs.py
-  - Changelog in README comes from js/version.js (same as the app UI).
+  - Changelog in README comes from js/core/version.js (same as the app UI).
 
 Optional:
   python tools/sync-docs.py --check        # exit 1 if outputs would change (CI)
@@ -23,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FRAGMENT = ROOT / "tools" / "_manual_fragment.html"
 INDEX = ROOT / "index.html"
-VERSION_JS = ROOT / "js" / "version.js"
+VERSION_JS = ROOT / "js" / "core" / "version.js"
 README = ROOT / "README.md"
 
 MARKER_START = "<!-- @manual-doc:start -->"
@@ -77,12 +77,12 @@ def write_text(path: Path, text: str) -> None:
 def parse_version_meta(version_js: str) -> tuple[str, list[dict]]:
     ver_m = re.search(r"const\s+APP_VERSION\s*=\s*'([^']+)'", version_js)
     if not ver_m:
-        raise SystemExit("Could not parse APP_VERSION in js/version.js")
+        raise SystemExit("Could not parse APP_VERSION in js/core/version.js")
     version_label = "v" + ver_m.group(1)
 
     block_m = re.search(r"const\s+APP_CHANGELOG\s*=\s*\[(.*)\]\s*;", version_js, re.DOTALL)
     if not block_m:
-        raise SystemExit("Could not parse APP_CHANGELOG in js/version.js")
+        raise SystemExit("Could not parse APP_CHANGELOG in js/core/version.js")
 
     entries: list[dict] = []
     for em in re.finditer(

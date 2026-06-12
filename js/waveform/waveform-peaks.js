@@ -371,7 +371,7 @@
         if (peakWorker) return peakWorker;
         if (typeof Worker === 'undefined') return null;
         try {
-            peakWorker = new Worker('js/waveform-peaks-worker.js');
+            peakWorker = new Worker('js/waveform/waveform-peaks-worker.js');
         } catch (_) {
             peakWorker = null;
         }
