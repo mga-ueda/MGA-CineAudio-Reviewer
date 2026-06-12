@@ -1,10 +1,17 @@
 /**
  * metronome.js — Click ON かつ再生中、BPM/拍子グリッドに同期したクリックを鳴らす。
+ * R. Offset ON 時は先頭小節（アウフタクト）はクリックしない。
+ * 再生開始直後 METRONOME_FIXED_GAIN_WINDOW_SEC は楽曲 RMS に依存せず METRONOME_FIXED_GAIN_DB でクリックする。
  */
 (function metronomeModule() {
     const METRONOME_SCHEDULE_AHEAD_SEC = 3;
     const METRONOME_MIN_BEAT_GAP_SEC = 0.02;
     const METRONOME_SCHEDULE_MIN_LEAD_SEC = 0.004;
+    /** 再生開始直後、この秒数は楽曲 RMS に依存せず固定 dB でクリックする */
+    const METRONOME_FIXED_GAIN_WINDOW_SEC = 1;
+    /** 再生開始直後の固定クリック音量（フルスケール dBFS） */
+    const METRONOME_FIXED_GAIN_DB = -10;
+    const METRONOME_FIXED_GAIN_LINEAR = Math.pow(10, METRONOME_FIXED_GAIN_DB / 20);
     /**
      * RMS 未取得時のフォールバック（Master Vol × 基準）。
      * 通常はミックス RMS + METRONOME_DB_ABOVE_MIX_RMS で決まる。
@@ -45,6 +52,7 @@
     /** Click チェックあり = メトロノーム ON。初期は OFF。 */
     let metronomeClickEnabled = false;
     let metronomeGainTargetLevel = NaN;
+    let metronomeFixedGainUntilTransportSec = -Infinity;
 
     const metronomeClickCheckbox = document.getElementById('metronomeClickCheckbox');
 
@@ -64,6 +72,14 @@
         }
         if (barIndex < entries.length) return entries[barIndex];
         return entries[entries.length - 1];
+    }
+
+    /** R. Offset ON 時は先頭小節（アウフタクト）のクリックを鳴らさない */
+    function isMetronomeRehearsalOffsetSkipFirstBar() {
+        return (
+            typeof getRehearsalMarkOffsetEnabled === 'function' &&
+            getRehearsalMarkOffsetEnabled()
+        );
     }
 
     function getMetronomeMeterKey() {
@@ -108,6 +124,18 @@
             return getReviewMixMasterLinearGain();
         }
         return 1;
+    }
+
+    function getMetronomeFixedGainLevel() {
+        return Math.min(
+            METRONOME_MAX_GAIN_LEVEL,
+            Math.max(METRONOME_MIN_GAIN_LINEAR, METRONOME_FIXED_GAIN_LINEAR),
+        );
+    }
+
+    function isMetronomeInFixedGainWindow(beatTransportSec) {
+        if (!Number.isFinite(beatTransportSec)) return false;
+        return beatTransportSec < metronomeFixedGainUntilTransportSec - 1e-9;
     }
 
     function getMetronomeEffectiveGainLevel() {
@@ -252,6 +280,8 @@
         metronomeMeterKey = meterKey || '';
         metronomeLastScheduledBeatSec = transportSec - METRONOME_MIN_BEAT_GAP_SEC;
         metronomeLastSeenTransportSec = transportSec;
+        metronomeFixedGainUntilTransportSec =
+            transportSec + METRONOME_FIXED_GAIN_WINDOW_SEC;
         clearMetronomeScheduledBeatKeys();
         resetMetronomeScan(metronomeMeterKey);
         flushMetronomeScheduledAudio(ctx);
@@ -442,12 +472,19 @@
         }
         const when = transportSecToCtxTime(ctx, transportSec, transportNowSec);
         if (!buffers || !buffers.accent || !buffers.beat) return false;
-        const gainNode = metronomeGain;
-        if (!gainNode || gainNode.context !== ctx) return false;
         const buffer = accent ? buffers.accent : buffers.beat;
         const src = ctx.createBufferSource();
         src.buffer = buffer;
-        connectMonoAudioCentered(src, gainNode, buffer.numberOfChannels);
+        if (isMetronomeInFixedGainWindow(transportSec)) {
+            const clickGain = ctx.createGain();
+            clickGain.gain.value = getMetronomeFixedGainLevel();
+            clickGain.connect(ctx.destination);
+            connectMonoAudioCentered(src, clickGain, buffer.numberOfChannels);
+        } else {
+            const gainNode = metronomeGain;
+            if (!gainNode || gainNode.context !== ctx) return false;
+            connectMonoAudioCentered(src, gainNode, buffer.numberOfChannels);
+        }
         src.start(when);
         metronomeScheduledBeatKeys.add(beatKey);
         return true;
@@ -529,23 +566,26 @@
         let entry = synced.entry;
 
         let guard = 0;
+        const skipFirstBar = isMetronomeRehearsalOffsetSkipFirstBar();
         while (barStartSec < endSec - 1e-9 && guard < 48000) {
             if (!entry) break;
-            eachBarBeat(barStartSec, entry, (beat) => {
-                if (beat.sec >= endSec - 1e-9) return;
-                if (beat.sec < fromSec - 1e-9) return;
-                if (
-                    scheduleMetronomeClick(
-                        ctx,
-                        beat.sec,
-                        !!beat.isDownbeat,
-                        buffers,
-                        transportNowSec,
-                    )
-                ) {
-                    metronomeLastScheduledBeatSec = beat.sec;
-                }
-            });
+            if (!(skipFirstBar && barIndex === 0)) {
+                eachBarBeat(barStartSec, entry, (beat) => {
+                    if (beat.sec >= endSec - 1e-9) return;
+                    if (beat.sec < fromSec - 1e-9) return;
+                    if (
+                        scheduleMetronomeClick(
+                            ctx,
+                            beat.sec,
+                            !!beat.isDownbeat,
+                            buffers,
+                            transportNowSec,
+                        )
+                    ) {
+                        metronomeLastScheduledBeatSec = beat.sec;
+                    }
+                });
+            }
 
             barStartSec += barDurationSec(entry);
             barIndex += 1;
@@ -580,6 +620,7 @@
         metronomeLastScheduledBeatSec = -Infinity;
         metronomeLastSeenTransportSec = -Infinity;
         metronomeMeterKey = '';
+        metronomeFixedGainUntilTransportSec = -Infinity;
         resetMetronomeScan('');
         stopMetronomeSyncTimer();
         clearMetronomeScheduledBeatKeys();

@@ -345,6 +345,9 @@
         if (!o.silent && typeof flashTransportOptBox === 'function') {
             flashTransportOptBox('rehearsalMarkOffset');
         }
+        if (typeof syncMetronomeToTransport === 'function') {
+            syncMetronomeToTransport({ force: true });
+        }
         if (!o.silent && !o.skipPersist && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
