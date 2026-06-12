@@ -1032,15 +1032,6 @@
         return 'partial';
     }
 
-    /** @deprecated 互換: キャッシュ復元 + preview */
-    function prepareWaveformViewportForScrubDraw() {
-        const coverage = hydrateWaveformViewportCacheForScrub();
-        if (coverage === 'partial') {
-            applyScrubPreviewWaveformViewportTiles();
-        }
-        return coverage !== 'none';
-    }
-
     /** 現在の Canvas 窓で描ける viewport タイル（preview/full）があるか */
     function waveformViewportHasScrubDrawablePeaks(opt) {
         return waveformViewportScrubWindowCoverage(opt) !== 'none';
@@ -1055,7 +1046,6 @@
     window.invalidateWaveformViewportPeaksForRegionEdit =
         invalidateWaveformViewportPeaksForRegionEdit;
     window.getWaveformViewportHiresSpec = getWaveformViewportHiresSpec;
-    window.prepareWaveformViewportForScrubDraw = prepareWaveformViewportForScrubDraw;
     window.hydrateWaveformViewportCacheForScrub = hydrateWaveformViewportCacheForScrub;
     window.applyScrubPreviewWaveformViewportTiles = applyScrubPreviewWaveformViewportTiles;
     window.waveformViewportScrubWindowCoverage = waveformViewportScrubWindowCoverage;
