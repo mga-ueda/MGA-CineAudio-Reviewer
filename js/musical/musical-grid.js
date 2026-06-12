@@ -2445,10 +2445,20 @@
         return true;
     }
 
-    /** Tempo/Sig ON 時 — 小節線（赤）の右に、リージョン内の 1 小節目からの番号を描画 */
+    /** Tempo/Sig ON 時 — 小節線（赤）の右に、リージョン内の 1 小節目からの番号を描画（Phrase 定義あり時は小節線の属するフレーズ基準） */
     const REGION_BAR_NUMBER_LABEL_FONT_PX = 10;
     const REGION_BAR_NUMBER_LABEL_Y = 8;
     const REGION_BAR_NUMBER_LABEL_X_OFFSET = 3;
+
+    function localBarNumberLabelForBarLine(lineSec, barBoundaries, phraseRanges, span) {
+        if (phraseRanges && phraseRanges.length) {
+            const phraseRange = phraseRangeAfterGridBoundarySec(lineSec);
+            if (!phraseRange) return null;
+            return localBarNumberForPhraseAtSec(phraseRange.startSec, lineSec, barBoundaries);
+        }
+        if (!span) return null;
+        return localBarNumberForRegionBarLine(span.startSec, lineSec, barBoundaries);
+    }
 
     function drawRegionBarNumberLabels(ctx, w, _h, master, barLines, meterSpec) {
         if (!getMusicalGridVisible() || !barLines.length || !meterSpec) return;
@@ -2456,6 +2466,8 @@
         if (!spans.length) return;
         const barBoundaries = collectBarBoundarySecs(meterSpec, master);
         if (!barBoundaries.length) return;
+        const phraseRanges = resolvePhraseGroupRanges({ requireFillVisible: false });
+        const usePhraseBarNumbers = phraseRanges.length > 0;
         const secToX = (sec) => (sec / master) * w;
         const fontPx = REGION_BAR_NUMBER_LABEL_FONT_PX;
         ctx.save();
@@ -2482,24 +2494,27 @@
             if (!line || line.kind !== 'bar' || !Number.isFinite(line.sec)) continue;
             const span = findPlaybackRegionSpanForBarLine(spans, line.sec, barBoundaries);
             if (!span) continue;
-            const localBar = localBarNumberForRegionBarLine(
-                span.startSec,
+            const localBar = localBarNumberLabelForBarLine(
                 line.sec,
                 barBoundaries,
+                usePhraseBarNumbers ? phraseRanges : null,
+                span,
             );
             if (!localBar) continue;
             drawLabelAtSec(line.sec, String(localBar));
         }
 
-        for (let si = 0; si < spans.length; si++) {
-            const span = spans[si];
-            if (regionSpanHasBarOneLabelAtIn(span, barLines, barBoundaries, spans)) continue;
-            if (
-                span.startSec < span.endSec - 1e-6 &&
-                span.startSec >= 0 &&
-                span.startSec < master - 1e-6
-            ) {
-                drawLabelAtSec(span.startSec, '1');
+        if (!usePhraseBarNumbers) {
+            for (let si = 0; si < spans.length; si++) {
+                const span = spans[si];
+                if (regionSpanHasBarOneLabelAtIn(span, barLines, barBoundaries, spans)) continue;
+                if (
+                    span.startSec < span.endSec - 1e-6 &&
+                    span.startSec >= 0 &&
+                    span.startSec < master - 1e-6
+                ) {
+                    drawLabelAtSec(span.startSec, '1');
+                }
             }
         }
         ctx.restore();
