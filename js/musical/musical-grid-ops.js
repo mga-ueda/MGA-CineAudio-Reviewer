@@ -1791,6 +1791,7 @@
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
     window.meterBeatDurationSecAtTransport = meterBeatDurationSecAtTransport;
+    window.snapSecToMusicalGridQuarterNote = snapSecToMusicalGridQuarterNote;
     window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;
     window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
     window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;

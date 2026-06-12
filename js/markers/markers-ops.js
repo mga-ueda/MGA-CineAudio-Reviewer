@@ -885,12 +885,14 @@
         relocateRegionVolumePitchMarkersAfterLayout;
     window.syncSegmentVolumePitchAfterRegionLayout = syncSegmentVolumePitchAfterRegionLayout;
 
-    function completePendingRangeAtCurrentTime() {
+    function completePendingRangeAtCurrentTime(opt) {
         if (!markerTimelineReady() || pendingRangeStartSec == null) return;
         const start = pendingRangeStartSec;
         pendingRangeStartSec = null;
         updateMarkerRangeHint();
-        addRangeMarkerBetweenSecs(start, currentTransportSec());
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const end = Number.isFinite(o.endSec) ? o.endSec : currentTransportSec();
+        addRangeMarkerBetweenSecs(start, end);
     }
 
     function clampMarkerSec(sec, opt) {

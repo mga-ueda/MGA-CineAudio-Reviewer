@@ -44,6 +44,19 @@
         return typeof isTransportPlaying === 'function' && isTransportPlaying();
     }
 
+    /** フレーズモード中・再生中の Ins マーカー確定時のみ 4 分音符（拍）へクオンタイズ */
+    function quantizeMarkerInsSecIfNeeded(sec) {
+        if (
+            typeof getMusicalGridPhraseFillVisible !== 'function' ||
+            !getMusicalGridPhraseFillVisible() ||
+            !isMarkerListPlaybackActive() ||
+            typeof snapSecToMusicalGridQuarterNote !== 'function'
+        ) {
+            return sec;
+        }
+        return snapSecToMusicalGridQuarterNote(sec);
+    }
+
     /**
      * 指定時刻に対応するマーカー id（点は一致、範囲は In/Out および区間内。
      * 範囲が重なるときは In が遅い方＝一覧で後ろの行を優先）
@@ -2463,7 +2476,7 @@
             insertMarkerLongPressTimer = null;
             if (insertMarkerPressAtMs == null) return;
             insertMarkerLongPressStarted = true;
-            beginPendingRangeAtSec(insertMarkerPressSec);
+            beginPendingRangeAtSec(quantizeMarkerInsSecIfNeeded(insertMarkerPressSec));
         }, MARKER_INSERT_RANGE_HOLD_MS);
         return true;
     }
@@ -2485,16 +2498,20 @@
             if (longStarted || pendingRangeStartSec != null) {
                 cancelPendingRange();
             }
-            addPointMarkerAtSec(pressSec);
+            addPointMarkerAtSec(quantizeMarkerInsSecIfNeeded(pressSec));
             return true;
         }
 
+        const outSec = quantizeMarkerInsSecIfNeeded(currentTransportSec());
         if (pendingRangeStartSec != null) {
-            completePendingRangeAtCurrentTime();
+            completePendingRangeAtCurrentTime({ endSec: outSec });
         } else {
             pendingRangeStartSec = null;
             updateMarkerRangeHint();
-            addRangeMarkerBetweenSecs(pressSec, currentTransportSec());
+            addRangeMarkerBetweenSecs(
+                quantizeMarkerInsSecIfNeeded(pressSec),
+                outSec,
+            );
         }
         return true;
     }

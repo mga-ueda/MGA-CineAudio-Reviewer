@@ -152,6 +152,26 @@
         const beatDur = beatDurationSec(firstSeg, pos.entry.bpm);
         return beatDur > 0.00001 ? beatDur : NaN;
     }
+    /** transport 秒を最寄りの 4 分音符（拍）グリッドへ丸める。メーター未設定時はそのまま返す。 */
+    function snapSecToMusicalGridQuarterNote(sec) {
+        const n = Number(sec);
+        if (!Number.isFinite(n)) return 0;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return Math.max(0, n);
+        const maxSec =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(maxSec > 0)) return Math.max(0, n);
+        const pos = getMusicalGridBarBySec(settings.meterSpec, n, maxSec);
+        if (!pos || !pos.entry) return Math.max(0, n);
+        const beat = resolveMeterBeatAtSec(pos.barStartSec, pos.entry, n);
+        if (!beat || !(beat.beatDur > 1e-9)) return Math.max(0, n);
+        const quarterDur = beat.beatDur;
+        const snapped =
+            beat.sec + Math.round((n - beat.sec) / quarterDur) * quarterDur;
+        return clampMusicalGridSec(snapped, maxSec);
+    }
     function musicalGridDrawSettings() {
         readMusicalGridFromInputs();
         const meterSpec = parseMeterSpec(getCommittedMusicalGridMeterText());

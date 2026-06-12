@@ -297,7 +297,7 @@
                 <p>マーカーの位置は、<strong>フレーム番号ではなく秒（トランスポート上の秒）</strong>として記録されます。<strong>Export Review</strong>（<code>.mgacr</code>）やブラウザ内のセッション保存も同じ形式です。画面上の In / Out 列や映像上のタイムコードは、記録した秒から<strong>現在の FPS に基づいてフレーム表記（<code>HH:MM:SS:FF</code>）へ変換して表示しています</strong>。</p>
                 <ul>
                     <li>表に見える TC と記録した秒は、常に同じ意味のフレーム境界を指すとは限りません。表示 TC は記録秒を最も近いフレームへ丸めた結果です。</li>
-                    <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、<strong>その時点の再生位置（秒）をそのまま記録</strong>します（フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>−</kbd> による ±1 フレーム調整を使ってください）。</li>
+                    <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、原則として<strong>その時点の再生位置（秒）をそのまま記録</strong>します。ただし<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ<strong>再生中</strong>に <kbd>Ins</kbd> だけで確定したポイント位置、および範囲マーカーの In / Out は、Tempo/Sig 定義に基づき<strong>4分音符単位</strong>へ丸めます（<kbd>[</kbd>/<kbd>]</kbd>、停止中、Phrase 着色 OFF では丸めません）。フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>−</kbd> による ±1 フレーム調整を使ってください。</li>
                     <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）または波形上のシークバー付近のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>−</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
                     <li>TC 欄の ±1 フレーム微調整は、いったんフレーム位置へ変換してから<strong>再び秒として保存</strong>されます。</li>
                     <li><strong>Copy</strong> は記録秒から求めた<strong>ミリ秒表記</strong>（<code>00:00:00.000</code>）を出力します。<strong>Paste</strong> はそのミリ秒 TC を読み取り、<strong>現在読み込まれている FPS</strong> で最も近いフレーム位置に合わせてから秒として配置します。DAW 側の TC と 1 フレームずれることがあります。</li>
@@ -319,14 +319,14 @@
 
                 <h3 class="docs-heading-box--sub" id="markers-point">ポイントマーカー（1時刻）</h3>
                 <ul>
-                    <li>再生位置で <kbd>Ins</kbd> を短く押して離すと、押した時点の位置にポイントが追加されます（押下から離すまで 0.2秒未満）。</li>
+                    <li>再生位置で <kbd>Ins</kbd> を短く押して離すと、押した時点の位置にポイントが追加されます（押下から離すまで 0.2秒未満）。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ<strong>再生中</strong>に確定したときだけ、Tempo/Sig 定義の<strong>4分音符グリッド</strong>へ丸めます。</li>
                     <li>一覧の <strong>Comment</strong> 列をクリックしてコメントを入力します。再生中は映像上にコメントが短時間表示されます。</li>
                     <li>波形上の点マーカーを<strong>ダブルクリック</strong>すると、その位置を32×で中央表示します。既に32×のときは全体表示（1×）に戻します。シングルクリックではその位置へシークします。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="markers-range">範囲マーカー（In 〜 Out）</h3>
                 <ul>
-                    <li><kbd>Ins</kbd> を 0.2秒以上押したまま離すと、押した位置から離した位置までの範囲マーカーになります。長押し中は In 待ちのプレビューが表示されます。</li>
+                    <li><kbd>Ins</kbd> を 0.2秒以上押したまま離すと、押した位置から離した位置までの範囲マーカーになります。長押し中は In 待ちのプレビューが表示されます。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ<strong>再生中</strong>に <kbd>Ins</kbd> で In / Out を確定したとき、それぞれの確定時刻を Tempo/Sig 定義の<strong>4分音符グリッド</strong>へ丸めます（<kbd>[</kbd>/<kbd>]</kbd> や停止中では丸めません）。</li>
                     <li><kbd>[</kbd> で In（開始）を設定し、続けて <kbd>]</kbd> で Out（終了）を設定します。In 設定後〜Out 確定前は、パネル上部に <em>Range: press ] for Out</em> とヒントが出ます。</li>
                     <li>波形上のマーカー区間の端（ハンドル）をドラッグして In / Out を調整できます。帯の中央付近をドラッグすると In / Out を同時に移動します（クリックのみのときはその位置へシーク）。</li>
                     <li>Audio Track 上でリージョンを <kbd>Ctrl</kbd>+クリックで<strong>選択</strong>したうえで <kbd>Alt</kbd>+ホイールによる音量補正を行うと、そのリージョン幅の範囲マーカーとコメント列（<code>3.0dB 上げる</code>/<code>-3.0dB 下げる</code> など）が自動で連動します。補正が <code>0.0dB</code> に戻ったときは、同じ In/Out の自動付与マーカーを削除します（手動で付けた範囲マーカーと In/Out が一致している場合も同じ行を更新/削除します）。</li>
@@ -590,7 +590,7 @@
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主な機能・キーとして、Audio Track への WAV 読み込み時の<strong>マーカー/リージョン自動取り込み</strong>、<strong>Export Wave</strong> による WAV へのマーカー/リージョン埋め込み（48 kHz / 24-bit、オフラインバウンス）、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、<kbd>U</kbd>（レイアウト切替）/<kbd>Shift</kbd>+<kbd>U</kbd>（ユーザーレイアウト編集）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
+                <p>最近追加した主な機能・キーとして、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ再生中の <kbd>Ins</kbd> マーカー確定時の<strong>4分音符クオンタイズ</strong>、Audio Track への WAV 読み込み時の<strong>マーカー/リージョン自動取り込み</strong>、<strong>Export Wave</strong> による WAV へのマーカー/リージョン埋め込み（48 kHz / 24-bit、オフラインバウンス）、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、<kbd>U</kbd>（レイアウト切替）/<kbd>Shift</kbd>+<kbd>U</kbd>（ユーザーレイアウト編集）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
                 <p>ショートカットの割り当ては <code>js/shortcuts/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>

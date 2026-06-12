@@ -1,10 +1,17 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.15';
+    const APP_VERSION = '0.16';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.16',
+            date: '2026年6月13日',
+            items: [
+                'Phrase 着色 ON かつ再生中に Ins でマーカーを確定したとき、ポイント位置および範囲 In/Out を Tempo/Sig 定義の 4 分音符（拍）グリッドへクオンタイズ（[ ] や停止中・Phrase 着色 OFF ではクオンタイズしない）。',
+            ],
+        },
         {
             version: '0.15',
             date: '2026年6月13日',
