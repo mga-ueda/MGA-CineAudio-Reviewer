@@ -471,7 +471,10 @@
         while (guard < 48000) {
             const entry = getMeterEntryForBar(meterSpec, metronomeScan.barIndex);
             if (!entry) return null;
-            const barDur = entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
+            const barDur =
+                typeof window.meterBarDurationSec === 'function'
+                    ? window.meterBarDurationSec(entry)
+                    : entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
             const barEndSec = metronomeScan.barStartSec + barDur;
             if (targetSec < barEndSec - 1e-9 || barEndSec >= maxSec - 1e-9) {
                 return { entry, barEndSec };
@@ -493,6 +496,28 @@
         buffers,
         transportNowSec,
     ) {
+        const barDurationSec =
+            typeof window.meterBarDurationSec === 'function'
+                ? window.meterBarDurationSec
+                : function fallbackBarDur(entry) {
+                      if (!entry || !entry.sig) return 0;
+                      return entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
+                  };
+        const eachBarBeat =
+            typeof window.forEachMeterBarBeat === 'function'
+                ? window.forEachMeterBarBeat
+                : function fallbackEachBeat(barStartSec, entry, fn) {
+                      if (!entry || !entry.sig || typeof fn !== 'function') return;
+                      const beatDur = beatDurationSec(entry.sig, entry.bpm);
+                      for (let beat = 0; beat < entry.sig.num; beat++) {
+                          fn({
+                              sec: barStartSec + beat * beatDur,
+                              beatInBar: beat,
+                              isDownbeat: beat === 0,
+                          });
+                      }
+                  };
+
         const synced = positionMetronomeScanAtSec(meterSpec, meterKey, fromSec, maxSec);
         if (!synced) return;
 
@@ -503,40 +528,23 @@
         let guard = 0;
         while (barStartSec < endSec - 1e-9 && guard < 48000) {
             if (!entry) break;
-            const beatDur = beatDurationSec(entry.sig, entry.bpm);
-            const barDur = entry.sig.num * beatDur;
-
-            if (barStartSec >= fromSec - 1e-9 && barStartSec < endSec + 1e-9) {
+            eachBarBeat(barStartSec, entry, (beat) => {
+                if (beat.sec >= endSec - 1e-9) return;
+                if (beat.sec < fromSec - 1e-9) return;
                 if (
                     scheduleMetronomeClick(
                         ctx,
-                        barStartSec,
-                        true,
+                        beat.sec,
+                        !!beat.isDownbeat,
                         buffers,
                         transportNowSec,
                     )
                 ) {
-                    metronomeLastScheduledBeatSec = barStartSec;
+                    metronomeLastScheduledBeatSec = beat.sec;
                 }
-            }
-            for (let beat = 1; beat < entry.sig.num; beat++) {
-                const beatSec = barStartSec + beat * beatDur;
-                if (beatSec >= endSec - 1e-9) break;
-                if (beatSec < fromSec - 1e-9) continue;
-                if (
-                    scheduleMetronomeClick(
-                        ctx,
-                        beatSec,
-                        false,
-                        buffers,
-                        transportNowSec,
-                    )
-                ) {
-                    metronomeLastScheduledBeatSec = beatSec;
-                }
-            }
+            });
 
-            barStartSec += barDur;
+            barStartSec += barDurationSec(entry);
             barIndex += 1;
             entry = getMeterEntryForBar(meterSpec, barIndex);
             guard += 1;

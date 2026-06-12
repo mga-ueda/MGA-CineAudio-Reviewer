@@ -462,7 +462,17 @@
                 <h3 class="docs-heading-box--sub" id="transport-options-top">波形直下（オプションバー上段）</h3>
                 <ul>
                     <li><strong>現在地（小節・拍）</strong> — <code>---:--:--</code> 形式で小節位置を表示。</li>
-                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。形式は <code>120-4/4</code>（BPM-拍子）。カンマ区切りで小節ごとに変化、括弧 <code>(120-4/4,140-3/4)</code> で交互切替も指定できます。入力欄にフォーカスがあるとき <kbd>↑</kbd>/<kbd>↓</kbd> で BPM ±1、<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> で入力欄へフォーカスします。ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
+                    <li><strong>Tempo/Sig</strong> — 小節・拍グリッド表示（<kbd>T</kbd>）とメーター入力。
+                        <ul>
+                            <li><strong>基本形式</strong> — <code>120-4/4</code>（BPM-拍子）。</li>
+                            <li><strong>小節ごとの変化</strong> — カンマ区切り（例: <code>120-4/4,140-3/4</code>）。括弧 <code>(120-4/4,140-3/4)</code> で交互切替。</li>
+                            <li><strong>変拍子（1 小節内）</strong> — <code>+</code> で拍子を連結します（例: <code>120-3/8+5/8</code> は 3/8 と 5/8 を<strong>1 小節</strong>とみなす）。現在地（小節・拍）の拍は小節内通算です（上記例では 1〜8 拍）。</li>
+                            <li><strong>入力欄の ↑/↓</strong> — カーソル位置の BPM または拍子（分子・分母）を ±1（<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10）。入力欄の<strong>末尾</strong>では次小節定義 <code>,120-4/4</code> を追加（変拍子の完成形 <code>149-3/4+5/4</code> も同様）。<code>+</code> で<strong>終わる入力途中</strong>だけは次小節ではなく<strong>変拍子の後半</strong>を補完（例: <code>149-3/8+</code> → ↑ → <code>149-3/8+4/4</code>。BPM はそのまま、後半のデフォルト拍子は <code>4/4</code>）。</li>
+                            <li><kbd>Tab</kbd> — Tempo/Sig 入力欄と Phrase 入力欄を相互に移動（Tempo/Sig → Phrase、Phrase → Tempo/Sig）。</li>
+                            <li><kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd> で各入力欄へフォーカス。</li>
+                            <li><strong>小節番号</strong> — ON 時は Audio Track リージョン内の小節線横に 1 始まりの小節番号が表示され、テンキーまたは <kbd>Shift</kbd>+上段数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
+                        </ul>
+                    </li>
                     <li><strong>Phrase</strong> — フレーズ着色表示（<kbd>P</kbd>）とグループ入力（例: <code>8</code> 小節、<code>1,8</code> で最初の1小節のみ別色のあと8小節ごと）。入力欄フォーカス時は、カーソル位置の項目を <kbd>↑</kbd>/<kbd>↓</kbd>（±1）と <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd>（±10）で調整できます。カンマ区切りの<strong>末尾</strong>（例: <code>1,8</code> の最後）にあるときは、上下どちらでも <code>,8</code> が追加されます（続けて8小節のフレーズを指定）。波形レーンから直接編集するときは <kbd>Alt</kbd>+<kbd>P</kbd> で入力欄へフォーカスします。</li>
                 </ul>
 
@@ -479,7 +489,7 @@
 
                 <h3 class="docs-heading-box--sub" id="transport-options-mid">波形直下（オプションバー中段）</h3>
                 <ul>
-                    <li><strong>Click</strong> — メトロノームクリック音（<kbd>C</kbd>）。Click ON かつ<strong>再生中</strong>のみ、BPM/拍子グリッド（Tempo/Sig 入力）の拍に同期して鳴ります。Tempo/Sig 表示（<kbd>T</kbd>）のオン/オフとは独立です。ダウンビートは高音、それ以外は低音。音量はマスター出力の RMS に連動し、常に楽曲より大きく聞こえるよう調整されます（Analyze 表示は不要。ミックス経路は通りません）。デフォルト OFF。設定は次回起動時に復元されます（Import/Export には含めません）。</li>
+                    <li><strong>Click</strong> — メトロノームクリック音（<kbd>C</kbd>）。Click ON かつ<strong>再生中</strong>のみ、BPM/拍子グリッド（Tempo/Sig 入力）の拍に同期して鳴ります。Tempo/Sig 表示（<kbd>T</kbd>）のオン/オフとは独立です。通常拍子では小節の 1 拍目が高音（High）、それ以外は低音（Low）。<strong>変拍子</strong>（例: <code>120-3/8+5/8</code>）では各拍子グループの先頭拍（1 拍目・4 拍目）が高音、それ以外は低音。音量はマスター出力の RMS に連動し、常に楽曲より大きく聞こえるよう調整されます（Analyze 表示は不要。ミックス経路は通りません）。デフォルト OFF。設定は次回起動時に復元されます（Import/Export には含めません）。</li>
                     <li><strong>Analyze</strong> — スペクトラム/メーター枠は<strong>常時表示</strong>です。チェック ON で Live（解析中）、OFF で解析停止（アイドル表示へ戻す）。<kbd>A</kbd> でも Live ↔ 解析停止を切替できます。解析停止中も CLIP PROTECT は動作します。</li>
                     <li><strong>R. Offset</strong> — <strong>リハーサルマークオフセット</strong>（Rehearsal Mark Offset）の表示オプション。冒頭の小節を<strong>アウフタクト</strong>（弱起）として扱い、その部分には練習番号を付けません。ON にすると先頭フレーズは番号なしとなり、本編の最初のフレーズから A が始まります。<kbd>R</kbd> で切り替え。Import/Export Review およびセッション復元に保存されます。</li>
                     <li><strong>Include in export</strong> — エクスポートに含めるメディア設定。<strong>Video</strong> は動画、<strong>Audio</strong> は追加音声（読み込み済みの全 Audio Track）を一括で切り替えます。</li>

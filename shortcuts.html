@@ -137,7 +137,7 @@
                     <tr>
                         <td>Click（メトロノーム）のオン/オフ</td>
                         <td><kbd>C</kbd></td>
-                        <td>オプションバー中段の Click チェックと同じ。Click ON かつ再生中のみクリック音が鳴る（BPM/拍子は Tempo/Sig 入力に従う）。音量はミックス RMS に連動（楽曲より大きく、Analyze 表示は不要）。デフォルト OFF。設定は次回起動時に復元（Import/Export には含めない）</td>
+                        <td>オプションバー中段の Click チェックと同じ。Click ON かつ再生中のみクリック音が鳴る（BPM/拍子は Tempo/Sig 入力に従う）。通常拍子は 1 拍目が高音、変拍子（例: <code>120-3/8+5/8</code>）は各拍子グループの先頭拍が高音。音量はミックス RMS に連動（楽曲より大きく、Analyze 表示は不要）。デフォルト OFF。設定は次回起動時に復元（Import/Export には含めない）</td>
                     </tr>
                     <tr>
                         <td>Analyze（スペクトラム/メーター）の Live/解析停止</td>
@@ -349,12 +349,12 @@
                     <tr>
                         <td>BPM・拍子の ±1（メーター欄）</td>
                         <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>メーター（BPM/拍子）入力欄にフォーカスがあるとき</td>
+                        <td>メーター（BPM/拍子）入力欄にフォーカスがあるとき。カーソル位置の BPM または拍子（分子・分母）を ±1。末尾では <code>,120-4/4</code> を追加（完成した変拍子 <code>149-3/4+5/4</code> も同様）。<code>+</code> で終わる入力途中だけ <code>4/4</code> を補完（例: <code>149-3/8+</code> → ↑ → <code>149-3/8+4/4</code>）。<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10</td>
                     </tr>
                     <tr>
-                        <td>BPMの ±10（メーター欄）</td>
+                        <td>BPM・拍子の ±10（メーター欄）</td>
                         <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>同上</td>
+                        <td>メーター（BPM/拍子）入力欄にフォーカスがあるとき。カーソル位置の BPM または拍子（分子・分母）を ±10</td>
                     </tr>
                     <tr>
                         <td>フレーズ長の ±1（フレーズ欄）</td>
@@ -365,6 +365,11 @@
                         <td>フレーズ長の ±10（フレーズ欄）</td>
                         <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
                         <td>同上。末尾では ±10 の代わりに <code>,8</code> を追加</td>
+                    </tr>
+                    <tr>
+                        <td>Tempo/Sig ↔ Phrase 入力欄の移動</td>
+                        <td><kbd>Tab</kbd></td>
+                        <td>メーター欄では Phrase 欄へ、Phrase 欄ではメーター欄へフォーカスを移す</td>
                     </tr>
                     <tr>
                         <td>入力確定（メーター/フレーズ欄）</td>

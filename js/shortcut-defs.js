@@ -732,9 +732,9 @@
             setElementTitle(phraseLbl, phraseTitle);
         }
 
-        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4）。${h.musicalGridMeterFocus} で編集、Enter/Esc で確定`;
+        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4、変拍子 140-3/8+5/8）。${h.musicalGridMeterFocus} で編集、Tab で Phrase 欄へ、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
-        const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Enter/Esc で確定`;
+        const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Tab で Tempo/Sig 欄へ、Enter/Esc で確定`;
         setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
 
         const analyzeTitle = `Live のオン/オフ（${h.analyze} でも Live ↔ 解析停止を切替）`;
