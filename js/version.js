@@ -1,10 +1,19 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.13';
+    const APP_VERSION = '0.14';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.14',
+            date: '2026年6月13日',
+            items: [
+                '無音リージョン削除時にフレーズ定義を正しく更新（専用無音スロットはグループ除去、部分無音はリップルのみ）。削除後にフレーズ欄を圧縮表示へ反映。',
+                '無音 gap 選択時の Delete キーを region-delete 経由に統一し、全リージョン切り直しによるフレーズ崩壊を防止。',
+                'Phrase 着色 OFF 時のリージョン移動アンドゥでスワップアニメーションを省略。',
+            ],
+        },
         {
             version: '0.13',
             date: '2026年6月12日',
