@@ -159,6 +159,8 @@
     window.handlePlaybackRegionPasteKeydown = handlePlaybackRegionPasteKeydown;
     window.handlePlaybackRegionFadeInKeydown = handlePlaybackRegionFadeInKeydown;
     window.handlePlaybackRegionFadeOutKeydown = handlePlaybackRegionFadeOutKeydown;
+    window.handlePlaybackRegionInNudgeKeydown = handlePlaybackRegionInNudgeKeydown;
+    window.handlePlaybackRegionOutNudgeKeydown = handlePlaybackRegionOutNudgeKeydown;
     window.beginRegionUndoGesture = beginRegionUndoGesture;
     window.commitRegionUndoGesture = commitRegionUndoGesture;
     window.clearRegionUndoStack = clearRegionUndoStack;

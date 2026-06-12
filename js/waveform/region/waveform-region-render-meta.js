@@ -808,6 +808,31 @@
         return spanA.right > spanB.left + gap && spanB.right > spanA.left + gap;
     }
 
+    function isEqualPowerCrossfadeFadeTrianglePair(track, leftEntry, rightEntry, leftKind, rightKind) {
+        if (leftKind !== 'out' || rightKind !== 'in') return false;
+        if (!leftEntry || !rightEntry) return false;
+        const outSeg = leftEntry.segmentIndex;
+        const inSeg = rightEntry.segmentIndex;
+        if (outSeg === inSeg) return false;
+        if (getRawSegmentFadeSec(track, outSeg, 'out') > 0.0005) return false;
+        if (getRawSegmentFadeSec(track, inSeg, 'in') > 0.0005) return false;
+        const oStart = Math.max(
+            getSegmentPlaybackTimelineStart(track, outSeg),
+            getSegmentPlaybackTimelineStart(track, inSeg),
+        );
+        const oEnd = Math.min(
+            getSegmentTimelineEnd(track, outSeg),
+            getSegmentTimelineEnd(track, inSeg),
+        );
+        if (oEnd - oStart < 0.005) return false;
+        return (
+            getEqualPowerCrossfadeOverlapFadeSecForSegment(track, outSeg, 'out') >
+                0.0005 &&
+            getEqualPowerCrossfadeOverlapFadeSecForSegment(track, inSeg, 'in') >
+                0.0005
+        );
+    }
+
     function computeSegmentFadeTriangleLayout(track, segmentIndex, metrics, master, triPx) {
         const widthPx = segmentRegionDisplayWidthPx(track, segmentIndex, metrics, master);
         const regionStartPx = segmentRegionStartPx(track, segmentIndex, metrics, master);
@@ -819,30 +844,25 @@
         );
         const outTransport = getSegmentTimelineEnd(track, segmentIndex);
         const regionDur = Math.max(0.001, outTransport - inTransport);
-        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
-        const playbackFromRegion = Math.max(0, playbackStart - inTransport);
-        const fadeInMax = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
-        const fadeOutMax = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
-        const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
-        const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');
-        const fadeInRatio = Math.max(0, Math.min(1, fadeInSec / regionDur));
-        const fadeOutRatio = Math.max(0, Math.min(1, fadeOutSec / regionDur));
-        const playbackOffsetRatio = Math.max(0, Math.min(1, playbackFromRegion / regionDur));
-        const fadeInAxisRatio = playbackOffsetRatio + fadeInRatio;
-        const fadeOutAxisRatio = Math.max(0, 1 - fadeOutRatio);
+        const pres = resolveSegmentFadeTrianglePresentation(
+            track,
+            segmentIndex,
+            inTransport,
+            regionDur,
+        );
 
         let showIn =
-            fadeInMax > 0.0005 &&
-            fadeTriangleFitsInRegion(fadeInAxisRatio, widthPx, triPx, 'in');
+            pres.showIn &&
+            fadeTriangleFitsInRegion(pres.fadeInAxisRatio, widthPx, triPx, 'in');
         let showOut =
-            fadeOutMax > 0.0005 &&
-            fadeTriangleFitsInRegion(fadeOutAxisRatio, widthPx, triPx, 'out');
+            pres.showOut &&
+            fadeTriangleFitsInRegion(pres.fadeOutAxisRatio, widthPx, triPx, 'out');
 
         const spanIn = showIn
             ? fadeTriangleGlobalSpan(
                   regionStartPx,
                   widthPx,
-                  fadeInAxisRatio,
+                  pres.fadeInAxisRatio,
                   triPx,
                   'in',
               )
@@ -851,7 +871,7 @@
             ? fadeTriangleGlobalSpan(
                   regionStartPx,
                   widthPx,
-                  fadeOutAxisRatio,
+                  pres.fadeOutAxisRatio,
                   triPx,
                   'out',
               )
@@ -873,10 +893,10 @@
         }
 
         return {
-            fadeInAxisRatio,
-            fadeOutAxisRatio,
-            fadeInSec,
-            fadeOutSec,
+            fadeInAxisRatio: pres.fadeInAxisRatio,
+            fadeOutAxisRatio: pres.fadeOutAxisRatio,
+            fadeInSec: pres.fadeInSec,
+            fadeOutSec: pres.fadeOutSec,
             showIn,
             showOut,
             spanIn,
@@ -901,7 +921,7 @@
         return visible;
     }
 
-    function resolveFadeTriangleCollisionsOnTrack(entries, triPx, gapPx) {
+    function resolveFadeTriangleCollisionsOnTrack(track, entries, triPx, gapPx) {
         void triPx;
         const maxPasses = Math.max(1, entries.length * 2);
         for (let pass = 0; pass < maxPasses; pass++) {
@@ -923,6 +943,17 @@
                 }
 
                 if (left.kind === 'out' && right.kind === 'in') {
+                    if (
+                        isEqualPowerCrossfadeFadeTrianglePair(
+                            track,
+                            left.entry,
+                            right.entry,
+                            left.kind,
+                            right.kind,
+                        )
+                    ) {
+                        continue;
+                    }
                     left.entry.layout.showOut = false;
                     left.entry.layout.spanOut = null;
                     right.entry.layout.showIn = false;
@@ -1003,40 +1034,30 @@
         );
         const outTransport = getSegmentTimelineEnd(track, segmentIndex);
         const regionDur = Math.max(0.001, outTransport - inTransport);
-        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
-        const playbackFromRegion = Math.max(0, playbackStart - inTransport);
-        const fadeInMax = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
-        const fadeOutMax = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
-        const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
-        const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');
-        const fadeInRatio = Math.max(0, Math.min(1, fadeInSec / regionDur));
-        const fadeOutRatio = Math.max(0, Math.min(1, fadeOutSec / regionDur));
-        const playbackOffsetRatio = Math.max(0, Math.min(1, playbackFromRegion / regionDur));
-        const fadeInAxisRatio = playbackOffsetRatio + fadeInRatio;
-        const fadeOutAxisRatio = Math.max(0, 1 - fadeOutRatio);
+        const pres = resolveSegmentFadeTrianglePresentation(
+            track,
+            segmentIndex,
+            inTransport,
+            regionDur,
+        );
 
         const fadeInHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-in',
         );
         if (fadeInHandle) {
-            fadeInHandle.style.left = fadeInAxisRatio * 100 + '%';
+            fadeInHandle.style.left = pres.fadeInAxisRatio * 100 + '%';
             fadeInHandle.style.right = 'auto';
-            fadeInHandle.hidden = !regionFadeTriangleHandleVisible(fadeInMax > 0.0005);
+            fadeInHandle.hidden = !regionFadeTriangleHandleVisible(pres.showIn);
         }
         const fadeOutHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-out',
         );
         if (fadeOutHandle) {
-            fadeOutHandle.style.left = fadeOutAxisRatio * 100 + '%';
+            fadeOutHandle.style.left = pres.fadeOutAxisRatio * 100 + '%';
             fadeOutHandle.style.right = 'auto';
-            fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(fadeOutMax > 0.0005);
+            fadeOutHandle.hidden = !regionFadeTriangleHandleVisible(pres.showOut);
         }
-        applySegmentFadeMarkerLinesToRegionEl(regionEl, {
-            fadeInAxisRatio,
-            fadeOutAxisRatio,
-            fadeInSec,
-            fadeOutSec,
-        });
+        applySegmentFadeMarkerLinesToRegionEl(regionEl, pres);
     }
 
     function refreshTrackFadeTriangleVisibility(track, container) {
@@ -1088,6 +1109,7 @@
         }
 
         resolveFadeTriangleCollisionsOnTrack(
+            track,
             entries,
             triPx,
             FADE_TRIANGLE_COLLISION_GAP_PX,

@@ -1151,7 +1151,7 @@
             }
             if (gap.partial) title += '（部分無音）';
         }
-        title += ' — Ctrl+クリックで選択（Phrase 着色 ON 時は E で入れ替え可）';
+        title += ' — Ctrl+クリックで選択（Phrase 着色（P）ON 時は E で入れ替え可）';
         el.title = title;
         appendSwapUnitMusicalMetaToEl(track, el, { silentGapIndex: gapIndex | 0 }, slotsOpt);
         if (isSilentGapEntrySelected(track.slot, gapIndex)) {
@@ -1190,12 +1190,25 @@
             el.classList.add('audio-waveform-lane__playback-region--selected');
         }
         el.dataset.segmentIndex = String(segmentIndex);
+        const nudgeInKey =
+            typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionInNudge
+                ? window.SHORTCUT_HINTS.regionInNudge
+                : 'Shift+I';
+        const nudgeOutKey =
+            typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionOutNudge
+                ? window.SHORTCUT_HINTS.regionOutNudge
+                : 'Shift+O';
         if (shouldShowSegmentInHandle(track, segmentIndex)) {
             el.classList.add('audio-waveform-lane__playback-region--edge-in');
             const handleIn = document.createElement('div');
             handleIn.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--in';
-            handleIn.title = 'リージョン ' + (segmentIndex + 1) + ' の In（ソース開始位置）';
+            handleIn.title =
+                'リージョン ' +
+                (segmentIndex + 1) +
+                ' の In（ドラッグでソース開始位置。Phrase 着色（P）OFF 時 ' +
+                nudgeInKey +
+                ' で1拍前へ）';
             el.appendChild(handleIn);
         }
         if (shouldShowSegmentOutHandle(track, segmentIndex)) {
@@ -1203,7 +1216,12 @@
             const handleOut = document.createElement('div');
             handleOut.className =
                 'audio-waveform-lane__playback-region__handle audio-waveform-lane__playback-region__handle--out';
-            handleOut.title = 'リージョン ' + (segmentIndex + 1) + ' の Out（ソース終了位置）';
+            handleOut.title =
+                'リージョン ' +
+                (segmentIndex + 1) +
+                ' の Out（ドラッグでソース終了位置。Phrase 着色（P）OFF 時 ' +
+                nudgeOutKey +
+                ' で1拍後方へ）';
             el.appendChild(handleOut);
         }
         const fadeCurve = document.createElement('div');
@@ -1426,7 +1444,7 @@
         const el = document.createElement('div');
         el.className = 'audio-waveform-lane__crossfade-marker';
         el.setAttribute('aria-hidden', 'true');
-        el.title = 'Crossfade（クロスフェード量）';
+        el.title = 'クロスフェード（ドラッグで量を調整）';
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         svg.setAttribute('class', 'audio-waveform-lane__crossfade-marker__shape');
         svg.setAttribute('viewBox', '0 0 100 100');

@@ -113,6 +113,165 @@
         return true;
     }
 
+    function resolveRegionEdgeNudgeTargets() {
+        const fromSelection =
+            typeof expandRegionSegmentEditTargetsFromSelection === 'function'
+                ? expandRegionSegmentEditTargetsFromSelection()
+                : [];
+        if (fromSelection.length) return fromSelection;
+        if (typeof resolveRegionFadeTargets === 'function') {
+            return resolveRegionFadeTargets();
+        }
+        return [];
+    }
+
+    function notifyRegionEdgeNudgeMiss(kind, reason) {
+        const edgeLabel = kind === 'in' ? 'In' : 'Out';
+        const keyLabel = kind === 'in' ? 'Shift+I' : 'Shift+O';
+        const msg =
+            'Region ' +
+            edgeLabel +
+            ' nudge (' +
+            keyLabel +
+            '): ' +
+            reason;
+        if (typeof writeLog === 'function') writeLog(msg);
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', edgeLabel + ' nudge', 'error');
+        }
+    }
+
+    function notifyRegionEdgeNudgeApplied(kind, count, deltaSec) {
+        const edgeLabel = kind === 'in' ? 'In' : 'Out';
+        const keyLabel = kind === 'in' ? 'Shift+I' : 'Shift+O';
+        const ms = Math.round(Math.max(0, Number(deltaSec) || 0) * 1000);
+        const amountLabel = '1 beat (' + ms + 'ms)';
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Region ' +
+                    edgeLabel +
+                    ' nudge (' +
+                    keyLabel +
+                    '): ' +
+                    (kind === 'in' ? '-' : '+') +
+                    amountLabel +
+                    ' (' +
+                    count +
+                    ' region' +
+                    (count === 1 ? '' : 's') +
+                    ')',
+            );
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(
+                'Region',
+                edgeLabel + ' ' + (kind === 'in' ? '-' : '+') + amountLabel,
+                'notice',
+            );
+        }
+    }
+
+    function nudgeSelectedRegionEdges(kind) {
+        if (!isRegionEdgeKeyboardNudgeEnabled()) {
+            notifyRegionEdgeNudgeMiss(
+                kind,
+                'Phrase tint must be OFF',
+            );
+            return false;
+        }
+        const targets = resolveRegionEdgeNudgeTargets();
+        if (!targets.length) {
+            notifyRegionEdgeNudgeMiss(
+                kind,
+                'select or hover a region (Ctrl+click)',
+            );
+            return false;
+        }
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        let anyChanged = false;
+        let blockedContinuous = 0;
+        let blockedLimit = 0;
+        let blockedNoMeter = 0;
+        let appliedDeltaSec = NaN;
+        const canNudge =
+            kind === 'in' ? canNudgeRegionInByKeyboard : canNudgeRegionOutByKeyboard;
+        for (let i = 0; i < targets.length; i++) {
+            const { slot, segmentIndex } = targets[i];
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            if (!canNudge(track, segmentIndex)) {
+                blockedContinuous += 1;
+                continue;
+            }
+            const delta = regionEdgeKeyboardNudgeSecForSegment(
+                track,
+                segmentIndex,
+                kind,
+            );
+            if (!(Number.isFinite(delta) && delta > 0.00001)) {
+                blockedNoMeter += 1;
+                continue;
+            }
+            let changed = false;
+            if (kind === 'in') {
+                changed = nudgeSegmentRegionInEarlierContentFixed(
+                    track,
+                    segmentIndex,
+                    delta,
+                    { skipUndo: true },
+                );
+            } else if (kind === 'out') {
+                changed = nudgeSegmentRegionOutLaterContentFixed(
+                    track,
+                    segmentIndex,
+                    delta,
+                    { skipUndo: true },
+                );
+            }
+            if (changed) {
+                anyChanged = true;
+                appliedDeltaSec = delta;
+            } else blockedLimit += 1;
+        }
+        if (!anyChanged) {
+            if (blockedNoMeter > 0 && blockedNoMeter >= targets.length) {
+                notifyRegionEdgeNudgeMiss(
+                    kind,
+                    'set Tempo/Sig (Musical Grid meter) first',
+                );
+            } else if (blockedContinuous > 0 && blockedContinuous >= targets.length) {
+                notifyRegionEdgeNudgeMiss(
+                    kind,
+                    'region content is continuous at this boundary',
+                );
+            } else {
+                notifyRegionEdgeNudgeMiss(kind, 'already at limit');
+            }
+            return false;
+        }
+        notifyRegionEdgeNudgeApplied(kind, targets.length, appliedDeltaSec);
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        return true;
+    }
+
+    function handlePlaybackRegionInNudgeKeydown(e) {
+        if (!matchUserShortcut(e, 'regionInNudge')) return false;
+        if (e.repeat) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        e.preventDefault();
+        nudgeSelectedRegionEdges('in');
+        return true;
+    }
+
+    function handlePlaybackRegionOutNudgeKeydown(e) {
+        if (!matchUserShortcut(e, 'regionOutNudge')) return false;
+        if (e.repeat) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        e.preventDefault();
+        nudgeSelectedRegionEdges('out');
+        return true;
+    }
+
     function handlePlaybackRegionEscapeKeydown(e) {
         if (!matchUserShortcut(e, 'regionEscape')) return false;
         if (regionHandleDragActive) {

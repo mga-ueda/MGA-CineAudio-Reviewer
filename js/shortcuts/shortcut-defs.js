@@ -194,6 +194,9 @@
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
         regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
         regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
+        // Phrase 着色 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
+        regionInNudge: { code: 'KeyI', ctrl: false, meta: false, alt: false, shift: true, primary: false },
+        regionOutNudge: { code: 'KeyO', ctrl: false, meta: false, alt: false, shift: true, primary: false },
         regionEscape: { code: 'Escape', ctrl: false, alt: false, meta: false },
 
         // ---------- ミックス ----------
@@ -653,6 +656,8 @@
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
             regionFadeIn: formatShortcutDef(s.regionFadeIn),
             regionFadeOut: formatShortcutDef(s.regionFadeOut),
+            regionInNudge: formatShortcutDef(s.regionInNudge),
+            regionOutNudge: formatShortcutDef(s.regionOutNudge),
             layoutModeToggle: formatShortcutDef(s.layoutModeToggle),
             layoutEditToggle: formatShortcutDef(s.layoutEditToggle),
         });

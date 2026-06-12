@@ -1,10 +1,19 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.14';
+    const APP_VERSION = '0.15';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.15',
+            date: '2026年6月13日',
+            items: [
+                'Phrase 着色 OFF 時、Shift+I / Shift+O でリージョン In / Out を Tempo/Sig の 1 拍ずつ調整（クリップ内容は動かさず、In ハンドル/Out ハンドルドラッグと同じ経路）。',
+                '1 拍調整で隣接リージョンと重なったとき等パワー・クロスフェードを適用し、Fade In / Fade Out 三角で表示。',
+                '等パワー・クロスフェードの三角マーカー表示を改善（非隣接リージョンの重なりにも対応）。',
+            ],
+        },
         {
             version: '0.14',
             date: '2026年6月13日',

@@ -1885,23 +1885,32 @@
         if (!state) return 0;
         return Math.max(0, Number(state.headPadSec) || 0);
     }
+    function readRawRegionLeadPadSec(track, segmentIndex) {
+        if (segmentIndex === 0) {
+            const state = getPlaybackRegionsState(track);
+            return Math.max(0, Number(state && state.regionLeadPadSec) || 0);
+        }
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        return Math.max(0, Number(raw && raw.regionLeadPadSec) || 0);
+    }
     /** リージョン左端（In ハンドル） */
     function getSegmentRegionTimelineIn(track, segmentIndex) {
         const anchor = getSegmentTimelineStart(track, segmentIndex);
+        let stored = null;
         if (segmentIndex === 0) {
             const state = getPlaybackRegionsState(track);
             if (state && Number.isFinite(state.regionTimelineInSec)) {
-                const regionIn = Math.max(0, state.regionTimelineInSec);
-                return regionIn < anchor - 0.00001 ? anchor : regionIn;
+                stored = Math.max(0, state.regionTimelineInSec);
             }
-            return anchor;
+        } else {
+            const raw = getRawSegmentEntry(track, segmentIndex);
+            if (raw && Number.isFinite(raw.regionTimelineInSec)) {
+                stored = Math.max(0, raw.regionTimelineInSec);
+            }
         }
-        const raw = getRawSegmentEntry(track, segmentIndex);
-        if (raw && Number.isFinite(raw.regionTimelineInSec)) {
-            const regionIn = Math.max(0, raw.regionTimelineInSec);
-            return regionIn < anchor - 0.00001 ? anchor : regionIn;
-        }
-        return anchor;
+        if (stored == null) return anchor;
+        if (readRawRegionLeadPadSec(track, segmentIndex) > 0.00001) return stored;
+        return stored < anchor - 0.00001 ? anchor : stored;
     }
     /**
      * リージョン右端（Out ハンドル）。
@@ -2086,6 +2095,242 @@
             typeof isSegmentBoundaryJoined === 'function' &&
             !isSegmentBoundaryJoined(track, segmentIndex - 1)
         );
+    }
+    function isRegionEdgeKeyboardNudgeEnabled() {
+        return (
+            typeof isPhraseOffMovableSplitBoundaryEnabled === 'function' &&
+            isPhraseOffMovableSplitBoundaryEnabled()
+        );
+    }
+    /** Shift+I — 左/In 側の境界で波形内容が連続していないときのみ */
+    function canNudgeRegionInByKeyboard(track, segmentIndex) {
+        if (
+            segmentIndex > 0 &&
+            typeof isSegmentSourceContinuousAtBoundary === 'function' &&
+            isSegmentSourceContinuousAtBoundary(track, segmentIndex - 1)
+        ) {
+            return false;
+        }
+        return true;
+    }
+    /** Shift+O — 右/Out 側の境界で波形内容が連続していないときのみ */
+    function canNudgeRegionOutByKeyboard(track, segmentIndex) {
+        const segments = getTrackSegments(track);
+        if (
+            segmentIndex < segments.length - 1 &&
+            typeof isSegmentSourceContinuousAtBoundary === 'function' &&
+            isSegmentSourceContinuousAtBoundary(track, segmentIndex)
+        ) {
+            return false;
+        }
+        return true;
+    }
+    function regionEdgeKeyboardNudgeRefTransport(track, segmentIndex, kind) {
+        if (kind === 'in') {
+            return getSegmentRegionTimelineIn(track, segmentIndex);
+        }
+        return getSegmentTimelineEnd(track, segmentIndex);
+    }
+    /** Phrase OFF — リージョン端 nudge 量（参照位置の Tempo/Sig における 1 拍） */
+    function regionEdgeKeyboardNudgeSecForSegment(track, segmentIndex, kind) {
+        const refSec = regionEdgeKeyboardNudgeRefTransport(track, segmentIndex, kind);
+        if (
+            typeof meterBeatDurationSecAtTransport === 'function'
+        ) {
+            const beat = meterBeatDurationSecAtTransport(refSec);
+            if (Number.isFinite(beat) && beat > 0.00001) return beat;
+        }
+        return NaN;
+    }
+    /** エッジ nudge で隣接セグメントと再生タイムラインが重なったか */
+    function hasAdjacentPlaybackCrossfadeOverlapForEdgeNudge(track, segmentIndex) {
+        if (typeof hasTimelineOverlapAtBoundary !== 'function') return false;
+        const segments = getTrackSegments(track);
+        if (
+            segmentIndex > 0 &&
+            hasTimelineOverlapAtBoundary(track, segmentIndex - 1)
+        ) {
+            return true;
+        }
+        if (
+            segmentIndex < segments.length - 1 &&
+            hasTimelineOverlapAtBoundary(track, segmentIndex)
+        ) {
+            return true;
+        }
+        return false;
+    }
+    function finalizeRegionEdgeKeyboardNudge(track, segmentIndex) {
+        updateTrackRegionOverlays(track);
+        const slot = track.slot;
+        const hasOverlap = hasAdjacentPlaybackCrossfadeOverlapForEdgeNudge(
+            track,
+            segmentIndex,
+        );
+        redrawAfterRegionChange(slot, { segmentIndex });
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (
+            hasOverlap &&
+            typeof applyReviewMixCrossfadeGainsIfNeeded === 'function'
+        ) {
+            applyReviewMixCrossfadeGainsIfNeeded();
+        }
+    }
+    /** In/Out ハンドルドラッグと同じ境界解決（キーボード nudge 用） */
+    function resolveSplitBoundaryIndexForRegionEdgeNudge(track, segmentIndex, kind) {
+        const segments = getTrackSegments(track);
+        if (kind === 'in' && segmentIndex > 0) {
+            const b = segmentIndex - 1;
+            if (
+                typeof isSegmentMovableSplitBoundary === 'function' &&
+                isSegmentMovableSplitBoundary(track, b)
+            ) {
+                return b;
+            }
+            if (
+                typeof isSegmentBoundaryJoined === 'function' &&
+                isSegmentBoundaryJoined(track, b)
+            ) {
+                return b;
+            }
+        } else if (kind === 'out' && segmentIndex < segments.length - 1) {
+            const b = segmentIndex;
+            if (
+                typeof isSegmentMovableSplitBoundary === 'function' &&
+                isSegmentMovableSplitBoundary(track, b)
+            ) {
+                return b;
+            }
+            if (
+                typeof isSegmentBoundaryJoined === 'function' &&
+                isSegmentBoundaryJoined(track, b)
+            ) {
+                return b;
+            }
+        }
+        return -1;
+    }
+    function finishRegionEdgeKeyboardNudge(track, segmentIndex, opt) {
+        if (opt && opt.geometryOnly) {
+            refreshTrackRegionOverlayGeometry(track);
+        } else {
+            finalizeRegionEdgeKeyboardNudge(track, segmentIndex);
+        }
+    }
+    /** Phrase OFF — In を 1 拍分手前へ（In ハンドルドラッグと同じ経路） */
+    function nudgeSegmentRegionInEarlierContentFixed(track, segmentIndex, deltaSec, opt) {
+        const delta = Number(deltaSec);
+        if (!Number.isFinite(delta) || delta <= 0.00001) return false;
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const audioEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const t0 = getTrackTimelineStartSec(track);
+        const minIn = segmentIndex === 0 ? Math.max(t0, 0) : 0;
+        const maxIn = audioEnd - PLAYBACK_REGION_MIN_SEC;
+        const targetIn = prevRegionIn - delta;
+        if (targetIn < minIn - 0.00001 || maxIn < minIn) return false;
+        const newRegionIn = Math.max(minIn, Math.min(maxIn, targetIn));
+        if (Math.abs(newRegionIn - prevRegionIn) < 0.00001) return false;
+
+        const splitB = resolveSplitBoundaryIndexForRegionEdgeNudge(
+            track,
+            segmentIndex,
+            'in',
+        );
+        if (splitB >= 0 && typeof setSplitBoundaryFromTransport === 'function') {
+            setSplitBoundaryFromTransport(track, splitB, newRegionIn, {
+                silent: !!(opt && opt.silent),
+                geometryOnly: !!(opt && opt.geometryOnly),
+            });
+            finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+            return true;
+        }
+        if (segmentIndex === 0 && newRegionIn < anchor - 0.00001) {
+            extendSegmentAnchorLeft(track, segmentIndex, newRegionIn, audioEnd, t0, opt);
+            finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+            return true;
+        }
+        if (isSeparatedSegment(track, segmentIndex)) {
+            expandSeparatedSegmentRegionInLeft(
+                track,
+                segmentIndex,
+                newRegionIn,
+                audioEnd,
+                t0,
+                opt,
+            );
+            finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+            return true;
+        }
+
+        if (newRegionIn >= anchor - 0.00001) {
+            if (newRegionIn <= anchor + 0.00001) {
+                setSegmentRegionTimelineIn(track, segmentIndex, anchor);
+                setSegmentRegionLeadPadSec(track, segmentIndex, 0);
+            } else {
+                setSegmentRegionTimelineIn(track, segmentIndex, newRegionIn);
+                setSegmentRegionLeadPadSec(track, segmentIndex, 0);
+            }
+        } else {
+            setSegmentRegionTimelineIn(track, segmentIndex, newRegionIn);
+            setSegmentRegionLeadPadSec(track, segmentIndex, anchor - newRegionIn);
+        }
+
+        finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+        return true;
+    }
+    /** Phrase OFF — Out を 1 拍分後方へ（Out ハンドルドラッグと同じ経路） */
+    function nudgeSegmentRegionOutLaterContentFixed(track, segmentIndex, deltaSec, opt) {
+        const delta = Number(deltaSec);
+        if (!Number.isFinite(delta) || delta <= 0.00001) return false;
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const seg = segments[segmentIndex];
+        if (!seg) return false;
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const prevEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const maxEnd =
+            typeof maxSegmentTimelineEndSec === 'function'
+                ? maxSegmentTimelineEndSec(track, segmentIndex)
+                : prevEnd + delta;
+        const newEnd = Math.min(maxEnd, prevEnd + delta);
+        if (newEnd <= prevEnd + 0.00001) return false;
+
+        const splitB = resolveSplitBoundaryIndexForRegionEdgeNudge(
+            track,
+            segmentIndex,
+            'out',
+        );
+        if (splitB >= 0 && typeof setSplitBoundaryFromTransport === 'function') {
+            setSplitBoundaryFromTransport(track, splitB, newEnd, {
+                silent: !!(opt && opt.silent),
+                geometryOnly: !!(opt && opt.geometryOnly),
+            });
+            finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+            return true;
+        }
+
+        const newSourceOut = Math.min(
+            getSegmentSourceDurationSec(track, seg),
+            seg.sourceInSec + Math.max(PLAYBACK_REGION_MIN_SEC, newEnd - anchor),
+        );
+        if (Math.abs(newSourceOut - seg.sourceOutSec) < 0.00001) return false;
+        seg.sourceOutSec = newSourceOut;
+        applySegmentsToState(
+            track,
+            segments.map((s) =>
+                normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+            ),
+            {
+                silent: !!(opt && opt.silent),
+                skipUndo: !!(opt && opt.skipUndo),
+                geometryOnly: !!(opt && opt.geometryOnly),
+                skipPersist: !!(opt && opt.geometryOnly),
+            },
+        );
+        finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
+        return true;
     }
     function extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt) {
         const segments = getTrackSegments(track).map((s) => ({ ...s }));

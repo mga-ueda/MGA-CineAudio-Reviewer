@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.14 |
+| **バージョン** | v0.15 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,12 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.15 - 2026年6月13日
+
+- Phrase 着色 OFF 時、Shift+I / Shift+O でリージョン In / Out を Tempo/Sig の 1 拍ずつ調整（クリップ内容は動かさず、In ハンドル/Out ハンドルドラッグと同じ経路）。
+- 1 拍調整で隣接リージョンと重なったとき等パワー・クロスフェードを適用し、Fade In / Fade Out 三角で表示。
+- 等パワー・クロスフェードの三角マーカー表示を改善（非隣接リージョンの重なりにも対応）。
 
 ### v0.14 - 2026年6月13日
 

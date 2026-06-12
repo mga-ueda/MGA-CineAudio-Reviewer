@@ -255,6 +255,15 @@
         }
 
         if (
+            dispatchShortcutHandlers(
+                ['handlePlaybackRegionInNudgeKeydown', 'handlePlaybackRegionOutNudgeKeydown'],
+                e,
+            )
+        ) {
+            return;
+        }
+
+        if (
             typeof handleMarkerPendingRangeEscapeKeydown === 'function' &&
             handleMarkerPendingRangeEscapeKeydown(e)
         ) {
@@ -290,6 +299,8 @@
                     'handlePlaybackRegionPasteKeydown',
                     'handlePlaybackRegionFadeInKeydown',
                     'handlePlaybackRegionFadeOutKeydown',
+                    'handlePlaybackRegionInNudgeKeydown',
+                    'handlePlaybackRegionOutNudgeKeydown',
                     'handleMarkerBracketKeydown',
                     (ev) =>
                         callWindowShortcut('handleMusicalGridPhraseSplitKeydown', ev) ||

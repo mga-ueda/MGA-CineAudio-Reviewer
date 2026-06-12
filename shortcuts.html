@@ -489,7 +489,7 @@
                     <tr>
                         <td>複数選択</td>
                         <td><kbd>Ctrl</kbd>+クリック（リージョンまたは無音スロット上）</td>
-                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>Phrase 着色 <kbd>P</kbd> ON</strong> では無音スロット 1 つ＋リージョン 1 つの組み合わせも可（<kbd>E</kbd> で入れ替え）。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
+                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> では無音スロット 1 つ＋リージョン 1 つの組み合わせも可（<kbd>E</kbd> で入れ替え）。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
                     </tr>
                     <tr>
                         <td>グループ化 / 解除</td>
@@ -499,17 +499,27 @@
                     <tr>
                         <td>入れ替え（フレーズ並び）</td>
                         <td><kbd>E</kbd></td>
-                        <td><strong>Phrase 着色 <kbd>P</kbd> ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
                     </tr>
                     <tr>
                         <td>ソース In/Out・スプリット点</td>
                         <td>ハンドル操作（Audio Track）</td>
-                        <td>隣接時は境界を1本のスプリットハンドルで移動。離した後は各リージョンに In/Out。<strong>Phrase 着色 <kbd>P</kbd> ON</strong> で隣接フレーズ境界のときはフレーズ境界ドラッグ（小節スナップ・Phrase 欄更新）。<strong>OFF</strong> 時はわずかな隙間・重なりの隣接境界もドラッグ可</td>
+                        <td>隣接時は境界を1本のスプリットハンドルで移動。離した後は各リージョンに In/Out。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> で隣接フレーズ境界のときはフレーズ境界ドラッグ（小節スナップ・Phrase 欄更新）。<strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時はわずかな隙間・重なりの隣接境界もドラッグ可</td>
                     </tr>
                     <tr>
                         <td>Fade In / Fade Out</td>
                         <td>三角ハンドル操作（Audio Track）/<kbd>Alt</kbd>+<kbd>I</kbd> / <kbd>Alt</kbd>+<kbd>O</kbd></td>
                         <td>三角ハンドルはリージョン内側へドラッグでフェード長を調整。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）は<strong>シークバー位置</strong>までフェードを伸ばす（In＝リージョン頭から、Out＝リージョン末尾から）。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。再生中も反映</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン In を 1 拍分手前へ</td>
+                        <td><kbd>Shift</kbd>+<kbd>I</kbd></td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時のみ。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。クリップ内容は動かさず In だけ前へ（In ハンドルドラッグと同じ経路）。移動量は参照位置の <strong>Tempo/Sig</strong> 定義に基づく <strong>1 拍</strong>（変拍子の各拍長に追従。Tempo/Sig 未設定時は不可）。隣接リージョンと重なると等パワー・クロスフェード（Fade In / Fade Out 三角で表示）。波形が連続している境界では不可</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン Out を 1 拍分後方へ</td>
+                        <td><kbd>Shift</kbd>+<kbd>O</kbd></td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時のみ。対象・移動量・クロスフェード・連続境界の制約は <kbd>Shift</kbd>+<kbd>I</kbd> と同様。クリップ内容は動かさず Out だけ後方へ（Out ハンドルドラッグと同じ経路）</td>
                     </tr>
                     <tr>
                         <td>クリップ開始位置（タイムライン）</td>
@@ -524,7 +534,7 @@
                     <tr>
                         <td>リージョンキー（±半音）</td>
                         <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（Audio Track）</td>
-                        <td><strong>Phrase 着色 <kbd>P</kbd> ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを付け/更新し、コメント列に <code>キーを +1 する</code> 等。Key 0 に戻すと同範囲の自動マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを付け/更新し、コメント列に <code>キーを +1 する</code> 等。Key 0 に戻すと同範囲の自動マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
                     </tr>
                     <tr>
                         <td>リージョン情報をコピー</td>

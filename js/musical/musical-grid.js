@@ -969,6 +969,24 @@
         const pos = getMusicalGridBarBySec(settings.meterSpec, sec, maxSec);
         return formatMusicalGridPlayheadPosition(pos);
     }
+    /** 指定 transport の拍位置における 1 拍の秒数（Tempo/Sig・変拍子の各拍長に追従） */
+    function meterBeatDurationSecAtTransport(transportSec) {
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return NaN;
+        const maxSec =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(maxSec > 0)) return NaN;
+        const pos = getMusicalGridBarBySec(settings.meterSpec, transportSec, maxSec);
+        if (!pos || !pos.entry) return NaN;
+        const beat = resolveMeterBeatAtSec(pos.barStartSec, pos.entry, pos.sec);
+        if (beat && beat.beatDur > 0.00001) return beat.beatDur;
+        const segments = getMeterSigSegments(pos.entry.sig);
+        const firstSeg = segments && segments.length ? segments[0] : pos.entry.sig;
+        const beatDur = beatDurationSec(firstSeg, pos.entry.bpm);
+        return beatDur > 0.00001 ? beatDur : NaN;
+    }
     function musicalGridDrawSettings() {
         readMusicalGridFromInputs();
         const meterSpec = parseMeterSpec(getCommittedMusicalGridMeterText());
@@ -4848,6 +4866,7 @@
     window.resolveAdjacentMusicalGridStopSec = resolveAdjacentMusicalGridStopSec;
     window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
+    window.meterBeatDurationSecAtTransport = meterBeatDurationSecAtTransport;
     window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;
     window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
     window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;
