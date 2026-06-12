@@ -141,6 +141,7 @@
     let waveformOffsetDragStartTimelineSec = 0;
     let waveformOffsetDragPreserveInPadSec = 0;
     let waveformOffsetDragStartAnchorSec = 0;
+    let waveformOffsetDragGrabTransportOffsetSec = NaN;
     /** @type {{ slot: number, segmentIndex: number }[] | null} */
     let waveformOffsetDragGroupMembers = null;
     /** @type {Record<string, number> | null} */
@@ -899,6 +900,7 @@
         waveformOffsetDragGroupStartTimelineByKey = null;
         waveformOffsetDragGroupStartAnchorByKey = null;
         waveformOffsetDragGroupStartRegionInByKey = null;
+        waveformOffsetDragGrabTransportOffsetSec = NaN;
         const lanes = waveformScrubTargetEl();
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
     }
@@ -1371,6 +1373,14 @@
             return;
         }
 
+        if (
+            typeof tryBeginSplitBoundaryDragFromPointer === 'function' &&
+            tryBeginSplitBoundaryDragFromPointer(ev)
+        ) {
+            cancelWaveformPointerGesture();
+            return;
+        }
+
         if (!(ev.ctrlKey || ev.metaKey) && typeof clearRegionSelection === 'function') {
             clearRegionSelection();
         }
@@ -1392,11 +1402,17 @@
         waveformPointerGestureDidMove = false;
         const inPreTrackGap = clickIsInPreTrackTimelineGap(ev.clientX, ev.clientY);
         const inRegionHandleZone =
-            typeof isPointerInRegionEwCursorHitZone === 'function' &&
-            isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY);
+            typeof isPointerInRegionEwCursorHitZoneExcludingSplit === 'function'
+                ? isPointerInRegionEwCursorHitZoneExcludingSplit(ev.clientX, ev.clientY)
+                : typeof isPointerInRegionEwCursorHitZone === 'function' &&
+                  isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY);
+        const onSplitHandle =
+            typeof isPointerOnSplitHandleAtPointer === 'function' &&
+            isPointerOnSplitHandleAtPointer(ev.clientX, ev.clientY);
         waveformPointerGestureRegionHit =
             !inPreTrackGap &&
             !inRegionHandleZone &&
+            !onSplitHandle &&
             regionHit &&
             canDragWaveformTrackTimelineStart(regionHit.slot) &&
             !(
@@ -2143,7 +2159,10 @@
         waveformOffsetDragSegmentIndex =
             typeof segmentIndex === 'number' && segmentIndex >= 0 ? segmentIndex : -1;
         waveformOffsetDragPointerId = ev.pointerId;
-        waveformOffsetDragStartClientX = ev.clientX;
+        waveformOffsetDragStartClientX = Number.isFinite(waveformPointerGestureStartX)
+            ? waveformPointerGestureStartX
+            : ev.clientX;
+        waveformOffsetDragGrabTransportOffsetSec = NaN;
         if (waveformOffsetDragSegmentIndex >= 0) {
             const track = { type: 'extra', slot };
             waveformOffsetDragGroupMembers =
@@ -2180,6 +2199,13 @@
                           waveformOffsetDragStartTimelineSec -
                               waveformOffsetDragStartAnchorSec,
                       );
+            if (typeof transportSecFromClientX === 'function') {
+                const ptrStart = transportSecFromClientX(waveformOffsetDragStartClientX);
+                if (Number.isFinite(ptrStart)) {
+                    waveformOffsetDragGrabTransportOffsetSec =
+                        ptrStart - waveformOffsetDragStartTimelineSec;
+                }
+            }
         } else {
             waveformOffsetDragGroupMembers = null;
             waveformOffsetDragGroupStartTimelineByKey = null;
@@ -2214,7 +2240,17 @@
                 e.clientX,
                 waveformOffsetDragStartClientX,
             );
-            const next = waveformOffsetDragStartTimelineSec + delta;
+            let next = waveformOffsetDragStartTimelineSec + delta;
+            if (
+                waveformOffsetDragSegmentIndex >= 0 &&
+                typeof transportSecFromClientX === 'function' &&
+                Number.isFinite(waveformOffsetDragGrabTransportOffsetSec)
+            ) {
+                const ptr = transportSecFromClientX(e.clientX);
+                if (Number.isFinite(ptr)) {
+                    next = ptr - waveformOffsetDragGrabTransportOffsetSec;
+                }
+            }
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
                     skipPersist: true,
@@ -2230,7 +2266,17 @@
                 e.clientX,
                 waveformOffsetDragStartClientX,
             );
-            const next = waveformOffsetDragStartTimelineSec + delta;
+            let next = waveformOffsetDragStartTimelineSec + delta;
+            if (
+                waveformOffsetDragSegmentIndex >= 0 &&
+                typeof transportSecFromClientX === 'function' &&
+                Number.isFinite(waveformOffsetDragGrabTransportOffsetSec)
+            ) {
+                const ptr = transportSecFromClientX(e.clientX);
+                if (Number.isFinite(ptr)) {
+                    next = ptr - waveformOffsetDragGrabTransportOffsetSec;
+                }
+            }
             const dragMembers =
                 waveformOffsetDragGroupMembers && waveformOffsetDragGroupMembers.length
                     ? waveformOffsetDragGroupMembers.slice()

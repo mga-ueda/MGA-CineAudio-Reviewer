@@ -219,13 +219,15 @@
             const skipJoinedCrossfadeClamp =
                 forPlayback &&
                 ((i > 0 &&
-                    isSegmentBoundaryJoined(track, i - 1) &&
-                    (hasExtendedCrossfadeOverlapAtBoundary(track, i - 1) ||
-                        hasManualSegmentFadeAtJoinedBoundary(track, i - 1))) ||
+                    ((isSegmentBoundaryJoined(track, i - 1) &&
+                        (hasExtendedCrossfadeOverlapAtBoundary(track, i - 1) ||
+                            hasManualSegmentFadeAtJoinedBoundary(track, i - 1))) ||
+                        hasTimelineOverlapAtBoundary(track, i - 1))) ||
                     (i < segments.length - 1 &&
-                        isSegmentBoundaryJoined(track, i) &&
-                        (hasExtendedCrossfadeOverlapAtBoundary(track, i) ||
-                            hasManualSegmentFadeAtJoinedBoundary(track, i))));
+                        ((isSegmentBoundaryJoined(track, i) &&
+                            (hasExtendedCrossfadeOverlapAtBoundary(track, i) ||
+                                hasManualSegmentFadeAtJoinedBoundary(track, i))) ||
+                            hasTimelineOverlapAtBoundary(track, i))));
             if (forPlayback && !skipJoinedCrossfadeClamp && joinedPrev && boundaryPrev != null) {
                 timelineStart = Math.min(
                     timelineStart,

@@ -43,6 +43,7 @@
             if (!track) return;
             container.addEventListener('pointerdown', (ev) => {
                 if (ev.button !== 0) return;
+                if (regionHandleDragActive) return;
                 if (ev.ctrlKey || ev.metaKey) {
                     if (typeof resolveSilentGapSelectionAtPointer === 'function') {
                         const hit = resolveSilentGapSelectionAtPointer(

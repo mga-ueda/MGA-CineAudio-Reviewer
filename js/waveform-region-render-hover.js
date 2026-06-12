@@ -516,6 +516,38 @@
                 });
             }
         }
+        const splitHandles = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region__handle--split',
+        );
+        const lane = document.getElementById('extraAudioLane' + track.slot);
+        const laneRect = lane ? lane.getBoundingClientRect() : null;
+        for (let s = 0; s < splitHandles.length; s++) {
+            const handleEl = splitHandles[s];
+            if (!handleEl || handleEl.hidden) continue;
+            const handleRect = handleEl.getBoundingClientRect();
+            if (!(handleRect.width > 0) && !(handleRect.height > 0)) continue;
+            const regionEl = handleEl.closest('.audio-waveform-lane__playback-region');
+            const top = regionEl
+                ? regionEl.getBoundingClientRect().top
+                : laneRect
+                  ? laneRect.top
+                  : handleRect.top;
+            const bottom = regionEl
+                ? regionEl.getBoundingClientRect().bottom
+                : laneRect
+                  ? laneRect.bottom
+                  : handleRect.bottom;
+            out.push({
+                regionEl: regionEl || handleEl,
+                rect: {
+                    left: handleRect.left - pad,
+                    top,
+                    right: handleRect.right + pad,
+                    bottom,
+                },
+                kind: 'edge-split',
+            });
+        }
         return out;
     }
 
@@ -537,6 +569,32 @@
             }
             const hits = collectRegionEwCursorHitRectsForTrack(track);
             for (let i = 0; i < hits.length; i++) {
+                if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** In/Out・フェード用 EW ゾーン（スプリット境界は除く — リージョン平行移動と競合しない） */
+    function isPointerInRegionEwCursorHitZoneExcludingSplit(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            const lane = document.getElementById('extraAudioLane' + track.slot);
+            if (!lane || lane.hidden) continue;
+            const laneRect = lane.getBoundingClientRect();
+            if (
+                clientY < laneRect.top ||
+                clientY > laneRect.bottom ||
+                clientX < laneRect.left ||
+                clientX > laneRect.right
+            ) {
+                continue;
+            }
+            const hits = collectRegionEwCursorHitRectsForTrack(track);
+            for (let i = 0; i < hits.length; i++) {
+                if (hits[i].kind === 'edge-split') continue;
                 if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
             }
         }
@@ -600,6 +658,8 @@
     }
 
     window.isPointerInRegionEwCursorHitZone = isPointerInRegionEwCursorHitZone;
+    window.isPointerInRegionEwCursorHitZoneExcludingSplit =
+        isPointerInRegionEwCursorHitZoneExcludingSplit;
 
     function updatePlaybackRegionHoverFromPointer(clientX, clientY, altKey) {
         updateRegionResizeHandleCursorFromPointer(clientX, clientY);

@@ -572,6 +572,8 @@
         return -1;
     }
     window.getActiveMixExtraSlotFromDom = getActiveMixExtraSlotFromDom;
+    window.needsCrossfadeWaveformPreviewDuringGeometryDrag =
+        needsCrossfadeWaveformPreviewDuringGeometryDrag;
 
     /** スプリット対象 Ex：リージョン上 → そのリージョン／それ以外 → resolveTargetExtraSlot */
     function resolveSplitTargetExtraSlot() {
@@ -943,8 +945,23 @@
         return zones.length > 0;
     }
 
+    function isSplitBoundaryRegionDragActive() {
+        return !!(regionHandleDragActive && regionHandleDragSplitBoundary);
+    }
+
+    /** リージョン平行移動ドラッグ中（スプリットハンドル非表示など overlay 専用処理用） */
+    function isOffsetDragRegionWaveformPreviewActive() {
+        const lanes =
+            typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        return (
+            lanes &&
+            lanes.classList.contains('audio-waveform-composite__lanes--offset-drag')
+        );
+    }
+
     /** geometryOnly ドラッグ中でも波形プレビューが必要なとき（フェードハンドル / 重なり開始） */
     function needsCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt) {
+        if (isSplitBoundaryRegionDragActive()) return false;
         if (isCrossfadeHandleDragActive()) return true;
         if (!isRegionGeometryOnlyDrag(opt)) return false;
         if (!(typeof slot === 'number' && slot >= 0)) return false;
@@ -1008,6 +1025,12 @@
         }
         if (typeof drawExtraTrackWaveform === 'function') {
             drawExtraTrackWaveform(slot);
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof applyReviewMixCrossfadeGainsIfNeeded === 'function') {
+            applyReviewMixCrossfadeGainsIfNeeded();
         }
     }
 
@@ -1297,13 +1320,15 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!master) return;
-        const splitTransport = getSegmentTimelineEnd(track, boundaryIndex);
+        const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
+        const rightStart = getSegmentTimelineStart(track, boundaryIndex + 1);
+        const splitTransport = (leftEnd + rightStart) * 0.5;
         const pct =
             typeof transportSecToTimelineLeftPercent === 'function'
                 ? transportSecToTimelineLeftPercent(splitTransport)
                 : (splitTransport / master) * 100;
         el.style.left = pct + '%';
-        el.style.width = '0';
+        el.style.width = '14px';
         el.hidden = false;
     }
 
@@ -1819,26 +1844,48 @@
         const splitHandles = container.querySelectorAll(
             '.audio-waveform-lane__playback-region__handle--split',
         );
+        const offsetDragActive = isOffsetDragRegionWaveformPreviewActive();
+        const activeSplitBoundaryIndex =
+            isSplitBoundaryRegionDragActive() &&
+            Number.isFinite(regionHandleDragBoundaryIndex)
+                ? regionHandleDragBoundaryIndex
+                : -1;
         for (let h = 0; h < splitHandles.length; h++) {
             const el = splitHandles[h];
             const b = Number(el.dataset.boundaryIndex);
-            if (
-                Number.isFinite(b) &&
-                b >= 0 &&
-                b < segments.length - 1 &&
-                isSegmentBoundaryJoined(track, b)
-            ) {
+            if (!Number.isFinite(b) || b < 0 || b >= segments.length - 1) {
+                el.hidden = true;
+                continue;
+            }
+            if (offsetDragActive) {
+                el.hidden = true;
+                continue;
+            }
+            const showSplitHandle =
+                b === activeSplitBoundaryIndex ||
+                isSegmentMovableSplitBoundary(track, b) ||
+                isSegmentBoundaryJoined(track, b);
+            if (showSplitHandle) {
                 positionSplitHandleEl(el, track, b);
+            } else {
+                el.hidden = true;
             }
         }
         const zones = collectTrackCrossfadeZones(track);
         const markers = container.querySelectorAll('.audio-waveform-lane__crossfade-marker');
         if (markers.length !== zones.length) {
-            updateTrackRegionOverlays(track);
-            return;
-        }
-        for (let z = 0; z < zones.length; z++) {
-            positionCrossfadeMarkerEl(markers[z], zones[z].startSec, zones[z].endSec);
+            if (isSplitBoundaryRegionDragActive()) {
+                for (let z = 0; z < markers.length && z < zones.length; z++) {
+                    positionCrossfadeMarkerEl(markers[z], zones[z].startSec, zones[z].endSec);
+                }
+            } else {
+                updateTrackRegionOverlays(track);
+                return;
+            }
+        } else {
+            for (let z = 0; z < zones.length; z++) {
+                positionCrossfadeMarkerEl(markers[z], zones[z].startSec, zones[z].endSec);
+            }
         }
         const silentGaps =
             typeof collectTrackSilentGaps === 'function'
@@ -1847,7 +1894,7 @@
         const silentGapEls = container.querySelectorAll(
             '.audio-waveform-lane__playback-silent-gap',
         );
-        if (silentGapEls.length !== silentGaps.length) {
+        if (silentGapEls.length !== silentGaps.length && !isSplitBoundaryRegionDragActive()) {
             updateTrackRegionOverlays(track);
             return;
         }
@@ -2029,7 +2076,12 @@
             'overlay/splitHandles',
             () => {
                 for (let b = 0; b < segments.length - 1; b++) {
-                    if (!isSegmentBoundaryJoined(track, b)) continue;
+                    if (
+                        !isSegmentMovableSplitBoundary(track, b) &&
+                        !isSegmentBoundaryJoined(track, b)
+                    ) {
+                        continue;
+                    }
                     const splitEl = buildSplitHandleEl(b);
                     positionSplitHandleEl(splitEl, track, b);
                     container.appendChild(splitEl);

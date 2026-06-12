@@ -431,12 +431,17 @@
     window.isSegmentBoundaryJoinableAtIndex = isSegmentBoundaryJoinableAtIndex;
     window.playbackRegionBoundaryJoinBlockReason = playbackRegionBoundaryJoinBlockReason;
     window.isAutoJoinedBoundaryCrossfadeEligible = isAutoJoinedBoundaryCrossfadeEligible;
+    window.hasTimelineOverlapAtBoundary = hasTimelineOverlapAtBoundary;
     window.hasExtendedCrossfadeOverlapAtBoundary = hasExtendedCrossfadeOverlapAtBoundary;
     window.hasManualSegmentFadeAtJoinedBoundary = hasManualSegmentFadeAtJoinedBoundary;
     window.getManualJoinedBoundaryFadeZone = getManualJoinedBoundaryFadeZone;
     window.isTransportInManualJoinedBoundaryFadeZone =
         isTransportInManualJoinedBoundaryFadeZone;
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
+    window.isSegmentSourceSplitAtBoundary = isSegmentSourceSplitAtBoundary;
+    window.isSegmentMovableSplitBoundary = isSegmentMovableSplitBoundary;
+    window.isPhraseOffMovableSplitBoundaryEnabled =
+        isPhraseOffMovableSplitBoundaryEnabled;
     window.getContinuousJoinedSourceOutSec = getContinuousJoinedSourceOutSec;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;

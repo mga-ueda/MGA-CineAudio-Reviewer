@@ -263,7 +263,7 @@
                     wantsSlice === !!existing.usesPitchSlice &&
                     wantsLive === !!existing.usesLiveStretch;
             }
-            if (keepExisting) {
+            if (keepExisting && !(opt && opt.force)) {
                 if (typeof pitchPlaybackLog === 'function' && pitch !== 0) {
                     pitchPlaybackLog('start/keep-existing', {
                         slot,

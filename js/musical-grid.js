@@ -1636,11 +1636,7 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
-        if (
-            phraseBoundaryDragActive &&
-            phraseBoundaryDragCounts &&
-            phraseBoundaryDragCounts.length
-        ) {
+        if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
             return collectPhraseGroupRangesFromBarCounts(
                 settings.meterSpec,
                 master,
@@ -1825,11 +1821,7 @@
 
     function collectPhraseGroupDrawRanges(settings, master) {
         if (!getMusicalGridPhraseFillVisible()) return [];
-        if (
-            phraseBoundaryDragActive &&
-            phraseBoundaryDragCounts &&
-            phraseBoundaryDragCounts.length
-        ) {
+        if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
             return collectPhraseGroupRangesFromBarCounts(
                 settings.meterSpec,
                 master,
@@ -1878,11 +1870,7 @@
 
     function collectPhraseGroupDrawCounts(settings, master) {
         if (!getMusicalGridPhraseFillVisible()) return [];
-        if (
-            phraseBoundaryDragActive &&
-            phraseBoundaryDragCounts &&
-            phraseBoundaryDragCounts.length
-        ) {
+        if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
             return phraseBoundaryDragCounts.slice();
         }
         return resolvePhraseGroupBarCounts(
@@ -2772,11 +2760,7 @@
     }
     function resolveCurrentExpandedPhraseGroupBarCounts() {
         readMusicalGridFromInputs();
-        if (
-            phraseBoundaryDragActive &&
-            phraseBoundaryDragCounts &&
-            phraseBoundaryDragCounts.length
-        ) {
+        if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
             return phraseBoundaryDragCounts.slice();
         }
         const settings = musicalGridDrawSettings();
@@ -3448,6 +3432,139 @@
             }
         }
         return null;
+    }
+    /**
+     * Phrase 着色 ON — リージョン結合境界が隣接フレーズグループ境界のとき、
+     * フレーズ境界ハンドルドラッグと同じ bar スナップ／counts 更新用コンテキストを返す。
+     */
+    function resolvePhraseBoundaryDragAtRegionBoundary(track, boundaryIndex) {
+        if (!getMusicalGridPhraseFillVisible()) return null;
+        if (!canCommitPhraseCompositionLayout()) return null;
+        const b = boundaryIndex | 0;
+        if (b < 0) return null;
+
+        const counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        if (!counts || counts.length < 2) return null;
+
+        let phraseBoundaryIndex = -1;
+        if (
+            typeof window.getSegmentRegionTimelineIn === 'function' &&
+            typeof window.phraseSlotIndexAtRegionInSec === 'function'
+        ) {
+            const leftIn = window.getSegmentRegionTimelineIn(track, b);
+            const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
+            const leftSlot = window.phraseSlotIndexAtRegionInSec(leftIn);
+            const rightSlot = window.phraseSlotIndexAtRegionInSec(rightIn);
+            if (leftSlot != null && rightSlot != null) {
+                if (rightSlot === leftSlot + 1) {
+                    phraseBoundaryIndex = leftSlot;
+                } else if (leftSlot === rightSlot) {
+                    return null;
+                }
+            }
+        }
+
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return null;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return null;
+
+        if (phraseBoundaryIndex < 0) {
+            const ranges = collectPhraseGroupRangesFromBarCounts(
+                settings.meterSpec,
+                master,
+                counts,
+            );
+            if (ranges.length < 2) return null;
+            let boundarySec = null;
+            if (typeof window.getSegmentRegionTimelineIn === 'function') {
+                const leftIn = window.getSegmentRegionTimelineIn(track, b);
+                const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
+                if (Number.isFinite(leftIn) && Number.isFinite(rightIn)) {
+                    boundarySec = (leftIn + rightIn) * 0.5;
+                }
+            }
+            if (boundarySec == null) return null;
+            const eps =
+                typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                    ? window.segmentBoundaryJoinEpsilonSec()
+                    : musicalGridBarLineSnapThresholdSec();
+            for (let i = 0; i < ranges.length - 1; i++) {
+                const sec = ranges[i].endSec;
+                if (!Number.isFinite(sec)) continue;
+                if (Math.abs(sec - boundarySec) <= eps) {
+                    phraseBoundaryIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (phraseBoundaryIndex < 0 || phraseBoundaryIndex >= counts.length - 1) {
+            return null;
+        }
+
+        const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const startBarK =
+            sumGroupBarCounts(counts, phraseBoundaryIndex) + counts[phraseBoundaryIndex];
+        return {
+            phraseBoundaryIndex,
+            startCounts: counts.slice(),
+            barBoundaries,
+            startBarK,
+        };
+    }
+    function previewPhraseBoundaryDragFromRegionPointer(ctx, clientX, startClientX) {
+        if (!ctx || !ctx.startCounts || !ctx.startCounts.length) return null;
+        const startCounts = ctx.startCounts;
+        const phraseB = ctx.phraseBoundaryIndex | 0;
+        if (phraseB < 0 || phraseB >= startCounts.length - 1) return null;
+        const sumBefore = sumGroupBarCounts(startCounts, phraseB);
+        const minK = sumBefore;
+        const maxK = sumBefore + startCounts[phraseB] + startCounts[phraseB + 1];
+        const targetK = targetBarKForPhraseBoundaryDrag(
+            ctx.startBarK,
+            startClientX,
+            clientX,
+            ctx.barBoundaries,
+            minK,
+            maxK,
+        );
+        const newCounts = countsForPhraseBoundaryAtBarIndex(startCounts, phraseB, targetK);
+        applyPhraseBoundaryDragPreview(newCounts);
+        return newCounts;
+    }
+    function commitPhraseBoundaryDragFromRegion(startCounts, finalCounts, phraseBoundaryIndex, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!finalCounts || !finalCounts.length) return false;
+        if (phraseGroupCountsEqual(startCounts, finalCounts)) return false;
+        if (!o.skipUndo) {
+            if (typeof window.requestRegionUndoCapture === 'function') {
+                window.requestRegionUndoCapture({ includePhrase: true });
+            } else {
+                requestPhraseUndoCapture();
+            }
+        }
+        applyExplicitPhraseGroupBarCounts(finalCounts, { skipUndo: true });
+        persistPhraseWaveformEditAndRedraw({
+            skipUndo: true,
+            relayoutSilent: o.relayoutSilent !== false,
+        });
+        if (!phraseBoundaryDragActive) {
+            phraseBoundaryDragCounts = null;
+            drawMusicalGridOverlay();
+            updatePhraseBoundaryOverlay();
+        }
+        return true;
+    }
+    function cancelPhraseBoundaryDragPreview() {
+        if (phraseBoundaryDragActive) return;
+        if (!phraseBoundaryDragCounts) return;
+        phraseBoundaryDragCounts = null;
+        drawMusicalGridOverlay();
+        updatePhraseBoundaryOverlay();
     }
     /**
      * 連続セグメント lo..hi をまとめて結合 — Phrase 境界を右から左へ counts 更新後、1 回 relayout。
@@ -4645,6 +4762,10 @@
     window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;
     window.joinPhraseAtTarget = joinPhraseAtTarget;
     window.joinPhraseAtRegionBoundary = joinPhraseAtRegionBoundary;
+    window.resolvePhraseBoundaryDragAtRegionBoundary = resolvePhraseBoundaryDragAtRegionBoundary;
+    window.previewPhraseBoundaryDragFromRegionPointer = previewPhraseBoundaryDragFromRegionPointer;
+    window.commitPhraseBoundaryDragFromRegion = commitPhraseBoundaryDragFromRegion;
+    window.cancelPhraseBoundaryDragPreview = cancelPhraseBoundaryDragPreview;
     window.joinPhraseAtRegionSpan = joinPhraseAtRegionSpan;
     window.handleMusicalGridPhraseUndoKeydown = handleMusicalGridPhraseUndoKeydown;
     window.handleMusicalGridPhraseRedoKeydown = handleMusicalGridPhraseRedoKeydown;

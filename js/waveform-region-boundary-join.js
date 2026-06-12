@@ -57,6 +57,21 @@
      * 結合アンカーは維持したまま、リージョン In/Out で重なりを広げた手動クロス。
      * 結合境界専用の 1 秒ハンドオフより長い／手前からの重なりがある。
      */
+    /** 隣接セグメントのタイムライン重なり（結合境界の有無に依存しない） */
+    function hasTimelineOverlapAtBoundary(track, boundaryIndex) {
+        const segments = getTrackSegments(track);
+        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
+        const oStart = Math.max(
+            getSegmentPlaybackTimelineStart(track, boundaryIndex),
+            getSegmentPlaybackTimelineStart(track, boundaryIndex + 1),
+        );
+        const oEnd = Math.min(
+            getSegmentTimelineEnd(track, boundaryIndex),
+            getSegmentTimelineEnd(track, boundaryIndex + 1),
+        );
+        return oEnd - oStart >= MIN_CROSSFADE_OVERLAP_SEC;
+    }
+
     function hasExtendedCrossfadeOverlapAtBoundary(track, boundaryIndex) {
         if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
         const boundaryT = getSegmentTimelineStart(track, boundaryIndex + 1);
@@ -223,10 +238,27 @@
         );
     }
 
-    /** タイムライン結合かつクリップ内ソースが連続（分割直後・B結合可能な境界） */
-    function isSegmentSourceContinuousAtBoundary(track, boundaryIndex) {
-        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+    /** Phrase オフ時のみ — スプリット境界ドラッグのタイムライン／ソースずれ許容 */
+    const PHRASE_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC = 0.1;
+
+    function isPhraseOffMovableSplitBoundaryEnabled() {
+        if (
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible()
+        ) {
+            return false;
+        }
+        return true;
+    }
+
+    function phraseOffMovableSplitBoundaryToleranceSec() {
+        return PHRASE_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC;
+    }
+
+    /** 同一クリップでソース上の分割点が共有されている（タイムライン結合は未要求） */
+    function isSegmentSourceSplitAtBoundary(track, boundaryIndex) {
         const segments = getTrackSegments(track);
+        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
         const left = segments[boundaryIndex];
         const right = segments[boundaryIndex + 1];
         if (!left || !right) return false;
@@ -240,6 +272,35 @@
                 (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
             ) <= segmentBoundaryJoinEpsilonSec()
         );
+    }
+
+    /**
+     * スプリット境界をドラッグで移動できる隣接ペア。
+     * タイムライン上の隣接（重なり／微小隙間）のみ。ソース分割点が共有されていても
+     * タイムラインが離れていればハンドルは出さない（平行移動後の隙間中央の縦線を防ぐ）。
+     */
+    function isSegmentMovableSplitBoundary(track, boundaryIndex) {
+        if (!isPhraseOffMovableSplitBoundaryEnabled()) return false;
+        const segments = getTrackSegments(track);
+        if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
+        const left = segments[boundaryIndex];
+        const right = segments[boundaryIndex + 1];
+        if (!left || !right) return false;
+        const leftClip =
+            left.clipId || getSegmentClipId(track, boundaryIndex);
+        const rightClip =
+            right.clipId || getSegmentClipId(track, boundaryIndex + 1);
+        if (leftClip !== rightClip) return false;
+        const tol = phraseOffMovableSplitBoundaryToleranceSec();
+        const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
+        const rightStart = getSegmentTimelineStart(track, boundaryIndex + 1);
+        return Math.abs(leftEnd - rightStart) <= tol;
+    }
+
+    /** タイムライン結合かつクリップ内ソースが連続（分割直後・B結合可能な境界） */
+    function isSegmentSourceContinuousAtBoundary(track, boundaryIndex) {
+        if (!isSegmentBoundaryJoined(track, boundaryIndex)) return false;
+        return isSegmentSourceSplitAtBoundary(track, boundaryIndex);
     }
 
     /** 同一クリップ連続結合チェーンのソース終端（再生ではリージョン境界を跨いで1本） */
@@ -370,12 +431,14 @@
 
     function shouldShowSegmentInHandle(track, segmentIndex) {
         if (segmentIndex === 0) return true;
+        if (isSegmentMovableSplitBoundary(track, segmentIndex - 1)) return false;
         return !isSegmentBoundaryJoined(track, segmentIndex - 1);
     }
 
     function shouldShowSegmentOutHandle(track, segmentIndex) {
         const segments = getTrackSegments(track);
         if (segmentIndex >= segments.length - 1) return true;
+        if (isSegmentMovableSplitBoundary(track, segmentIndex)) return false;
         return !isSegmentBoundaryJoined(track, segmentIndex);
     }
 

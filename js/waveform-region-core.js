@@ -1661,6 +1661,19 @@
             raw.regionTimelineInSec = clamped;
         }
     }
+    function isSeparatedSegment(track, segmentIndex) {
+        if (segmentIndex <= 0) return false;
+        if (
+            typeof isSegmentMovableSplitBoundary === 'function' &&
+            isSegmentMovableSplitBoundary(track, segmentIndex - 1)
+        ) {
+            return false;
+        }
+        return (
+            typeof isSegmentBoundaryJoined === 'function' &&
+            !isSegmentBoundaryJoined(track, segmentIndex - 1)
+        );
+    }
     function extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt) {
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         const seg = segments[segmentIndex];
@@ -1691,10 +1704,60 @@
             },
         );
     }
+    /**
+     * セパレート列: リージョン In を手前へ広げつつ Out を固定（sourceIn を伸ばす）。
+     * 手前のセグメントと重なってもよい。
+     */
+    function expandSeparatedSegmentRegionInLeft(track, segmentIndex, regionIn, audioEnd, t0, opt) {
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        if (regionIn < anchor - 0.00001) {
+            extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
+            return;
+        }
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const delta = prevRegionIn - regionIn;
+        if (delta <= 0.00001) return;
+
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const seg = segments[segmentIndex];
+        if (!seg) return;
+
+        seg.timelineStartSec = anchor - delta;
+        seg.sourceInSec = Math.max(0, seg.sourceInSec - delta);
+        if (regionIn <= anchor + 0.00001) {
+            delete seg.regionTimelineInSec;
+            delete seg.regionLeadPadSec;
+        } else {
+            seg.regionTimelineInSec = regionIn;
+            delete seg.regionLeadPadSec;
+        }
+
+        applySegmentsToState(
+            track,
+            segments.map((s) =>
+                normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+            ),
+            {
+                silent: true,
+                skipUndo: true,
+                geometryOnly: !!(opt && opt.geometryOnly),
+                skipPersist: !!(opt && opt.geometryOnly),
+            },
+        );
+    }
+    /** リージョン本体の平行移動ドラッグ（offset drag）— In ハンドル／境界操作と区別 */
+    function isParallelRegionOffsetDragOpt(opt) {
+        return !!(
+            opt &&
+            Number.isFinite(opt.dragStartRegionIn) &&
+            Number.isFinite(opt.dragStartAnchor)
+        );
+    }
     function applySegmentRegionInFromTransport(track, segmentIndex, transportSec, opt) {
         const anchor = getSegmentTimelineStart(track, segmentIndex);
         const audioEnd = getSegmentTimelineEnd(track, segmentIndex);
         const t0 = getTrackTimelineStartSec(track);
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         let regionIn = Math.max(
             0,
             Math.min(audioEnd - PLAYBACK_REGION_MIN_SEC, transportSec),
@@ -1703,10 +1766,36 @@
             regionIn = Math.max(t0, regionIn);
         }
         regionIn = clampSegmentTimelineStart(track, segmentIndex, regionIn);
+        if (!isParallelRegionOffsetDragOpt(opt)) {
+            if (
+                segmentIndex > 0 &&
+                typeof isSegmentMovableSplitBoundary === 'function' &&
+                isSegmentMovableSplitBoundary(track, segmentIndex - 1)
+            ) {
+                setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
+                return;
+            }
+            if (
+                isSeparatedSegment(track, segmentIndex) &&
+                regionIn < prevRegionIn - 0.00001
+            ) {
+                expandSeparatedSegmentRegionInLeft(
+                    track,
+                    segmentIndex,
+                    regionIn,
+                    audioEnd,
+                    t0,
+                    opt,
+                );
+                return;
+            }
+        }
         const maxPadIn = audioEnd - PLAYBACK_REGION_MIN_SEC;
         if (regionIn < anchor - 0.00001) {
             if (
+                !isParallelRegionOffsetDragOpt(opt) &&
                 segmentIndex > 0 &&
+                typeof isSegmentBoundaryJoined === 'function' &&
                 isSegmentBoundaryJoined(track, segmentIndex - 1)
             ) {
                 setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
