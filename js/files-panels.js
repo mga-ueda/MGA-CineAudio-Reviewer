@@ -806,12 +806,11 @@
             const confirmPromise =
                 typeof requestAppConfirm === 'function'
                     ? requestAppConfirm(
-                          'Video Clear',
-                          '読み込んだ動画をアンロードします。映像に関する情報が失われますが、よろしいですか？',
-                          'Video Clear: cancelled',
+                          msg('dialog.videoClear.title'),
+                          msg('dialog.videoClear.body'),
+                          msg('log.dialog.videoClear.cancelled'),
                           {
-                              logLine:
-                                  'Video Clear: confirm — loaded video will be unloaded',
+                              logLine: msg('log.dialog.videoClear.confirm'),
                           },
                       )
                     : Promise.resolve(false);

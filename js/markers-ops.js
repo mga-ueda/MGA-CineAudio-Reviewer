@@ -1305,23 +1305,14 @@
         const tcSec = th.tcNudgeSec || 'Shift++/−';
         const tcDel = th.tcClearOut || 'Del';
         const tcDone = (th.submitEdit || 'Enter') + '/' + (th.cancelEdit || 'Esc');
+        const h = { tcFrame, tcSec, tcDel, tcDone };
         if (edge === 'in') {
-            return 'In TC: ' + tcFrame + ' で ±1f、' + tcSec + ' で ±1s（' + tcDone + ' で終了）';
+            return msg('tooltip.markerTc.in', h);
         }
         if (isRange) {
-            return (
-                'Out TC: ' +
-                tcFrame +
-                ' で ±1f、' +
-                tcSec +
-                ' で ±1s、' +
-                tcDel +
-                ' で Out クリア（' +
-                tcDone +
-                ' で終了）'
-            );
+            return msg('tooltip.markerTc.outRange', h);
         }
-        return 'Out TC: ' + tcFrame + ' で range Out を設定（±1f / ' + tcSec + ' で ±1s）';
+        return msg('tooltip.markerTc.outPoint', h);
     }
 
     function createMarkerTcInput(m, edge) {

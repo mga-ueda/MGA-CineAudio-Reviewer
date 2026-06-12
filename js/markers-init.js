@@ -90,12 +90,11 @@
                 const confirmPromise =
                     typeof requestAppConfirm === 'function'
                         ? requestAppConfirm(
-                              'Markers Clear',
-                              'すべてのマーカーと Memo が削除されます。よろしいですか？',
-                              'Markers Clear: cancelled',
+                              msg('dialog.markersClear.title'),
+                              msg('dialog.markersClear.body'),
+                              msg('log.dialog.markersClear.cancelled'),
                               {
-                                  logLine:
-                                      'Markers Clear: confirm — all markers and memo will be removed',
+                                  logLine: msg('log.dialog.markersClear.confirm'),
                               },
                           )
                         : Promise.resolve(false);

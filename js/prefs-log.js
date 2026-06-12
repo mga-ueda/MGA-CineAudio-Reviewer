@@ -181,20 +181,14 @@
         if (changed && o.logChange !== false && typeof writeLog === 'function') {
             if (next) {
                 if (typeof writeLogWarn === 'function') {
-                    writeLogWarn(
-                        'Test: sample warning (for W/E Only filter and [Warning] tag check)',
-                    );
+                    writeLogWarn(msg('log.debug.enabledSampleWarn'));
                 }
                 if (typeof writeLogError === 'function') {
-                    writeLogError(
-                        'Test: sample error (for W/E Only filter and [Error] tag check)',
-                    );
+                    writeLogError(msg('log.debug.enabledSampleError'));
                 }
-                writeLog(
-                    'Debug Log enabled ([RegionRestore], [MusicalSlot], [KeyPlayback], [VideoAnalyzer], [WaveformViewport], etc.)',
-                );
+                writeLog(msg('log.debug.enabled'));
             } else {
-                writeLog('Debug Log disabled');
+                writeLog(msg('log.debug.disabled'));
             }
         }
     }
@@ -425,9 +419,9 @@
             copyBtn.addEventListener('click', async () => {
                 const ok = await copyLogToClipboard();
                 if (ok) {
-                    writeLog('Log copied to clipboard');
+                    writeLog(msg('log.clipboard.copied'));
                 } else {
-                    writeLog('Log could not copy');
+                    writeLog(msg('log.clipboard.copyFailed'));
                 }
             });
         }

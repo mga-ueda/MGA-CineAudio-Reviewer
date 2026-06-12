@@ -666,10 +666,10 @@
 
     function applyShortcutTooltips() {
         const h = SHORTCUT_HINTS;
-        const playTitle = `再生/停止（${h.playStop}、${h.preroll} でプリロール、${h.replayFromStart} で再生開始位置から再生し直し）`;
+        const playTitle = msg('tooltip.playStop', h);
         setElementTitle(document.getElementById('playStopBtn'), playTitle);
 
-        const loopTitle = `再生をループ（${h.loop}）`;
+        const loopTitle = msg('tooltip.loop', h);
         const loopChk = document.getElementById('loopPlaybackCheckbox');
         setElementTitle(loopChk, loopTitle);
         if (loopChk) {
@@ -677,23 +677,17 @@
             setElementTitle(loopLbl, loopTitle);
         }
 
-        const memoTitle = `追加コメント — セッション全体の追加メモ（${h.cancelEdit} でフォーカス解除）`;
+        const memoTitle = msg('tooltip.markerMemo', h);
         setElementTitle(document.getElementById('markerMemoTextarea'), memoTitle);
         const memoLbl = document.querySelector('label[for="markerMemoTextarea"]');
         setElementTitle(memoLbl, memoTitle);
-        setElementTitle(
-            document.getElementById('markerCopyBtn'),
-            'マーカー一覧をタブ区切りでコピー（時刻は 00:00:00.000 形式・Length 列なし）',
-        );
-        setElementTitle(
-            document.getElementById('markerPasteBtn'),
-            'マーカー一覧を貼り付けて全置換（Copy と同形式・ms TC を FPS で最寄りフレームへ合わせて秒として配置）',
-        );
+        setElementTitle(document.getElementById('markerCopyBtn'), msg('tooltip.markerCopy'));
+        setElementTitle(document.getElementById('markerPasteBtn'), msg('tooltip.markerPaste'));
 
-        const soloTitle = `Solo（このレーンのみ再生・${h.solo}。ソロ中に再度押すと解除）`;
-        const muteTitle = `Mute（このレーンをミュート・${h.mute}、${h.muteClearAll} で全ミュート解除）`;
-        const volTitle = `音量を調整（レーン上で ${h.laneVolume} は ±1 dB）`;
-        const addTrackTitle = `次の Audio Track を表示（${h.addExtraTrack}）`;
+        const soloTitle = msg('tooltip.solo', h);
+        const muteTitle = msg('tooltip.mute', h);
+        const volTitle = msg('tooltip.laneVolume', h);
+        const addTrackTitle = msg('tooltip.addExtraTrack', h);
 
         setElementTitle(document.getElementById('videoAudioSoloBtn'), soloTitle);
         setElementTitle(document.getElementById('videoAudioMuteBtn'), muteTitle);
@@ -711,12 +705,9 @@
         }
 
         const lanes = document.getElementById('audioWaveformLanesTracks');
-        setElementTitle(
-            lanes,
-            `クリック/ドラッグでシーク。レーン上で ${h.solo}/${h.mute}/${h.laneVolume} はミックス。${h.waveformZoom} またはホイール上/下で横倍率変更（${h.waveformZoomExtreme} または Ctrl+ホイール上/下で最大/全体表示）、${h.waveformVerticalZoom} で振幅倍率変更、${h.waveformLaneHeight} または Shift+Ctrl+ホイール上/下でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。${h.waveformTimelineCenterSeekbar} で再生ヘッドを画面中央へ（一瞬センターロック）。`,
-        );
+        setElementTitle(lanes, msg('tooltip.waveformLanes', h));
 
-        const gridTitle = `小節・拍グリッドの表示（${h.musicalGrid}）`;
+        const gridTitle = msg('tooltip.musicalGrid', h);
         const gridChk = document.getElementById('musicalGridVisibleCheckbox');
         setElementTitle(gridChk, gridTitle);
         if (gridChk) {
@@ -724,7 +715,7 @@
             setElementTitle(gridLbl, gridTitle);
         }
 
-        const phraseTitle = `フレーズ着色と番号（${h.musicalPhrase}）`;
+        const phraseTitle = msg('tooltip.musicalPhrase', h);
         const phraseChk = document.getElementById('musicalGridPhraseFillCheckbox');
         setElementTitle(phraseChk, phraseTitle);
         if (phraseChk) {
@@ -732,26 +723,23 @@
             setElementTitle(phraseLbl, phraseTitle);
         }
 
-        const meterInputTitle = `Tempo/Sig — BPM-拍子（例: 140-4/4、変拍子 140-3/8+5/8、拍子繰り返し 140-3/4:5/4）。1 要素内で + と : は併用不可（確定時は直前の有効値）。${h.musicalGridMeterFocus} で編集、Tab で Phrase 欄へ、Enter/Esc で確定`;
+        const meterInputTitle = msg('tooltip.musicalGridMeterInput', h);
         setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
-        const phraseInputTitle = `Phrase 小節数（例: 8 / 1,8）。${h.musicalGridPhraseFocus} で編集、Tab で Tempo/Sig 欄へ、Enter/Esc で確定`;
+        const phraseInputTitle = msg('tooltip.musicalGridPhraseInput', h);
         setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
 
-        const analyzeTitle = `Live のオン/オフ（${h.analyze} でも Live ↔ 解析停止を切替）`;
+        const analyzeTitle = msg('tooltip.analyzeCheckbox', h);
         setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);
-        setElementTitle(
-            document.getElementById('analyzeToggleWrap'),
-            `Analyze — スペクトラムとレベルメーター（常時表示。チェックで Live、${h.analyze} で Live/解析停止の切替）。解析停止中も CLIP PROTECT は有効。`,
-        );
+        setElementTitle(document.getElementById('analyzeToggleWrap'), msg('tooltip.analyzeWrap', h));
 
-        const clickTitle = `メトロノームクリック音（${h.metronomeClick} で切替）。Click ON かつ再生中のみ鳴ります。`;
+        const clickTitle = msg('tooltip.metronomeClickCheckbox', h);
         setElementTitle(document.getElementById('metronomeClickCheckbox'), clickTitle);
         setElementTitle(
             document.getElementById('metronomeClickToggleWrap'),
-            `Click — 再生中に BPM/拍子グリッドへ同期したクリック音（${h.metronomeClick} で切替）。音量はミックス RMS に連動（楽曲より大きく、Analyze 不要）。設定は次回起動時に復元。`,
+            msg('tooltip.metronomeClickWrap', h),
         );
 
-        const offsetTitle = `R. Offset — 冒頭小節をアウフタクトとしてリハーサル名を付けない（${h.rehearsalMarkOffset} で切替）。Import/Export Review およびセッション復元に保存。`;
+        const offsetTitle = msg('tooltip.rehearsalMarkOffset', h);
         setElementTitle(document.getElementById('rehearsalMarkOffsetWrap'), offsetTitle);
         const offsetChk = document.getElementById('rehearsalMarkOffsetCheckbox');
         setElementTitle(offsetChk, offsetTitle);
@@ -760,27 +748,12 @@
             setElementTitle(offsetLbl, offsetTitle);
         }
 
-        setElementTitle(
-            document.getElementById('masterVolSlider'),
-            `ダブルクリックまたは ${h.masterVolReset} で 100%`,
-        );
-        setElementTitle(
-            document.getElementById('masterVolWrap'),
-            `Master Vol — ミックス後のマスター音量（ダブルクリックまたは ${h.masterVolReset} で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。クリップ時は CLIP PROTECT で自動減衰。`,
-        );
+        setElementTitle(document.getElementById('masterVolSlider'), msg('tooltip.masterVolSlider', h));
+        setElementTitle(document.getElementById('masterVolWrap'), msg('tooltip.masterVolWrap', h));
 
-        setElementTitle(
-            document.getElementById('sessionAllClearBtn'),
-            `動画・追加音声・マーカー・保存済みセッションをアンロード（${h.sessionAllClear}）`,
-        );
-        setElementTitle(
-            document.getElementById('sessionImportBtn'),
-            `.mgacr を Import Review で復元（ドロップ可・${h.sessionImport}）`,
-        );
-        setElementTitle(
-            document.getElementById('sessionExportBtn'),
-            `選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（${h.sessionExport}）`,
-        );
+        setElementTitle(document.getElementById('sessionAllClearBtn'), msg('tooltip.sessionAllClear', h));
+        setElementTitle(document.getElementById('sessionImportBtn'), msg('tooltip.sessionImport', h));
+        setElementTitle(document.getElementById('sessionExportBtn'), msg('tooltip.sessionExport', h));
         if (typeof updateSessionExportMediaBtnUi === 'function') {
             updateSessionExportMediaBtnUi(
                 typeof fileMain !== 'undefined' && !!fileMain,
@@ -788,39 +761,34 @@
         } else {
             setElementTitle(
                 document.getElementById('sessionExportVideoBtn'),
-                'レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し（オフラインバウンス・マーカー/リージョン埋め込み・書き出し中は Esc でキャンセル）',
+                msg('tooltip.sessionExportWave'),
             );
         }
 
         const exportVideoChk = document.getElementById('sessionExportIncludeVideo');
         const exportAudioChk = document.getElementById('sessionExportIncludeAudio');
-        const exportVideoTitle = 'Export Review に Video を含める';
-        const exportAudioTitle = 'Export Review に追加音声（読み込み済みの全 Audio Track）を含める';
+        const exportVideoTitle = msg('tooltip.exportIncludeVideo');
+        const exportAudioTitle = msg('tooltip.exportIncludeAudio');
         setElementTitle(exportVideoChk, exportVideoTitle);
         setElementTitle(exportAudioChk, exportAudioTitle);
         if (exportVideoChk) setElementTitle(exportVideoChk.closest('label'), exportVideoTitle);
         if (exportAudioChk) setElementTitle(exportAudioChk.closest('label'), exportAudioTitle);
 
-        setElementTitle(document.getElementById('videoClearBtn'), '動画だけをアンロード（追加音声・マーカーは残る場合あり）');
-        setElementTitle(
-            document.getElementById('videoAudioClearBtn'),
-            'Video Audio レーンは非表示にできません（最後の1トラック）',
-        );
-        setElementTitle(document.getElementById('markerClearAllBtn'), 'すべてのマーカーを削除');
-        setElementTitle(document.getElementById('seekBar'), '再生ヘッド位置をシーク');
+        setElementTitle(document.getElementById('videoClearBtn'), msg('tooltip.videoClear'));
+        setElementTitle(document.getElementById('videoAudioClearBtn'), msg('tooltip.videoAudioClear'));
+        setElementTitle(document.getElementById('markerClearAllBtn'), msg('tooltip.markerClearAll'));
+        setElementTitle(document.getElementById('seekBar'), msg('tooltip.seekBar'));
 
-        setElementTitle(document.getElementById('logCopyBtn'), 'ログ全文をクリップボードへコピー');
-        setElementTitle(document.getElementById('logClearBtn'), 'ログを消去');
-        const logWeOnlyTitle =
-            '警告・エラーのみ表示（次回起動時に復元。Import/Export 対象外）';
+        setElementTitle(document.getElementById('logCopyBtn'), msg('tooltip.logCopy'));
+        setElementTitle(document.getElementById('logClearBtn'), msg('tooltip.logClear'));
+        const logWeOnlyTitle = msg('tooltip.logWeOnly');
         const logWeOnlyCb = document.getElementById('logWeOnlyCheckbox');
         setElementTitle(logWeOnlyCb, logWeOnlyTitle);
         if (logWeOnlyCb) {
             const logWeOnlyLbl = logWeOnlyCb.closest('label');
             setElementTitle(logWeOnlyLbl, logWeOnlyTitle);
         }
-        const logDebugTitle =
-            '診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）';
+        const logDebugTitle = msg('tooltip.logDebug');
         const logDebugCb = document.getElementById('logDebugCheckbox');
         setElementTitle(logDebugCb, logDebugTitle);
         if (logDebugCb) {
@@ -828,8 +796,8 @@
             setElementTitle(logDebugLbl, logDebugTitle);
         }
 
-        const moveUpTitle = '直上の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）';
-        const moveDownTitle = '直下の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）';
+        const moveUpTitle = msg('tooltip.extraAudioMoveUp');
+        const moveDownTitle = msg('tooltip.extraAudioMoveDown');
         for (let slot = 0; slot < trackCount; slot++) {
             setElementTitle(document.getElementById('extraAudioMoveUpBtn' + slot), moveUpTitle);
             setElementTitle(document.getElementById('extraAudioMoveDownBtn' + slot), moveDownTitle);

@@ -30,12 +30,8 @@
             writeLog('Extra audio ' + (slot + 1) + ': file too large — ' + mb + ' MB');
             if (typeof showAppAlert === 'function') {
                 showAppAlert(
-                    'Cannot load extra audio',
-                    'File size (' +
-                        mb +
-                        ' MB) exceeds the limit (' +
-                        limitMb +
-                        ' MB).',
+                    msg('dialog.extraAudio.cannotLoadTitle'),
+                    msg('dialog.extraAudio.tooLargeBody', { mb, limitMb }),
                     { log: false },
                 );
             }

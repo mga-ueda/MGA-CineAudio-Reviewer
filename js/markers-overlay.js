@@ -1033,9 +1033,9 @@
                 : 'V';
         markerHideViewBtn.title = hasMarkers
             ? markersDisplayHidden
-                ? 'タイムラインと映像上のマーカーを表示（' + hintV + '）'
-                : 'タイムラインと映像上のマーカーを非表示（' + hintV + '）'
-            : 'マーカーを追加すると Hide/View が使えます';
+                ? msg('tooltip.markerHideView.show', { markerHide: hintV })
+                : msg('tooltip.markerHideView.hide', { markerHide: hintV })
+            : msg('tooltip.markerHideView.noMarkers');
         markerHideViewBtn.setAttribute(
             'aria-pressed',
             markersDisplayHidden ? 'true' : 'false',

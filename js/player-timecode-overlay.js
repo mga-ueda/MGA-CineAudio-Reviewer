@@ -358,9 +358,9 @@
         btn.textContent = tcOverlayUserHidden ? 'TC View' : 'TC Hide';
         btn.title = ready
             ? tcOverlayUserHidden
-                ? '映像上のタイムコードを表示（設定は Export Review / Import Review に保存）'
-                : '映像上のタイムコードを非表示（設定は Export Review / Import Review に保存）'
-            : '動画または追加音声を読み込むと TC Hide / TC View が使えます';
+                ? msg('tooltip.videoTcHide.show')
+                : msg('tooltip.videoTcHide.hide')
+            : msg('tooltip.videoTcHide.notReady');
         btn.setAttribute('aria-pressed', tcOverlayUserHidden ? 'true' : 'false');
         btn.disabled = !ready;
     }

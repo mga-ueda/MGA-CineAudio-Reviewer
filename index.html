@@ -54,8 +54,8 @@
             <p class="app-confirm-overlay__title" id="appConfirmTitle"></p>
             <p class="app-confirm-overlay__body" id="appConfirmBody"></p>
             <div class="app-confirm-overlay__actions">
-                <button type="button" id="appConfirmCancel" class="session-io-btn" title="確認ダイアログを閉じる">キャンセル</button>
-                <button type="button" id="appConfirmOk" class="session-io-btn session-io-btn--export" title="この内容で確定">OK</button>
+                <button type="button" id="appConfirmCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="appConfirmOk" class="session-io-btn session-io-btn--export">OK</button>
             </div>
         </div>
     </div>
@@ -64,10 +64,10 @@
         <div class="app-confirm-overlay__box marker-paste-overlay__box">
             <p class="app-confirm-overlay__title" id="markerPasteOverlayTitle">Markers Paste</p>
             <p class="app-confirm-overlay__body">Copy と同じ形式（# / In / Out / Feedback、時刻は 00:00:00.000）の表を貼り付けて OK を押してください。</p>
-            <textarea id="markerPasteTextarea" class="marker-paste-overlay__textarea" rows="10" spellcheck="false" aria-label="Marker table text" title="Markers の表データを貼り付け"></textarea>
+            <textarea id="markerPasteTextarea" class="marker-paste-overlay__textarea" rows="10" spellcheck="false" aria-label="Marker table text"></textarea>
             <div class="app-confirm-overlay__actions">
-                <button type="button" id="markerPasteCancel" class="session-io-btn" title="貼り付けをキャンセル">キャンセル</button>
-                <button type="button" id="markerPasteOk" class="session-io-btn session-io-btn--export" title="貼り付け内容を反映">OK</button>
+                <button type="button" id="markerPasteCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="markerPasteOk" class="session-io-btn session-io-btn--export">OK</button>
             </div>
         </div>
     </div>
@@ -80,7 +80,7 @@
     <header class="app-header">
         <div class="app-header-inner">
             <h2 class="app-title">MGA CineAudio Reviewer</h2>
-            <button type="button" class="version-badge" id="appVersionBadge" aria-label="バージョン情報を表示" title="バージョン情報を表示"></button>
+            <button type="button" class="version-badge" id="appVersionBadge" aria-label="バージョン情報を表示"></button>
         </div>
     </header>
 
@@ -90,12 +90,12 @@
 
     <div class="layout-dock-panel-content layout-dock-panel-content--player" data-layout-panel="player" id="layoutDockPanelPlayer">
         <div class="player-stage__main" id="playerStageMain">
-            <div class="video-panel file-drop-target file-drop-target--both" id="panelMain" data-side="main" title="動画・追加音声・.mgacr をドロップして読み込み（ページ内どこでも可）">
+            <div class="video-panel file-drop-target file-drop-target--both" id="panelMain" data-side="main">
                 <div class="video-panel__head-row">
                     <p class="video-panel-label">Video</p>
                     <div class="video-panel__head-actions">
-                        <button type="button" id="videoTcHideViewBtn" class="marker-panel__hide-view-btn" disabled title="動画または追加音声を読み込むと TC Hide / TC View が使えます">TC Hide</button>
-                        <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled title="動画だけをアンロード（追加音声・マーカーは残る場合あり）">Clear</button>
+                        <button type="button" id="videoTcHideViewBtn" class="marker-panel__hide-view-btn" disabled>TC Hide</button>
+                        <button type="button" id="videoClearBtn" class="marker-panel__clear-btn" disabled>Clear</button>
                     </div>
                 </div>
                 <span class="file-name" id="nameMain">Not Loaded</span>
@@ -131,8 +131,8 @@
                 <div class="transport-bar__row transport-bar__row--playback" role="group" aria-label="Playback controls">
                     <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
                         <div class="transport-opt-cell transport-opt-cell--playback">
-                            <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label" title="再生をループ">
-                                <input type="checkbox" id="loopPlaybackCheckbox" checked title="再生をループ">
+                            <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
+                                <input type="checkbox" id="loopPlaybackCheckbox" checked>
                                 <span>Loop</span>
                             </label>
                         </div>
@@ -141,16 +141,16 @@
                         href="guide.html"
                         id="transportGuideLink"
                         class="transport-shortcuts-link transport-opt-chip"
-                        title="How To を新しいウィンドウで開く"
+                       
                     >How To</a>
                     <a
                         href="shortcuts.html"
                         id="transportShortcutsLink"
                         class="transport-shortcuts-link transport-opt-chip"
-                        title="Shortcut 一覧を新しいウィンドウで開く"
+                       
                     >Shortcut</a>
-                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all" title="動画・追加音声・マーカー・保存済みセッションをアンロード（Ctrl+Shift+Alt+Del）">All Clear</button>
-                    <button type="button" id="playStopBtn" disabled title="再生/停止">Play</button>
+                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all">All Clear</button>
+                    <button type="button" id="playStopBtn" disabled>Play</button>
                 </div>
             </div>
     </div>
@@ -161,10 +161,10 @@
                 <div class="marker-panel__head-row">
                     <h3 class="marker-panel__title">Markers</h3>
                     <div class="marker-panel__head-actions">
-                        <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled title="マーカーを追加すると Hide/View が使えます（V）">Hide</button>
-                        <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled title="マーカーテーブルをコピー（タブ区切り・時刻は 00:00:00.000 ms・Length 列なし）">Copy</button>
-                        <button type="button" id="markerPasteBtn" class="marker-panel__paste-btn" disabled title="マーカーテーブルを貼り付け（Copy と同形式・ms TC を FPS で最寄りフレームへ合わせて秒として配置・全マーカーを置換）">Paste</button>
-                        <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled title="すべてのマーカーを削除">Clear</button>
+                        <button type="button" id="markerHideViewBtn" class="marker-panel__hide-view-btn" disabled>Hide</button>
+                        <button type="button" id="markerCopyBtn" class="marker-panel__copy-btn" disabled>Copy</button>
+                        <button type="button" id="markerPasteBtn" class="marker-panel__paste-btn" disabled>Paste</button>
+                        <button type="button" id="markerClearAllBtn" class="marker-panel__clear-btn" disabled>Clear</button>
                     </div>
                 </div>
                 <p class="marker-panel__range-hint" id="markerRangeHint" hidden>Range: press <kbd>]</kbd> for Out</p>
@@ -187,7 +187,7 @@
                 </div>
                 <p class="marker-list-empty" id="markerListEmpty">動画または追加音声を読み込むとマーカーを追加できます<br><kbd>Ins</kbd> ポイント、<kbd>Ins</kbd> 長押しでレンジ、<kbd>[</kbd> <kbd>]</kbd> レンジ</p>
                 <div class="marker-panel__memo">
-                    <label class="marker-panel__memo-label" for="markerMemoTextarea" title="セッション全体の追加メモ（Esc でフォーカス解除）">Additional Comments</label>
+                    <label class="marker-panel__memo-label" for="markerMemoTextarea">Additional Comments</label>
                     <textarea
                         id="markerMemoTextarea"
                         class="marker-panel__memo-textarea"
@@ -196,7 +196,7 @@
                         wrap="soft"
                         aria-label="Session memo"
                         disabled
-                        title="セッション全体の追加メモを入力"
+                       
                     ></textarea>
                 </div>
             </div>
@@ -204,15 +204,15 @@
     </div>
 
     <div class="layout-dock-panel-content layout-dock-panel-content--waveform" data-layout-panel="waveform" id="layoutDockPanelWaveform">
-    <section class="audio-waveform-composite file-drop-target file-drop-target--both" id="audioWaveformComposite" aria-label="音声波形" title="動画・追加音声・.mgacr をドロップして読み込み（ページ内どこでも可）">
+    <section class="audio-waveform-composite file-drop-target file-drop-target--both" id="audioWaveformComposite" aria-label="音声波形">
         <div class="audio-waveform-composite__grid">
             <div class="audio-waveform-composite__sidebar">
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
                     <div class="audio-waveform-lane-meta__row">
                         <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
                         <div class="track-mix-actions">
-                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled title="Solo（S。ソロ中に再度押すと解除）" aria-pressed="false">S</button>
-                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled title="Mute（M。Alt+M で全トラックのミュート解除）" aria-pressed="false">M</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--solo" id="videoAudioSoloBtn" disabled aria-pressed="false">S</button>
+                            <button type="button" class="track-mix-btn track-mix-btn--mute" id="videoAudioMuteBtn" disabled aria-pressed="false">M</button>
                         </div>
                     </div>
                     <div class="track-lane-controls">
@@ -223,14 +223,14 @@
                             <span class="track-lane-meter-db" id="trackLaneMeterDbVideo" aria-hidden="true">-96.0 dB</span>
                         </div>
                         <div class="track-lane-fader-row">
-                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="828" disabled aria-label="Video Audio volume" title="Video Audio の音量を調整（レーン上で +/- は ±1 dB）">
+                            <input type="range" class="track-lane-fader" id="trackLaneFaderVideo" min="0" max="1000" step="1" value="828" disabled aria-label="Video Audio volume">
                             <span class="track-lane-fader-db" id="trackLaneFaderDbVideo">0.0 dB</span>
                         </div>
                     </div>
                     <span class="audio-waveform-lane-meta__status" id="audioWaveformStatus" hidden></span>
                     <div class="track-lane-bottom-actions track-lane-bottom-actions--compact">
-                        <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled title="Video Audio レーンは非表示にできません（最後の1トラック）">×</button>
-                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn" title="次の Audio Track を表示（Ctrl+N）">+ Add Track</button>
+                        <button type="button" class="track-mix-btn track-mix-btn--clear" id="videoAudioClearBtn" disabled>×</button>
+                        <button type="button" class="track-lane-add-btn" id="videoAudioAddTrackBtn">+ Add Track</button>
                     </div>
                 </div>
                 <div id="extraLaneMetaMount"></div>
@@ -238,7 +238,7 @@
             <div
                 class="audio-waveform-composite__lanes"
                 id="audioWaveformLanesTracks"
-                title="クリック/ドラッグでシーク。レーン上で S/M/+/- はミックス。↑/↓ またはホイール上/下で横倍率を1段階変更（Ctrl+↑/↓ または Ctrl+ホイール上/下で最大/全体表示）、Shift+↑/↓ で縦倍率変更（Shift+Ctrl+↓ で等倍にリセット）、Shift+Ctrl+ホイール上/下でトラック高さ変更、Shift+ホイールで横スクロール。Phrase 着色 ON かつリージョン選択中は Alt+Shift+ホイールでキー ±1 半音。"
+               
                 tabindex="0"
                 role="presentation"
             >
@@ -288,7 +288,7 @@
                 </div>
                 <div class="audio-waveform-composite__hover-playhead" id="audioWaveformHoverPlayhead" hidden aria-hidden="true"></div>
                 </div>
-                <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position" title="再生ヘッド位置をシーク">
+                <input type="range" id="seekBar" class="audio-waveform-composite__seek-input" min="0" max="100" step="0.016666666666666666" value="0" disabled tabindex="-1" aria-label="Playhead position">
             </div>
         </div>
     </section>
@@ -302,14 +302,14 @@
                 class="transport-opt-chip transport-musical-pos"
                 id="musicalGridPlayheadPos"
                 aria-live="polite"
-                title="現在地（小節・拍・ms）"
+               
             >---:--:--</div>
             <div class="musical-grid-options transport-opt-chip" role="group" aria-label="Musical grid">
                 <label
                     class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
-                    title="小節・拍グリッドの表示 (T)"
+                   
                 >
-                    <input type="checkbox" id="musicalGridVisibleCheckbox" title="Tempo/Sig グリッドの表示を切替">
+                    <input type="checkbox" id="musicalGridVisibleCheckbox">
                     <span>Tempo/Sig</span>
                 </label>
                 <input
@@ -321,13 +321,13 @@
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="140-4/4"
-                    title="BPM-拍子。例: 140-4/4 / 140-3/8+5/8 / 140-3/4:5/4 / 140-1/16,140-4/4 / (140-4/4,140-2/4)。+ は変拍子（1 小節内）、: は拍子繰り返し（小節ごと）。1 要素内で + と : の併用不可（確定時は直前の有効値に戻る）。Alt+T で編集、Tab で Phrase 欄へ、Enter/Esc で確定。"
+                   
                 >
                 <label
                     class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
-                    title="フレーズ着色と番号 (P)"
+                   
                 >
-                    <input type="checkbox" id="musicalGridPhraseFillCheckbox" title="Phrase 着色の表示を切替">
+                    <input type="checkbox" id="musicalGridPhraseFillCheckbox">
                     <span>Phrase</span>
                 </label>
                 <input
@@ -339,7 +339,7 @@
                     autocomplete="off"
                     spellcheck="false"
                     placeholder="1,8"
-                    title="Phrase の小節数。8 = 8小節ごと。1,8 = 最初の1小節のみ、その後は8小節ごと。Alt+P で編集、Tab で Tempo/Sig 欄へ、Enter/Esc で確定。"
+                   
                 >
             </div>
         </div>
@@ -348,7 +348,7 @@
             <div
                 class="session-save-indicator-chip"
                 id="sessionSaveIndicator"
-                title="データ保存中はランプが明るく光ります"
+               
             >
                 <span class="session-save-indicator__housing" aria-hidden="true">
                     <span class="session-save-indicator__lamp session-save-indicator__lamp--idle"></span>
@@ -356,14 +356,14 @@
                     <span class="session-save-indicator__text">SAVED</span>
                 </span>
             </div>
-            <div class="master-vol-container transport-opt-chip" id="masterVolWrap" title="Master Vol — ミックス後のマスター音量（ダブルクリックまたは Ctrl+Shift+V で 100%）。LKFS は再生開始からのインテグレーテッド値（停止後も保持、再再生で計測し直し）。クリップ時は CLIP PROTECT で自動減衰。">
+            <div class="master-vol-container transport-opt-chip" id="masterVolWrap">
                 <span class="master-vol-container__label transport-opt-label">Master Vol</span>
-                <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume" title="ダブルクリックまたは Ctrl+Shift+V で 100%">
+                <input type="range" id="masterVolSlider" min="0" max="2" step="0.01" value="1.0" aria-label="Master volume">
                 <span class="transport-opt-value" id="masterVolDisp" aria-live="polite">0.0 dB / ----- LKFS</span>
             </div>
             <div class="monitor-floor-options transport-opt-chip" role="group" aria-label="Analysis display lower limit">
                 <label class="transport-opt-label" for="spectrumFloorDbSelect">Spectrum floor</label>
-                <select id="spectrumFloorDbSelect" class="transport-select monitor-floor-select" title="スペクトラム表示の下限 dB">
+                <select id="spectrumFloorDbSelect" class="transport-select monitor-floor-select">
                     <option value="-50">-50 dB</option>
                     <option value="-60">-60 dB</option>
                     <option value="-70">-70 dB</option>
@@ -371,7 +371,7 @@
                     <option value="-96">-96 dB</option>
                 </select>
                 <label class="transport-opt-label" for="meterFloorDbSelect">Level meter floor</label>
-                <select id="meterFloorDbSelect" class="transport-select monitor-floor-select" title="レベルメーター目盛りの下限 dB">
+                <select id="meterFloorDbSelect" class="transport-select monitor-floor-select">
                     <option value="-50">-50 dB</option>
                     <option value="-60">-60 dB</option>
                     <option value="-70">-70 dB</option>
@@ -381,35 +381,35 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--export">
-            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap" title="Click — 再生中に BPM/拍子グリッドへ同期したクリック音（C で切替）。">
+            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap">
                 <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
-                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)" title="メトロノームクリック音（C で切替）">
+                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)">
             </div>
-            <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap" title="Analyze — スペクトラムとレベルメーター（常時表示。チェックで Live、A で Live/解析停止の切替）。解析停止中も CLIP PROTECT は有効。">
+            <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap">
                 <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
-                <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze（Live のオン/オフ。A で Live/解析停止を切替）" title="ON で Live（解析中）、OFF で解析停止。A キーでも切替">
+                <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze（Live のオン/オフ。A で Live/解析停止を切替）">
             </div>
-            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap" title="R. Offset — 冒頭小節をアウフタクトとしてリハーサル名を付けない（R で切替）。Import/Export Review およびセッション復元に保存。">
+            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap">
                 <label class="transport-opt-label" for="rehearsalMarkOffsetCheckbox">R. Offset</label>
-                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Rehearsal mark offset (R. Offset)" title="ON: 先頭フレーズにリハーサル名を付けない（R で切替）">
+                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Rehearsal mark offset (R. Offset)">
             </div>
             <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
                     <span class="transport-opt-label">Include in export</span>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に Video を含める">
-                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled title="Export Review に Video を含める">
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeVideo" checked disabled>
                         <span>Video</span>
                     </label>
-                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item" title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
-                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled title="Export Review に追加音声（読み込み済みの全 Audio Track）を含める">
+                    <label class="transport-compact-lbl transport-compact-lbl--row session-export-media__item">
+                        <input type="checkbox" id="sessionExportIncludeAudio" checked disabled>
                         <span>Audio</span>
                     </label>
                 </div>
             </div>
             <div class="session-io-actions" role="group" aria-label="Import and export review">
-                <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import" title=".mgacr を Import Review で復元（ドロップ可・Ctrl+Shift+Alt+I）">Import Review</button>
-                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled title="選択中のメディア・マーカー・ミックス・表示設定を1ファイルに保存（Ctrl+Shift+Alt+E）">Export Review</button>
-                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video session-io-btn--export-wave" disabled title="レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し（オフラインバウンス・マーカー/リージョン埋め込み・書き出し中は Esc でキャンセル）">Export Wave</button>
+                <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import">Import Review</button>
+                <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled>Export Review</button>
+                <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video session-io-btn--export-wave" disabled>Export Wave</button>
             </div>
         </div>
         </div>
@@ -488,16 +488,16 @@
         <div class="log-wrap">
             <div id="log">&gt; System Ready.</div>
             <div class="log-actions" aria-label="Log actions">
-                <label class="log-debug-toggle" title="警告・エラーのみ表示（次回起動時に復元。Import/Export 対象外）">
+                <label class="log-debug-toggle">
                     <input type="checkbox" id="logWeOnlyCheckbox" />
                     <span>W/E Only</span>
                 </label>
-                <label class="log-debug-toggle" title="診断用の詳細ログを出力（次回起動時に復元。Import/Export 対象外）">
+                <label class="log-debug-toggle">
                     <input type="checkbox" id="logDebugCheckbox" />
                     <span>Debug Log</span>
                 </label>
-                <button id="logCopyBtn" type="button" class="log-action-btn" title="ログ全文をクリップボードへコピー">Copy</button>
-                <button id="logClearBtn" type="button" class="log-action-btn" title="ログを消去">Clear</button>
+                <button id="logCopyBtn" type="button" class="log-action-btn">Copy</button>
+                <button id="logClearBtn" type="button" class="log-action-btn">Clear</button>
             </div>
         </div>
         </div>
@@ -600,6 +600,14 @@
 
     <script src="js/version.js"></script>
     <script src="js/constants.js"></script>
+    <script src="js/messages/registry.js"></script>
+    <script src="js/messages/overlay.js"></script>
+    <script src="js/messages/dialog.js"></script>
+    <script src="js/messages/tooltip.js"></script>
+    <script src="js/messages/toast.js"></script>
+    <script src="js/messages/log.js"></script>
+    <script src="js/messages/ui.js"></script>
+    <script src="js/messages/apply-static.js"></script>
     <script src="js/dom-refs.js"></script>
     <script src="js/layout-dock.js"></script>
     <script src="js/apply-version.js"></script>

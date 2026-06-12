@@ -37,7 +37,7 @@
         const total = Math.max(0.001, Number(totalSec) || 0);
         const elapsed = Math.max(0, Number(elapsedSec) || 0);
         const pct = Math.min(100, Math.round((elapsed / total) * 100));
-        const label = kind === 'wave' ? 'Exporting WAV…' : 'Exporting WebM…';
+        const label = kind === 'wave' ? msg('overlay.export.exportingWave') : msg('overlay.export.exportingWebm');
         return (
             label +
             ' ' +
@@ -88,8 +88,7 @@
                 esc.hidden = true;
             } else {
                 esc.hidden = false;
-                esc.innerHTML =
-                    '操作はロックされています。<kbd>Esc</kbd> キーで書き出しをキャンセルできます。';
+                esc.innerHTML = msg('overlay.export.escHint');
             }
         }
     }
@@ -115,7 +114,7 @@
             webmExportUserCancel = false;
             webmExportEmergencyCleanup = null;
             applyBlockingOverlayChrome({
-                title: 'WebM を書き出し中',
+                title: msg('overlay.export.webmTitle'),
                 hideEscHint: false,
             });
         }
@@ -156,15 +155,15 @@
     function tryCancelWebmExportFromEsc() {
         if (!isWebmExportActive()) return;
         webmExportUserCancel = true;
-        updateExportBlockingSub('キャンセルしています…');
+        updateExportBlockingSub(msg('overlay.export.canceling'));
         if (typeof webmExportEmergencyCleanup === 'function') {
             webmExportEmergencyCleanup();
         }
         if (typeof writeLog === 'function') {
             writeLog(
                 blockingMode === 'wave-export'
-                    ? 'Export Wave: cancel requested (Esc)'
-                    : 'Export WebM: cancel requested (Esc)',
+                    ? msg('log.export.waveCancelEsc')
+                    : msg('log.export.webmCancelEsc'),
             );
         }
     }
@@ -176,7 +175,7 @@
         webmExportEmergencyCleanup = null;
         blockingMode = kind;
         setOperationBlockingVisible(true, {
-            title: kind === 'wave-export' ? 'WAV を書き出し中' : 'WebM を書き出し中',
+            title: kind === 'wave-export' ? msg('overlay.export.waveTitle') : msg('overlay.export.webmTitle'),
             hideEscHint: false,
         });
         try {
@@ -189,7 +188,7 @@
         updateExportBlockingSub(
             totalSec > 0
                 ? formatMediaExportProgressSub(0, totalSec, o.kind === 'wave' ? 'wave' : 'webm')
-                : 'Preparing export…',
+                : msg('overlay.export.preparing'),
         );
     }
 

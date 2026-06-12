@@ -18,11 +18,11 @@
         const textEl = el.querySelector('.session-save-indicator__text');
         if (textEl) textEl.textContent = (busy || fading) ? 'SAVING' : 'SAVED';
         if (busy) {
-            el.title = 'データを保存しています…';
+            el.title = msg('ui.sessionSave.busy');
         } else if (pending) {
-            el.title = 'データ保存中はランプが明るく光ります（保存待ち）';
+            el.title = msg('ui.sessionSave.pending');
         } else {
-            el.title = 'データ保存中はランプが明るく光ります';
+            el.title = msg('ui.sessionSave.idle');
         }
     }
 

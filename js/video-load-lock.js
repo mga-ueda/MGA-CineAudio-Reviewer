@@ -70,10 +70,7 @@
         if (ctx && ctx.state === 'suspended') {
             void ctx.resume();
         }
-        writeLog(
-            'Video load: ready' +
-                (lockFileName ? ' (“' + lockFileName + '”)' : ''),
-        );
+        writeLog(msg('log.videoLoad.ready', lockFileName));
         if (typeof kickMainVideoWaveformAfterLoadLock === 'function') {
             kickMainVideoWaveformAfterLoadLock();
         }
@@ -84,14 +81,14 @@
         if (!status) return;
         if (!lockActive) return;
         if (!lockVideoReady) {
-            status.textContent = 'Loading video…';
+            status.textContent = msg('overlay.videoLoad.loadingVideo');
             return;
         }
         if (!lockAudioReady) {
-            status.textContent = 'Loading Video Audio…';
+            status.textContent = msg('overlay.videoLoad.loadingVideoAudio');
             return;
         }
-        status.textContent = 'Ready';
+        status.textContent = msg('overlay.videoLoad.ready');
     }
 
     function applyVideoLoadLockUi(active) {
@@ -157,15 +154,12 @@
             lockPlaybackWaitTimer = 0;
             if (waitGen !== lockGen || !lockActive) return;
             if (lockVideoReady && lockAudioReady) return;
-            writeLog('Video load: playback wait timeout — releasing lock');
+            writeLog(msg('log.videoLoad.playbackWaitTimeout'));
             lockVideoReady = true;
             lockAudioReady = true;
             tryCompleteVideoLoadLock();
         }, LOCK_PLAYBACK_WAIT_TIMEOUT_MS);
-        writeLog(
-            'Video load: started' +
-                (lockFileName ? ' (“' + lockFileName + '”)' : ''),
-        );
+        writeLog(msg('log.videoLoad.started', lockFileName));
     }
 
     function cancelVideoLoadLock() {

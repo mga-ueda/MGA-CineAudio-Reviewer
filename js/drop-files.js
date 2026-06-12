@@ -34,10 +34,10 @@
             void window.runImportReviewFromFile(f);
         } else if (typeof window.importSessionPackage === 'function') {
             void window.importSessionPackage(f).catch((e) => {
-                const msg = e && e.message ? e.message : String(e);
-                writeLog('Import Review: failed — ' + msg);
+                const errMsg = e && e.message ? e.message : String(e);
+                writeLog('Import Review: failed — ' + errMsg);
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('インポートに失敗しました', msg, { log: false });
+                    showAppAlert(msg('dialog.import.failedTitle'), errMsg, { log: false });
                 }
             });
         } else {

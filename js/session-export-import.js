@@ -1040,10 +1040,8 @@
         const btn = document.getElementById('sessionExportVideoBtn');
         if (!btn) return;
         const mode = hasVideo ? 'webm' : 'wave';
-        const label = hasVideo ? 'Export WebM' : 'Export Wave';
-        const title = hasVideo
-            ? 'タイムコードとマーカーコメントを焼き込んだ WebM を書き出し（実時間・書き出し中は Esc でキャンセル）'
-            : 'レビューミックスを 48 kHz / 24-bit ステレオ WAV で書き出し（オフラインバウンス・マーカー/リージョン埋め込み・書き出し中は Esc でキャンセル）';
+        const label = hasVideo ? msg('ui.sessionExportMediaBtn.webm') : msg('ui.sessionExportMediaBtn.wave');
+        const title = hasVideo ? msg('tooltip.sessionExportWebm') : msg('tooltip.sessionExportWave');
         btn.textContent = label;
         btn.title = title;
         btn.dataset.exportMediaMode = mode;
@@ -1256,13 +1254,13 @@
     function runImportReviewFromFile(file, opt) {
         if (!file) return Promise.resolve();
         if (!isMgacrReviewFile(file)) {
-            const msg =
+            const rejectMsg =
                 'Import Review accepts .mgacr files only (selected: "' +
                 (file.name || 'unknown') +
                 '")';
-            writeLog('Import Review: rejected — ' + msg);
+            writeLog('Import Review: rejected — ' + rejectMsg);
             if (typeof showAppAlert === 'function') {
-                showAppAlert('インポートできません', msg, { log: false });
+                showAppAlert(msg('dialog.import.cannotTitle'), rejectMsg, { log: false });
             }
             return Promise.resolve();
         }
@@ -1271,15 +1269,15 @@
         if (importBtn) importBtn.disabled = true;
         return importSessionPackage(file)
             .catch((e) => {
-                const msg = e && e.message ? e.message : String(e);
+                const errMsg = e && e.message ? e.message : String(e);
                 const src = file.name + ' (' + formatByteSize(file.size) + ')';
-                writeLog('Import Review: failed — ' + msg);
+                writeLog('Import Review: failed — ' + errMsg);
                 writeLog('Import Review: source was "' + src + '"');
                 if (e && e.stack) {
                     writeLog('Import Review: error detail — ' + String(e.stack).split('\n')[0]);
                 }
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('インポートに失敗しました', msg, { log: false });
+                    showAppAlert(msg('dialog.import.failedTitle'), errMsg, { log: false });
                 }
             })
             .finally(() => {
@@ -1311,9 +1309,9 @@
             ) {
                 if (typeof showAppAlert === 'function') {
                     showAppAlert(
-                        '音声をエクスポートできません',
-                        'エクスポートする追加音声（Audio Track）を読み込んでください。',
-                        { logLine: 'Export Wave: no audio tracks loaded' },
+                        msg('dialog.exportWave.cannotTitle'),
+                        msg('dialog.exportWave.noTracksBody'),
+                        { logLine: msg('log.exportWave.noTracks') },
                     );
                 }
                 return;
@@ -1322,11 +1320,10 @@
                 const noticePromise =
                     typeof requestAppNotice === 'function'
                         ? requestAppNotice(
-                              'Export Wave',
-                              'WAV をエクスポートするには、Include in export の Audio にチェックを入れてください。',
+                              msg('dialog.exportWave.title'),
+                              msg('dialog.exportWave.includeAudioNotice'),
                               {
-                                  logLine:
-                                      'Export Wave: Audio not included in export selection (check Include in export → Audio)',
+                                  logLine: msg('log.exportWave.includeAudioNotice'),
                               },
                           )
                         : Promise.resolve(true);
@@ -1338,9 +1335,9 @@
             if (!hasIncludedExtra) {
                 if (typeof showAppAlert === 'function') {
                     showAppAlert(
-                        '音声をエクスポートできません',
-                        'Include in export の Audio にチェックを入れ、書き出す Audio Track を読み込んでください。',
-                        { logLine: 'Export Wave: no audio tracks selected for export' },
+                        msg('dialog.exportWave.cannotTitle'),
+                        msg('dialog.exportWave.noSelectionBody'),
+                        { logLine: msg('log.exportWave.noSelection') },
                     );
                 }
                 return;
@@ -1348,9 +1345,9 @@
             if (typeof exportReviewWavePackage !== 'function') {
                 if (typeof showAppAlert === 'function') {
                     showAppAlert(
-                        'WAV エクスポート不可',
-                        'このブラウザでは WAV エクスポート機能を利用できません。',
-                        { logLine: 'Export Wave: unavailable in this browser' },
+                        msg('dialog.exportWave.unavailableTitle'),
+                        msg('dialog.exportWave.unavailableBody'),
+                        { logLine: msg('log.exportWave.unavailable') },
                     );
                 }
                 return;
@@ -1358,11 +1355,11 @@
             btn.disabled = true;
             exportReviewWavePackage({ exportMedia: media })
                 .catch((e) => {
-                    const msg = e && e.message ? e.message : String(e);
-                    if (msg === 'Export cancelled') return;
-                    writeLog('Export Wave: failed — ' + msg);
+                    const errMsg = e && e.message ? e.message : String(e);
+                    if (errMsg === 'Export cancelled') return;
+                    writeLog('Export Wave: failed — ' + errMsg);
                     if (typeof showAppAlert === 'function') {
-                        showAppAlert('WAV のエクスポートに失敗しました', msg, { log: false });
+                        showAppAlert(msg('dialog.exportWave.failedTitle'), errMsg, { log: false });
                     }
                 })
                 .finally(() => {
@@ -1377,9 +1374,9 @@
         if (!isExportVideoAvailable()) {
             if (typeof showAppAlert === 'function') {
                 showAppAlert(
-                    '動画をエクスポートできません',
-                    'エクスポートする動画を読み込んでください。',
-                    { logLine: 'Export WebM: no video loaded' },
+                    msg('dialog.exportWebm.cannotTitle'),
+                    msg('dialog.exportWebm.noVideoBody'),
+                    { logLine: msg('log.exportWebm.noVideo') },
                 );
             }
             return;
@@ -1388,11 +1385,10 @@
             const noticePromise =
                 typeof requestAppNotice === 'function'
                     ? requestAppNotice(
-                          'Export WebM',
-                          'WebM をエクスポートするには、Include in export の Video にチェックを入れてください。',
+                          msg('dialog.exportWebm.title'),
+                          msg('dialog.exportWebm.includeVideoNotice'),
                           {
-                              logLine:
-                                  'Export WebM: Video not included in export selection (check Include in export → Video)',
+                              logLine: msg('log.exportWebm.includeVideoNotice'),
                           },
                       )
                     : Promise.resolve(true);
@@ -1402,9 +1398,9 @@
         if (typeof exportReviewVideoPackage !== 'function') {
             if (typeof showAppAlert === 'function') {
                 showAppAlert(
-                    'WebM エクスポート不可',
-                    'このブラウザでは WebM エクスポート機能を利用できません。',
-                    { logLine: 'Export WebM: unavailable in this browser' },
+                    msg('dialog.exportWebm.unavailableTitle'),
+                    msg('dialog.exportWebm.unavailableBody'),
+                    { logLine: msg('log.exportWebm.unavailable') },
                 );
             }
             return;
@@ -1412,11 +1408,11 @@
         btn.disabled = true;
         exportReviewVideoPackage({ exportMedia: media })
             .catch((e) => {
-                const msg = e && e.message ? e.message : String(e);
-                if (msg === 'Export cancelled') return;
-                writeLog('Export WebM: failed — ' + msg);
+                const errMsg = e && e.message ? e.message : String(e);
+                if (errMsg === 'Export cancelled') return;
+                writeLog('Export WebM: failed — ' + errMsg);
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('WebM のエクスポートに失敗しました', msg, { log: false });
+                    showAppAlert(msg('dialog.exportWebm.failedTitle'), errMsg, { log: false });
                 }
             })
             .finally(() => {
@@ -1435,13 +1431,13 @@
         btn.disabled = true;
         exportSessionPackage()
             .catch((e) => {
-                const msg = e && e.message ? e.message : String(e);
-                writeLog('Export Review: failed — ' + msg);
+                const errMsg = e && e.message ? e.message : String(e);
+                writeLog('Export Review: failed — ' + errMsg);
                 if (e && e.stack) {
                     writeLog('Export Review: error detail — ' + String(e.stack).split('\n')[0]);
                 }
                 if (typeof showAppAlert === 'function') {
-                    showAppAlert('エクスポートに失敗しました', msg, { log: false });
+                    showAppAlert(msg('dialog.export.failedTitle'), errMsg, { log: false });
                 }
             })
             .finally(() => {
@@ -1473,12 +1469,11 @@
         const confirmPromise =
             typeof requestAppConfirm === 'function'
                 ? requestAppConfirm(
-                      'All Clear',
-                      '読み込んだ動画・追加音声・マーカーなど、すべての読み込み情報が失われます。よろしいですか？',
-                      'All Clear: cancelled',
+                      msg('dialog.allClear.title'),
+                      msg('dialog.allClear.body'),
+                      msg('log.dialog.allClear.cancelled'),
                       {
-                          logLine:
-                              'All Clear: confirm — all loaded media, markers, and saved session will be removed',
+                          logLine: msg('log.dialog.allClear.confirm'),
                       },
                   )
                 : Promise.resolve(false);
@@ -1491,11 +1486,11 @@
                     : Promise.resolve();
             Promise.resolve(run)
                 .catch((e) => {
-                    const msg = e && e.message ? e.message : String(e);
+                    const errMsg = e && e.message ? e.message : String(e);
                     if (typeof clearLog === 'function') clearLog();
-                    writeLog('Session: All Clear failed — ' + msg);
+                    writeLog('Session: All Clear failed — ' + errMsg);
                     if (typeof showAppAlert === 'function') {
-                        showAppAlert('All Clear に失敗しました', msg, { log: false });
+                        showAppAlert(msg('dialog.allClear.failedTitle'), errMsg, { log: false });
                     }
                 })
                 .finally(() => {

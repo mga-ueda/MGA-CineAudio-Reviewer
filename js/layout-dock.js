@@ -57,22 +57,22 @@
     const LAYOUT_MODES = ['default', 'custom', 'customView'];
 
     const LAYOUT_MODE_TOAST = {
-        default: 'Default layout',
-        custom: 'Custom layout (edit)',
-        customView: 'Custom layout',
+        default: msg('toast.layout.default'),
+        custom: msg('toast.layout.customEdit'),
+        customView: msg('toast.layout.customView'),
     };
 
     const PANEL_TOOLTIP_LABELS = {
-        header: 'ヘッダー',
-        player: '映像',
-        playback: 'トランスポート',
-        markers: 'マーカー',
-        waveform: '音声トラック',
-        transport: 'オプション',
-        monitor: 'アナライザー',
-        log: 'ログ',
-        reading: 'リーディング',
-        footer: 'フッター',
+        header: msg('tooltip.layoutPanel.header'),
+        player: msg('tooltip.layoutPanel.player'),
+        playback: msg('tooltip.layoutPanel.playback'),
+        markers: msg('tooltip.layoutPanel.markers'),
+        waveform: msg('tooltip.layoutPanel.waveform'),
+        transport: msg('tooltip.layoutPanel.transport'),
+        monitor: msg('tooltip.layoutPanel.monitor'),
+        log: msg('tooltip.layoutPanel.log'),
+        reading: msg('tooltip.layoutPanel.reading'),
+        footer: msg('tooltip.layoutPanel.footer'),
     };
 
     let layoutMode = 'default';
@@ -939,7 +939,7 @@
                 flashSeekHint(label, '', 'notice');
             }
             if (typeof writeLog === 'function') {
-                writeLog('Layout: ' + label);
+                writeLog(msg('log.layout.mode', label));
             }
         }
     }

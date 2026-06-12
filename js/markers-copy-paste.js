@@ -526,19 +526,23 @@
         if (opt && opt.memoText != null && String(opt.memoText).trim()) {
             parts.push('memo');
         }
-        writeLog('Marker: pasted from clipboard (' + parts.join(', ') + ')');
-        flashSeekHint('Markers', 'Pasted', 'notice');
+        writeLog(msg('log.markers.pasted', parts));
+        flashSeekHint(msg('toast.markers.pastedPrimary'), msg('toast.markers.pastedSecondary'), 'notice');
     }
 
     function showMarkersPasteFormatError(message) {
-        writeLog('Marker: paste format error — ' + message);
+        writeLog(msg('log.markers.pasteFormatError', message));
         if (typeof showAppAlert === 'function') {
-            showAppAlert('Markers Paste', message, { log: false });
+            showAppAlert(msg('dialog.markersPaste.title'), message, { log: false });
         } else {
-            window.alert('Markers Paste\n\n' + message);
+            window.alert(msg('dialog.markersPaste.title') + '\n\n' + message);
         }
         if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Markers', 'Paste failed', 'error');
+            flashSeekHint(
+                msg('toast.markers.pastedPrimary'),
+                msg('toast.markers.pasteFailedSecondary'),
+                'error',
+            );
         }
     }
 
@@ -569,7 +573,7 @@
             };
             const onOk = () => finish(textarea.value);
             const onCancel = () => {
-                writeLog('Marker: paste cancelled (dialog)');
+                writeLog(msg('log.markers.pasteCancelledDialog'));
                 finish(null);
             };
             const onKey = (e) => {
@@ -592,33 +596,26 @@
                 if (String(text ?? '').trim()) {
                     return text;
                 }
-                writeLog('Marker: clipboard empty — opening paste dialog');
+                writeLog(msg('log.markers.clipboardEmpty'));
             } catch (err) {
                 writeLog(
-                    'Marker: clipboard read failed — ' +
-                        (err && err.message ? err.message : String(err)),
+                    msg('log.markers.clipboardReadFailed', err && err.message ? err.message : String(err)),
                 );
             }
         } else {
-            writeLog('Marker: clipboard.readText unavailable — opening paste dialog');
+            writeLog(msg('log.markers.clipboardUnavailable'));
         }
         return readMarkersPasteTextFromOverlay();
     }
 
     async function confirmMarkersPasteReplace(count) {
-        const body =
-            'マーカー ' +
-            count +
-            ' 件で、現在のマーカー一覧をすべて置き換えます。よろしいですか？';
+        const body = msg('dialog.markersPaste.confirmBody', count);
         if (typeof requestAppConfirm === 'function') {
-            return requestAppConfirm('Markers Paste', body, 'Markers Paste: cancelled', {
-                logLine:
-                    'Markers Paste: confirm — replace all markers with ' +
-                    count +
-                    ' pasted item(s)',
+            return requestAppConfirm(msg('dialog.markersPaste.title'), body, msg('log.dialog.markersPaste.cancelled'), {
+                logLine: msg('log.dialog.markersPaste.confirm', count),
             });
         }
-        return window.confirm('Markers Paste\n\n' + body);
+        return window.confirm(msg('dialog.markersPaste.title') + '\n\n' + body);
     }
 
     async function pasteMarkersFromClipboard() {
