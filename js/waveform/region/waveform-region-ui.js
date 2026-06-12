@@ -1098,7 +1098,7 @@
             segmentIndex > 0 &&
             typeof isSegmentBoundaryJoined === 'function' &&
             !isSegmentBoundaryJoined(track, segmentIndex - 1) &&
-            desiredRegionIn < dragStartRegionIn - 0.00001
+            Math.abs(desiredRegionIn - dragStartRegionIn) > 0.00001
         ) {
             if (desiredRegionIn < REGION_IN_MIN_TRANSPORT_SEC - 0.00001) {
                 desiredRegionIn = REGION_IN_MIN_TRANSPORT_SEC;

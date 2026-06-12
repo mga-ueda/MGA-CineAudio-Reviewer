@@ -2158,6 +2158,54 @@
             },
         );
     }
+    /**
+     * セパレート列: リージョン In を後方へ狭げつつ Out を固定（sourceIn を戻す）。
+     * 手前のセグメントと重なってもよい。
+     */
+    function contractSeparatedSegmentRegionInRight(track, segmentIndex, regionIn, audioEnd, t0, opt) {
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const delta = regionIn - prevRegionIn;
+        if (delta <= 0.00001) return;
+
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const seg = segments[segmentIndex];
+        if (!seg) return;
+
+        const maxTrim = Math.max(
+            0,
+            seg.sourceOutSec - seg.sourceInSec - PLAYBACK_REGION_MIN_SEC,
+        );
+        const appliedDelta = Math.min(delta, maxTrim);
+        if (appliedDelta <= 0.00001) return;
+
+        const effectiveRegionIn = prevRegionIn + appliedDelta;
+        seg.timelineStartSec = anchor + appliedDelta;
+        seg.sourceInSec = Math.min(
+            seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC,
+            seg.sourceInSec + appliedDelta,
+        );
+        if (effectiveRegionIn <= anchor + 0.00001) {
+            delete seg.regionTimelineInSec;
+            delete seg.regionLeadPadSec;
+        } else {
+            seg.regionTimelineInSec = effectiveRegionIn;
+            delete seg.regionLeadPadSec;
+        }
+
+        applySegmentsToState(
+            track,
+            segments.map((s) =>
+                normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+            ),
+            {
+                silent: true,
+                skipUndo: true,
+                geometryOnly: !!(opt && opt.geometryOnly),
+                skipPersist: !!(opt && opt.geometryOnly),
+            },
+        );
+    }
     /** リージョン本体の平行移動ドラッグ（offset drag）— In ハンドル／境界操作と区別 */
     function isParallelRegionOffsetDragOpt(opt) {
         return !!(
@@ -2193,6 +2241,20 @@
                 regionIn < prevRegionIn - 0.00001
             ) {
                 expandSeparatedSegmentRegionInLeft(
+                    track,
+                    segmentIndex,
+                    regionIn,
+                    audioEnd,
+                    t0,
+                    opt,
+                );
+                return;
+            }
+            if (
+                isSeparatedSegment(track, segmentIndex) &&
+                regionIn > prevRegionIn + 0.00001
+            ) {
+                contractSeparatedSegmentRegionInRight(
                     track,
                     segmentIndex,
                     regionIn,
