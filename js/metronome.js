@@ -53,6 +53,9 @@
     }
 
     function getMeterEntryForBar(spec, barIndex) {
+        if (typeof window.getMeterEntryForBar === 'function') {
+            return window.getMeterEntryForBar(spec, barIndex);
+        }
         if (!spec || !spec.entries || !spec.entries.length) return null;
         const entries = spec.entries;
         if (spec.mode === 'fixed') return entries[0];

@@ -192,6 +192,7 @@
             .trim()
             .replace(/\s+/g, '')
             .replace(/／/g, '/')
+            .replace(/：/g, ':')
             .replace(/，/g, ',');
     }
 
@@ -234,12 +235,22 @@
     }
 
     function formatMeterSigText(sig) {
+        if (sig && sig.alternates && sig.alternates.length) {
+            return sig.alternates.map((s) => s.num + '/' + s.den).join(':');
+        }
         const segments = getMeterSigSegments(sig);
         if (!segments || !segments.length) return '';
         return segments.map((s) => s.num + '/' + s.den).join('+');
     }
 
     function cloneMeterSig(sig) {
+        if (!sig) return { num: 4, den: 4 };
+        if (sig.alternates && sig.alternates.length) {
+            if (sig.alternates.length === 1) {
+                return { num: sig.alternates[0].num, den: sig.alternates[0].den };
+            }
+            return { alternates: sig.alternates.map((s) => ({ num: s.num, den: s.den })) };
+        }
         const segments = getMeterSigSegments(sig);
         if (!segments || !segments.length) return { num: 4, den: 4 };
         if (segments.length === 1) return { num: segments[0].num, den: segments[0].den };
@@ -282,7 +293,23 @@
         return { segments: segments.map((s) => ({ num: s.num, den: s.den })) };
     }
 
-    /** 入力途中（例: 120-3/8+）でも編集可能な entry を返す */
+    function alternatesToMeterSig(alternates) {
+        if (!alternates || !alternates.length) return cloneMeterSig(getDefaultMeterEntryValues().sig);
+        if (alternates.length === 1) return { num: alternates[0].num, den: alternates[0].den };
+        return { alternates: alternates.map((s) => ({ num: s.num, den: s.den })) };
+    }
+
+    /** @returns {':'|'+'|''} */
+    function meterSigPartDelimiter(sigPart) {
+        const s = String(sigPart || '');
+        const hasColon = s.indexOf(':') >= 0;
+        const hasPlus = s.indexOf('+') >= 0;
+        if (hasColon && !hasPlus) return ':';
+        if (hasPlus) return '+';
+        return '';
+    }
+
+    /** 入力途中（例: 120-3/8+ / 120-3/4:）でも編集可能な entry を返す */
     function parseMeterEntryDraft(entryText) {
         const defaults = getDefaultMeterEntryValues();
         const text = String(entryText || '').trim();
@@ -306,29 +333,33 @@
         if (!sigPart.length) {
             return { bpm, sig: cloneMeterSig(defaults.sig) };
         }
-        const segments = sigPart.split('+').map((part) => parsePartialTimeSignatureToken(part));
-        return { bpm, sig: segmentsToMeterSig(segments) };
+        const delim = meterSigPartDelimiter(sigPart) || '+';
+        const parts = sigPart.split(delim).map((part) => parsePartialTimeSignatureToken(part));
+        if (delim === ':') {
+            return { bpm, sig: alternatesToMeterSig(parts) };
+        }
+        return { bpm, sig: segmentsToMeterSig(parts) };
     }
 
     function resolveMeterEntryForBump(entryText) {
-        if (meterEntryHasTrailingCompoundPlus(entryText)) {
+        if (meterEntryHasTrailingSigPartDelimiter(entryText)) {
             return parseMeterEntryDraft(entryText);
         }
         return parseMeterToken(entryText) || parseMeterEntryDraft(entryText);
     }
 
-    /** 拍子部が + で終わる = 変拍子後半の入力途中 */
-    function meterEntryHasTrailingCompoundPlus(entryText) {
+    /** 拍子部が + または : で終わる = 変拍子／拍子繰り返しの後半入力途中 */
+    function meterEntryHasTrailingSigPartDelimiter(entryText) {
         const entry = String(entryText == null ? '' : entryText);
         const dash = entry.indexOf('-');
         if (dash < 0) return false;
-        return /\+\s*$/.test(entry.slice(dash + 1));
+        return /(?:\+|:)\s*$/.test(entry.slice(dash + 1));
     }
 
     function meterInputShouldAppendCommaEntry(input, raw, entryIndex) {
         if (!input || !phraseInputCaretAtEnd(input)) return false;
         const span = commaListEntrySpan(raw, entryIndex);
-        if (meterEntryHasTrailingCompoundPlus(span.text)) return false;
+        if (meterEntryHasTrailingSigPartDelimiter(span.text)) return false;
         return true;
     }
 
@@ -351,10 +382,28 @@
         return lead > 0 ? s.slice(0, lead) + joined + tail : joined;
     }
 
-    /** 変拍子: "3/8+5/8" → { segments:[...] }。単拍子は { num, den } のまま。 */
+    /** 変拍子: "3/8+5/8" → { segments:[...] }。拍子繰り返し: "3/4:5/4" → { alternates:[...] }。単拍子は { num, den }。 */
     function parseMeterSigPart(raw) {
         const s = String(raw || '').trim();
-        if (!s || /\+\s*$/.test(s)) return null;
+        if (!s || /\+\s*$/.test(s) || /:\s*$/.test(s)) return null;
+        const hasColon = s.indexOf(':') >= 0;
+        const hasPlus = s.indexOf('+') >= 0;
+        if (hasColon && hasPlus) return null;
+        if (hasColon) {
+            const parts = s.split(':');
+            if (parts.length === 1) {
+                const sig = parseTimeSignatureToken(parts[0]);
+                return sig ? { num: sig.num, den: sig.den } : null;
+            }
+            const alternates = [];
+            for (let i = 0; i < parts.length; i++) {
+                if (!parts[i].length) return null;
+                const sig = parseTimeSignatureToken(parts[i]);
+                if (!sig) return null;
+                alternates.push(sig);
+            }
+            return { alternates };
+        }
         const parts = s.split('+');
         if (parts.length === 1) {
             const sig = parseTimeSignatureToken(parts[0]);
@@ -371,10 +420,14 @@
     }
 
     function parseMeterToken(token) {
-        const m = /^(\d+(?:\.\d+)?)-([\d\/+]+)$/.exec(String(token || '').trim());
-        if (!m) return null;
-        const bpm = Number(m[1]);
-        const sig = parseMeterSigPart(m[2]);
+        const s = String(token || '').trim();
+        const dash = s.indexOf('-');
+        if (dash < 0) return null;
+        const bpmPart = s.slice(0, dash).trim();
+        const sigPart = s.slice(dash + 1).trim();
+        if (!bpmPart.length || !sigPart.length) return null;
+        const bpm = Number(bpmPart);
+        const sig = parseMeterSigPart(sigPart);
         if (!sig || !(bpm > 0 && bpm <= 999)) return null;
         return { bpm, sig };
     }
@@ -475,7 +528,7 @@
         const start = barStart | 0;
         const count = barCount | 0;
         for (let i = 0; i < count; i++) {
-            const token = formatMeterEntryToken(getMeterEntryForBar(spec, start + i));
+            const token = formatMeterEntryToken(getRawMeterEntryForBar(spec, start + i));
             if (!token) continue;
             if (token !== lastToken) {
                 parts.push(token);
@@ -485,15 +538,67 @@
         return parts.join(', ');
     }
 
-    function getMeterEntryForBar(spec, barIndex) {
-        if (!spec || !spec.entries || !spec.entries.length) return null;
+    function getRawMeterEntryIndexForBar(spec, barIndex) {
+        if (!spec || !spec.entries || !spec.entries.length) return -1;
         const entries = spec.entries;
-        if (spec.mode === 'fixed') return entries[0];
+        if (spec.mode === 'fixed') return 0;
         if (spec.mode === 'alternate') {
-            return entries[((barIndex % entries.length) + entries.length) % entries.length];
+            return ((barIndex % entries.length) + entries.length) % entries.length;
         }
-        if (barIndex < entries.length) return entries[barIndex];
-        return entries[entries.length - 1];
+        if (barIndex < entries.length) return barIndex;
+        return entries.length - 1;
+    }
+
+    function getRawMeterEntryForBar(spec, barIndex) {
+        const idx = getRawMeterEntryIndexForBar(spec, barIndex);
+        if (idx < 0 || !spec || !spec.entries || !spec.entries[idx]) return null;
+        return spec.entries[idx];
+    }
+
+    function meterSigHasRepeats(sig) {
+        return !!(sig && sig.alternates && sig.alternates.length > 1);
+    }
+
+    function getSigCycleIndexForBar(spec, barIndex) {
+        if (!spec || !spec.entries || !spec.entries.length) return 0;
+        const entryIdx = getRawMeterEntryIndexForBar(spec, barIndex);
+        const entry = entryIdx >= 0 ? spec.entries[entryIdx] : null;
+        if (!meterSigHasRepeats(entry && entry.sig)) return 0;
+        const altLen = entry.sig.alternates.length;
+        if (spec.mode === 'fixed') {
+            return barIndex % altLen;
+        }
+        if (spec.mode === 'sequence' && barIndex < spec.entries.length) {
+            return 0;
+        }
+        let cycleCount = 0;
+        for (let b = 0; b < barIndex; b++) {
+            if (getRawMeterEntryIndexForBar(spec, b) === entryIdx) {
+                cycleCount++;
+            }
+        }
+        return cycleCount % altLen;
+    }
+
+    function resolveEntrySigForCycle(sig, cycleIndex) {
+        if (!sig) return { num: 4, den: 4 };
+        if (sig.alternates && sig.alternates.length) {
+            const len = sig.alternates.length;
+            const idx = ((cycleIndex % len) + len) % len;
+            const a = sig.alternates[idx];
+            return { num: a.num, den: a.den };
+        }
+        return cloneMeterSig(sig);
+    }
+
+    function getMeterEntryForBar(spec, barIndex) {
+        const raw = getRawMeterEntryForBar(spec, barIndex);
+        if (!raw) return null;
+        const cycleIndex = getSigCycleIndexForBar(spec, barIndex);
+        return {
+            bpm: raw.bpm,
+            sig: resolveEntrySigForCycle(raw.sig, cycleIndex),
+        };
     }
 
     function composeMeterTextFromLegacy(tempo, timeSignature) {
@@ -510,7 +615,7 @@
         }
         const sigParts = sig.split(',').filter((p) => p.length > 0);
         const tokens = sigParts.map((p) => {
-            if (/^\d+(?:\.\d+)?-[\d\/+]+$/.test(p)) return p;
+            if (/^\d+(?:\.\d+)?-[\d\/:+]+$/.test(p)) return p;
             return bpm + '-' + p;
         });
         if (!tokens.length) return '';
@@ -1008,8 +1113,12 @@
         const o = opt && typeof opt === 'object' ? opt : {};
         readMusicalGridFromInputs();
         // 空欄や不正フォーマットは既定値へフォールバックして保存・復元を安定させる。
-        if (!musicalGridMeterText || !parseMeterSpec(musicalGridMeterText)) {
+        let meterSpec = parseMeterSpec(musicalGridMeterText);
+        if (!musicalGridMeterText || !meterSpec) {
             musicalGridMeterText = MUSICAL_GRID_DEFAULT_METER_TEXT;
+            if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
+        } else {
+            musicalGridMeterText = formatMeterSpec(meterSpec);
             if (musicalGridMeterInput) musicalGridMeterInput.value = musicalGridMeterText;
         }
         if (!musicalGridPhraseText || !parsePhraseGroupingSpec(musicalGridPhraseText)) {
@@ -1138,16 +1247,17 @@
         if (comma >= 0) end = comma;
         return { start: lead + start, end: lead + end, text: inner.slice(start, end) };
     }
-    /** @returns {number} 変拍子 entry 内で caret が指す拍子セグメント index */
+    /** @returns {number} entry 内で caret が指す拍子セグメント index（+ 変拍子 / : 拍子繰り返し） */
     function meterSigSegmentIndexAtCaret(entryText, caretInEntry) {
         const entry = String(entryText == null ? '' : entryText);
         const dash = entry.indexOf('-');
         if (dash < 0) return 0;
         const sigPart = entry.slice(dash + 1);
         const rel = Math.max(0, Math.min(sigPart.length, caretInEntry - dash - 1));
-        if (sigPart.indexOf('+') < 0) return 0;
+        const delim = meterSigPartDelimiter(sigPart);
+        if (!delim) return 0;
         let pos = 0;
-        const parts = sigPart.split('+');
+        const parts = sigPart.split(delim);
         for (let i = 0; i < parts.length; i++) {
             const end = pos + parts[i].length;
             if (rel <= end || i === parts.length - 1) return i;
@@ -1166,7 +1276,8 @@
         const rel = pos - dash - 1;
         const segIdx = meterSigSegmentIndexAtCaret(entry, caretInEntry);
         let segStart = 0;
-        const parts = sigPart.split('+');
+        const delim = meterSigPartDelimiter(sigPart) || '+';
+        const parts = sigPart.split(delim);
         for (let i = 0; i < segIdx; i++) {
             segStart += parts[i].length + 1;
         }
@@ -1179,6 +1290,15 @@
     }
     function bumpMeterSigField(sig, field, step, segIdx) {
         if (!sig) return;
+        if (sig.alternates && sig.alternates.length) {
+            const idx = Math.max(0, Math.min(sig.alternates.length - 1, segIdx | 0));
+            if (field === 'num') {
+                sig.alternates[idx].num = clampMeterSigPart(sig.alternates[idx].num + step);
+            } else if (field === 'den') {
+                sig.alternates[idx].den = clampMeterSigPart(sig.alternates[idx].den + step);
+            }
+            return;
+        }
         if (sig.segments && sig.segments.length) {
             const idx = Math.max(0, Math.min(sig.segments.length - 1, segIdx | 0));
             if (field === 'num') {
@@ -1201,7 +1321,8 @@
         if (field === 'bpm' && dash >= 0) return span.start + Math.max(0, dash - 1);
         if ((field === 'num' || field === 'den') && dash >= 0) {
             const sigPart = entry.slice(dash + 1);
-            const parts = sigPart.split('+');
+            const delim = meterSigPartDelimiter(sigPart) || '+';
+            const parts = sigPart.split(delim);
             const idx = Math.max(0, Math.min(parts.length - 1, segIdx | 0));
             let segStart = 0;
             for (let i = 0; i < idx; i++) segStart += parts[i].length + 1;
@@ -1241,7 +1362,7 @@
         const segIdx = meterSigSegmentIndexAtCaret(span.text, caretInEntry);
         const field = meterFieldAtCaretInEntry(span.text, caretInEntry);
         const step = field === 'bpm' ? delta : sigDelta;
-        const trailingPlus = meterEntryHasTrailingCompoundPlus(span.text);
+        const trailingDelimiter = meterEntryHasTrailingSigPartDelimiter(span.text);
         readMusicalGridFromInputs();
         clearMusicalGridPositionCache();
         let spec = parseMeterSpec(musicalGridMeterText);
@@ -1271,7 +1392,7 @@
             const entry = spec.entries[idx];
             if (field === 'bpm') {
                 entry.bpm = Math.max(1, Math.min(999, entry.bpm + step));
-            } else if (!trailingPlus) {
+            } else if (!trailingDelimiter) {
                 bumpMeterSigField(entry.sig, field, step, segIdx);
             }
             nextText = formatMeterSpec(spec);
@@ -1279,7 +1400,7 @@
             const token = resolveMeterEntryForBump(span.text);
             if (field === 'bpm') {
                 token.bpm = Math.max(1, Math.min(999, token.bpm + step));
-            } else if (!trailingPlus) {
+            } else if (!trailingDelimiter) {
                 bumpMeterSigField(token.sig, field, step, segIdx);
             }
             nextText = replaceCommaListEntry(raw, entryIndex, formatMeterEntryToken(token));
@@ -4406,6 +4527,7 @@
     window.drawMusicalGridOverlay = drawMusicalGridOverlay;
     window.scheduleMusicalGridRedraw = scheduleMusicalGridRedraw;
     window.parseMeterSpec = parseMeterSpec;
+    window.getMeterEntryForBar = getMeterEntryForBar;
     window.meterBarDurationSec = meterBarDurationSec;
     window.forEachMeterBarBeat = forEachMeterBarBeat;
     window.getMeterSigSegments = getMeterSigSegments;
