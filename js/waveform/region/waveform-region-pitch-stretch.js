@@ -7,8 +7,8 @@
 
     function pitchPlaybackLog(step, data) {
         if (
-            typeof isDebugLogEnabled === 'function' &&
-            !isDebugLogEnabled()
+            typeof isDebugLogCategoryEnabled === 'function' &&
+            !isDebugLogCategoryEnabled('KEY_PLAYBACK')
         ) {
             return;
         }

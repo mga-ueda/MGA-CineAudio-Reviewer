@@ -352,10 +352,8 @@
     document.addEventListener(
         'wheel',
         (ev) => {
-            if (
-                typeof isOperationBlockingActive === 'function' &&
-                isOperationBlockingActive()
-            ) {
+            /** Export 中のみスクロールロック。 */
+            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
                 ev.preventDefault();
             }
         },
@@ -364,10 +362,7 @@
     document.addEventListener(
         'touchmove',
         (ev) => {
-            if (
-                typeof isOperationBlockingActive === 'function' &&
-                isOperationBlockingActive()
-            ) {
+            if (typeof isWebmExportActive === 'function' && isWebmExportActive()) {
                 ev.preventDefault();
             }
         },

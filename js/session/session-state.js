@@ -34,7 +34,7 @@
     let sessionRestoreListenersArmed = false;
     let sessionRestoreInProgress = false;
 
-    let masterFrameSec = 1 / DISPLAY_FPS;
+    let masterFrameSec = 1 / (typeof window.DISPLAY_FPS === 'number' && window.DISPLAY_FPS > 0 ? window.DISPLAY_FPS : 60);
 
     const containerFps = { main: null };
     const containerSampleCount = { main: null };

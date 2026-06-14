@@ -28,22 +28,6 @@
 
     const USER_SHORTCUTS = {
         // ---------- 再生・移動 ----------
-        layoutModeToggle: {
-            code: 'KeyU',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: false,
-        }, // レイアウト: 標準 ↔ ユーザーレイアウト
-        layoutEditToggle: {
-            code: 'KeyU',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: true,
-        }, // ユーザーレイアウト編集 ↔ 表示
         transportToggle: { code: 'Space' }, // 再生/停止
         prerollPlay: { code: 'Space', primary: true, alt: false, shift: false }, // Ctrl/Cmd + Space
         replayFromPlaybackStart: { codes: ['Enter', 'NumpadEnter'], alt: true, ctrl: false, meta: false, shift: false }, // Alt + Enter
@@ -139,6 +123,14 @@
         },
         rehearsalMarkOffsetToggle: {
             code: 'KeyR',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        devConstantsPanelToggle: {
+            code: 'F10',
             primary: false,
             ctrl: false,
             meta: false,
@@ -658,8 +650,6 @@
             regionFadeOut: formatShortcutDef(s.regionFadeOut),
             regionInNudge: formatShortcutDef(s.regionInNudge),
             regionOutNudge: formatShortcutDef(s.regionOutNudge),
-            layoutModeToggle: formatShortcutDef(s.layoutModeToggle),
-            layoutEditToggle: formatShortcutDef(s.layoutEditToggle),
         });
     }
 
@@ -792,13 +782,6 @@
         if (logWeOnlyCb) {
             const logWeOnlyLbl = logWeOnlyCb.closest('label');
             setElementTitle(logWeOnlyLbl, logWeOnlyTitle);
-        }
-        const logDebugTitle = msg('tooltip.logDebug');
-        const logDebugCb = document.getElementById('logDebugCheckbox');
-        setElementTitle(logDebugCb, logDebugTitle);
-        if (logDebugCb) {
-            const logDebugLbl = logDebugCb.closest('label');
-            setElementTitle(logDebugLbl, logDebugTitle);
         }
 
         const moveUpTitle = msg('tooltip.extraAudioMoveUp');

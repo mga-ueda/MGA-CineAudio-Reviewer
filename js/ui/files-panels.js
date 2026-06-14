@@ -164,7 +164,7 @@
         if (c != null && c > 0) {
             fpsStr = c + ' fps';
         } else {
-            fpsStr = 'FPS n/a (~' + DISPLAY_FPS + ' est.)';
+            fpsStr = 'FPS n/a (~' + (typeof window.DISPLAY_FPS === 'number' ? window.DISPLAY_FPS : 60) + ' est.)';
         }
         infoMain.hidden = false;
         setInfoMainMetaText(mod + ' · ' + fpsStr + ' · Total: ' + totalF + ' f');
@@ -478,7 +478,7 @@
 
     function fpsFloatForSide(side) {
         const c = containerFps[side];
-        return c != null && c > 0 ? c : DISPLAY_FPS;
+        return c != null && c > 0 ? c : (typeof window.DISPLAY_FPS === 'number' && window.DISPLAY_FPS > 0 ? window.DISPLAY_FPS : 60);
     }
 
     function masterFpsFloatForTransport() {
@@ -579,7 +579,9 @@
     function roundedFpsForSide(side) {
         const c = containerFps[side];
         if (c != null && c > 0) return Math.max(1, Math.min(240, Math.round(c)));
-        return DISPLAY_FPS;
+        return typeof window.DISPLAY_FPS === 'number' && window.DISPLAY_FPS > 0
+            ? Math.max(1, Math.min(240, Math.round(window.DISPLAY_FPS)))
+            : 60;
     }
 
     function masterFpsIntForTransport() {

@@ -1,12 +1,15 @@
 /**
  * waveform-viewport-diag.js — 128px タイル取得 / ピークキャッシュの診断ログ
- * ログ枠の Debug Log が ON のときのみ出力
+ * constants.js の DEBUG_LOG.WAVEFORM_VIEWPORT が true のときのみ出力
  */
 (function waveformViewportDiagModule() {
     const LOG_PREFIX = '[WaveformViewport] ';
 
     function enabled() {
-        return typeof window.isDebugLogEnabled === 'function' && window.isDebugLogEnabled();
+        return (
+            typeof window.isDebugLogCategoryEnabled === 'function' &&
+            window.isDebugLogCategoryEnabled('WAVEFORM_VIEWPORT')
+        );
     }
 
     function fmtDetail(detail) {

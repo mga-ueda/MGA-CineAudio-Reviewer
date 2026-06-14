@@ -72,7 +72,7 @@
         </div>
     </div>
 
-    <div id="appLayoutShell" class="layout-dock-shell layout-dock-shell--default" aria-label="App layout"></div>
+    <div id="appLayoutShell" class="layout-dock-shell" aria-label="App layout"></div>
 
     <div id="layoutDockPanelSource" hidden aria-hidden="true">
     <div class="layout-dock-panel-content layout-dock-panel-content--header" data-layout-panel="header" id="layoutDockPanelHeader">
@@ -492,11 +492,8 @@
                     <input type="checkbox" id="logWeOnlyCheckbox" />
                     <span>W/E Only</span>
                 </label>
-                <label class="log-debug-toggle">
-                    <input type="checkbox" id="logDebugCheckbox" />
-                    <span>Debug Log</span>
-                </label>
                 <button id="logCopyBtn" type="button" class="log-action-btn">Copy</button>
+                <button id="logDownloadBtn" type="button" class="log-action-btn">Download</button>
                 <button id="logClearBtn" type="button" class="log-action-btn">Clear</button>
             </div>
         </div>
@@ -716,6 +713,7 @@
     <script src="js/session/session-export-import.js"></script>
     <script src="js/session/boot-prefs.js"></script>
     <script src="js/events/events-video-bind.js"></script>
+    <script src="js/ui/dev-constants-panel.js"></script>
     <script src="js/events/events-shortcuts.js"></script>
     <script src="js/events/events-lifecycle.js"></script>
     <script src="js/events/events-boot.js"></script>

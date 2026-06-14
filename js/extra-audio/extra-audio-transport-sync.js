@@ -169,8 +169,8 @@
         resetExtraMixScheduleTime();
         if (
             typeof pitchPlaybackLog === 'function' &&
-            typeof isDebugLogEnabled === 'function' &&
-            isDebugLogEnabled()
+            typeof isDebugLogCategoryEnabled === 'function' &&
+            isDebugLogCategoryEnabled('KEY_PLAYBACK')
         ) {
             const pendingPitch = allActiveAtT
                 .filter((h) => {

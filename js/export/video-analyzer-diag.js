@@ -1,6 +1,6 @@
 /**
  * video-analyzer-diag.js — 動画モニタータップ / Analyze 診断ログ
- * ログ枠の Debug Log が ON のときのみ出力（localStorage に保存）
+ * constants.js の DEBUG_LOG.VIDEO_ANALYZER が true のときのみ出力
  */
 (function videoAnalyzerDiagModule() {
     const LOG_PREFIX = '[VideoAnalyzer] ';
@@ -8,7 +8,10 @@
     let lastConnectedAt = 0;
 
     function enabled() {
-        return typeof window.isDebugLogEnabled === 'function' && window.isDebugLogEnabled();
+        return (
+            typeof window.isDebugLogCategoryEnabled === 'function' &&
+            window.isDebugLogCategoryEnabled('VIDEO_ANALYZER')
+        );
     }
 
     function fmtDetail(detail) {

@@ -3,17 +3,6 @@
  */
 (function messagesTooltipModule() {
     registerMessages({
-        'tooltip.layoutPanel.header': 'ヘッダー',
-        'tooltip.layoutPanel.player': '映像',
-        'tooltip.layoutPanel.playback': 'トランスポート',
-        'tooltip.layoutPanel.markers': 'マーカー',
-        'tooltip.layoutPanel.waveform': '音声トラック',
-        'tooltip.layoutPanel.transport': 'オプション',
-        'tooltip.layoutPanel.monitor': 'アナライザー',
-        'tooltip.layoutPanel.log': 'ログ',
-        'tooltip.layoutPanel.reading': 'リーディング',
-        'tooltip.layoutPanel.footer': 'フッター',
-
         'tooltip.playStop': (h) =>
             '再生/停止（' +
             h.playStop +

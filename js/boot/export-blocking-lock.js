@@ -55,10 +55,7 @@
     }
 
     function refreshOperationBlockingControlLocks() {
-        const xl =
-            blockingMode !== null ||
-            (typeof isLayoutDockStructureEditing === 'function' &&
-                isLayoutDockStructureEditing());
+        const xl = blockingMode !== null;
         const exportBtn = document.getElementById('sessionExportBtn');
         const importBtn = document.getElementById('sessionImportBtn');
         const exportWebmBtn = document.getElementById('sessionExportVideoBtn');
@@ -139,12 +136,6 @@
     }
 
     function isOperationBlockingActive() {
-        if (
-            typeof isLayoutDockStructureEditing === 'function' &&
-            isLayoutDockStructureEditing()
-        ) {
-            return true;
-        }
         return blockingMode !== null;
     }
 

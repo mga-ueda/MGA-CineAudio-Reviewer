@@ -313,11 +313,12 @@
 
         folds.forEach((d) => {
             d.addEventListener('toggle', () => {
-                if (!d.open) return;
-                folds.forEach((other) => {
-                    if (other !== d) other.removeAttribute('open');
-                });
-                scrollAppDocFoldIntoView(d);
+                if (d.open) {
+                    folds.forEach((other) => {
+                        if (other !== d) other.removeAttribute('open');
+                    });
+                    scrollAppDocFoldIntoView(d);
+                }
             });
         });
     })();

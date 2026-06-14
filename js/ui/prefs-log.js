@@ -2,7 +2,6 @@
  * prefs-log.js — localStorage 設定の読み書き、ログパネル、確認ダイアログ、writeLog。
  */
     let logLines = [];
-    let debugLogEnabled = false;
     /** W/E Only フィルタ（localStorage のユーザー設定。Import/Export 対象外） */
     let logWeOnlyFilter = false;
 
@@ -116,12 +115,15 @@
         return entry && entry.text != null ? String(entry.text) : String(entry);
     }
 
-    function isDebugLogEnabled() {
-        return !!debugLogEnabled;
-    }
-
     function getEffectiveLogMaxLines() {
-        return debugLogEnabled ? 0 : LOG_MAX_LINES;
+        if (
+            typeof window.isAnyDebugLogCategoryEnabled === 'function' &&
+            window.isAnyDebugLogCategoryEnabled()
+        ) {
+            return 0;
+        }
+        const n = window.LOG_MAX_LINES;
+        return typeof n === 'number' && n > 0 ? Math.floor(n) : 500;
     }
 
     function trimLogLinesToMax() {
@@ -155,51 +157,16 @@
         setLogWeOnlyFilter(p.logWeOnlyFilter === true, { persist: false });
     }
 
-    function syncDebugLogCheckbox() {
-        const cb = document.getElementById('logDebugCheckbox');
-        if (cb) cb.checked = !!debugLogEnabled;
-    }
-
-    function applyDebugLogFromPrefs(prefs) {
-        const p = prefs && typeof prefs === 'object' ? prefs : {};
-        setDebugLogEnabled(p.debugLogEnabled === true, { persist: false, logChange: false });
-    }
-
-    function setDebugLogEnabled(on, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const next = !!on;
-        const changed = next !== debugLogEnabled;
-        debugLogEnabled = next;
-        syncDebugLogCheckbox();
-        if (o.persist !== false && typeof writePrefs === 'function') {
-            writePrefs();
-        }
-        if (!next) {
-            trimLogLinesToMax();
-            syncLogEl();
-        }
-        if (changed && o.logChange !== false && typeof writeLog === 'function') {
-            if (next) {
-                if (typeof writeLogWarn === 'function') {
-                    writeLogWarn(msg('log.debug.enabledSampleWarn'));
-                }
-                if (typeof writeLogError === 'function') {
-                    writeLogError(msg('log.debug.enabledSampleError'));
-                }
-                writeLog(msg('log.debug.enabled'));
-            } else {
-                writeLog(msg('log.debug.disabled'));
-            }
-        }
-    }
-
-    window.isDebugLogEnabled = isDebugLogEnabled;
-    window.setDebugLogEnabled = setDebugLogEnabled;
-    window.applyDebugLogFromPrefs = applyDebugLogFromPrefs;
     window.isLogWeOnlyFilterEnabled = isLogWeOnlyFilterEnabled;
     window.setLogWeOnlyFilter = setLogWeOnlyFilter;
     window.applyLogWeOnlyFromPrefs = applyLogWeOnlyFromPrefs;
     window.classifyLogLevel = classifyLogLevel;
+
+    /** Dev constants パネル — DEBUG_LOG 変更後にログ行上限を再適用 */
+    window.applyDebugLogToggleSideEffects = function applyDebugLogToggleSideEffects() {
+        trimLogLinesToMax();
+        syncLogEl();
+    };
 
     function syncLogEl() {
         if (!logEl) return;
@@ -376,6 +343,42 @@
         return ok;
     }
 
+    function logDownloadFilename() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        return (
+            'carlog_' +
+            d.getFullYear() +
+            pad(d.getMonth() + 1) +
+            pad(d.getDate()) +
+            pad(d.getHours()) +
+            pad(d.getMinutes()) +
+            pad(d.getSeconds()) +
+            '.txt'
+        );
+    }
+
+    function downloadLogToFile() {
+        const text = logLines.map(logEntryPlainText).join('\n');
+        if (!text) return null;
+        const fileName = logDownloadFilename();
+        try {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return fileName;
+        } catch (_) {
+            return null;
+        }
+    }
+
     function writeLog(m, opt) {
         if (!logEl) return;
         const now = new Date();
@@ -425,11 +428,19 @@
                 }
             });
         }
-        const debugCb = document.getElementById('logDebugCheckbox');
-        if (debugCb) {
-            syncDebugLogCheckbox();
-            debugCb.addEventListener('change', () => {
-                setDebugLogEnabled(debugCb.checked);
+        const downloadBtn = document.getElementById('logDownloadBtn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', () => {
+                if (!logLines.length) {
+                    writeLog(msg('log.download.empty'));
+                    return;
+                }
+                const fileName = downloadLogToFile();
+                if (fileName) {
+                    writeLog(msg('log.download.saved', fileName));
+                } else {
+                    writeLog(msg('log.download.failed'));
+                }
             });
         }
         const weOnlyCb = document.getElementById('logWeOnlyCheckbox');
@@ -571,7 +582,6 @@
             } else             if (typeof prev.timecodeOverlayHidden === 'boolean') {
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }
-            payload.debugLogEnabled = isDebugLogEnabled();
             payload.logWeOnlyFilter = isLogWeOnlyFilterEnabled();
             if (typeof getWaveformLaneHeightScale === 'function') {
                 payload.waveformLaneHeightScale = getWaveformLaneHeightScale();

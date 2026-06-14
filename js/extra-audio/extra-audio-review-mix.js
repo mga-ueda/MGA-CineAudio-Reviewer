@@ -60,7 +60,10 @@
             vol: videoMain ? videoMain.volume : null,
             retryCount: reviewMixVideoMonitorTapRetryCount,
         };
-        if (typeof window.isDebugLogEnabled !== 'function' || !window.isDebugLogEnabled()) {
+        if (
+            typeof window.isDebugLogCategoryEnabled !== 'function' ||
+            !window.isDebugLogCategoryEnabled('VIDEO_ANALYZER')
+        ) {
             return snap;
         }
         if (videoMonitorStream) {

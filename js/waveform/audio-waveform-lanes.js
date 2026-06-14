@@ -473,21 +473,8 @@
 
     let lastWaveformCompositeLaneCount = null;
 
-    function scheduleCustomLayoutWaveformPaneHeightSync() {
-        if (typeof syncCustomLayoutWaveformPaneHeight !== 'function') return;
-        requestAnimationFrame(() => {
-            syncCustomLayoutWaveformPaneHeight();
-        });
-    }
-
     function refreshWaveformLaneHeightLayout() {
-        if (typeof captureCustomLayoutWaveformPaneHeights === 'function') {
-            captureCustomLayoutWaveformPaneHeights();
-        }
         applyWaveformLaneHeightScaleToDom();
-        if (typeof syncCustomLayoutWaveformPaneHeight === 'function') {
-            syncCustomLayoutWaveformPaneHeight();
-        }
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
@@ -562,27 +549,10 @@
             if (metas[i] && !metas[i].hidden) count += 1;
         }
         const laneCount = Math.max(1, count);
-        const laneCountChanged =
-            lastWaveformCompositeLaneCount !== null && lastWaveformCompositeLaneCount !== laneCount;
-        if (
-            laneCountChanged &&
-            typeof captureCustomLayoutWaveformPaneHeights === 'function' &&
-            typeof getLayoutDockMode === 'function' &&
-            getLayoutDockMode() !== 'default'
-        ) {
-            captureCustomLayoutWaveformPaneHeights();
-        }
         lastWaveformCompositeLaneCount = laneCount;
         audioWaveformComposite.style.setProperty('--wave-lane-count', String(laneCount));
         syncVisibleWaveformLaneGridRows();
         syncTimelineOverlayGridPlacement(laneCount);
-        const syncCustomLayoutWaveform = !!o.syncCustomLayoutWaveform || laneCountChanged;
-        if (
-            syncCustomLayoutWaveform &&
-            typeof syncCustomLayoutWaveformPaneHeight === 'function'
-        ) {
-            syncCustomLayoutWaveformPaneHeight();
-        }
 
         requestAnimationFrame(() => {
             const laneH = getWaveformLaneHeightCss();

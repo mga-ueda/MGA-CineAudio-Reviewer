@@ -13,6 +13,9 @@
 
         'log.clipboard.copied': 'Log copied to clipboard',
         'log.clipboard.copyFailed': 'Log could not copy',
+        'log.download.saved': (fileName) => 'Log downloaded (“' + fileName + '”)',
+        'log.download.failed': 'Log download failed',
+        'log.download.empty': 'Log download skipped (empty)',
 
         'log.export.webmCancelEsc': 'Export WebM: cancel requested (Esc)',
         'log.export.waveCancelEsc': 'Export Wave: cancel requested (Esc)',

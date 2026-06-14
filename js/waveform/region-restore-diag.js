@@ -1,12 +1,15 @@
 /**
  * region-restore-diag.js — セッション復元 / overlay / All Clear の段階診断ログ
- * ログ枠の Debug Log が ON のときのみ出力（localStorage に保存）
+ * constants.js の DEBUG_LOG.REGION_RESTORE が true のときのみ出力
  */
 (function regionRestoreDiagModule() {
     const LOG_PREFIX = '[RegionRestore] ';
 
     function enabled() {
-        return typeof window.isDebugLogEnabled === 'function' && window.isDebugLogEnabled();
+        return (
+            typeof window.isDebugLogCategoryEnabled === 'function' &&
+            window.isDebugLogCategoryEnabled('REGION_RESTORE')
+        );
     }
 
     function fmtDetail(detail) {

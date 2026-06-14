@@ -1,15 +1,15 @@
 /**
  * timeline-musical-slots-diag.js — [MusicalSlot] 診断ログ（入れ替え調査用）
  *
- * ログ枠の Debug Log が ON のときのみ出力（localStorage に保存）
+ * constants.js の DEBUG_LOG.MUSICAL_SLOT が true のときのみ出力
  * 手動: musicalSlotDiagDumpOriginBindings(0) / musicalSlotDiagDumpTrack(0)
  */
 (function timelineMusicalSlotsDiagModule() {
     const LOG_PREFIX = '[MusicalSlot]';
 
     function musicalSlotDiagEnabled() {
-        if (typeof window.isDebugLogEnabled === 'function') {
-            return window.isDebugLogEnabled();
+        if (typeof window.isDebugLogCategoryEnabled === 'function') {
+            return window.isDebugLogCategoryEnabled('MUSICAL_SLOT');
         }
         if (typeof window !== 'undefined' && typeof window.musicalSlotDiagEnabled === 'boolean') {
             return window.musicalSlotDiagEnabled;

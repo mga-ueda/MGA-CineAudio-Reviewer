@@ -160,6 +160,13 @@
     }
 
     window.addEventListener('keydown', (e) => {
+        if (
+            typeof handleDevConstantsPanelKeydown === 'function' &&
+            handleDevConstantsPanelKeydown(e)
+        ) {
+            return;
+        }
+
         const isCodeInGroup =
             typeof window.isShortcutCodeInGroup === 'function'
                 ? window.isShortcutCodeInGroup
@@ -194,22 +201,6 @@
             typeof isGlobalShortcutBlockedForTextInput === 'function' &&
             isGlobalShortcutBlockedForTextInput(e)
         ) {
-            return;
-        }
-
-        if (matchUserShortcut(e, 'layoutEditToggle')) {
-            if (typeof toggleLayoutDockEditMode === 'function') {
-                e.preventDefault();
-                toggleLayoutDockEditMode();
-            }
-            return;
-        }
-
-        if (matchUserShortcut(e, 'layoutModeToggle')) {
-            if (typeof toggleLayoutDockMode === 'function') {
-                e.preventDefault();
-                toggleLayoutDockMode();
-            }
             return;
         }
 

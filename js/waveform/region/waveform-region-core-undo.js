@@ -763,7 +763,7 @@
             window.musicalSlotDiagLog(stage, payload);
         }
     }
-    /** 無音リージョン削除調査用 — Debug Log OFF でも常に出力 */
+    /** 無音リージョン削除調査用 — constants.js の DEBUG_LOG.SILENT_GAP_DELETE */
     function silentGapDeleteDiagFmtPayload(payload) {
         if (payload == null) return '';
         if (typeof payload === 'string') return payload;
@@ -774,6 +774,12 @@
         );
     }
     function silentGapDeleteDiagLog(stage, payload) {
+        if (
+            typeof window.isDebugLogCategoryEnabled !== 'function' ||
+            !window.isDebugLogCategoryEnabled('SILENT_GAP_DELETE')
+        ) {
+            return;
+        }
         if (typeof writeLog !== 'function') return;
         const tail = silentGapDeleteDiagFmtPayload(payload);
         writeLog('[SilentGapDel] ' + stage + (tail ? ' | ' + tail : ''));

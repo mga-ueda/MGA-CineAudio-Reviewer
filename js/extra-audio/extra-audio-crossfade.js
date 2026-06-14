@@ -394,11 +394,7 @@
                     typeof boundaryNeedsPitchPlaybackSplit === 'function' &&
                     boundaryNeedsPitchPlaybackSplit(trackRef, leftHit.segmentIndex)
                 ) {
-                    if (
-                        typeof pitchPlaybackLog === 'function' &&
-                        typeof isDebugLogEnabled === 'function' &&
-                        isDebugLogEnabled()
-                    ) {
+                    if (typeof pitchPlaybackLog === 'function') {
                         pitchPlaybackLog('crossfade/pitch-split-skip', {
                             slot,
                             boundaryIndex: leftHit.segmentIndex,

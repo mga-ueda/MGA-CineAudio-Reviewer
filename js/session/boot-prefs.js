@@ -9,9 +9,6 @@
             } else {
                 applySavedLoopPlayback(p.loopPlayback);
             }
-            if (typeof applyDebugLogFromPrefs === 'function') {
-                applyDebugLogFromPrefs(p);
-            }
             if (typeof applyLogWeOnlyFromPrefs === 'function') {
                 applyLogWeOnlyFromPrefs(p);
             }
