@@ -405,7 +405,14 @@
             updateSessionAllClearButton();
         });
         if (!o.preserveLog && typeof clearLog === 'function') clearLog();
-        writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
+        if (typeof writeActionLog === 'function') {
+            writeActionLog(
+                'Session',
+                'all cleared (video, audio tracks, markers, saved session)',
+            );
+        } else {
+            writeLog('Session: all cleared (video, audio tracks, markers, saved session)');
+        }
         diagLog('allClear/done', null);
         if (!o.silentToast && typeof flashSeekHint === 'function') {
             flashSeekHint('Session', 'All cleared', 'notice');
@@ -451,7 +458,13 @@
         if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
         if (typeof updateMarkerCommentOverlay === 'function') updateMarkerCommentOverlay();
         updateVideoClearButton();
-        writeLog('Video: cleared (“' + name + '” unloaded); markers and waveform tracks kept');
+        if (typeof logVideoAction === 'function') {
+            logVideoAction(
+                'cleared "' + name + '" (markers and waveform tracks kept)',
+            );
+        } else {
+            writeLog('Video: cleared (“' + name + '” unloaded); markers and waveform tracks kept');
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Video', 'Cleared', 'notice');
         }

@@ -1,27 +1,21 @@
 /**
- * prefs-log.js — localStorage 設定の読み書き、ログパネル、確認ダイアログ、writeLog。
+ * prefs-log.js — localStorage 設定、ログパネル UI、確認ダイアログ。
+ * ログデータモデル・表示形式は log-core.js。
  */
     let logLines = [];
-    /** W/E Only フィルタ（localStorage のユーザー設定。Import/Export 対象外） */
+    /** W/E Only フィルタ（セッション内のみ。デフォルト OFF、保存しない） */
     let logWeOnlyFilter = false;
+    /** Actions — tier=action のみ（セッション内のみ。デフォルト OFF、保存しない） */
+    let logActionsOnlyFilter = false;
 
     const LOG_LEVEL_TAG = { warn: '[Warning]', error: '[Error]' };
 
-    function stripLogLevelTag(message) {
-        return String(message).replace(/^\[(?:Warning|Error)\]\s+/i, '');
-    }
-
-    function formatLogMessageBody(message, level) {
-        const body = stripLogLevelTag(message);
-        const tag = LOG_LEVEL_TAG[level];
-        return tag ? tag + ' ' + body : body;
-    }
-
     function logEntryLevel(entry) {
         if (entry && entry.level) return entry.level;
-        const raw = logEntryPlainText(entry);
-        const msg = raw.replace(/^\[[\d:]+\]\s*-\s*/, '');
-        return classifyLogLevel(stripLogLevelTag(msg));
+        if (typeof window.classifyLogLevel === 'function') {
+            return window.classifyLogLevel(entry && entry.message != null ? entry.message : '');
+        }
+        return 'info';
     }
 
     function isLogEntryWarnOrError(entry) {
@@ -30,8 +24,18 @@
     }
 
     function getLogEntriesForDisplay() {
-        if (!logWeOnlyFilter) return logLines;
-        return logLines.filter(isLogEntryWarnOrError);
+        let entries = logLines;
+        if (logWeOnlyFilter) {
+            entries = entries.filter(isLogEntryWarnOrError);
+        }
+        if (logActionsOnlyFilter) {
+            entries = entries.filter(
+                typeof window.isLogEntryVisibleInOpsFilter === 'function'
+                    ? window.isLogEntryVisibleInOpsFilter
+                    : (e) => e && e.tier === 'action',
+            );
+        }
+        return entries;
     }
 
     /** @typedef {'info'|'warn'|'error'} LogLevel */
@@ -47,12 +51,14 @@
         if (o.level === 'info' || o.level === 'warn' || o.level === 'error') {
             return o.level;
         }
-        const m = stripLogLevelTag(String(message));
+        const m = String(message).replace(/^\[(?:Warning|Error)\]\s+/i, '');
         if (
             /Session (save|read) failed\b/i.test(m) ||
             /\brestore failed\b/i.test(m) ||
             /\bfailed —/i.test(m) ||
-            /Import Review: failed/i.test(m) ||
+            /Import(?: Review)?: failed/i.test(m) ||
+            /^Import\s+failed/i.test(m) ||
+            /^Import\s+rejected/i.test(m) ||
             /Export WebM: failed/i.test(m) ||
             /Export Wave: failed/i.test(m) ||
             /Export Review: failed/i.test(m) ||
@@ -102,17 +108,18 @@
     }
 
     function normalizeLogEntry(raw) {
-        if (raw && typeof raw === 'object' && raw.text != null) {
-            const text = String(raw.text);
-            const level = raw.level || logEntryLevel({ text, level: raw.level });
-            return { text, level };
+        if (typeof window.normalizeStoredLogEntry === 'function') {
+            return window.normalizeStoredLogEntry(raw);
         }
-        const text = String(raw);
-        return { text, level: classifyLogLevel(text) };
+        const text = raw && raw.text != null ? String(raw.text) : String(raw);
+        return { timeMs: Date.now(), time: '00:00:00', tier: 'detail', category: 'System', message: text, level: 'info' };
     }
 
     function logEntryPlainText(entry) {
-        return entry && entry.text != null ? String(entry.text) : String(entry);
+        if (typeof window.formatLogEntryPlainText === 'function') {
+            return window.formatLogEntryPlainText(entry);
+        }
+        return entry && entry.message != null ? String(entry.message) : String(entry);
     }
 
     function getEffectiveLogMaxLines() {
@@ -142,24 +149,33 @@
         if (cb) cb.checked = !!logWeOnlyFilter;
     }
 
-    function setLogWeOnlyFilter(on, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
+    function setLogWeOnlyFilter(on) {
         logWeOnlyFilter = !!on;
         syncLogWeOnlyCheckbox();
         syncLogEl();
-        if (o.persist !== false && typeof writePrefs === 'function') {
-            writePrefs();
-        }
     }
 
-    function applyLogWeOnlyFromPrefs(prefs) {
-        const p = prefs && typeof prefs === 'object' ? prefs : {};
-        setLogWeOnlyFilter(p.logWeOnlyFilter === true, { persist: false });
+    function isLogActionsOnlyFilterEnabled() {
+        return !!logActionsOnlyFilter;
+    }
+
+    function syncLogActionsOnlyCheckbox() {
+        const cb = document.getElementById('logOpsOnlyCheckbox');
+        if (cb) cb.checked = !!logActionsOnlyFilter;
+    }
+
+    function setLogActionsOnlyFilter(on) {
+        logActionsOnlyFilter = !!on;
+        syncLogActionsOnlyCheckbox();
+        syncLogEl();
     }
 
     window.isLogWeOnlyFilterEnabled = isLogWeOnlyFilterEnabled;
     window.setLogWeOnlyFilter = setLogWeOnlyFilter;
-    window.applyLogWeOnlyFromPrefs = applyLogWeOnlyFromPrefs;
+    window.isLogActionsOnlyFilterEnabled = isLogActionsOnlyFilterEnabled;
+    window.setLogActionsOnlyFilter = setLogActionsOnlyFilter;
+    window.isLogOpsOnlyFilterEnabled = isLogActionsOnlyFilterEnabled;
+    window.setLogOpsOnlyFilter = setLogActionsOnlyFilter;
     window.classifyLogLevel = classifyLogLevel;
 
     /** Dev constants パネル — DEBUG_LOG 変更後にログ行上限を再適用 */
@@ -176,8 +192,33 @@
             const entry = visible[i];
             const line = document.createElement('div');
             const level = logEntryLevel(entry);
-            line.className = 'log-line log-line--' + level;
-            line.textContent = logEntryPlainText(entry);
+            line.className =
+                'log-line log-line--' +
+                level +
+                ' log-line--tier-' +
+                (entry.tier || 'detail');
+
+            const timeEl = document.createElement('span');
+            timeEl.className = 'log-line__time';
+            timeEl.textContent = '[' + (entry.time || '00:00:00') + ']';
+
+            const catEl = document.createElement('span');
+            catEl.className = 'log-line__cat';
+            catEl.textContent = entry.category || 'System';
+
+            const msgEl = document.createElement('span');
+            msgEl.className = 'log-line__msg';
+            if (level === 'warn' || level === 'error') {
+                const tag = document.createElement('span');
+                tag.className = 'log-line__level-tag';
+                tag.textContent = LOG_LEVEL_TAG[level] + ' ';
+                msgEl.appendChild(tag);
+            }
+            msgEl.appendChild(document.createTextNode(entry.message || ''));
+
+            line.appendChild(timeEl);
+            line.appendChild(catEl);
+            line.appendChild(msgEl);
             logEl.appendChild(line);
         }
         logEl.scrollTop = logEl.scrollHeight;
@@ -379,22 +420,22 @@
         }
     }
 
-    function writeLog(m, opt) {
-        if (!logEl) return;
-        const now = new Date();
-        const time =
-            '[' +
-            String(now.getHours()).padStart(2, '0') +
-            ':' +
-            String(now.getMinutes()).padStart(2, '0') +
-            ':' +
-            String(now.getSeconds()).padStart(2, '0') +
-            ']';
-        const level = classifyLogLevel(m, opt);
-        const formattedLine = time + ' - ' + formatLogMessageBody(m, level);
-        logLines.push({ text: formattedLine, level });
+    function appendLogEntry(message, opt) {
+        if (!logEl) return null;
+        const entry =
+            typeof window.createLogEntry === 'function'
+                ? window.createLogEntry(message, opt)
+                : normalizeLogEntry({ message: String(message), level: opt && opt.level });
+        logLines.push(entry);
         trimLogLinesToMax();
         syncLogEl();
+        return entry;
+    }
+
+    window.appendLogEntry = appendLogEntry;
+
+    function writeLog(m, opt) {
+        appendLogEntry(m, opt);
     }
 
     function writeLogWarn(m, opt) {
@@ -422,9 +463,17 @@
             copyBtn.addEventListener('click', async () => {
                 const ok = await copyLogToClipboard();
                 if (ok) {
-                    writeLog(msg('log.clipboard.copied'));
+                    if (typeof writeMetaLog === 'function') {
+                        writeMetaLog('Log', msg('log.clipboard.copied'));
+                    } else {
+                        writeLog(msg('log.clipboard.copied'));
+                    }
                 } else {
-                    writeLog(msg('log.clipboard.copyFailed'));
+                    if (typeof writeMetaLog === 'function') {
+                        writeMetaLog('Log', msg('log.clipboard.copyFailed'));
+                    } else {
+                        writeLog(msg('log.clipboard.copyFailed'));
+                    }
                 }
             });
         }
@@ -432,14 +481,26 @@
         if (downloadBtn) {
             downloadBtn.addEventListener('click', () => {
                 if (!logLines.length) {
-                    writeLog(msg('log.download.empty'));
+                    if (typeof writeMetaLog === 'function') {
+                        writeMetaLog('Log', msg('log.download.empty'));
+                    } else {
+                        writeLog(msg('log.download.empty'));
+                    }
                     return;
                 }
                 const fileName = downloadLogToFile();
                 if (fileName) {
-                    writeLog(msg('log.download.saved', fileName));
+                    if (typeof writeMetaLog === 'function') {
+                        writeMetaLog('Log', msg('log.download.saved', fileName));
+                    } else {
+                        writeLog(msg('log.download.saved', fileName));
+                    }
                 } else {
-                    writeLog(msg('log.download.failed'));
+                    if (typeof writeMetaLog === 'function') {
+                        writeMetaLog('Log', msg('log.download.failed'));
+                    } else {
+                        writeLog(msg('log.download.failed'));
+                    }
                 }
             });
         }
@@ -448,6 +509,13 @@
             syncLogWeOnlyCheckbox();
             weOnlyCb.addEventListener('change', () => {
                 setLogWeOnlyFilter(weOnlyCb.checked);
+            });
+        }
+        const opsOnlyCb = document.getElementById('logOpsOnlyCheckbox');
+        if (opsOnlyCb) {
+            syncLogActionsOnlyCheckbox();
+            opsOnlyCb.addEventListener('change', () => {
+                setLogActionsOnlyFilter(opsOnlyCb.checked);
             });
         }
     })();
@@ -587,7 +655,6 @@
             } else             if (typeof prev.timecodeOverlayHidden === 'boolean') {
                 payload.timecodeOverlayHidden = prev.timecodeOverlayHidden;
             }
-            payload.logWeOnlyFilter = isLogWeOnlyFilterEnabled();
             if (typeof getWaveformLaneHeightScale === 'function') {
                 payload.waveformLaneHeightScale = getWaveformLaneHeightScale();
             } else             if (typeof prev.waveformLaneHeightScale === 'number') {

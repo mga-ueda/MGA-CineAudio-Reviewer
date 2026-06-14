@@ -60,15 +60,27 @@
             if (!addClipEarly) {
                 cacheExtraTrackPersistBlob(tr, file, ab);
             }
-            writeLog(
-                'Extra audio ' +
-                    (slot + 1) +
-                    ': decoding ' +
-                    (file.name || 'audio') +
-                    ' (' +
-                    Math.round(ab.byteLength / 1024) +
-                    ' KB)…',
-            );
+            if (typeof detailLog === 'function') {
+                detailLog(
+                    'ExAudio',
+                    formatExTrack(slot) +
+                        ' decoding "' +
+                        (file.name || 'audio') +
+                        '" (' +
+                        Math.round(ab.byteLength / 1024) +
+                        ' KB)…',
+                );
+            } else {
+                writeLog(
+                    'Extra audio ' +
+                        (slot + 1) +
+                        ': decoding ' +
+                        (file.name || 'audio') +
+                        ' (' +
+                        Math.round(ab.byteLength / 1024) +
+                        ' KB)…',
+                );
+            }
             let decodeProgressTimer = 0;
             decodeProgressTimer = setInterval(() => {
                 writeLog('Extra audio ' + (slot + 1) + ': still decoding…');
@@ -171,6 +183,66 @@
         if (clipRef) {
             clipRef.buffer = buffer;
             clipRef.file = file;
+            if (typeof bindClipBackupOnLoad === 'function') {
+                bindClipBackupOnLoad(clipRef, buffer, {
+                    backupBuffer: opt && opt.backupBuffer,
+                    backupPersistBlob: opt && opt.backupPersistBlob,
+                    stretchedPersist: !!(opt && opt.stretchedPersist),
+                });
+            } else {
+                clipRef.backupBuffer = buffer;
+            }
+        }
+        if (
+            opt &&
+            opt.fromSessionRestore &&
+            opt.backupPersistBlob &&
+            opt.backupPersistBlob.size > 0 &&
+            clipRef
+        ) {
+            try {
+                const backupAb = await opt.backupPersistBlob.arrayBuffer();
+                const backupBuffer = await decodeExtraFileArrayBuffer(backupAb);
+                if (backupBuffer && backupBuffer.duration > 0) {
+                    bindClipBackupOnLoad(clipRef, buffer, {
+                        backupBuffer,
+                        backupPersistBlob: opt.backupPersistBlob,
+                        stretchedPersist: true,
+                    });
+                }
+            } catch (backupErr) {
+                writeLog(
+                    'Extra audio ' +
+                        (slot + 1) +
+                        ': backup decode failed — ' +
+                        (backupErr && backupErr.message
+                            ? backupErr.message
+                            : String(backupErr)),
+                );
+            }
+        }
+        if (
+            !(opt && opt.fromSessionRestore) &&
+            typeof parseMeterSpec === 'function' &&
+            typeof isTempoStretchActiveForSpec === 'function' &&
+            typeof applyTempoStretchForMeterSpec === 'function' &&
+            typeof getCommittedMusicalGridMeterText === 'function' &&
+            !(typeof isTempoStretchApplySkipped === 'function' && isTempoStretchApplySkipped())
+        ) {
+            const meterSpec = parseMeterSpec(getCommittedMusicalGridMeterText());
+            if (meterSpec && isTempoStretchActiveForSpec(meterSpec)) {
+                const prevSpec = {
+                    mode: meterSpec.mode,
+                    entries: meterSpec.entries,
+                    stretchDelta: 0,
+                };
+                await applyTempoStretchForMeterSpec(meterSpec, {
+                    prevSpec,
+                    force: true,
+                });
+                buffer = tr.buffer;
+                if (clipRef) clipRef.buffer = buffer;
+            }
         }
         if (opt && opt.fromSessionRestore) {
             const track = { type: 'extra', slot };
@@ -312,13 +384,30 @@
                 applyExtraTrackLaneGain(slot);
                 refreshReviewMixUi();
             }
-            writeLog(
-                'Extra audio ' +
-                    (slot + 1) +
-                    ': loaded ' +
-                    file.name +
-                    ' (synced to video head)'
-            );
+            const durLabel =
+                buffer && buffer.duration > 0
+                    ? typeof formatActionTc === 'function'
+                        ? formatActionTc(buffer.duration)
+                        : buffer.duration.toFixed(1) + ' s'
+                    : '';
+            const loadMsg =
+                'loaded "' +
+                (file.name || 'audio') +
+                '" on ' +
+                formatExTrack(slot) +
+                (durLabel ? ' (' + durLabel + ')' : '') +
+                (restoreLoad ? ', session restore' : ', synced to video head');
+            if (typeof logExAudioAction === 'function') {
+                logExAudioAction(loadMsg);
+            } else {
+                writeLog(
+                    'Extra audio ' +
+                        (slot + 1) +
+                        ': loaded ' +
+                        file.name +
+                        (restoreLoad ? '' : ' (synced to video head)'),
+                );
+            }
             syncExtraAudioToTransport();
             if (!restoreLoad && typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();

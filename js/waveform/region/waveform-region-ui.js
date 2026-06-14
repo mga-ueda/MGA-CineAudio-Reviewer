@@ -476,15 +476,26 @@
     function notifyRegionsJoined(track, joinedCount, remainingCount, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (o.silent) return;
-        writeLog(
-            'Ex ' +
-                (track.slot + 1) +
-                ': ' +
-                joinedCount +
-                ' regions joined (' +
-                remainingCount +
-                ' left)',
-        );
+        const joinMsg =
+            formatExTrack(track.slot) +
+            ' joined ' +
+            joinedCount +
+            ' region(s) (' +
+            remainingCount +
+            ' left)';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(joinMsg);
+        } else {
+            writeLog(
+                'Ex ' +
+                    (track.slot + 1) +
+                    ': ' +
+                    joinedCount +
+                    ' regions joined (' +
+                    remainingCount +
+                    ' left)',
+            );
+        }
         if (typeof flashSeekHint === 'function') {
             const hint =
                 joinedCount >= 2
@@ -709,6 +720,106 @@
                 boundaryIndex +
                 '"]',
         );
+    }
+
+    function syncPhraseBoundaryDeferForPointer(clientX, clientY) {
+        if (typeof syncPhraseBoundaryDeferToRegionHandles !== 'function') return;
+        const forceOff =
+            typeof window.isRegionHandleHitDebugEnabled === 'function' &&
+            window.isRegionHandleHitDebugEnabled();
+        if (forceOff) {
+            syncPhraseBoundaryDeferToRegionHandles(true);
+            return;
+        }
+        let defer = false;
+        if (
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(clientX, clientY)
+        ) {
+            defer = true;
+        } else if (
+            typeof resolveRegionResizeHandleAtPointer === 'function' &&
+            Number.isFinite(clientX) &&
+            Number.isFinite(clientY)
+        ) {
+            const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+            for (let slot = 0; slot < n && !defer; slot++) {
+                const hit = resolveRegionResizeHandleAtPointer(
+                    { type: 'extra', slot },
+                    clientX,
+                    clientY,
+                );
+                defer = !!hit;
+            }
+        }
+        syncPhraseBoundaryDeferToRegionHandles(defer);
+    }
+
+    /** lanes capture — Fade/In/Out（pointer-events なし／Phrase 境界より先に幾何ヒット） */
+    function tryBeginRegionHandleDragFromPointer(ev) {
+        if (!ev || ev.button !== 0 || ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+        if (!Number.isFinite(ev.clientX) || !Number.isFinite(ev.clientY)) return false;
+        syncPhraseBoundaryDeferForPointer(ev.clientX, ev.clientY);
+
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        let bestHit = null;
+        let bestRank = Infinity;
+        let bestDist = Infinity;
+        for (let slot = 0; slot < n; slot++) {
+            const lane = document.getElementById('extraAudioLane' + slot);
+            if (!lane || lane.hidden) continue;
+            const laneRect = lane.getBoundingClientRect();
+            if (
+                ev.clientY < laneRect.top ||
+                ev.clientY > laneRect.bottom ||
+                ev.clientX < laneRect.left ||
+                ev.clientX > laneRect.right
+            ) {
+                continue;
+            }
+            const track = { type: 'extra', slot };
+            const hit = resolveRegionResizeHandleAtPointer(
+                track,
+                ev.clientX,
+                ev.clientY,
+            );
+            if (!hit) continue;
+            const rank =
+                hit.kind === 'fade-in' || hit.kind === 'fade-out'
+                    ? 0
+                    : hit.kind === 'in' || hit.kind === 'out'
+                      ? 1
+                      : 2;
+            let dist = Infinity;
+            if (hit.regionEl && typeof hit.regionEl.getBoundingClientRect === 'function') {
+                const r = hit.regionEl.getBoundingClientRect();
+                dist = Math.hypot(
+                    ev.clientX - (r.left + r.width * 0.5),
+                    ev.clientY - (r.top + r.height * 0.5),
+                );
+            }
+            if (
+                rank < bestRank ||
+                (rank === bestRank && dist < bestDist)
+            ) {
+                bestRank = rank;
+                bestDist = dist;
+                bestHit = Object.assign({ track }, hit);
+            }
+        }
+        if (!bestHit) return false;
+        onRegionHandlePointerDown(
+            ev,
+            bestHit.track,
+            bestHit.segmentIndex,
+            bestHit.kind,
+            { regionEl: bestHit.regionEl },
+        );
+        return true;
+    }
+
+    function tryBeginRegionFadeHandleDragFromPointer(ev) {
+        return tryBeginRegionHandleDragFromPointer(ev);
     }
 
     /** lanes capture — スプリットハンドル上のみ境界ドラッグ（リージョン本体の平行移動と競合しない） */
@@ -1668,7 +1779,7 @@
         document.addEventListener('pointercancel', regionHandleDragDocUp);
     }
 
-    function beginRegionHandleDragSession(ev, track, segmentIndex, kind) {
+    function beginRegionHandleDragSession(ev, track, segmentIndex, kind, opt) {
         regionHandleDragActive = true;
         regionHandleDragTrack = track;
         regionHandleDragSegmentIndex = segmentIndex;
@@ -1678,10 +1789,15 @@
         regionHandleDragPointerId = ev.pointerId;
         regionHandleDragStartClientX = ev.clientX;
         regionHandleDragDidMove = false;
-        regionHandleDragCaptureEl = null;
-        if (typeof ev.target.setPointerCapture === 'function') {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const captureEl =
+            o.captureEl ||
+            o.regionEl ||
+            (typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null);
+        regionHandleDragCaptureEl = captureEl || null;
+        if (captureEl && typeof captureEl.setPointerCapture === 'function') {
             try {
-                ev.target.setPointerCapture(ev.pointerId);
+                captureEl.setPointerCapture(ev.pointerId);
             } catch (_) {}
         }
         const lanes =
@@ -1738,7 +1854,7 @@
         }
     }
 
-    function onRegionHandlePointerDown(ev, track, segmentIndex, kind) {
+    function onRegionHandlePointerDown(ev, track, segmentIndex, kind, opt) {
         if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
             syncSnapSuppressionFromPointerEvent(ev);
         }
@@ -1756,7 +1872,11 @@
         if (typeof endAudioWaveformScrub === 'function') {
             endAudioWaveformScrub({ force: true });
         }
-        beginRegionHandleDragSession(ev, track, segmentIndex, kind);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        beginRegionHandleDragSession(ev, track, segmentIndex, kind, {
+            ...o,
+            captureEl: o.regionEl || o.captureEl,
+        });
         const splitB = resolveSplitBoundaryIndexForHandleDrag(
             track,
             segmentIndex,
@@ -1808,7 +1928,12 @@
         regionHandleDragDocUp = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
             e.preventDefault();
-            if (typeof e.target.releasePointerCapture === 'function') {
+            const releaseEl = regionHandleDragCaptureEl;
+            if (releaseEl && typeof releaseEl.releasePointerCapture === 'function') {
+                try {
+                    releaseEl.releasePointerCapture(e.pointerId);
+                } catch (_) {}
+            } else if (typeof e.target.releasePointerCapture === 'function') {
                 try {
                     e.target.releasePointerCapture(e.pointerId);
                 } catch (_) {}
@@ -2084,5 +2209,7 @@
     }
 
     window.resolveSplitBoundaryPointerHit = resolveSplitBoundaryPointerHit;
+    window.tryBeginRegionHandleDragFromPointer = tryBeginRegionHandleDragFromPointer;
+    window.tryBeginRegionFadeHandleDragFromPointer = tryBeginRegionFadeHandleDragFromPointer;
     window.tryBeginSplitBoundaryDragFromPointer = tryBeginSplitBoundaryDragFromPointer;
     window.isPointerOnSplitHandleAtPointer = isPointerOnSplitHandleAtPointer;

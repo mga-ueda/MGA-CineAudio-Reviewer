@@ -171,7 +171,7 @@
                             <strong>スペクトラムとメーター</strong> — トランスポートの下。左にスペクトラム、右にステレオの RMS / ピークメーター。
                         </li>
                         <li>
-                            <strong>ログ</strong> — 画面最下部。読み込み・エクスポート・警告・エラーなどのメッセージ。<strong>W/E Only</strong> で警告・エラー行のみ表示。
+                            <strong>ログ</strong> — 画面最下部。読み込み・エクスポート・警告・エラーなどのメッセージ。<strong>W/E Only</strong> / <strong>Actions</strong> で表示を絞り込み。
                         </li>
                     </ol>
                 </div>
@@ -559,8 +559,8 @@
             <section class="guide-section" id="log">
                 <h2 class="docs-heading-box">ログ</h2>
                 <p><strong>ログ</strong>は画面最下部のテキスト行です。読み込み完了、エクスポート結果、同期の警告などが時系列で表示されます。重要度に応じて行の色が変わり、ワーニング行の先頭には <code>[Warning]</code>、エラー行には <code>[Error]</code> が付きます（通常の情報行は従来どおり白系）。</p>
-                <p>ログ欄右下の <strong>W/E Only</strong> を ON にすると、<strong>ワーニングとエラーの行だけ</strong>が表示されます（フォールバックや軽微な未適用は黄色、保存失敗やデコード失敗などは赤）。ログが長いときに問題行だけを追う用途です。デフォルトは OFF で、ON/OFF は <strong>localStorage</strong> に保存され<strong>次回起動時に復元</strong>されます（Import/Export 対象外）。<strong>Copy</strong> は、W/E Only ON 時は<strong>表示されている行だけ</strong>をコピーします。</p>
-                <p><strong>Debug Log</strong> を ON にすると、診断用の詳細ログも出力されます（次回起動時に復元。Import/Export 対象外）。Debug Log を ON にした直後には、W/E Only の動作確認用にテストの <code>[Warning]</code> / <code>[Error]</code> 行がそれぞれ1行ずつ出ます。<strong>Copy</strong>（全文または表示中のみ）・<strong>Clear</strong>（ログ消去）も右端にあります。うまくいかないときは、まずここを確認してください。</p>
+                <p>ログ欄右下の <strong>W/E Only</strong> を ON にすると、<strong>ワーニングとエラーの行だけ</strong>が表示されます（フォールバックや軽微な未適用は黄色、保存失敗やデコード失敗などは赤）。<strong>Actions</strong> を ON にすると、<strong>操作の結果</strong>（リージョン編集・読み込み完了など）と警告・エラー行だけが表示され、診断用の詳細行や内部手順は非表示のままです。どちらもデフォルトは OFF で、<strong>ページを再読み込みすると OFF に戻ります</strong>（ユーザー設定には保存しません）。<strong>Copy</strong> は、フィルタ ON 時は<strong>表示されている行だけ</strong>をコピーします。</p>
+                <p>調査用の<strong>診断ログ</strong>や波形上の<strong>リージョン操作帯</strong>表示は <kbd>F10</kbd> の「開発者向け定数」パネルから切り替えます（実行中のみ有効。再読み込みですべて OFF）。診断ログのいずれかが ON の間はログ行数が無制限になり、すべて OFF のときは 500 行上限です。<strong>Download</strong>（ログ全文をファイル保存）・<strong>Clear</strong>（ログ消去）も右端にあります。うまくいかないときは、まずここを確認してください。</p>
             </section>
 
             <section class="guide-section" id="shortcuts">
@@ -570,7 +570,7 @@
                     <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">Shortcut（一覧ページ）を開く →</a>
                 </p>
                 <p>再生バーの <strong>Shortcut</strong> リンクからも同じページを新しいウィンドウで開けます。</p>
-                <p>最近追加した主な機能・キーとして、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ再生中の <kbd>Ins</kbd> マーカー確定時の<strong>4分音符クオンタイズ</strong>、Audio Track への WAV 読み込み時の<strong>マーカー/リージョン自動取り込み</strong>、<strong>Export Wave</strong> による WAV へのマーカー/リージョン埋め込み（48 kHz / 24-bit、オフラインバウンス）、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、ログ欄の <strong>W/E Only</strong>（警告・エラーのみ表示）と <strong>Debug Log</strong> トグルがあります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
+                <p>最近追加した主な機能・キーとして、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ再生中の <kbd>Ins</kbd> マーカー確定時の<strong>4分音符クオンタイズ</strong>、Audio Track への WAV 読み込み時の<strong>マーカー/リージョン自動取り込み</strong>、<strong>Export Wave</strong> による WAV へのマーカー/リージョン埋め込み（48 kHz / 24-bit、オフラインバウンス）、<kbd>L</kbd>（<strong>Loop</strong>/全体ループ）、<kbd>C</kbd>（<strong>Click</strong>/メトロノーム）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中の <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（キー ±1 半音）、<kbd>Alt</kbd>+<kbd>T</kbd> / <kbd>Alt</kbd>+<kbd>P</kbd>（Tempo/Sig・Phrase 入力欄へフォーカス）、<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時の無音スロット <kbd>Ctrl</kbd>+クリック選択と <kbd>E</kbd>（<strong>E</strong>xchange）による入れ替え、<kbd>R</kbd>（<strong>R. Offset</strong>/リハーサルマークオフセット）、<kbd>A</kbd>（Analyze の Live/解析停止 切替）、ログ欄の <strong>W/E Only</strong> / <strong>Actions</strong>（表示フィルタ。再読み込みで OFF）、<kbd>F10</kbd>（開発者向け定数: 診断ログ・リージョン操作帯）があります。結合 <kbd>B</kbd> は <strong>B</strong>ond の頭文字です。従来どおり <kbd>T</kbd> / <kbd>P</kbd>（Tempo/Sig / Phrase 着色の表示切替）、Tempo/Sig 表示中の <kbd>X</kbd>/<kbd>B</kbd>/<kbd>Del</kbd> はフレーズ編集、Tempo/Sig OFF 時はリージョン編集になります。詳細は <a href="shortcuts.html">shortcuts.html</a> を参照してください。</p>
                 <p>ショートカットの割り当ては <code>js/shortcuts/shortcut-defs.js</code> に集約されています。コード編集に慣れている場合は、このファイルを改変してカスタマイズできます。</p>
                 <p>ただし改変版を使うには、リポジトリ一式を<strong>ローカルへダウンロードして運用</strong>する前提になります。通常運用は、公開中の <strong>GitHub Pages 版をそのまま使う方法を推奨</strong>します（人知れず更新が入る場合があるため、最新状態を利用しやすくなります）。</p>
             </section>
@@ -580,7 +580,7 @@
                 <ul>
                     <li>読み込んだ動画は<strong>ブラウザ内</strong>にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
                     <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。オプションバー下段の <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
-                    <li>Loop のオン/オフ、Click、Analyze、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。</li>
+                    <li>Loop のオン/オフ、Click、Analyze、タイムコードオーバーレイの表示・位置、レーンの表示状態などは <strong>localStorage</strong> に保存されます。ログ欄の <strong>W/E Only</strong> / <strong>Actions</strong> は保存されず、再読み込みで OFF になります。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには、ページ内のどこへでも再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で保存データが消えると、前回のセッションは復元できません。</li>
                 </ul>

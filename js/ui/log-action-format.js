@@ -1,0 +1,139 @@
+/**
+ * log-action-format.js — Actions（tier=action）向けログの共通フォーマットと出力。
+ */
+(function logActionFormatModule() {
+    function actionLog(category, message, opt) {
+        const msg = message != null ? String(message) : '';
+        if (typeof writeActionLog === 'function') {
+            writeActionLog(category, msg, opt);
+        } else if (typeof writeLog === 'function') {
+            writeLog(msg, opt);
+        }
+    }
+
+    function detailLog(category, message, opt) {
+        const msg = message != null ? String(message) : '';
+        if (typeof writeDetailLog === 'function') {
+            writeDetailLog(category, msg, opt);
+        } else if (typeof writeLog === 'function') {
+            writeLog(msg, opt);
+        }
+    }
+
+    function formatActionTc(sec) {
+        if (typeof formatTimecodeForTransport === 'function') {
+            return formatTimecodeForTransport(sec);
+        }
+        const s = Number(sec);
+        return Number.isFinite(s) ? s.toFixed(3) + ' s' : '—';
+    }
+
+    function formatExTrack(slot) {
+        return 'Ex' + ((slot | 0) + 1);
+    }
+
+    function formatRegionRef(slot, segmentIndex) {
+        return formatExTrack(slot) + ' R' + ((segmentIndex | 0) + 1);
+    }
+
+    function formatPhraseLabelForActionLog(phraseSlotIndex) {
+        const i = phraseSlotIndex | 0;
+        if (i < 0) return '?';
+        if (typeof window.rehearsalMarkLabelForPhraseSlotIndex === 'function') {
+            return window.rehearsalMarkLabelForPhraseSlotIndex(i);
+        }
+        if (typeof window.phraseGroupLabelForIndex === 'function') {
+            return window.phraseGroupLabelForIndex(i);
+        }
+        return String(i + 1);
+    }
+
+    function formatSwapUnitActionLabel(slot, unitIndex, countsOpt) {
+        if (!slot) return 'unit ' + ((unitIndex | 0) + 1);
+        const parts = [];
+        if (slot.kind === 'silent') {
+            parts.push('silent gap ' + ((slot.silentGapIndex | 0) + 1));
+        } else if (slot.segmentRefs && slot.segmentRefs.length) {
+            parts.push(
+                slot.segmentRefs
+                    .map((r) => 'R' + ((r.segmentIndex | 0) + 1))
+                    .join('+'),
+            );
+        } else {
+            parts.push('unit ' + ((unitIndex | 0) + 1));
+        }
+        const m = slot.musical || {};
+        const phraseIdx = m.phraseSlotIndex | 0;
+        if (phraseIdx >= 0) {
+            parts.push('Phrase ' + formatPhraseLabelForActionLog(phraseIdx));
+        }
+        let bars = m.phraseBarCount | 0;
+        if (!(bars > 0) && countsOpt && phraseIdx >= 0 && phraseIdx < countsOpt.length) {
+            bars = countsOpt[phraseIdx] | 0;
+        }
+        if (bars > 0) parts.push(bars + ' bars');
+        return parts.join(', ');
+    }
+
+    function formatRegionSwapActionMessage(track, slotA, slotB, idxA, idxB, swapMode, counts) {
+        const ex = formatExTrack(track.slot);
+        const labelA = formatSwapUnitActionLabel(slotA, idxA, counts);
+        const labelB = formatSwapUnitActionLabel(slotB, idxB, counts);
+        return 'swapped ' + labelA + ' ↔ ' + labelB + ' on ' + ex + ' (' + swapMode + ')';
+    }
+
+    function formatRegionHistoryActionMessage(direction, actionLabel) {
+        const dir = direction === 'redo' ? 'redo' : 'undo';
+        const label = actionLabel != null ? String(actionLabel).trim() : '';
+        return label ? dir + ' — ' + label : dir;
+    }
+
+    function logRegionAction(message, opt) {
+        const msg = message != null ? String(message) : '';
+        if (typeof window.noteRegionUndoActionLabel === 'function') {
+            window.noteRegionUndoActionLabel(msg);
+        }
+        actionLog('Region', msg, opt);
+    }
+
+    function logMarkerAction(message, opt) {
+        actionLog('Marker', message, opt);
+    }
+
+    function logPhraseAction(message, opt) {
+        actionLog('Phrase', message, opt);
+    }
+
+    function logExAudioAction(message, opt) {
+        actionLog('ExAudio', message, opt);
+    }
+
+    function logMixAction(message, opt) {
+        actionLog('Mix', message, opt);
+    }
+
+    function logVideoAction(message, opt) {
+        actionLog('Video', message, opt);
+    }
+
+    function logSessionAction(message, opt) {
+        actionLog('Session', message, opt);
+    }
+
+    window.actionLog = actionLog;
+    window.detailLog = detailLog;
+    window.formatActionTc = formatActionTc;
+    window.formatExTrack = formatExTrack;
+    window.formatRegionRef = formatRegionRef;
+    window.formatPhraseLabelForActionLog = formatPhraseLabelForActionLog;
+    window.formatSwapUnitActionLabel = formatSwapUnitActionLabel;
+    window.formatRegionSwapActionMessage = formatRegionSwapActionMessage;
+    window.formatRegionHistoryActionMessage = formatRegionHistoryActionMessage;
+    window.logRegionAction = logRegionAction;
+    window.logMarkerAction = logMarkerAction;
+    window.logPhraseAction = logPhraseAction;
+    window.logExAudioAction = logExAudioAction;
+    window.logMixAction = logMixAction;
+    window.logVideoAction = logVideoAction;
+    window.logSessionAction = logSessionAction;
+})();

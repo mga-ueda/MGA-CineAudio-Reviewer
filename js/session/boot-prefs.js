@@ -9,9 +9,6 @@
             } else {
                 applySavedLoopPlayback(p.loopPlayback);
             }
-            if (typeof applyLogWeOnlyFromPrefs === 'function') {
-                applyLogWeOnlyFromPrefs(p);
-            }
             if (typeof applyUserWaveformLaneHeightFromStorage === 'function') {
                 applyUserWaveformLaneHeightFromStorage(p);
             }
@@ -24,11 +21,14 @@
     window.initPrefsFromStorage = initPrefsFromStorage;
 
     (function logAppStartupLines() {
-        const readyLine = '> System Ready. (' + APP_VERSION_LABEL + ')';
         if (typeof seedLogLines === 'function') {
-            seedLogLines(readyLine);
+            seedLogLines([]);
         } else if (logEl) {
-            logEl.innerText = readyLine;
+            logEl.replaceChildren();
         }
-        writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');
+        if (typeof writeMetaLog === 'function') {
+            writeMetaLog('System', 'ready (' + APP_VERSION_LABEL + ')');
+        } else {
+            writeLog('MGA CineAudio Reviewer started (' + APP_VERSION_LABEL + ').');
+        }
     })();

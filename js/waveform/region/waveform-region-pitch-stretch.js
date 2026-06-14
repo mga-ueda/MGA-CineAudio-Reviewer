@@ -12,6 +12,10 @@
         ) {
             return;
         }
+        if (typeof writeDiagLog === 'function') {
+            writeDiagLog('KEY_PLAYBACK', step, data);
+            return;
+        }
         if (typeof writeLog !== 'function') return;
         writeLog('[KeyPlayback] ' + step + ' | ' + JSON.stringify(data || {}));
     }
@@ -747,16 +751,26 @@
                         }
                     }
                     cache.set(key, buf);
-                    if (typeof writeLog === 'function') {
-                        writeLog(
-                            'Ex ' +
-                                (track.slot + 1) +
-                                ' key ready (' +
-                                (pitch > 0 ? '+' : '') +
-                                pitch +
-                                ')',
-                        );
-                    }
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(
+                    formatExTrack(track.slot) +
+                        ' key ready (' +
+                        (pitch > 0 ? '+' : '') +
+                        pitch +
+                        ' semitones, R' +
+                        (segmentIndex + 1) +
+                        ')',
+                );
+            } else if (typeof writeLog === 'function') {
+                writeLog(
+                    'Ex ' +
+                        (track.slot + 1) +
+                        ' key ready (' +
+                        (pitch > 0 ? '+' : '') +
+                        pitch +
+                        ')',
+                );
+            }
                     if (typeof syncExtraAudioToTransport === 'function') {
                         syncExtraAudioToTransport({ force: true });
                     }

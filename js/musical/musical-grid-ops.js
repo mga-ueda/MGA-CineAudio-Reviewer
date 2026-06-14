@@ -339,7 +339,15 @@
             path: 'phrase-grid-relayout',
             phraseAfter: musicalGridPhraseText,
         });
-        if (typeof writeLog === 'function') {
+        if (typeof logPhraseAction === 'function') {
+            logPhraseAction(
+                label +
+                    ' deleted' +
+                    (useSeekbar ? ' (seekbar)' : '') +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        } else if (typeof writeLog === 'function') {
             writeLog(
                 'Phrase ' +
                     label +
@@ -703,26 +711,38 @@
             after: musicalGridPhraseText,
         });
 
-        if (!(o.silent) && typeof writeLog === 'function') {
+        if (!(o.silent)) {
             if (hit.relayoutOnly) {
-                writeLog(
-                    'Ex ' +
-                        ((track.slot | 0) + 1) +
-                        ': regions joined at boundary ' +
-                        ((boundaryIndex | 0) + 1) +
-                        ' (phrase relayout)',
-                );
+                const relayoutMsg =
+                    formatExTrack(track.slot) +
+                    ' regions joined at boundary ' +
+                    ((boundaryIndex | 0) + 1) +
+                    ' (phrase relayout)';
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(relayoutMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog(
+                        'Ex ' +
+                            ((track.slot | 0) + 1) +
+                            ': regions joined at boundary ' +
+                            ((boundaryIndex | 0) + 1) +
+                            ' (phrase relayout)',
+                    );
+                }
             } else {
                 const left = phraseGroupLabelForIndex(hit.boundaryIndex);
                 const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
-                writeLog(
-                    'Phrase ' +
-                        left +
-                        '/' +
-                        right +
-                        ' joined at region boundary: ' +
-                        musicalGridPhraseText,
-                );
+                const joinMsg =
+                    left +
+                    '/' +
+                    right +
+                    ' joined at region boundary: ' +
+                    musicalGridPhraseText;
+                if (typeof logPhraseAction === 'function') {
+                    logPhraseAction(joinMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog('Phrase ' + joinMsg);
+                }
             }
         }
         if (!(o.silent) && typeof flashSeekHint === 'function') {
@@ -804,7 +824,17 @@
         const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
         applyExplicitPhraseGroupBarCounts(hit.counts);
         persistPhraseWaveformEditAndRedraw({ skipUndo: true });
-        if (typeof writeLog === 'function') {
+        if (typeof logPhraseAction === 'function') {
+            logPhraseAction(
+                left +
+                    '/' +
+                    right +
+                    ' joined' +
+                    (useSeekbar ? ' (seekbar)' : '') +
+                    ': ' +
+                    musicalGridPhraseText,
+            );
+        } else if (typeof writeLog === 'function') {
             writeLog(
                 'Phrase ' +
                     left +
@@ -1319,6 +1349,7 @@
               })()
             : null;
     let phraseBoundaryDragActive = false;
+    let meterCommitInFlight = false;
     let phraseBoundaryDragPointerId = null;
     let phraseBoundaryDragBoundaryIndex = -1;
     let phraseBoundaryDragBarBoundaries = null;
@@ -1380,6 +1411,12 @@
     }
 
     function onPhraseBoundaryHandlePointerDown(ev, boundaryIndex) {
+        if (
+            typeof tryBeginRegionHandleDragFromPointer === 'function' &&
+            tryBeginRegionHandleDragFromPointer(ev)
+        ) {
+            return;
+        }
         if (
             typeof isPointerInRegionEwCursorHitZone === 'function' &&
             isPointerInRegionEwCursorHitZone(ev.clientX, ev.clientY)
@@ -1573,6 +1610,9 @@
             });
             phraseBoundaryRoot.appendChild(handle);
         }
+        if (typeof window.scheduleWaveformRegionOverlayRefresh === 'function') {
+            window.scheduleWaveformRegionOverlayRefresh();
+        }
     }
 
     function focusMusicalGridMeterEditor() {
@@ -1605,12 +1645,87 @@
     }
 
     function commitMusicalGridMeterEditor() {
-        persistMusicalGridAndRedraw({
-            relayoutSlotsFromMeter: true,
-            strictMeterCommit: true,
-        });
-        if (musicalGridMeterInput) musicalGridMeterInput.blur();
-        if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
+        if (meterCommitInFlight) return;
+        const stretchPrevSpec =
+            typeof parseMeterSpec === 'function'
+                ? parseMeterSpec(
+                      typeof getMusicalGridMeterLayoutBaseline === 'function'
+                          ? getMusicalGridMeterLayoutBaseline()
+                          : getCommittedMusicalGridMeterText(),
+                  )
+                : null;
+        const stretchNextSpec =
+            typeof parseMeterSpec === 'function'
+                ? parseMeterSpec(
+                      musicalGridMeterInput
+                          ? musicalGridMeterInput.value
+                          : getCommittedMusicalGridMeterText(),
+                  )
+                : null;
+        const stretchDeltaOnlyPending =
+            typeof meterStretchDeltaOnlyChanged === 'function' &&
+            meterStretchDeltaOnlyChanged(stretchPrevSpec, stretchNextSpec);
+        const stretchWillChange =
+            stretchPrevSpec &&
+            stretchNextSpec &&
+            typeof computeTempoStretchRateFromSpec === 'function' &&
+            typeof isTempoStretchActiveForSpec === 'function' &&
+            (Math.abs(
+                computeTempoStretchRateFromSpec(stretchPrevSpec) -
+                    computeTempoStretchRateFromSpec(stretchNextSpec),
+            ) > 0.00001 ||
+                isTempoStretchActiveForSpec(stretchPrevSpec) !==
+                    isTempoStretchActiveForSpec(stretchNextSpec));
+        meterCommitInFlight = true;
+        const run = async () => {
+            try {
+                persistMusicalGridAndRedraw({
+                    relayoutSlotsFromMeter: false,
+                    strictMeterCommit: true,
+                    skipTimelineSlotRebuild: stretchDeltaOnlyPending,
+                });
+                if (typeof applyTempoStretchForCurrentMeter === 'function') {
+                    await applyTempoStretchForCurrentMeter({ prevSpec: stretchPrevSpec });
+                }
+                if (
+                    stretchWillChange &&
+                    typeof setTempoStretchPendingRelayout === 'function'
+                ) {
+                    setTempoStretchPendingRelayout(true);
+                }
+                const committedSpec =
+                    typeof parseMeterSpec === 'function'
+                        ? parseMeterSpec(getCommittedMusicalGridMeterText())
+                        : null;
+                const stretchDeltaOnly =
+                    typeof meterStretchDeltaOnlyChanged === 'function' &&
+                    meterStretchDeltaOnlyChanged(stretchPrevSpec, committedSpec);
+                persistMusicalGridAndRedraw({
+                    skipMeterCommit: true,
+                    relayoutSlotsFromMeter: true,
+                    forceRelayoutFromMeter: true,
+                    preservePhraseTextOnMeterRelayout: stretchDeltaOnly,
+                    strictMeterCommit: true,
+                });
+                if (musicalGridMeterInput) musicalGridMeterInput.blur();
+                if (typeof scheduleWaveformFocusRestore === 'function') {
+                    scheduleWaveformFocusRestore();
+                }
+            } finally {
+                meterCommitInFlight = false;
+                if (typeof clearTempoStretchPendingRelayout === 'function') {
+                    clearTempoStretchPendingRelayout();
+                }
+                if (
+                    stretchWillChange &&
+                    typeof window.pruneRegionUndoStackIncompatibleWithCurrentTransport ===
+                        'function'
+                ) {
+                    window.pruneRegionUndoStackIncompatibleWithCurrentTransport();
+                }
+            }
+        };
+        void run();
     }
 
     function cancelMusicalGridMeterEditor() {
@@ -1676,13 +1791,21 @@
             });
             musicalGridMeterInput.addEventListener('input', onInput);
             musicalGridMeterInput.addEventListener('change', () => {
-                persistMusicalGridAndRedraw({
-                    relayoutSlotsFromMeter: true,
-                    strictMeterCommit: true,
-                });
+                commitMusicalGridMeterEditor();
             });
             musicalGridMeterInput.addEventListener('keydown', (e) => {
                 if (handleMusicalGridEditorTabKeydown(e, 'meter')) return;
+                if (
+                    (e.key === '+' || e.key === '-') &&
+                    !e.altKey &&
+                    !e.ctrlKey &&
+                    !e.metaKey &&
+                    typeof insertMeterStretchSignAtEditorStart === 'function' &&
+                    insertMeterStretchSignAtEditorStart(e.key)
+                ) {
+                    e.preventDefault();
+                    return;
+                }
                 if (
                     matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
                     matchUserShortcut(e, 'musicalGridInputArrowDown', { allowRepeat: true })
@@ -1771,6 +1894,14 @@
     window.drawMusicalGridOverlay = drawMusicalGridOverlay;
     window.scheduleMusicalGridRedraw = scheduleMusicalGridRedraw;
     window.parseMeterSpec = parseMeterSpec;
+    window.parseTempoStretchPrefix = parseTempoStretchPrefix;
+    window.caretInTempoStretchPrefix = caretInTempoStretchPrefix;
+    window.stretchPrefixDigitCaretOffset = stretchPrefixDigitCaretOffset;
+    window.caretPosForStretchPrefixField = caretPosForStretchPrefixField;
+    window.meterSpecStretchDeltaValid = meterSpecStretchDeltaValid;
+    window.meterStretchDeltaOnlyChanged = meterStretchDeltaOnlyChanged;
+    window.formatTempoStretchPrefix = formatTempoStretchPrefix;
+    window.getCommittedMusicalGridMeterText = getCommittedMusicalGridMeterText;
     window.getMeterEntryForBar = getMeterEntryForBar;
     window.meterBarDurationSec = meterBarDurationSec;
     window.forEachMeterBarBeat = forEachMeterBarBeat;

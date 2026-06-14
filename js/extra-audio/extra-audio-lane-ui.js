@@ -257,7 +257,11 @@
                 setExtraTrackLaneUiOpen(i, true);
                 setExtraTrackStatus(i, 'Not Loaded');
                 refreshExtraTrackUi(i);
-                writeLog('Ex ' + (i + 1) + ': track lane opened');
+                if (typeof logExAudioAction === 'function') {
+                    logExAudioAction(formatExTrack(i) + ' レーンを表示');
+                } else {
+                    writeLog('Ex ' + (i + 1) + ': track lane opened');
+                }
                 return i;
             }
         }

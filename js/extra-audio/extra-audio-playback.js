@@ -246,6 +246,20 @@
             typeof isTrackRegionActive === 'function' &&
             isTrackRegionActive(track)
         ) {
+            const t = Number(transportSec);
+            if (Number.isFinite(t)) {
+                const start =
+                    typeof getTrackTimelineStartSec === 'function'
+                        ? getTrackTimelineStartSec(track)
+                        : getExtraTrackTimelineStartSec(slot);
+                const end =
+                    typeof getTrackTimelineEndSec === 'function'
+                        ? getTrackTimelineEndSec(track)
+                        : extraTrackPlayableTransportEndSec(slot);
+                if (end > start && t >= start - 0.0005 && t < end - 0.002) {
+                    return true;
+                }
+            }
             return extraTrackHasAudibleOrImminentSegment(slot, transportSec);
         }
         if (typeof isTrackTransportAudible === 'function') {
@@ -955,13 +969,18 @@
             peaks,
             timelineStartSec: timelineStart > 0 ? timelineStart : 0,
         };
+        const mainClip = getExtraTrackClip(tr, 'main') || clips[0];
+        if (mainClip && mainClip.backupPersistBlob && mainClip.stretchedPersist) {
+            entry.backupBlob = mainClip.backupPersistBlob;
+            entry.backupByteLength = mainClip.backupPersistBlob.size || 0;
+        }
         appendRegionFieldsToExtraTrackPersistEntry(entry, slot);
         const clips = ensureExtraTrackClips(tr);
         if (clips.length > 1) {
             entry.clips = clips
                 .map((c) => {
                     if (!c.persistBlob || c.persistBlob.size < 1) return null;
-                    return {
+                    const clipOut = {
                         id: c.id,
                         name: c.file ? c.file.name : c.name || 'audio',
                         lastModified: c.file ? c.file.lastModified : Date.now(),
@@ -970,6 +989,11 @@
                         duration: c.buffer && c.buffer.duration > 0 ? c.buffer.duration : 0,
                         peaks: clonePeaksForPersist(c.peaks),
                     };
+                    if (c.backupPersistBlob && c.stretchedPersist) {
+                        clipOut.backupBlob = c.backupPersistBlob;
+                        clipOut.backupByteLength = c.backupPersistBlob.size || 0;
+                    }
+                    return clipOut;
                 })
                 .filter(Boolean);
         }

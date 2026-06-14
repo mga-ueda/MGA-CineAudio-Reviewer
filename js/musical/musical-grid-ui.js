@@ -376,9 +376,11 @@
     }
     function persistMusicalGridAndRedraw(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const meterCommit = applyMusicalGridMeterCommitFromInputs({
-            notifyReject: !!o.strictMeterCommit,
-        });
+        const meterCommit = o.skipMeterCommit
+            ? { accepted: true, changed: false }
+            : applyMusicalGridMeterCommitFromInputs({
+                  notifyReject: !!o.strictMeterCommit,
+              });
         if (!musicalGridPhraseText || !parsePhraseGroupingSpec(musicalGridPhraseText)) {
             musicalGridPhraseText = MUSICAL_GRID_DEFAULT_PHRASE_TEXT;
             if (musicalGridPhraseInput) musicalGridPhraseInput.value = musicalGridPhraseText;
@@ -386,12 +388,15 @@
         const shouldRelayout = !!(o.relayoutRegions && canCommitPhraseCompositionLayout());
         const shouldRelayoutFromMeter = !!(
             o.relayoutSlotsFromMeter &&
-            meterCommit.changed &&
+            (meterCommit.changed || o.forceRelayoutFromMeter) &&
             canCommitPhraseCompositionLayout() &&
             !shouldRelayout
         );
         const shouldRelayoutRegions = shouldRelayout || shouldRelayoutFromMeter;
-        const shouldCompressPhrase = !!(o.compressPhrase || shouldRelayoutFromMeter);
+        const shouldCompressPhrase = !!(
+            o.compressPhrase ||
+            (shouldRelayoutFromMeter && !o.preservePhraseTextOnMeterRelayout)
+        );
         if (shouldCompressPhrase) {
             compressPhraseDefinitionFromExpandedCounts({ skipUndo: !!o.skipUndo });
         }
@@ -402,7 +407,8 @@
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
                 preservePhraseBarCountsOverride:
-                    shouldRelayoutFromMeter && !shouldCompressPhrase,
+                    !!o.preservePhraseTextOnMeterRelayout ||
+                    (shouldRelayoutFromMeter && !shouldCompressPhrase),
                 skipUndo: !!o.skipUndo,
             });
         }
@@ -610,13 +616,80 @@
             input.setSelectionRange(pos, pos);
         }
     }
+    function setMeterInputValuePreserveStretchPrefixCaret(input, text, digitOffset) {
+        if (!input) return;
+        input.value = text;
+        const pos = caretPosForStretchPrefixField(text, digitOffset);
+        if (typeof input.setSelectionRange === 'function') {
+            input.setSelectionRange(pos, pos);
+        }
+    }
+    function insertMeterStretchSignAtEditorStart(sign) {
+        const input = musicalGridMeterInput;
+        if (!input || (sign !== '+' && sign !== '-')) return false;
+        const selStart = input.selectionStart;
+        const selEnd = input.selectionEnd;
+        if (selStart !== 0 || selEnd !== selStart) return false;
+        const raw = normalizeMusicalGridMeterText(input.value);
+        if (parseTempoStretchPrefix(raw).prefixLen > 0) return false;
+        let body = raw;
+        if (/^[+-]/.test(body)) body = body.slice(1);
+        if (!body) {
+            const committed = getCommittedMusicalGridMeterText();
+            body =
+                parseTempoStretchPrefix(committed).text ||
+                committed ||
+                MUSICAL_GRID_DEFAULT_METER_TEXT;
+        }
+        const nextText = sign + '0,' + body;
+        musicalGridMeterText = nextText;
+        input.value = nextText;
+        input.setSelectionRange(1, 1);
+        scheduleMusicalGridRedraw();
+        scheduleMusicalGridAutosave();
+        return true;
+    }
     function clampMeterSigPart(n) {
         return Math.max(1, Math.min(32, n | 0));
+    }
+    function bumpMeterStretchDeltaBy(step) {
+        const input = musicalGridMeterInput;
+        const raw = input ? input.value : musicalGridMeterText;
+        const caret = input ? input.selectionStart : 0;
+        const digitOffset = stretchPrefixDigitCaretOffset(raw, caret);
+        readMusicalGridFromInputs();
+        clearMusicalGridPositionCache();
+        const spec = parseMeterSpec(musicalGridMeterText);
+        if (!spec) return;
+        const nextDelta = (spec.stretchDelta || 0) + (step | 0);
+        spec.stretchDelta = nextDelta;
+        if (!meterSpecStretchDeltaValid(spec)) {
+            spec.stretchDelta = Math.max(-998, Math.min(998, nextDelta));
+            if (!meterSpecStretchDeltaValid(spec)) return;
+        }
+        const nextText = formatMeterSpec(spec);
+        musicalGridMeterText = nextText;
+        if (input) {
+            if (nextDelta === 0) {
+                input.value = nextText;
+                if (typeof input.setSelectionRange === 'function') {
+                    input.setSelectionRange(0, 0);
+                }
+            } else {
+                setMeterInputValuePreserveStretchPrefixCaret(input, nextText, digitOffset);
+            }
+        }
+        scheduleMusicalGridRedraw();
+        scheduleMusicalGridAutosave();
     }
     function bumpMeterFieldBy(delta, sigDelta) {
         const input = musicalGridMeterInput;
         const raw = input ? input.value : musicalGridMeterText;
         const caret = input ? input.selectionStart : 0;
+        if (caretInTempoStretchPrefix(raw, caret)) {
+            bumpMeterStretchDeltaBy(delta);
+            return;
+        }
         const entryIndex = commaListEntryIndexAtCaret(raw, caret);
         const span = commaListEntrySpan(raw, entryIndex);
         const caretInEntry = caret - span.start;

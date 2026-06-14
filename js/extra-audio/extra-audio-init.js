@@ -54,7 +54,11 @@
                         return;
                     }
                     clearExtraTrack(slot);
-                    writeLog('Extra audio ' + (slot + 1) + ': cleared');
+                    if (typeof logExAudioAction === 'function') {
+                        logExAudioAction(formatExTrack(slot) + ' cleared');
+                    } else {
+                        writeLog('Extra audio ' + (slot + 1) + ': cleared');
+                    }
                 });
             }
             if (ui.moveUpBtn) {

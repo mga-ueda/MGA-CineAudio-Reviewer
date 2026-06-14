@@ -23,19 +23,31 @@
     window.REGION_FADE_RESERVE_TOP_INSET_PX = 18;
 
     /**
-     * 開発者向け・診断ログ / デバッグ描画の説明（既定値は下記 DEBUG_TOGGLES。実行中は F10 の Dev constants パネルでも切替可）。
+     * ログ tier（js/ui/log-core.js）と診断ログ（DEBUG_LOG）の説明。
      *
-     * 通常ログ（読み込み完了・エクスポート結果・確認ダイアログの記録・[Warning]/[Error]）は
-     * 本フラグに関係なく常に出力される。ここで制御するのは調査用の冗長ログのみ。
+     * --- ログ tier（表示フィルタ）---
+     * action — ユーザー操作の結果。Actions チェック ON 時は action + 警告/エラーのみ表示。
+     * detail — 操作の内部步骤（読込進行・永続化・シーク等）。通常ログに表示。
+     * meta   — 起動メッセージ・ログ UI 操作（コピー/ダウンロード）等。
+     * diag   — 調査用診断。DEBUG_LOG の当該カテゴリが true のときのみ writeDiagLog 経由で記録。
+     *
+     * 表示形式: [HH:MM:SS] Category message（Category は 8 文字幅）
+     * 未移行の writeLog() は LEGACY_LOG_RULES で tier/category を推定する。
+     * ユーザー操作の Actions ログは js/ui/log-action-format.js の actionLog / logRegionAction 等で
+     * 操作内容が再現できるよう具体的に書く（例: swapped Phrase A ↔ Phrase B on Ex1）。
+     *
+     * --- DEBUG_LOG（診断カテゴリ）---
+     * 通常の action/detail/meta ログは本フラグに関係なく出力される。
+     * ここで制御するのは diag tier の冗長ログのみ。
      *
      * 各モジュールは window.isDebugLogCategoryEnabled('REGION_RESTORE') 等で参照する。
-     * ログ行の先頭タグ（例: [MusicalSlot]）でフィルタしやすい。
+     * writeDiagLog('REGION_RESTORE', step, payload) → カテゴリ Restore として記録。
      *
      * 運用のヒント:
-     * - 本番・通常レビューではすべて false のままにする。
+     * - 本番・通常レビューでは DEBUG_LOG はすべて false のまま。
      * - 調査時は当該カテゴリだけ true にし、再読み込みして再現操作する。
-     * - 大量出力時はログ枠の W/E Only で [Warning]/[Error] だけに絞ると見やすい。
-     * - いずれか 1 つでも true の間はログ行数が無制限になる（すべて false で LOG_MAX_LINES に戻る）。
+     * - Actions ON で操作結果だけに絞る。W/E Only で警告/エラーだけに絞る。
+     * - いずれか 1 つでも DEBUG_LOG が true の間はログ行数が無制限（すべて false で LOG_MAX_LINES に戻る）。
      *
      * --- REGION_RESTORE ---
      * [RegionRestore] — セッション復元・overlay 再描画・All Clear の段階追跡。
@@ -76,11 +88,14 @@
      * 有効化の目安: キー変更後のクリック・境界での途切れ、クロスフェードとピッチ分割の競合。
      *
      * --- TEMPO_STRETCH ---
-     * [TempoStretch/A] — メトロノーム連動テンポストレッチ（主に各 Ex トラックのリージョン1）。
-     * モジュール: js/waveform/region/waveform-region-pitch-stretch.js（tempoStretchDiagLog）
-     * 主な内容: sub-master/ready・failed、cache/hit・miss、kickoff/*、start/resolved、upgrade/*。
-     *           ログ接頭辞は [TempoStretch/A]（segmentIndex===0 のとき直接 writeLog）。
-     * 有効化の目安: Tempo/Sig 変更後にリージョン1の音程・長さがおかしい、sub-master 待ちで再生が遅れる。
+     * [TempoStretch/A] — Tempo/Sig 先頭接頭辞（+N,）による Ex 波形タイムストレッチ。
+     * モジュール: js/waveform/tempo-stretch.js（tempoStretchDiagLog）
+     * 主な内容: clip/applied、render/worklet-failed、stretch failed、状態ダンプ（F10 検証ボタン）。
+     * 有効化の目安: ストレッチ後の無音・尺異常・Enter 確定後のリージョンずれ。KEY_PLAYBACK と併用可。
+     *
+     * --- TEMPO_STRETCH_VERIFY（F10 検証オプション）---
+     * window.TEMPO_STRETCH_VERIFY.skipApply — ストレッチ適用をスキップ（A/B 比較）。
+     * dumpTempoStretchVerifyState / restoreAllExtraTracksFromBackup — F10 の検証ボタン。
      *
      * --- SILENT_GAP_DELETE ---
      * [SilentGapDel] — 無音リージョン削除・Ctrl+クリック無音選択・Delete キー経路の追跡。
@@ -90,8 +105,9 @@
      *           grid/phrase-delete/*。併せて [MusicalSlot] silent-del/* へも転送（MUSICAL_SLOT 要）。
      * 有効化の目安: 無音 gap 削除後にフレーズ定義が崩れる、Delete が効かない/別リージョンが消える。
      *
-     * --- FADE_TRIANGLE_HIT_DEBUG ---
-     * Fade In/Out 三角の掴み判定領域を波形上に色付き表示（診断ログ DEBUG_LOG とは別）。
+     * --- REGION_HANDLE_HIT_DEBUG ---
+     * リージョン操作帯（Fade/In/Out/Split/クロスフェード/Phrase 境界）を波形上に色分け表示。
+     * 診断ログ DEBUG_LOG とは別。FADE_TRIANGLE_HIT_DEBUG は後方互換エイリアス。
      */
     const DEBUG_TOGGLES = {
         /** 診断ログ — isDebugLogCategoryEnabled() が参照 */
@@ -104,12 +120,23 @@
             TEMPO_STRETCH: false,
             SILENT_GAP_DELETE: false,
         },
-        /** 波形 overlay の Fade 掴み帯デバッグ描画 */
-        FADE_TRIANGLE_HIT_DEBUG: false,
+        /** 波形 overlay — リージョン操作帯デバッグ描画 */
+        REGION_HANDLE_HIT_DEBUG: false,
     };
 
     window.DEBUG_LOG = DEBUG_TOGGLES.DEBUG_LOG;
-    window.FADE_TRIANGLE_HIT_DEBUG = DEBUG_TOGGLES.FADE_TRIANGLE_HIT_DEBUG;
+    window.REGION_HANDLE_HIT_DEBUG = DEBUG_TOGGLES.REGION_HANDLE_HIT_DEBUG;
+    window.FADE_TRIANGLE_HIT_DEBUG = DEBUG_TOGGLES.REGION_HANDLE_HIT_DEBUG;
+
+    window.isRegionHandleHitDebugEnabled = function () {
+        return !!(window.REGION_HANDLE_HIT_DEBUG || window.FADE_TRIANGLE_HIT_DEBUG);
+    };
+
+    /** F10 検証用 — 実行中のみ。再読み込みで skipApply は false に戻る。 */
+    window.TEMPO_STRETCH_VERIFY = {
+        /** true = 読込・Enter 確定時のストレッチ適用を抑止（バックアップは維持） */
+        skipApply: false,
+    };
 
     /**
      * DEBUG_LOG の指定カテゴリが有効か。category は DEBUG_LOG のキー名（例: 'REGION_RESTORE'）。

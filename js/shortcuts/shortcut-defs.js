@@ -144,7 +144,7 @@
             meta: false,
             alt: false,
             shift: false,
-        },
+        }, // 開発者向け定数（診断ログ・リージョン操作帯・タイムストレッチ検証）
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -792,6 +792,13 @@
         if (logWeOnlyCb) {
             const logWeOnlyLbl = logWeOnlyCb.closest('label');
             setElementTitle(logWeOnlyLbl, logWeOnlyTitle);
+        }
+        const logOpsOnlyTitle = msg('tooltip.logOpsOnly');
+        const logOpsOnlyCb = document.getElementById('logOpsOnlyCheckbox');
+        setElementTitle(logOpsOnlyCb, logOpsOnlyTitle);
+        if (logOpsOnlyCb) {
+            const logOpsOnlyLbl = logOpsOnlyCb.closest('label');
+            setElementTitle(logOpsOnlyLbl, logOpsOnlyTitle);
         }
 
         const moveUpTitle = msg('tooltip.extraAudioMoveUp');

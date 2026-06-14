@@ -152,10 +152,10 @@
     function waveformViewportDensityScaleForZoom(zoom) {
         const z = Number(zoom);
         if (!Number.isFinite(z) || z <= 1.02) return 0.42;
-        if (z <= 4.5) return 0.55;
-        if (z <= 8.5) return 0.68;
-        if (z <= 16.5) return 0.8;
-        return 0.92;
+        if (z <= 4.5) return 0.78;
+        if (z <= 8.5) return 0.9;
+        if (z <= 16.5) return 0.96;
+        return 1;
     }
 
     function waveformViewportBarCountForCssWidth(widthCss, zoom) {
@@ -1170,6 +1170,13 @@
         if (opt && opt.sync) {
             scheduleRegionBoundaryPresentationRefresh(opt);
         }
+        if (
+            typeof scheduleWaveformHiresRedrawAfterZoom === 'function' &&
+            typeof isWaveformViewportDisplayCurrent === 'function' &&
+            !isWaveformViewportDisplayCurrent(opt)
+        ) {
+            scheduleWaveformHiresRedrawAfterZoom(opt);
+        }
         return true;
     }
 
@@ -1202,7 +1209,7 @@
         if (typeof syncAllRehearsalMarksOverlayPlacement === 'function') {
             syncAllRehearsalMarksOverlayPlacement();
         }
-        scheduleWaveformVisualRefresh();
+        scheduleWaveformVisualRefresh({ sync: true });
     }
 
     window.refreshWaveformTimelineVisualAfterZoomChange =

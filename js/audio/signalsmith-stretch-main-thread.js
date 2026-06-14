@@ -152,6 +152,8 @@
 
         const tonalityNorm = 8000 / sampleRate;
         let outPos = 0;
+        let blockCount = 0;
+        const yieldEveryBlocks = 256;
 
         while (outPos + blockSize <= totalOutputFrames) {
             const outputTime = playOutputStartSec + outPos / sampleRate;
@@ -181,6 +183,10 @@
                 outChannels[c].set(block, outPos);
             }
             outPos += blockSize;
+            blockCount += 1;
+            if (blockCount % yieldEveryBlocks === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
         }
 
         return {

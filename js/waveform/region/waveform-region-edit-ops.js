@@ -189,7 +189,12 @@
                 state.segments = [];
             }
             if (ensureDefaultTrackRegion(track, { silent: true })) {
-                writeLog('Ex ' + (track.slot + 1) + ': region reset to full clip');
+                const resetMsg = formatExTrack(track.slot) + ' reset to full clip';
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(resetMsg);
+                } else {
+                    writeLog('Ex ' + (track.slot + 1) + ': region reset to full clip');
+                }
                 if (typeof flashSeekHint === 'function') {
                     flashSeekHint('Ex ' + (track.slot + 1), 'Region reset', 'notice');
                 }
@@ -197,22 +202,38 @@
                 return true;
             }
             clearTrackRegion(track, { skipUndo: true });
-            writeLog('Ex ' + (track.slot + 1) + ': all regions removed');
+            const offMsg = formatExTrack(track.slot) + ' all regions removed';
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(offMsg);
+            } else {
+                writeLog('Ex ' + (track.slot + 1) + ': all regions removed');
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Ex ' + (track.slot + 1), 'Regions off', 'notice');
             }
             return true;
         }
         applySegmentsToState(track, segments, { skipUndo: true });
-        writeLog(
-            'Ex ' +
-                (track.slot + 1) +
-                ': region ' +
-                (segmentIndex + 1) +
-                ' deleted (' +
-                segments.length +
-                ' left)',
-        );
+        const deleteMsg =
+            formatExTrack(track.slot) +
+            ' R' +
+            (segmentIndex + 1) +
+            ' deleted (' +
+            segments.length +
+            ' left)';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(deleteMsg);
+        } else {
+            writeLog(
+                'Ex ' +
+                    (track.slot + 1) +
+                    ': region ' +
+                    (segmentIndex + 1) +
+                    ' deleted (' +
+                    segments.length +
+                    ' left)',
+            );
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Ex ' + (track.slot + 1), 'Region deleted', 'notice');
         }
@@ -758,15 +779,23 @@
             return false;
         }
 
-        writeLog(
-            'Playback region split at ' +
-                splitTransport.toFixed(3) +
-                's (' +
-                successCount +
-                ' track' +
-                (successCount === 1 ? '' : 's') +
-                ')',
-        );
+        const splitTc =
+            typeof formatActionTc === 'function'
+                ? formatActionTc(splitTransport)
+                : splitTransport.toFixed(3) + ' s';
+        const splitMsg =
+            'split at ' +
+            splitTc +
+            ' (' +
+            successCount +
+            ' track' +
+            (successCount === 1 ? '' : 's') +
+            ')';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(splitMsg);
+        } else {
+            writeLog('Playback region split at ' + splitTransport.toFixed(3) + 's (' + successCount + ' track(s))');
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Split', 'notice');
         }

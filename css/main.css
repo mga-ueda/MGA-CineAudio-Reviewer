@@ -2179,7 +2179,8 @@
         }
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__musical-grid,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail,
-        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries {
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-hit-debug-overlay {
             position: absolute;
             left: 0;
             top: 0;
@@ -2190,6 +2191,10 @@
         }
         .audio-waveform-composite__phrase-boundaries {
             z-index: 7;
+        }
+        .audio-waveform-composite__region-hit-debug-overlay {
+            z-index: 8;
+            overflow: visible;
         }
         .audio-waveform-composite__phrase-boundary-handle {
             position: absolute;
@@ -2238,6 +2243,7 @@
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__musical-grid,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__seek-trail,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__phrase-boundaries,
+        .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-hit-debug-overlay,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__playhead-wrap,
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__hover-playhead,
@@ -3751,6 +3757,169 @@
             transform: translateX(-100%);
             clip-path: polygon(0 0, 100% 0, 100% 100%);
         }
+        /* F10 — リージョン操作帯デバッグ（色分け: fade=黄橙 / In/Out=青 / split=桃 / x-fade=紫 / phrase=緑） */
+        .audio-waveform-lane__region-hit-debug {
+            position: absolute;
+            pointer-events: none;
+            box-sizing: border-box;
+            overflow: visible;
+        }
+        .audio-waveform-lane__region-hit-debug__label {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 0 3px;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 0.52rem;
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: 0.02em;
+            color: rgba(255, 255, 255, 0.94);
+            background: rgba(0, 0, 0, 0.82);
+            border-radius: 2px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 3;
+        }
+        .audio-waveform-lane__playback-regions--hit-debug
+            .audio-waveform-lane__playback-region {
+            overflow: visible;
+        }
+        .audio-waveform-lane__region-hit-debug--fade-reserve {
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 4;
+            background: rgba(255, 255, 255, 0.05);
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.28);
+        }
+        .audio-waveform-lane__region-hit-debug--fade-in,
+        .audio-waveform-lane__region-hit-debug--fade-out {
+            top: 0;
+            bottom: auto;
+            width: 12px;
+            height: var(--region-hit-debug-fade-band-h, 18px);
+            z-index: 40;
+            background: rgba(255, 210, 60, 0.42);
+            outline: 2px solid rgba(255, 130, 0, 0.96);
+        }
+        .audio-waveform-lane__region-hit-debug--fade-in {
+            transform: none;
+        }
+        .audio-waveform-lane__region-hit-debug--fade-in::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 11px;
+            z-index: 1;
+            background: rgba(255, 80, 0, 0.88);
+            clip-path: polygon(0 0, 100% 0, 0 100%);
+        }
+        .audio-waveform-lane__region-hit-debug--fade-in
+            .audio-waveform-lane__region-hit-debug__label,
+        .audio-waveform-lane__region-hit-debug--fade-out
+            .audio-waveform-lane__region-hit-debug__label {
+            top: 50%;
+            left: calc(100% + 2px);
+            right: auto;
+            transform: translateY(-50%);
+        }
+        .audio-waveform-lane__region-hit-debug--fade-out {
+            transform: translateX(-100%);
+        }
+        .audio-waveform-lane__region-hit-debug--fade-out::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 11px;
+            z-index: 1;
+            background: rgba(255, 80, 0, 0.88);
+            clip-path: polygon(0 0, 100% 0, 100% 100%);
+        }
+        .audio-waveform-lane__region-hit-debug--suppressed {
+            opacity: 0.42;
+            outline-style: dotted;
+        }
+        .audio-waveform-lane__region-hit-debug--edge-in,
+        .audio-waveform-lane__region-hit-debug--edge-out {
+            top: 0;
+            bottom: 0;
+            width: 14px;
+            z-index: 11;
+            background: rgba(80, 200, 255, 0.14);
+            outline: 1px dashed rgba(40, 170, 240, 0.82);
+        }
+        .audio-waveform-lane__region-hit-debug--edge-in {
+            left: 0;
+            transform: translateX(-50%);
+        }
+        .audio-waveform-lane__region-hit-debug--edge-out {
+            right: 0;
+            left: auto;
+            transform: translateX(50%);
+        }
+        .audio-waveform-lane__region-hit-debug--split {
+            top: 0;
+            bottom: 0;
+            left: -4px;
+            right: -4px;
+            width: auto;
+            z-index: 13;
+            background: rgba(255, 120, 210, 0.14);
+            outline: 1px dashed rgba(235, 70, 185, 0.82);
+        }
+        .audio-waveform-lane__region-hit-debug--crossfade {
+            top: 0;
+            bottom: 0;
+            z-index: 5;
+            background: rgba(170, 120, 255, 0.14);
+            border-left: 1px dashed rgba(150, 90, 240, 0.78);
+            border-right: 1px dashed rgba(150, 90, 240, 0.78);
+        }
+        /* 後方互換 — 旧 fade-hit-debug クラス */
+        .audio-waveform-lane__playback-region__fade-hit-debug {
+            position: absolute;
+            top: 0;
+            width: 8px;
+            height: 16px;
+            pointer-events: none;
+            z-index: 12;
+            box-sizing: border-box;
+            background: rgba(255, 210, 60, 0.28);
+            outline: 1px dashed rgba(255, 170, 30, 0.88);
+        }
+        .audio-waveform-composite__phrase-boundaries--hit-debug
+            .audio-waveform-composite__phrase-boundary-handle {
+            background: rgba(100, 240, 150, 0.16);
+            outline: none;
+            box-shadow: inset 1px 0 0 rgba(60, 210, 110, 0.55),
+                inset -1px 0 0 rgba(60, 210, 110, 0.55);
+        }
+        .audio-waveform-composite__phrase-boundaries--hit-debug
+            .audio-waveform-composite__phrase-boundary-handle::before {
+            content: 'phrase';
+            position: absolute;
+            top: 50%;
+            bottom: auto;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 0 3px;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: 0.52rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: rgba(255, 255, 255, 0.94);
+            background: rgba(0, 0, 0, 0.82);
+            border-radius: 2px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 2;
+        }
         .audio-waveform-lane__playback-region__fade-marker-line {
             position: absolute;
             top: 8px;
@@ -4751,6 +4920,41 @@
             font-size: 0.64rem;
             font-family: inherit;
         }
+        .dev-constants-panel__list--actions {
+            gap: 8px;
+        }
+        .dev-constants-panel__row--verify {
+            margin-bottom: 4px;
+        }
+        .dev-constants-panel__action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .dev-constants-panel__action-btn {
+            flex: 1 1 auto;
+            min-width: 9rem;
+            padding: 0.45em 0.75em;
+            border-radius: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.07);
+            color: rgba(230, 235, 245, 0.95);
+            font-size: 0.72rem;
+            cursor: pointer;
+        }
+        .dev-constants-panel__action-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .dev-constants-panel__action-btn:focus-visible {
+            outline: 2px solid rgba(120, 170, 255, 0.85);
+            outline-offset: 1px;
+        }
+        .dev-constants-panel__verify-note {
+            margin: 8px 0 0;
+            font-size: 0.66rem;
+            line-height: 1.35;
+            color: rgba(160, 170, 188, 0.78);
+        }
 
         .solo-tc-notice-overlay {
             z-index: 19500;
@@ -5702,9 +5906,48 @@
             gap: 1px;
         }
         .log-line {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
             white-space: pre-wrap;
             word-break: break-word;
             line-height: 1.35;
+        }
+        .log-line__time {
+            flex: 0 0 auto;
+            color: #9aa3b5;
+            font-variant-numeric: tabular-nums;
+        }
+        .log-line__cat {
+            flex: 0 0 4.5rem;
+            color: #8ec8ff;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        .log-line__msg {
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        .log-line__level-tag {
+            font-weight: 700;
+        }
+        .log-line--tier-action .log-line__msg {
+            color: #f4f6fb;
+        }
+        .log-line--tier-detail .log-line__cat {
+            color: #7a8496;
+        }
+        .log-line--tier-detail .log-line__msg {
+            color: #c4cad6;
+        }
+        .log-line--tier-diag .log-line__cat {
+            color: #b090e8;
+        }
+        .log-line--tier-diag .log-line__msg {
+            color: #a8adb8;
+        }
+        .log-line--tier-meta .log-line__msg {
+            color: #9aa3b5;
         }
         .log-line--info {
             color: #f0f0f5;

@@ -866,6 +866,29 @@
         }
         if (!isTrackRegionActive(track)) return false;
 
+        const oldSegments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        const metaBySegmentIndex = [];
+        const beforeBoundsMap =
+            typeof captureTrackSegmentRegionBoundsMap === 'function'
+                ? captureTrackSegmentRegionBoundsMap(track)
+                : null;
+        for (let si = 0; si < oldSegments.length; si++) {
+            const seg = oldSegments[si];
+            metaBySegmentIndex[si] = {
+                gainDb:
+                    typeof getSegmentGainDb === 'function'
+                        ? getSegmentGainDb(track, si)
+                        : seg.gainDb,
+                pitchSemitones:
+                    typeof getSegmentPitchSemitones === 'function'
+                        ? getSegmentPitchSemitones(track, si)
+                        : seg.pitchSemitones,
+                fadeInSec: seg.fadeInSec,
+                fadeOutSec: seg.fadeOutSec,
+            };
+        }
+
         const stream = collectTrackSourceStreamForPhraseLayout(track);
         const defaultClip = getPrimaryClipIdForTrack(track);
         let cursor = { partIndex: 0, offsetSec: 0 };
@@ -897,6 +920,21 @@
                 timelineStartSec: placementSec,
                 regionTimelineInSec: placementSec,
             };
+            const meta = i < metaBySegmentIndex.length ? metaBySegmentIndex[i] : null;
+            if (meta) {
+                if (Number.isFinite(meta.gainDb) && Math.abs(meta.gainDb) > 0.0005) {
+                    seg.gainDb = meta.gainDb;
+                }
+                if (Number.isFinite(meta.pitchSemitones) && meta.pitchSemitones !== 0) {
+                    seg.pitchSemitones = Math.round(meta.pitchSemitones);
+                }
+                if (Number.isFinite(meta.fadeInSec) && meta.fadeInSec > 0.0005) {
+                    seg.fadeInSec = meta.fadeInSec;
+                }
+                if (Number.isFinite(meta.fadeOutSec) && meta.fadeOutSec > 0.0005) {
+                    seg.fadeOutSec = meta.fadeOutSec;
+                }
+            }
             nextSegments.push(seg);
         }
 
@@ -918,6 +956,25 @@
 
         if (!commitPhraseLayoutSegments(track, nextSegments, o)) {
             return false;
+        }
+        if (
+            beforeBoundsMap &&
+            typeof relocateRegionVolumePitchMarkersAfterLayout === 'function'
+        ) {
+            relocateRegionVolumePitchMarkersAfterLayout(track, beforeBoundsMap, {
+                silent: true,
+            });
+        }
+        if (
+            beforeBoundsMap &&
+            typeof syncSegmentVolumePitchAfterRegionLayout === 'function'
+        ) {
+            syncSegmentVolumePitchAfterRegionLayout(track, beforeBoundsMap, {
+                silent: true,
+            });
+        }
+        if (typeof schedulePitchSliceRenderForTrack === 'function') {
+            schedulePitchSliceRenderForTrack(track);
         }
         noteRegionShrinkPersistIntent(track.slot);
 

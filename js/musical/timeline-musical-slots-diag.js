@@ -38,7 +38,12 @@
     }
 
     function musicalSlotDiagLog(stage, payload) {
-        if (!musicalSlotDiagEnabled() || typeof writeLog !== 'function') return;
+        if (!musicalSlotDiagEnabled()) return;
+        if (typeof writeDiagLog === 'function') {
+            writeDiagLog('MUSICAL_SLOT', stage, payload);
+            return;
+        }
+        if (typeof writeLog !== 'function') return;
         const tail = musicalSlotDiagFmtPayload(payload);
         writeLog(LOG_PREFIX + ' ' + stage + (tail ? ' | ' + tail : ''));
     }

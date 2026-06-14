@@ -290,8 +290,19 @@
             applyReviewMixVideoGain();
         }
         try {
-            if (typeof runTransportPlay === 'function') {
-                await runTransportPlay(playGen);
+            const runPlay =
+                typeof window.runTransportPlay === 'function'
+                    ? window.runTransportPlay
+                    : typeof runTransportPlay === 'function'
+                      ? runTransportPlay
+                      : null;
+            if (runPlay) {
+                const ok = await runPlay(playGen);
+                if (ok === false && playGen === transportPlayGeneration) {
+                    writeLogWarn('Transport: play aborted (superseded or cancelled)');
+                }
+            } else if (typeof window.startVideoPlayback === 'function') {
+                await window.startVideoPlayback({ force: true, playGen });
             } else if (typeof startVideoPlayback === 'function') {
                 await startVideoPlayback({ force: true, playGen });
             }

@@ -1387,6 +1387,11 @@
                     regionLeadPadSec: restoreRegionLeadPadSec,
                     regionSourceInSec: entry.regionSourceInSec,
                     regionSourceOutSec: entry.regionSourceOutSec,
+                    backupPersistBlob:
+                        entry.backupBlob && entry.backupBlob.size > 0
+                            ? entry.backupBlob
+                            : null,
+                    stretchedPersist: !!(entry.backupBlob && entry.backupBlob.size > 0),
                 });
                 if (restoreAborted()) return;
                 if (Array.isArray(entry.clips) && entry.clips.length > 1) {
@@ -1418,6 +1423,13 @@
                                 addClip: true,
                                 fromSessionRestore: true,
                                 preservedClipId: clipEntry.id,
+                                backupPersistBlob:
+                                    clipEntry.backupBlob && clipEntry.backupBlob.size > 0
+                                        ? clipEntry.backupBlob
+                                        : null,
+                                stretchedPersist: !!(
+                                    clipEntry.backupBlob && clipEntry.backupBlob.size > 0
+                                ),
                             });
                         } catch (clipErr) {
                             writeLog(

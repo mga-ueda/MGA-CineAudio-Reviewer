@@ -502,6 +502,15 @@
             (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
         if (!ready) return;
 
+        // Fade/In/Out — Phrase 境界・リージョン選択より先（capture 幾何ヒット）
+        if (
+            typeof tryBeginRegionHandleDragFromPointer === 'function' &&
+            tryBeginRegionHandleDragFromPointer(ev)
+        ) {
+            cancelWaveformPointerGesture();
+            return;
+        }
+
         const regionHit =
             typeof resolveRegionSegmentFromPointer === 'function'
                 ? resolveRegionSegmentFromPointer(ev.clientX, ev.clientY)

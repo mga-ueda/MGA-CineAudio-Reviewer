@@ -950,7 +950,11 @@
         const target = { kind: 'video' };
         const wasSolo = isMixTargetSolo(target);
         if (!toggleExclusiveMixSolo(target)) return;
-        writeLog('Video audio: ' + (wasSolo ? 'solo off' : 'solo'));
+        if (typeof logMixAction === 'function') {
+            logMixAction('Video Audio ' + (wasSolo ? 'solo off' : 'solo on'));
+        } else {
+            writeLog('Video audio: ' + (wasSolo ? 'solo off' : 'solo'));
+        }
     }
 
     function toggleVideoMute() {
@@ -958,7 +962,11 @@
         videoMix.muted = !videoMix.muted;
         refreshReviewMixUi();
         syncExtraAudioToTransport();
-        writeLog('Video audio: ' + (videoMix.muted ? 'muted' : 'unmuted'));
+        if (typeof logMixAction === 'function') {
+            logMixAction('Video Audio ' + (videoMix.muted ? 'muted' : 'unmuted'));
+        } else {
+            writeLog('Video audio: ' + (videoMix.muted ? 'muted' : 'unmuted'));
+        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
@@ -968,7 +976,11 @@
         const target = { kind: 'extra', slot: slot };
         const wasSolo = isMixTargetSolo(target);
         if (!toggleExclusiveMixSolo(target)) return;
-        writeLog('Extra audio ' + (slot + 1) + ': ' + (wasSolo ? 'solo off' : 'solo'));
+        if (typeof logMixAction === 'function') {
+            logMixAction(formatExTrack(slot) + (wasSolo ? ' solo off' : ' solo on'));
+        } else {
+            writeLog('Extra audio ' + (slot + 1) + ': ' + (wasSolo ? 'solo off' : 'solo'));
+        }
     }
 
     function toggleExtraMute(slot) {
@@ -977,7 +989,11 @@
         tr.muted = !tr.muted;
         refreshReviewMixUi();
         syncExtraAudioToTransport();
-        writeLog('Extra audio ' + (slot + 1) + ': ' + (tr.muted ? 'muted' : 'unmuted'));
+        if (typeof logMixAction === 'function') {
+            logMixAction(formatExTrack(slot) + (tr.muted ? ' muted' : ' unmuted'));
+        } else {
+            writeLog('Extra audio ' + (slot + 1) + ': ' + (tr.muted ? 'muted' : 'unmuted'));
+        }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
@@ -1005,8 +1021,12 @@
         if (!t) return false;
         const wasSolo = isMixTargetSolo(t);
         if (!toggleExclusiveMixSolo(t)) return false;
-        const label = t.kind === 'video' ? 'Video' : 'Extra audio ' + (t.slot + 1);
-        writeLog('Mix solo' + (wasSolo ? ' off: ' : ': ') + label);
+        const label = t.kind === 'video' ? 'Video Audio' : formatExTrack(t.slot);
+        if (typeof logMixAction === 'function') {
+            logMixAction(label + (wasSolo ? ' solo off' : ' solo on'));
+        } else {
+            writeLog('Mix solo' + (wasSolo ? ' off: ' : ': ') + label);
+        }
         return true;
     }
 

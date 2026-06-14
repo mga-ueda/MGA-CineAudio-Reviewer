@@ -177,6 +177,11 @@
                 const leader = built.segmentRefs[0].segmentIndex | 0;
                 p = byLeader.get(segmentLeaderPersistedIdentity(leader));
             }
+            if (built.segmentRefs && built.segmentRefs.length > 1) {
+                if (!p || swapUnitIdentityKey(p) !== builtKey) {
+                    continue;
+                }
+            }
             if (!p) continue;
             if (p.id) built.id = p.id;
             if (built.segmentRefs && built.segmentRefs.length === 1) {
@@ -1771,7 +1776,7 @@
         }
 
         if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
-            window.requestRegionUndoCapture({ includePhrase: true });
+            window.requestRegionUndoCapture({ includePhrase: true, forceCapture: true });
         }
 
         const willAnimateSwap =
@@ -1864,6 +1869,27 @@
             }
         }
 
+        const swapActionMessage =
+            typeof formatRegionSwapActionMessage === 'function'
+                ? formatRegionSwapActionMessage(
+                      track,
+                      slotA,
+                      slotB,
+                      idxA,
+                      idxB,
+                      swapMode,
+                      counts,
+                  )
+                : 'swapped on Ex ' +
+                  (track.slot + 1) +
+                  ' (unit ' +
+                  (idxA + 1) +
+                  ' ↔ ' +
+                  (idxB + 1) +
+                  ', ' +
+                  swapMode +
+                  ')';
+
         function runDeferredSwapUiAndDiagnostics() {
             window.musicalSlotDiagLog('swap/after-cache', {
                 ex: track.slot + 1,
@@ -1874,14 +1900,10 @@
                     unit: window.musicalSlotDiagSummarizeSwapUnit(s, i),
                 })),
             });
-            if (typeof writeLog === 'function') {
-                writeLog(
-                    'Playback region: swapped SwapUnits on Ex ' +
-                        (track.slot + 1) +
-                        ' (' +
-                        swapMode +
-                        ')',
-                );
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(swapActionMessage);
+            } else if (typeof writeLog === 'function') {
+                writeLog('Playback region: ' + swapActionMessage);
             }
             if (typeof window.scheduleMusicalGridRedraw === 'function') {
                 window.scheduleMusicalGridRedraw();
@@ -1964,14 +1986,10 @@
         if (typeof window.notifyMasterTransportDurationChanged === 'function') {
             window.notifyMasterTransportDurationChanged();
         }
-        if (typeof writeLog === 'function') {
-            writeLog(
-                'Playback region: swapped SwapUnits on Ex ' +
-                    (track.slot + 1) +
-                    ' (' +
-                    swapMode +
-                    ')',
-            );
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(swapActionMessage);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Playback region: ' + swapActionMessage);
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Swapped', 'notice');

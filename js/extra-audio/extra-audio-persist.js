@@ -390,7 +390,7 @@
         const ui = getExtraUi(slot);
         if (!ui || !ui.status) return false;
         const text = ui.status.textContent || '';
-        return /decoding/i.test(text);
+        return /decoding|stretching/i.test(text);
     }
 
     function areExtraTrackWaveformsRestorePending() {

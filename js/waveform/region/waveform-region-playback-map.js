@@ -1349,7 +1349,6 @@
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(slot) : null;
         if (!tr || !tile || !plan) return false;
         const cacheOnly = !!opt.cacheOnly;
-        if (!cacheOnly && !tr.peakPyramid) return false;
         const track = { type: 'extra', slot };
         const tileSpec = {
             masterStartSec: tile.masterStartSec,

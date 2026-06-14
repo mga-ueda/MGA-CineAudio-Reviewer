@@ -70,7 +70,13 @@
         if (ctx && ctx.state === 'suspended') {
             void ctx.resume();
         }
-        writeLog(msg('log.videoLoad.ready', lockFileName));
+        if (typeof logVideoAction === 'function') {
+            logVideoAction(
+                'ready' + (lockFileName ? ' ("' + lockFileName + '")' : ''),
+            );
+        } else {
+            writeLog(msg('log.videoLoad.ready', lockFileName));
+        }
         if (typeof kickMainVideoWaveformAfterLoadLock === 'function') {
             kickMainVideoWaveformAfterLoadLock();
         }

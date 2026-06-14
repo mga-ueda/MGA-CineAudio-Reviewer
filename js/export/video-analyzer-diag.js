@@ -24,7 +24,12 @@
     }
 
     function log(stage, detail) {
-        if (!enabled() || typeof writeLog !== 'function') return;
+        if (!enabled()) return;
+        if (typeof writeDiagLog === 'function') {
+            writeDiagLog('VIDEO_ANALYZER', stage, detail);
+            return;
+        }
+        if (typeof writeLog !== 'function') return;
         const tail = detail != null ? ' | ' + fmtDetail(detail) : '';
         writeLog(LOG_PREFIX + stage + tail);
     }

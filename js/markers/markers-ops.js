@@ -29,7 +29,11 @@
         const parts = [];
         if (n) parts.push(n + ' item(s)');
         if (hadMemo) parts.push('memo');
-        writeLog('Marker: all cleared (' + parts.join(', ') + ')');
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('all cleared (' + parts.join(', ') + ')');
+        } else {
+            writeLog('Marker: all cleared (' + parts.join(', ') + ')');
+        }
         flashSeekHint('Markers', 'Cleared', 'notice');
     }
 
@@ -163,7 +167,11 @@
         sortMarkersInPlace();
         activeMarkerId = m.id;
         persistMarkersAfterChange();
-        writeLog('Marker: point at ' + tcLabelForSec(t));
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('point at ' + tcLabelForSec(t));
+        } else {
+            writeLog('Marker: point at ' + tcLabelForSec(t));
+        }
         flashSeekHint('Marker', tcLabelForSec(t), 'notice');
     }
 
@@ -185,7 +193,11 @@
         updateMarkerRangeHint();
         updateMarkerClearAllButton();
         renderSeekBarMarkers();
-        writeLog('Marker: range In at ' + tcLabelForSec(t));
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('range In at ' + tcLabelForSec(t));
+        } else {
+            writeLog('Marker: range In at ' + tcLabelForSec(t));
+        }
         flashSeekHint('Range In', tcLabelForSec(t), 'notice');
     }
 
@@ -225,7 +237,15 @@
         activeMarkerId = m.id;
         persistMarkersAfterChange(opt);
         if (!(opt && opt.silent)) {
-            writeLog('Marker: range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end));
+            if (typeof logMarkerAction === 'function') {
+                logMarkerAction(
+                    'range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end),
+                );
+            } else {
+                writeLog(
+                    'Marker: range ' + tcLabelForSec(start) + ' – ' + tcLabelForSec(end),
+                );
+            }
             flashSeekHint('Range', tcLabelForSec(start) + ' – ' + tcLabelForSec(end), 'notice');
         }
     }
@@ -835,17 +855,28 @@
                 newBounds.endSec,
             );
 
-            let gainDb =
+            const rawGainDb =
                 typeof getSegmentGainDb === 'function' ? getSegmentGainDb(track, i) : 0;
+            let gainDb = rawGainDb;
             if (volM) {
-                gainDb = parseGainDbFromRegionVolumeMarkerComment(volM.comment);
+                const markerGain = parseGainDbFromRegionVolumeMarkerComment(volM.comment);
+                if (
+                    Math.abs(markerGain) > 0.0005 ||
+                    Math.abs(rawGainDb) < 0.0005
+                ) {
+                    gainDb = markerGain;
+                }
             }
-            let pitch =
+            const rawPitch =
                 typeof getSegmentPitchSemitones === 'function'
                     ? getSegmentPitchSemitones(track, i)
                     : 0;
+            let pitch = rawPitch;
             if (pitchM) {
-                pitch = parsePitchFromRegionPitchMarkerComment(pitchM.comment);
+                const markerPitch = parsePitchFromRegionPitchMarkerComment(pitchM.comment);
+                if (markerPitch !== 0 || rawPitch === 0) {
+                    pitch = markerPitch;
+                }
             }
 
             const segOpt = {
@@ -919,7 +950,11 @@
         delete m.startSec;
         delete m.endSec;
         if (!(opt && opt.silent)) {
-            writeLog('Marker: range collapsed to point at ' + tcLabelForSec(t));
+            if (typeof logMarkerAction === 'function') {
+                logMarkerAction('range collapsed to point at ' + tcLabelForSec(t));
+            } else {
+                writeLog('Marker: range collapsed to point at ' + tcLabelForSec(t));
+            }
         }
         return true;
     }
@@ -1062,7 +1097,11 @@
         sortMarkersInPlace();
         activeMarkerId = m.id;
         persistMarkersAfterChange({ ...opt, forceMarkerList: true });
-        writeLog('Marker: Out TC cleared -> point at ' + tcLabelForSec(t));
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('Out TC cleared → point at ' + tcLabelForSec(t));
+        } else {
+            writeLog('Marker: Out TC cleared -> point at ' + tcLabelForSec(t));
+        }
         flashSeekHint('Marker', 'Out cleared', 'notice');
         return true;
     }
@@ -1103,7 +1142,11 @@
         sortMarkersInPlace();
         activeMarkerId = m.id;
         persistMarkersAfterChange(opt);
-        writeLog('Marker: TC updated ' + markerTimeLabel(m));
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('TC updated ' + markerTimeLabel(m));
+        } else {
+            writeLog('Marker: TC updated ' + markerTimeLabel(m));
+        }
         flashSeekHint('Marker TC', tcLabelForSec(t));
         return true;
     }
@@ -1434,10 +1477,24 @@
     function removeMarker(id) {
         const idx = currentMarkers.findIndex((m) => m.id === id);
         if (idx < 0) return;
+        const removed = currentMarkers[idx];
         currentMarkers = currentMarkers.filter((m) => m.id !== id);
         if (activeMarkerId === id) activeMarkerId = null;
         persistMarkersAfterChange();
-        writeLog('Marker: removed');
+        const kind = removed && removed.type === 'range' ? 'range' : 'point';
+        const tc =
+            typeof markerTimeLabel === 'function'
+                ? markerTimeLabel(removed)
+                : tcLabelForSec(removed.timeSec || removed.startSec);
+        let msg = 'removed ' + kind + ' at ' + tc;
+        if (removed && removed.comment && String(removed.comment).trim()) {
+            msg += ' — "' + String(removed.comment).trim() + '"';
+        }
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction(msg);
+        } else {
+            writeLog('Marker: ' + msg);
+        }
     }
 
     function updateMarkerComment(id, text) {

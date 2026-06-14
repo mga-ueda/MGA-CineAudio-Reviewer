@@ -151,7 +151,6 @@
             return false;
         }
         const cacheOnly = !!opt.cacheOnly;
-        if (!cacheOnly && !waveformPeakPyramid) return false;
         const contentDur = getWaveformAudioDurationSec();
         const timelineStartSec = 0;
         const trackEndSec = timelineStartSec + contentDur;

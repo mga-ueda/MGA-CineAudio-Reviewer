@@ -101,6 +101,11 @@
             }
         }
         if (!tr.segmentSources) tr.segmentSources = {};
+        if (typeof ensureClipBackupState === 'function') {
+            for (let ci = 0; ci < tr.clips.length; ci++) {
+                ensureClipBackupState(tr.clips[ci]);
+            }
+        }
         return tr.clips;
     }
 

@@ -214,7 +214,15 @@
                 typeof isTrackRegionActive === 'function'
                     ? isTrackRegionActive(trackRef)
                     : false;
-            const activeAtT = allActiveAtT.filter((s) => s.slot === i);
+            let activeAtT = allActiveAtT.filter((s) => s.slot === i);
+            if (
+                regionActive &&
+                !activeAtT.length &&
+                typeof mapTransportToSegmentForPlayback === 'function'
+            ) {
+                const fallbackHit = mapTransportToSegmentForPlayback(trackRef, gainT);
+                if (fallbackHit) activeAtT = [fallbackHit];
+            }
 
             if (regionActive && activeAtT.length) {
                 ensureExtraTrackMixRouting(i, ctx);
@@ -291,7 +299,8 @@
     }
 
     /** Schedule the full mix (video element + extras) before video.play(). */
-    async function primeReviewMixForPlayback() {
+    async function primeReviewMixForPlayback(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const ctx = ensureReviewMixCtx();
         if (ctx && ctx.state === 'suspended') {
             try {
@@ -299,7 +308,12 @@
             } catch (_) {}
         }
         if (ctx && typeof warmupPitchStretchWorklet === 'function') {
-            await warmupPitchStretchWorklet(ctx);
+            const warm = warmupPitchStretchWorklet(ctx);
+            if (o.awaitWarmup && warm && typeof warm.then === 'function') {
+                await warm;
+            } else {
+                void warm;
+            }
         }
         applyReviewMixVideoGain();
         if (ctx) {

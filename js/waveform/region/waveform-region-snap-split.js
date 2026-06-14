@@ -230,14 +230,20 @@
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
 
         if (targets.length === 1) {
-            writeLog(
-                'Ex ' +
-                    (lastSlot + 1) +
-                    ' region ' +
-                    (lastSeg + 1) +
-                    ' gain: ' +
-                    (lastLabel || '0.0 dB'),
-            );
+            const gainMsg =
+                formatRegionRef(lastSlot, lastSeg) + ' gain → ' + (lastLabel || '0.0 dB');
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(gainMsg);
+            } else {
+                writeLog(
+                    'Ex ' +
+                        (lastSlot + 1) +
+                        ' region ' +
+                        (lastSeg + 1) +
+                        ' gain: ' +
+                        (lastLabel || '0.0 dB'),
+                );
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint(
                     'Ex ' + (lastSlot + 1) + ' R' + (lastSeg + 1),
@@ -248,13 +254,28 @@
         } else {
             const stepLabel =
                 (step > 0 ? '+' : '') + step.toFixed(0) + ' dB';
-            writeLog(
-                'Playback region gain ' +
-                    stepLabel +
-                    ' (' +
-                    targets.length +
-                    ' regions)',
-            );
+            const refs = targets
+                .slice(0, 4)
+                .map((t) => formatRegionRef(t.slot, t.segmentIndex))
+                .join(', ');
+            const gainMsg =
+                'gain ' +
+                stepLabel +
+                ' on ' +
+                targets.length +
+                ' region(s)' +
+                (refs ? ' (' + refs + (targets.length > 4 ? ', …' : '') + ')' : '');
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(gainMsg);
+            } else {
+                writeLog(
+                    'Playback region gain ' +
+                        stepLabel +
+                        ' (' +
+                        targets.length +
+                        ' regions)',
+                );
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', stepLabel + ' × ' + targets.length, 'notice');
             }
@@ -303,14 +324,20 @@
         }
 
         if (targets.length === 1) {
-            writeLog(
-                'Ex ' +
-                    (lastSlot + 1) +
-                    ' region ' +
-                    (lastSeg + 1) +
-                    ' key: ' +
-                    (lastLabel || 'Key 0'),
-            );
+            const keyMsg =
+                formatRegionRef(lastSlot, lastSeg) + ' key → ' + (lastLabel || 'Key 0');
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(keyMsg);
+            } else {
+                writeLog(
+                    'Ex ' +
+                        (lastSlot + 1) +
+                        ' region ' +
+                        (lastSeg + 1) +
+                        ' key: ' +
+                        (lastLabel || 'Key 0'),
+                );
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint(
                     'Ex ' + (lastSlot + 1) + ' R' + (lastSeg + 1),
@@ -320,13 +347,28 @@
             }
         } else {
             const stepLabel = (step > 0 ? '+' : '') + step;
-            writeLog(
-                'Playback region key ' +
-                    stepLabel +
-                    ' (' +
-                    targets.length +
-                    ' regions)',
-            );
+            const refs = targets
+                .slice(0, 4)
+                .map((t) => formatRegionRef(t.slot, t.segmentIndex))
+                .join(', ');
+            const keyMsg =
+                'key ' +
+                stepLabel +
+                ' on ' +
+                targets.length +
+                ' region(s)' +
+                (refs ? ' (' + refs + (targets.length > 4 ? ', …' : '') + ')' : '');
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(keyMsg);
+            } else {
+                writeLog(
+                    'Playback region key ' +
+                        stepLabel +
+                        ' (' +
+                        targets.length +
+                        ' regions)',
+                );
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'Key ' + stepLabel + ' × ' + targets.length, 'notice');
             }
@@ -832,18 +874,30 @@
         return fadeHandleHitTestRect(handleEl.getBoundingClientRect());
     }
 
+    function pointInClientRect(clientX, clientY, rect) {
+        if (!rect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        return (
+            clientX >= rect.left &&
+            clientX <= rect.right &&
+            clientY >= rect.top &&
+            clientY <= rect.bottom
+        );
+    }
+
+    /** ドラッグ開始用 — 三角＋下方向拡張の操作矩形全体 */
+    function isPointerInFadeHandleGrabZone(regionEl, edgeKind, clientX, clientY) {
+        const hitRect = getFadeHandleHitRect(regionEl, edgeKind);
+        return pointInClientRect(clientX, clientY, hitRect);
+    }
+
     /** In/Out とフェード三角の操作帯が重なるとき、端リサイズ判定から除外する */
     function isPointerInFadeHandleHitZone(regionEl, edgeKind, clientX, clientY) {
         const hitRect = getFadeHandleHitRect(regionEl, edgeKind);
         if (!hitRect || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             return false;
         }
-        return (
-            clientX >= hitRect.left &&
-            clientX <= hitRect.right &&
-            clientY >= hitRect.top &&
-            clientY <= hitRect.bottom
-        );
+        const kind = edgeKind === 'in' ? 'fade-in' : 'fade-out';
+        return isPointerOnFadeHandleTriangle(kind, hitRect, clientX, clientY);
     }
 
     function isPointerOnRegionEdgeResizeHandle(regionEl, edgeKind, clientX, clientY) {
@@ -926,7 +980,7 @@
                 const kind = fadeCandidates[c].kind;
                 const fadeEdgeKind = kind === 'fade-in' ? 'in' : 'out';
                 if (
-                    !isPointerInFadeHandleHitZone(
+                    !isPointerInFadeHandleGrabZone(
                         regionEl,
                         fadeEdgeKind,
                         clientX,
@@ -978,3 +1032,9 @@
         }
         return bestFade || best;
     }
+
+    window.getFadeHandleHitRect = getFadeHandleHitRect;
+    window.isPointerInFadeHandleGrabZone = isPointerInFadeHandleGrabZone;
+    window.isPointerInFadeHandleHitZone = isPointerInFadeHandleHitZone;
+    window.isPointerOnFadeHandleTriangle = isPointerOnFadeHandleTriangle;
+    window.resolveRegionResizeHandleAtPointer = resolveRegionResizeHandleAtPointer;

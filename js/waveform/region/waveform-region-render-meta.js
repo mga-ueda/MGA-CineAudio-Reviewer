@@ -1251,6 +1251,9 @@
             applyDenseRegionBoundaryPresentation(track, container);
             refreshTrackFadeTriangleVisibility(track, container);
         }
+        if (typeof window.scheduleWaveformRegionOverlayRefresh === 'function') {
+            window.scheduleWaveformRegionOverlayRefresh();
+        }
     }
 
     window.refreshAllRegionBoundaryPresentation = refreshAllRegionBoundaryPresentation;

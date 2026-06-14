@@ -220,6 +220,7 @@
     window.scheduleWorkAfterTransportUiFrame = scheduleWorkAfterTransportUiFrame;
     window.updateTransportPlaybackUiFrame = updateTransportPlaybackUiFrame;
     window.startVideoPlayback = startVideoPlayback;
+    window.runTransportPlay = runTransportPlay;
 
     function rememberTransportPlaybackStartSec(sec) {
         let n = Number(sec);
@@ -369,8 +370,14 @@
         pendingRestoreTime = null;
         setPlayingUi(true);
         if (!rafId) rafId = requestAnimationFrame(tick);
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
+        const syncExtras =
+            typeof window.syncExtraAudioToTransport === 'function'
+                ? window.syncExtraAudioToTransport
+                : typeof syncExtraAudioToTransport === 'function'
+                  ? syncExtraAudioToTransport
+                  : null;
+        if (syncExtras) {
+            syncExtras({ force: true });
         }
         writeLog(
             'Transport: playback from master tail @ ' + formatTimecodeForTransport(t0)
@@ -1007,14 +1014,34 @@
     }
 
     async function runTransportPlay(playGen) {
+        const primeMix =
+            typeof window.primeReviewMixForPlayback === 'function'
+                ? window.primeReviewMixForPlayback
+                : typeof primeReviewMixForPlayback === 'function'
+                  ? primeReviewMixForPlayback
+                  : typeof window.primeExtraAudioForPlayback === 'function'
+                    ? window.primeExtraAudioForPlayback
+                    : null;
+        const syncExtras =
+            typeof window.syncExtraAudioToTransport === 'function'
+                ? window.syncExtraAudioToTransport
+                : typeof syncExtraAudioToTransport === 'function'
+                  ? syncExtraAudioToTransport
+                  : null;
         if (isAudioOnlyTransportPlayback()) {
-            if (typeof primeReviewMixForPlayback === 'function') {
-                await primeReviewMixForPlayback();
-            } else if (typeof primeExtraAudioForPlayback === 'function') {
-                await primeExtraAudioForPlayback();
+            const ctx =
+                typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
+            if (ctx && ctx.state === 'suspended') {
+                try {
+                    await ctx.resume();
+                } catch (_) {}
             }
             if (playGen != null && playGen !== transportPlayGeneration) return false;
-            return startMasterTransportTailPlayback(playGen);
+            const ok = startMasterTransportTailPlayback(playGen);
+            if (primeMix) {
+                void primeMix();
+            }
+            return ok;
         }
         await ensureVideoCanPlayForTransport();
         if (playGen != null && playGen !== transportPlayGeneration) return false;
@@ -1026,10 +1053,8 @@
         ) {
             return startMasterTransportTailPlayback(playGen);
         }
-        if (typeof primeReviewMixForPlayback === 'function') {
-            await primeReviewMixForPlayback();
-        } else if (typeof primeExtraAudioForPlayback === 'function') {
-            await primeExtraAudioForPlayback();
+        if (primeMix) {
+            await primeMix();
         }
         if (playGen != null && playGen !== transportPlayGeneration) return false;
         const startT = getTransportSec();
@@ -1048,8 +1073,8 @@
         }
         setPlayingUi(true);
         if (!rafId) rafId = requestAnimationFrame(tick);
-        if (typeof syncExtraAudioToTransport === 'function') {
-            syncExtraAudioToTransport({ force: true });
+        if (syncExtras) {
+            syncExtras({ force: true });
         }
         const playPromise = videoMain.play();
         if (playPromise && typeof playPromise.then === 'function') {
@@ -1085,8 +1110,8 @@
                 pendingRestoreTime = null;
                 setPlayingUi(true);
                 if (!rafId) rafId = requestAnimationFrame(tick);
-                if (typeof syncExtraAudioToTransport === 'function') {
-                    syncExtraAudioToTransport({ force: true });
+                if (syncExtras) {
+                    syncExtras({ force: true });
                 }
                 writeLog('Transport: extra-only tail (video at end)');
                 return true;

@@ -33,6 +33,10 @@
     window.canPersistRegionShrink = canPersistRegionShrink;
     window.getRegionPersistEpoch = getRegionPersistEpoch;
     window.swapRegionPersistEpochBetweenSlots = swapRegionPersistEpochBetweenSlots;
+    window.pruneRegionUndoStackIncompatibleWithCurrentTransport =
+        pruneRegionUndoStackIncompatibleWithCurrentTransport;
+    window.regionUndoSnapshotDurationScaleCompatible =
+        regionUndoSnapshotDurationScaleCompatible;
     function emptyPlaybackRegionsState() {
         return { active: false, segments: [], headPadSec: 0 };
     }
@@ -61,6 +65,75 @@
             };
         }
         return { tracks: [], phrase: null, phraseExpandedCounts: null, markers: null };
+    }
+    /** Undo スナップショット上のリージョン終端（秒）— タイムストレッチ前後の混在検出用 */
+    function regionUndoSnapshotMaxRegionEndSec(snap) {
+        const normalized = normalizeRegionUndoSnapshot(snap);
+        let max = 0;
+        const tracks = normalized.tracks || [];
+        for (let ti = 0; ti < tracks.length; ti++) {
+            const entry = tracks[ti];
+            const segs =
+                entry && entry.playbackRegions && Array.isArray(entry.playbackRegions.segments)
+                    ? entry.playbackRegions.segments
+                    : [];
+            for (let si = 0; si < segs.length; si++) {
+                const seg = segs[si];
+                if (!seg) continue;
+                let end = Number(seg.regionTimelineOutSec);
+                if (!Number.isFinite(end)) {
+                    const inSec = Number(seg.regionTimelineInSec);
+                    const srcIn = Number(seg.sourceInSec);
+                    const srcOut = Number(seg.sourceOutSec);
+                    if (Number.isFinite(inSec) && Number.isFinite(srcOut) && Number.isFinite(srcIn)) {
+                        end = inSec + Math.max(0, srcOut - srcIn);
+                    } else if (Number.isFinite(srcOut)) {
+                        end = srcOut;
+                    }
+                }
+                if (Number.isFinite(end) && end > max) max = end;
+            }
+        }
+        return max;
+    }
+    function regionUndoSnapshotDurationScaleCompatible(snap, masterSec) {
+        if (!(masterSec > 0)) return true;
+        const snapMax = regionUndoSnapshotMaxRegionEndSec(snap);
+        if (!(snapMax > 0.01)) return true;
+        const ratio = snapMax / masterSec;
+        return ratio >= 0.92 && ratio <= 1.08;
+    }
+    /** 現在のマスター尺と合わない Undo エントリを除去（タイムストレッチ後に古い履歴が残る問題） */
+    function pruneRegionUndoStackIncompatibleWithCurrentTransport() {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return 0;
+        let removed = 0;
+        for (let i = regionUndoStack.length - 1; i >= 0; i--) {
+            if (regionUndoSnapshotDurationScaleCompatible(regionUndoStack[i], master)) {
+                continue;
+            }
+            regionUndoStack.splice(i, 1);
+            removed++;
+        }
+        if (removed > 0) {
+            const msg =
+                'pruned ' +
+                removed +
+                ' undo entr' +
+                (removed === 1 ? 'y' : 'ies') +
+                ' incompatible with current transport scale';
+            if (typeof actionLog === 'function') {
+                actionLog('Region', msg);
+            } else if (typeof writeActionLog === 'function') {
+                writeActionLog('Region', msg);
+            } else if (typeof writeLog === 'function') {
+                writeLog('Playback region: ' + msg);
+            }
+        }
+        return removed;
     }
     function restoredPlaybackHasUsableTimelineSlots(playbackRegions) {
         const slots =
@@ -128,13 +201,19 @@
         }
         let phrase = null;
         let phraseExpandedCounts = null;
+        const phraseFillOn =
+            typeof getMusicalGridPhraseFillVisible === 'function' &&
+            getMusicalGridPhraseFillVisible();
         if (regionUndoSnapshotIncludePhrase(opt)) {
             phrase = capturePhraseUndoSnapshot();
-            if (typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function') {
-                const counts = window.getExpandedPhraseGroupBarCountsSnapshot();
-                if (counts && counts.length) {
-                    phraseExpandedCounts = counts.slice();
-                }
+        }
+        if (
+            phraseFillOn &&
+            typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
+        ) {
+            const counts = window.getExpandedPhraseGroupBarCountsSnapshot();
+            if (counts && counts.length) {
+                phraseExpandedCounts = counts.slice();
             }
         }
         let markers = null;
@@ -152,6 +231,12 @@
     function clearRegionRedoStack() {
         regionRedoStack.length = 0;
     }
+    function noteRegionUndoActionLabel(label) {
+        const text = label != null ? String(label).trim() : '';
+        if (!text || !regionUndoStack.length) return;
+        regionUndoStack[regionUndoStack.length - 1].actionLabel = text;
+    }
+    window.noteRegionUndoActionLabel = noteRegionUndoActionLabel;
     function requestRegionUndoCapture(opt) {
         if (regionUndoPaused) return;
         if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
@@ -161,7 +246,8 @@
         const top = regionUndoStack.length
             ? regionUndoStack[regionUndoStack.length - 1]
             : null;
-        if (top && regionUndoSnapshotsEqual(top, snap)) return;
+        const forceCapture = !!(opt && opt.forceCapture);
+        if (!forceCapture && top && regionUndoSnapshotsEqual(top, snap)) return;
         regionUndoStack.push(snap);
         clearRegionRedoStack();
     }
@@ -171,6 +257,55 @@
         const top = regionUndoStack[regionUndoStack.length - 1];
         if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
             top.regionSwapAnimHint = window.cloneRegionSwapHistoryAnimHint(hint);
+        }
+    }
+    /** Undo 復元後 — スナップショット上の gain/key を segment へ書き戻し marker と同期 */
+    function applyRestoredSegmentAudioAttributesFromUndoTracks(tracks) {
+        if (!Array.isArray(tracks)) return;
+        for (let ti = 0; ti < tracks.length; ti++) {
+            const entry = tracks[ti];
+            if (!entry || !(entry.slot >= 0)) continue;
+            const track = { type: 'extra', slot: entry.slot };
+            const savedSegs =
+                entry.playbackRegions && Array.isArray(entry.playbackRegions.segments)
+                    ? entry.playbackRegions.segments
+                    : null;
+            if (!savedSegs || !savedSegs.length) continue;
+            const state = getPlaybackRegionsState(track);
+            if (!state || !Array.isArray(state.segments) || !state.segments.length) continue;
+            const savedById = new Map();
+            for (let si = 0; si < savedSegs.length; si++) {
+                const s = savedSegs[si];
+                if (s && s.id) savedById.set(String(s.id), s);
+            }
+            const segOpt = {
+                skipUndo: true,
+                skipPersist: true,
+            };
+            let anyPitch = false;
+            for (let i = 0; i < state.segments.length; i++) {
+                const raw = state.segments[i];
+                if (!raw) continue;
+                const saved = savedById.get(String(raw.id)) || savedSegs[i];
+                if (!saved) continue;
+                const gainDb = Number.isFinite(saved.gainDb) ? saved.gainDb : 0;
+                const pitch = Number.isFinite(saved.pitchSemitones)
+                    ? Math.round(saved.pitchSemitones)
+                    : 0;
+                if (pitch !== 0) anyPitch = true;
+                if (typeof setSegmentGainDb === 'function') {
+                    setSegmentGainDb(track, i, gainDb, segOpt);
+                }
+                if (typeof setSegmentPitchSemitones === 'function') {
+                    setSegmentPitchSemitones(track, i, pitch, segOpt);
+                }
+            }
+            if (typeof invalidatePitchSliceCacheForTrack === 'function') {
+                invalidatePitchSliceCacheForTrack(track);
+            }
+            if (anyPitch && typeof schedulePitchSliceRenderForTrack === 'function') {
+                schedulePitchSliceRenderForTrack(track);
+            }
         }
     }
     function restoreRegionUndoSnapshot(snap, opt) {
@@ -186,6 +321,7 @@
             if (entry) {
                 tr.playbackRegions = deepCloneJson(entry.playbackRegions);
                 bumpRegionPersistEpoch(i);
+                clearTrackSegmentsMemoForSlot(i);
                 if (typeof setExtraTrackTimelineStartSec === 'function') {
                     setExtraTrackTimelineStartSec(entry.slot, entry.timelineStartSec, {
                         skipPersist: true,
@@ -194,6 +330,7 @@
             } else {
                 tr.playbackRegions = emptyPlaybackRegionsState();
                 bumpRegionPersistEpoch(i);
+                clearTrackSegmentsMemoForSlot(i);
             }
         }
         if (typeof window.invalidateTrackTimelineSlotsReadCache === 'function') {
@@ -212,9 +349,45 @@
             normalized.phrase != null &&
             typeof restorePhraseUndoSnapshot === 'function'
         ) {
-            restorePhraseUndoSnapshot(normalized.phrase, { skipTimelineSlotRebuild: true });
+            restorePhraseUndoSnapshot(normalized.phrase, {
+                skipTimelineSlotRebuild: true,
+                skipRelayoutRegions: true,
+            });
         }
-        let needsSlotRebuild = false;
+        const masterSec =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const durationScaleMismatch =
+            masterSec > 0 &&
+            !regionUndoSnapshotDurationScaleCompatible(normalized, masterSec);
+        if (durationScaleMismatch) {
+            for (let i = 0; i < n; i++) {
+                const tr =
+                    typeof extraTrackBySlot === 'function' ? extraTrackBySlot(i) : null;
+                if (tr && tr.playbackRegions) {
+                    tr.playbackRegions.timelineSlots = [];
+                }
+            }
+            if (
+                normalized.phraseExpandedCounts &&
+                normalized.phraseExpandedCounts.length &&
+                typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function'
+            ) {
+                window.applyPhraseGroupBarCountsForRegionSwap(normalized.phraseExpandedCounts, {
+                    skipUndo: true,
+                    relayoutRegions: true,
+                });
+            }
+            if (typeof writeDetailLog === 'function') {
+                writeDetailLog('Region', 'undo snapshot relayouted to match current transport scale');
+            } else if (typeof writeLog === 'function') {
+                writeLog(
+                    'Playback region: undo snapshot relayouted to match current transport scale',
+                );
+            }
+        }
+        let needsSlotRebuild = durationScaleMismatch;
         for (let i = 0; i < n; i++) {
             const entry = normalized.tracks.find((e) => e.slot === i);
             if (trackNeedsTimelineSlotRebuildAfterRestore(entry, { type: 'extra', slot: i })) {
@@ -225,7 +398,7 @@
         if (needsSlotRebuild) {
             if (typeof window.rebuildAllTrackTimelineSlots === 'function') {
                 window.rebuildAllTrackTimelineSlots({
-                    infer: false,
+                    infer: durationScaleMismatch,
                     skipPresentationRefresh: true,
                 });
             }
@@ -233,6 +406,7 @@
         if (Array.isArray(normalized.markers) && typeof setMarkersFromSnapshot === 'function') {
             setMarkersFromSnapshot(normalized.markers);
         }
+        applyRestoredSegmentAudioAttributesFromUndoTracks(normalized.tracks);
         if (!o.deferRedraw) {
             for (let i = 0; i < n; i++) {
                 const tr =
@@ -556,6 +730,7 @@
         if (!regionUndoStack.length) return false;
         const current = captureRegionUndoSnapshotForHistory();
         const prev = regionUndoStack.pop();
+        const undoActionLabel = prev && prev.actionLabel ? String(prev.actionLabel) : '';
         const normalizedPrev = normalizeRegionUndoSnapshot(prev);
         let swapHintForRestore = null;
         if (prev.regionSwapAnimHint && prev.regionSwapAnimHint.swapAnim) {
@@ -584,9 +759,22 @@
         if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
             window.clearRegionSwapHistoryAnimHint();
         }
+        if (undoActionLabel) current.actionLabel = undoActionLabel;
         regionRedoStack.push(current);
         beginDeferredRegionHistoryRestore(prev, () => {
-            writeLog('Playback region: undo');
+            const undoMsg =
+                typeof formatRegionHistoryActionMessage === 'function'
+                    ? formatRegionHistoryActionMessage('undo', undoActionLabel)
+                    : undoActionLabel
+                      ? 'undo — ' + undoActionLabel
+                      : 'undo';
+            if (typeof actionLog === 'function') {
+                actionLog('Region', undoMsg);
+            } else if (typeof writeActionLog === 'function') {
+                writeActionLog('Region', undoMsg);
+            } else {
+                writeLog('Playback region: ' + undoMsg);
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'Undo', 'notice');
             }
@@ -597,6 +785,7 @@
         if (!regionRedoStack.length) return false;
         const current = captureRegionUndoSnapshotForHistory();
         const next = regionRedoStack.pop();
+        const redoActionLabel = next && next.actionLabel ? String(next.actionLabel) : '';
         let swapHintForRestore = null;
         if (next.regionSwapAnimHint && next.regionSwapAnimHint.swapAnim) {
             swapHintForRestore = next.regionSwapAnimHint;
@@ -618,9 +807,22 @@
         if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
             window.clearRegionSwapHistoryAnimHint();
         }
+        if (redoActionLabel) current.actionLabel = redoActionLabel;
         regionUndoStack.push(current);
         beginDeferredRegionHistoryRestore(next, () => {
-            writeLog('Playback region: redo');
+            const redoMsg =
+                typeof formatRegionHistoryActionMessage === 'function'
+                    ? formatRegionHistoryActionMessage('redo', redoActionLabel)
+                    : redoActionLabel
+                      ? 'redo — ' + redoActionLabel
+                      : 'redo';
+            if (typeof actionLog === 'function') {
+                actionLog('Region', redoMsg);
+            } else if (typeof writeActionLog === 'function') {
+                writeActionLog('Region', redoMsg);
+            } else {
+                writeLog('Playback region: ' + redoMsg);
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'Redo', 'notice');
             }
@@ -780,9 +982,12 @@
         ) {
             return;
         }
-        if (typeof writeLog !== 'function') return;
-        const tail = silentGapDeleteDiagFmtPayload(payload);
-        writeLog('[SilentGapDel] ' + stage + (tail ? ' | ' + tail : ''));
+        if (typeof writeDiagLog === 'function') {
+            writeDiagLog('SILENT_GAP_DELETE', stage, payload);
+        } else if (typeof writeLog === 'function') {
+            const tail = silentGapDeleteDiagFmtPayload(payload);
+            writeLog('[SilentGapDel] ' + stage + (tail ? ' | ' + tail : ''));
+        }
         if (typeof window.musicalSlotDiagLog === 'function') {
             window.musicalSlotDiagLog('silent-del/' + stage, payload);
         }

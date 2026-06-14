@@ -86,7 +86,8 @@
         persistMusicalGridAndRedraw({
             skipUndo: true,
             skipTimelineSlotRebuild: !!o.skipTimelineSlotRebuild,
-            relayoutRegions: canCommitPhraseCompositionLayout(),
+            relayoutRegions:
+                !o.skipRelayoutRegions && canCommitPhraseCompositionLayout(),
         });
         updatePhraseBoundaryOverlay();
         phraseUndoPaused = false;
@@ -98,7 +99,11 @@
         phraseRedoStack.push(current);
         restorePhraseUndoSnapshot(prev);
         if (typeof writeLog === 'function') {
-            writeLog('Phrase: undo -> ' + musicalGridPhraseText);
+            if (typeof logPhraseAction === 'function') {
+                logPhraseAction('undo → ' + musicalGridPhraseText);
+            } else {
+                writeLog('Phrase: undo -> ' + musicalGridPhraseText);
+            }
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Phrase', 'Undo', 'notice');
@@ -112,7 +117,11 @@
         phraseUndoStack.push(current);
         restorePhraseUndoSnapshot(next);
         if (typeof writeLog === 'function') {
-            writeLog('Phrase: redo -> ' + musicalGridPhraseText);
+            if (typeof logPhraseAction === 'function') {
+                logPhraseAction('redo → ' + musicalGridPhraseText);
+            } else {
+                writeLog('Phrase: redo -> ' + musicalGridPhraseText);
+            }
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Phrase', 'Redo', 'notice');
@@ -483,10 +492,91 @@
         return found;
     }
 
-    /** @returns {{ mode: 'fixed'|'sequence'|'alternate', entries: {bpm:number, sig:{num:number, den:number}}[] }|null} */
+    /** 先頭のテンポストレッチ接頭辞（例: +8, / -10,）を分離する */
+    function parseTempoStretchPrefix(raw) {
+        const s = normalizeMusicalGridMeterText(raw);
+        const m = /^([+-]\d+),/.exec(s);
+        if (!m) {
+            return { stretchDelta: 0, text: s, prefixLen: 0 };
+        }
+        const delta = parseInt(m[1], 10);
+        if (!Number.isFinite(delta)) {
+            return { stretchDelta: 0, text: s, prefixLen: 0 };
+        }
+        return {
+            stretchDelta: delta,
+            text: s.slice(m[0].length),
+            prefixLen: m[0].length,
+        };
+    }
+
+    function caretInTempoStretchPrefix(raw, caret) {
+        const info = parseTempoStretchPrefix(raw);
+        if (!info.prefixLen) return false;
+        const pos = Math.max(0, caret | 0);
+        return pos < info.prefixLen;
+    }
+
+    function formatTempoStretchPrefix(delta) {
+        const d = delta | 0;
+        if (!d) return '';
+        return (d > 0 ? '+' : '') + d + ',';
+    }
+
+    /** ストレッチ接頭辞内の桁オフセット（符号直後を 0） */
+    function stretchPrefixDigitCaretOffset(raw, caret) {
+        const info = parseTempoStretchPrefix(raw);
+        if (!info.prefixLen) return 0;
+        const pos = Math.max(0, Math.min(caret | 0, info.prefixLen));
+        return Math.max(0, pos - 1);
+    }
+
+    /** 桁オフセットから接頭辞内カーソル位置を復元（テンポ・拍子フィールドと同様に維持） */
+    function caretPosForStretchPrefixField(text, digitOffset) {
+        const info = parseTempoStretchPrefix(text);
+        if (!info.prefixLen) return 0;
+        const numStart = 1;
+        const commaPos = info.prefixLen - 1;
+        const numLen = Math.max(0, commaPos - numStart);
+        return numStart + Math.min(Math.max(0, digitOffset | 0), numLen);
+    }
+
+    function meterSpecStretchDeltaValid(spec) {
+        if (!spec || !spec.entries || !spec.entries.length) return false;
+        const delta = spec.stretchDelta || 0;
+        if (!delta) return true;
+        for (let i = 0; i < spec.entries.length; i++) {
+            const effective = spec.entries[i].bpm + delta;
+            if (!(effective > 0 && effective <= 999)) return false;
+        }
+        return true;
+    }
+
+    function meterEntriesEqual(a, b) {
+        if (!a || !b) return false;
+        if (a.mode !== b.mode) return false;
+        if (!a.entries || !b.entries || a.entries.length !== b.entries.length) return false;
+        for (let i = 0; i < a.entries.length; i++) {
+            if (a.entries[i].bpm !== b.entries[i].bpm) return false;
+            if (a.entries[i].sig.num !== b.entries[i].sig.num) return false;
+            if (a.entries[i].sig.den !== b.entries[i].sig.den) return false;
+        }
+        return true;
+    }
+
+    /** Tempo/Sig 本体は同一で先頭ストレッチ接頭辞だけ変わったか */
+    function meterStretchDeltaOnlyChanged(prevSpec, nextSpec) {
+        if (!prevSpec || !nextSpec) return false;
+        if ((prevSpec.stretchDelta || 0) === (nextSpec.stretchDelta || 0)) return false;
+        return meterEntriesEqual(prevSpec, nextSpec);
+    }
+
+    /** @returns {{ mode: 'fixed'|'sequence'|'alternate', entries: {bpm:number, sig:{num:number, den:number}}[], stretchDelta?: number }|null} */
     function parseMeterSpec(raw) {
-        let s = normalizeMusicalGridMeterText(raw);
-        if (!s) return null;
+        const prefix = parseTempoStretchPrefix(raw);
+        let s = prefix.text;
+        if (!s && !prefix.stretchDelta) return null;
+        if (!s && prefix.stretchDelta) return null;
         let mode = 'fixed';
         const altMatch = /^\((.+)\)$/.exec(s);
         if (altMatch) {
@@ -502,7 +592,13 @@
             entries.push(entry);
         }
         if (entries.length > 1 && mode === 'fixed') mode = 'sequence';
-        return { mode, entries };
+        const spec = {
+            mode,
+            entries,
+            stretchDelta: prefix.stretchDelta || 0,
+        };
+        if (!meterSpecStretchDeltaValid(spec)) return null;
+        return spec;
     }
 
     function formatBpmForMeter(bpm) {
@@ -512,8 +608,10 @@
     function formatMeterSpec(spec) {
         if (!spec || !spec.entries || !spec.entries.length) return '';
         const parts = spec.entries.map((e) => formatMeterEntryToken(e));
-        const joined = parts.join(',');
-        return spec.mode === 'alternate' ? '(' + joined + ')' : joined;
+        let joined = parts.join(',');
+        if (spec.mode === 'alternate') joined = '(' + joined + ')';
+        const prefix = formatTempoStretchPrefix(spec.stretchDelta || 0);
+        return prefix + joined;
     }
 
     function formatMeterEntryToken(entry) {
@@ -596,8 +694,10 @@
         const raw = getRawMeterEntryForBar(spec, barIndex);
         if (!raw) return null;
         const cycleIndex = getSigCycleIndexForBar(spec, barIndex);
+        const delta = spec && spec.stretchDelta ? spec.stretchDelta : 0;
+        const bpm = Math.max(1, Math.min(999, raw.bpm + delta));
         return {
-            bpm: raw.bpm,
+            bpm,
             sig: resolveEntrySigForCycle(raw.sig, cycleIndex),
         };
     }

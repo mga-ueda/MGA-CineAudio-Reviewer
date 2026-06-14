@@ -619,18 +619,37 @@
                 if (maxEnd > 0) return maxEnd;
             }
         }
-        if (typeof getTrackTimelineEndSec === 'function') {
-            const end = getTrackTimelineEndSec({ type: 'extra', slot });
-            if (end > 0) return end;
-        }
         const start =
             typeof getExtraTrackTimelineStartSec === 'function'
                 ? getExtraTrackTimelineStartSec(slot)
                 : 0;
+        let regionEnd = 0;
+        if (typeof getTrackTimelineEndSec === 'function') {
+            regionEnd = getTrackTimelineEndSec({ type: 'extra', slot });
+        }
+        let bufEnd = 0;
         if (typeof extraTrackBufferDuration === 'function') {
             const buf = extraTrackBufferDuration(slot);
-            if (buf > 0) return start + buf;
+            if (buf > 0) bufEnd = start + buf;
         }
+        // タイムストレッチ直後はリージョン再配置前でも伸長済みバッファ尺をマスターに反映
+        if (
+            typeof isExtraTrackTempoStretched === 'function' &&
+            isExtraTrackTempoStretched(slot) &&
+            bufEnd > regionEnd + 0.0005
+        ) {
+            return bufEnd;
+        }
+        // ストレッチ解除直後はリージョン未再配置の間、オリジナルバッファ尺を優先
+        if (
+            typeof isTempoStretchPendingRelayout === 'function' &&
+            isTempoStretchPendingRelayout() &&
+            bufEnd > 0
+        ) {
+            return bufEnd;
+        }
+        if (regionEnd > 0) return regionEnd;
+        if (bufEnd > 0) return bufEnd;
         if (typeof getExtraTrackMaxTimelineEndSec === 'function') {
             const end = getExtraTrackMaxTimelineEndSec(slot);
             if (end > 0) return end;

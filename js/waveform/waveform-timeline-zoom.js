@@ -591,8 +591,11 @@
 
         invalidateWaveformCanvasWindowCache();
         waveformTimelineZoom = z;
-        if (
-            z <= WAVEFORM_TIMELINE_ZOOM_FIT + 0.001 &&
+        if (z > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001) {
+            if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+                invalidateWaveformViewportHiresSpec();
+            }
+        } else if (
             oldZoom > WAVEFORM_TIMELINE_ZOOM_FIT + 0.001 &&
             typeof onWaveformTimelineFitZoomRestored === 'function'
         ) {

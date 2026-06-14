@@ -144,6 +144,11 @@
                         <td><kbd>H</kbd></td>
                         <td>縦型（デフォルト）と横型レイアウトを切替。横型では1段目に左列（タイトル行・スペクトラム/メーター・再生バー）・映像・Markers パネルを横並びに、2段目に波形、3段目にオプションバー、4段目にログ・リーディング、5段目にフッターを並べる。設定は次回起動時に復元（Import/Export には含めない）</td>
                     </tr>
+                    <tr>
+                        <td>開発者向け定数パネル</td>
+                        <td><kbd>F10</kbd></td>
+                        <td>診断ログ（カテゴリ別）・リージョン操作帯（Fade/In/Out/Split/クロスフェード/Phrase 境界の色分け）・タイムストレッチ検証。実行中のみ有効。再読み込みですべて OFF。<kbd>Esc</kbd> または枠外クリックで閉じる。診断ログのいずれか ON の間はログ行数無制限（すべて OFF で 500 行上限）</td>
+                    </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
                     </tr>
@@ -504,7 +509,7 @@
                     <tr>
                         <td>Fade In / Fade Out</td>
                         <td>三角ハンドル操作（Audio Track）/<kbd>Alt</kbd>+<kbd>I</kbd> / <kbd>Alt</kbd>+<kbd>O</kbd></td>
-                        <td>三角ハンドルはリージョン内側へドラッグでフェード長を調整。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）は<strong>シークバー位置</strong>までフェードを伸ばす（In＝リージョン頭から、Out＝リージョン末尾から）。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。再生中も反映</td>
+                        <td>リージョン上端の三角ハンドルを内側へドラッグでフェード長を調整（Phrase 着色 ON 時は Phrase 境界と重なる位置でも操作可）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）は<strong>シークバー位置</strong>までフェードを伸ばす（In＝リージョン頭から、Out＝リージョン末尾から）。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。再生中も反映。操作帯の確認は <kbd>F10</kbd> のリージョン操作帯</td>
                     </tr>
                     <tr>
                         <td>リージョン In を 1 拍分手前へ</td>
@@ -570,6 +575,34 @@
                         <td>解除</td>
                         <td><kbd>Esc</kbd></td>
                         <td>ハンドル操作中はドラッグ取消。リージョン・無音スロットの複数選択中は選択解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン解除</td>
+                    </tr>
+                    <tr class="shortcut-table__section">
+                        <th scope="colgroup" colspan="3">ログ（画面最下部）</th>
+                    </tr>
+                    <tr>
+                        <td>警告・エラーのみ表示</td>
+                        <td>クリック（W/E Only）</td>
+                        <td>ワーニング行とエラー行だけ表示。デフォルト OFF。再読み込みで OFF（保存しない）。Copy は表示中の行のみ</td>
+                    </tr>
+                    <tr>
+                        <td>操作結果のみ表示</td>
+                        <td>クリック（Actions）</td>
+                        <td>操作の結果と警告/エラー行を表示（診断ログ・内部手順は非表示）。デフォルト OFF。再読み込みで OFF（保存しない）</td>
+                    </tr>
+                    <tr>
+                        <td>ログをコピー</td>
+                        <td>クリック（Copy）</td>
+                        <td>表示中の行をクリップボードへ（W/E Only / Actions のフィルタを反映）</td>
+                    </tr>
+                    <tr>
+                        <td>ログをファイル保存</td>
+                        <td>クリック（Download）</td>
+                        <td>ログ全文をテキストファイルで保存（フィルタは反映しない）</td>
+                    </tr>
+                    <tr>
+                        <td>ログを消去</td>
+                        <td>クリック（Clear）</td>
+                        <td>ログ行をすべて削除</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">レビューの保存・共有（.mgacr）</th>

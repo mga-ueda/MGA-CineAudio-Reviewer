@@ -486,11 +486,15 @@
     <div id="logSection">
     <div class="bottom-info">
         <div class="log-wrap">
-            <div id="log">&gt; System Ready.</div>
+            <div id="log"></div>
             <div class="log-actions" aria-label="Log actions">
                 <label class="log-debug-toggle">
                     <input type="checkbox" id="logWeOnlyCheckbox" />
                     <span>W/E Only</span>
+                </label>
+                <label class="log-debug-toggle">
+                    <input type="checkbox" id="logOpsOnlyCheckbox" />
+                    <span>Actions</span>
                 </label>
                 <button id="logCopyBtn" type="button" class="log-action-btn">Copy</button>
                 <button id="logDownloadBtn" type="button" class="log-action-btn">Download</button>
@@ -614,7 +618,9 @@
     <script src="js/session/session-state.js"></script>
     <script src="js/core/format-utils.js"></script>
     <script src="js/core/async-utils.js"></script>
+    <script src="js/ui/log-core.js"></script>
     <script src="js/ui/prefs-log.js"></script>
+    <script src="js/ui/log-action-format.js"></script>
     <script src="js/ui/ui-helpers.js"></script>
     <script src="js/musical/mp4-fps.js"></script>
     <script src="js/ui/files-panels.js"></script>
@@ -648,6 +654,7 @@
     <script src="js/audio/signalsmith-stretch-main-thread.js"></script>
     <script src="js/waveform/region/waveform-region-fade-gain.js"></script>
     <script src="js/waveform/region/waveform-region-pitch-stretch.js"></script>
+    <script src="js/waveform/tempo-stretch.js"></script>
     <script src="js/waveform/region/waveform-region-snap-split.js"></script>
     <script src="js/waveform/region/waveform-region-render-meta.js"></script>
     <script src="js/waveform/region/waveform-region-render-canvas.js"></script>

@@ -125,10 +125,33 @@
             syncLoadingOverlayPlacement(lane, el);
         } else {
             ensureLoadingInLane(lane, el);
+            setLaneWaveformLoadingMessage(lane, 'Now loading');
         }
         if (visible) el.setAttribute('aria-busy', 'true');
         else el.removeAttribute('aria-busy');
     }
+
+    function setLaneWaveformLoadingMessage(laneEl, message) {
+        const lane = resolveWaveformLaneEl(laneEl);
+        if (!lane) return;
+        const el = loadingElForLane(lane);
+        if (!el) return;
+        const box = el.querySelector('.audio-waveform-lane__loading-box');
+        if (box) box.textContent = message || 'Now loading';
+    }
+
+    window.setExtraTrackWaveformLoadingMessage = function setExtraTrackWaveformLoadingMessage(
+        slot,
+        message,
+    ) {
+        const lane = document.getElementById('extraAudioLane' + slot);
+        if (lane) {
+            setLaneWaveformLoadingMessage(lane, message);
+            return;
+        }
+        const ui = typeof getExtraUi === 'function' ? getExtraUi(slot) : null;
+        setLaneWaveformLoadingMessage(ui && ui.track ? ui.track : null, message);
+    };
 
     window.setVideoTrackWaveformLoading = function setVideoTrackWaveformLoading(visible) {
         const lane =

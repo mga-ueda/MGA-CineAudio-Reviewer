@@ -41,7 +41,7 @@
         TEMPO_STRETCH: {
             label: 'テンポストレッチ',
             tag: '[TempoStretch/A]',
-            desc: 'Tempo/Sig 連動 sub-master（主に R1）。テンポ変更後の音程・長さ異常・待ち時間の調査。',
+            desc: 'Ex 波形のオフラインストレッチ・clip/applied・失敗ログ。無音・尺異常の調査に。KEY_PLAYBACK と併用可。',
         },
         SILENT_GAP_DELETE: {
             label: '無音 gap 削除',
@@ -50,10 +50,11 @@
         },
     };
 
-    const FADE_HIT_DEBUG_META = {
-        label: 'Fade 三角ヒット判定',
+    const REGION_HIT_DEBUG_META = {
+        label: 'リージョン操作帯',
         tag: 'overlay',
-        desc: 'Fade In/Out 三角の掴み判定帯を波形上に色表示（上記ログとは別系統）。',
+        desc:
+            'Fade 三角・In/Out・Split・クロスフェード重なり・Phrase 境界・上端 fade 予約帯を色分け表示（ログとは別）。',
     };
 
     let overlayEl = null;
@@ -61,6 +62,24 @@
     let bodyEl = null;
     let open = false;
     let checkboxByKey = new Map();
+    let skipApplyCheckbox = null;
+
+    function ensureTempoStretchVerify() {
+        if (!window.TEMPO_STRETCH_VERIFY || typeof window.TEMPO_STRETCH_VERIFY !== 'object') {
+            window.TEMPO_STRETCH_VERIFY = { skipApply: false };
+        }
+        return window.TEMPO_STRETCH_VERIFY;
+    }
+
+    function setTempoStretchSkipApply(on) {
+        ensureTempoStretchVerify().skipApply = !!on;
+        if (skipApplyCheckbox) skipApplyCheckbox.checked = !!on;
+        if (typeof writeLog === 'function') {
+            writeLog(
+                '[TempoStretch/Verify] skipApply ' + (on ? 'ON' : 'OFF'),
+            );
+        }
+    }
 
     function debugLogKeysInPanelOrder() {
         const flags = window.DEBUG_LOG;
@@ -101,8 +120,10 @@
         applyDebugLogSideEffects();
     }
 
-    function setFadeHitDebug(on) {
-        window.FADE_TRIANGLE_HIT_DEBUG = !!on;
+    function setRegionHandleHitDebug(on) {
+        const v = !!on;
+        window.REGION_HANDLE_HIT_DEBUG = v;
+        window.FADE_TRIANGLE_HIT_DEBUG = v;
         applyDebugLogSideEffects();
     }
 
@@ -112,15 +133,89 @@
                 window.DEBUG_LOG[key] = false;
             }
         }
+        window.REGION_HANDLE_HIT_DEBUG = false;
         window.FADE_TRIANGLE_HIT_DEBUG = false;
+        setTempoStretchSkipApply(false);
         syncCheckboxesFromState();
         applyDebugLogSideEffects();
     }
 
+    function buildActionButton(label, onClick) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'dev-constants-panel__action-btn';
+        btn.textContent = label;
+        btn.addEventListener('click', onClick);
+        return btn;
+    }
+
+    function buildVerifySection() {
+        const block = buildSection(
+            '検証（タイムストレッチ / 再生）',
+            '無音・尺異常の切り分け用。ログは [TempoStretch/Verify] または [TempoStretch/A]（診断 ON 時）でフィルタ。',
+            'dev-constants-panel__list--actions',
+        );
+
+        const skipRow = document.createElement('label');
+        skipRow.className = 'dev-constants-panel__row dev-constants-panel__row--verify';
+
+        skipApplyCheckbox = document.createElement('input');
+        skipApplyCheckbox.type = 'checkbox';
+        skipApplyCheckbox.className = 'dev-constants-panel__checkbox';
+        skipApplyCheckbox.addEventListener('change', () => {
+            setTempoStretchSkipApply(skipApplyCheckbox.checked);
+        });
+
+        const skipText = document.createElement('span');
+        skipText.className = 'dev-constants-panel__row-text';
+        skipText.innerHTML =
+            '<span class="dev-constants-panel__row-head">' +
+            '<span class="dev-constants-panel__row-label">ストレッチ適用をスキップ</span>' +
+            '<span class="dev-constants-panel__row-tag">A/B</span></span>' +
+            '<span class="dev-constants-panel__row-desc">読込・Tempo/Sig Enter 時のストレッチを抑止。72-4/4 で無音か切り分ける。</span>';
+
+        skipRow.appendChild(skipApplyCheckbox);
+        skipRow.appendChild(skipText);
+        block.list.appendChild(skipRow);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'dev-constants-panel__action-row';
+        btnRow.appendChild(
+            buildActionButton('状態をログに出力', () => {
+                if (typeof window.dumpTempoStretchVerifyState === 'function') {
+                    window.dumpTempoStretchVerifyState();
+                } else if (typeof writeLog === 'function') {
+                    writeLog('[TempoStretch/Verify] dump API unavailable');
+                }
+            }),
+        );
+        btnRow.appendChild(
+            buildActionButton('バックアップから復元', () => {
+                if (typeof window.restoreAllExtraTracksFromBackup === 'function') {
+                    void window.restoreAllExtraTracksFromBackup();
+                } else if (typeof writeLog === 'function') {
+                    writeLog('[TempoStretch/Verify] restore API unavailable');
+                }
+            }),
+        );
+        block.list.appendChild(btnRow);
+
+        const note = document.createElement('p');
+        note.className = 'dev-constants-panel__verify-note';
+        note.textContent =
+            '併用推奨: テンポストレッチ + キー/ピッチ再生ログ。セッション復元は [RegionRestore]。';
+        block.section.appendChild(note);
+
+        return block.section;
+    }
+
     function syncCheckboxesFromState() {
         checkboxByKey.forEach((input, key) => {
-            if (key === 'FADE_TRIANGLE_HIT_DEBUG') {
-                input.checked = !!window.FADE_TRIANGLE_HIT_DEBUG;
+            if (key === 'REGION_HANDLE_HIT_DEBUG') {
+                input.checked =
+                    typeof window.isRegionHandleHitDebugEnabled === 'function'
+                        ? window.isRegionHandleHitDebugEnabled()
+                        : !!window.REGION_HANDLE_HIT_DEBUG;
                 return;
             }
             input.checked = !!(
@@ -129,6 +224,9 @@
                 window.DEBUG_LOG[key]
             );
         });
+        if (skipApplyCheckbox) {
+            skipApplyCheckbox.checked = !!ensureTempoStretchVerify().skipApply;
+        }
     }
 
     function buildSection(title, note, listClass) {
@@ -167,8 +265,8 @@
         input.dataset.toggleKey = key;
         input.dataset.toggleKind = kind;
         input.addEventListener('change', () => {
-            if (kind === 'fadeHitDebug') {
-                setFadeHitDebug(input.checked);
+            if (kind === 'regionHitDebug') {
+                setRegionHandleHitDebug(input.checked);
             } else {
                 setDebugLogFlag(key, input.checked);
             }
@@ -226,9 +324,11 @@
             null,
         );
         drawBlock.list.appendChild(
-            buildToggleRow('FADE_TRIANGLE_HIT_DEBUG', FADE_HIT_DEBUG_META, 'fadeHitDebug'),
+            buildToggleRow('REGION_HANDLE_HIT_DEBUG', REGION_HIT_DEBUG_META, 'regionHitDebug'),
         );
         bodyEl.appendChild(drawBlock.section);
+
+        bodyEl.appendChild(buildVerifySection());
     }
 
     function ensureOverlay() {
