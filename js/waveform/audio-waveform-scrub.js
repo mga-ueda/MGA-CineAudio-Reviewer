@@ -181,3 +181,4 @@
     let waveformPauseBuildListener = null;
     const WAVEFORM_PRESENCE_WATCH_INTERVAL_MS = 1500;
     const WAVEFORM_PRESENCE_WATCH_MAX_TRIES = 40;
+    const WAVEFORM_PRESENCE_WATCH_FIRST_MS = 300;
