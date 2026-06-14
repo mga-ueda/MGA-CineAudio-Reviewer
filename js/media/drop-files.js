@@ -161,7 +161,8 @@
 
     bindFileDropTarget(panelMain, { logLabel: 'Video panel' });
     if (frameMain) {
-        frameMain.addEventListener('click', () => {
+        frameMain.addEventListener('click', (e) => {
+            if (e.target && e.target.closest && e.target.closest('.video-timecode')) return;
             if (panelMain && panelMain.classList.contains('loaded')) return;
             openFilePickerFromDropArea('Video area');
         });

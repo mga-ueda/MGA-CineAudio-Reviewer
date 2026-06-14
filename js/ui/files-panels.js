@@ -109,6 +109,8 @@
         }
     }
 
+    const DEFAULT_VIDEO_FRAME_ASPECT = '16 / 9';
+
     /** 実ピクセル比に合わせて枠を決め、object-fit: contain の上下黒帯を出さない */
     function syncVideoFrameAspectRatio() {
         const frame =
@@ -122,7 +124,7 @@
         if (w > 0 && h > 0) {
             frame.style.aspectRatio = w + ' / ' + h;
         } else {
-            frame.style.removeProperty('aspect-ratio');
+            frame.style.aspectRatio = DEFAULT_VIDEO_FRAME_ASPECT;
         }
     }
 
@@ -132,7 +134,7 @@
                 ? frameMain
                 : document.getElementById('frameMain');
         if (!frame) return;
-        frame.style.removeProperty('aspect-ratio');
+        frame.style.aspectRatio = DEFAULT_VIDEO_FRAME_ASPECT;
     }
 
     window.syncVideoFrameAspectRatio = syncVideoFrameAspectRatio;

@@ -546,6 +546,10 @@
         el.addEventListener('pointermove', onTcOverlayPointerMove);
         el.addEventListener('pointerup', onTcOverlayPointerUp);
         el.addEventListener('pointercancel', onTcOverlayPointerUp);
+        el.addEventListener('click', (ev) => {
+            if (!tcOverlayTimelineReady() || el.classList.contains('video-timecode--hidden')) return;
+            ev.stopPropagation();
+        });
         el.addEventListener('dblclick', (ev) => {
             if (!tcOverlayTimelineReady() || el.classList.contains('video-timecode--hidden')) return;
             ev.preventDefault();

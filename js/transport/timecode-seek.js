@@ -1761,8 +1761,8 @@
             setTransportSec(0);
         }
         nameMain.textContent = f.name;
-        updatePanelInfoLine();
         setLoaded(panelMain, true);
+        updatePanelInfoLine();
         if (
             typeof pendingLaneUiRestore !== 'undefined' &&
             pendingLaneUiRestore &&

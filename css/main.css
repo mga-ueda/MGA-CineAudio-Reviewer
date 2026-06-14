@@ -334,7 +334,7 @@
         body.layout-mode-horizontal {
             padding-left: 8px;
             padding-right: 8px;
-            --layout-h-fixed-media-col-w: calc(var(--layout-content-max-w) * 0.5 * 0.75);
+            --layout-h-fixed-media-col-w: calc(var(--layout-content-max-w) * 0.5 * 0.75 + 140px);
             --layout-h-analyzer-col-min-w: 500px;
             --layout-h-analyzer-col-max-w: 1000px;
             /** 1段目の高さ — マーカー枠（head + table + memo）が唯一の基準 */
@@ -553,13 +553,37 @@
             .video-panel__stage
             .video-frame {
             flex: 0 1 auto;
-            width: auto;
-            height: auto;
             max-width: 100%;
             max-height: 100%;
             aspect-ratio: 16 / 9;
             margin: 0;
             align-self: center;
+        }
+        /** 未読込 — 幅を確定して空枠の潰れを防ぐ */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel:not(.loaded)
+            .video-panel__stage
+            .video-frame {
+            width: 100%;
+            height: auto;
+        }
+        /** 読込後 — contain フィット（枠比 = 動画比、object-fit 黒帯なし） */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel.loaded
+            .video-panel__stage
+            .video-frame {
+            width: auto;
+            height: auto;
         }
         body.layout-mode-horizontal
             .layout-dock-shell
