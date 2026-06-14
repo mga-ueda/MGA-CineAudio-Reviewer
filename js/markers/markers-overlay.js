@@ -713,14 +713,6 @@
     }
 
     /** マーカー一覧行の In/Out TC 文字列（モデルから直接） */
-    function markerListRowTcInValue(m) {
-        return markerListRowTcValueForEdge(m, 'in');
-    }
-
-    function markerListRowTcOutValue(m) {
-        return markerListRowTcValueForEdge(m, 'out');
-    }
-
     function markerListRowTcValueForEdge(m, edge) {
         if (!m) return '';
         if (edge === 'out') {

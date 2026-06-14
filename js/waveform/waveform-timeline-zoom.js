@@ -66,10 +66,6 @@
         }
     }
 
-    function isWaveformTimelineProgrammaticScroll() {
-        return waveformTimelineProgrammaticScroll;
-    }
-
     function isWaveformLanesScrollVisualDeferActive() {
         if (typeof isWaveformVisualRefreshDeferred === 'function' && isWaveformVisualRefreshDeferred()) {
             return true;

@@ -328,10 +328,6 @@
         return all;
     }
 
-    function transportSecToSegmentSourceSec(track, segmentIndex, transportSec) {
-        return segmentSourceSecFromTransport(track, segmentIndex, transportSec);
-    }
-
     function isTrackTransportAudible(track, transportSec) {
         return !!mapTransportToSegment(track, transportSec);
     }
@@ -601,17 +597,6 @@
         ctx.fillRect(x, top, Math.max(1, barW + 0.5), Math.max(1, bot - top));
     }
 
-    function trackWaveformNeedsCrossfadeVisualMap(track) {
-        if (trackHasPlaybackSegmentOverlap(track)) return true;
-        const segments = getTrackSegments(track);
-        for (let b = 0; b < segments.length - 1; b++) {
-            if (hasManualSegmentFadeAtJoinedBoundary(track, b)) return true;
-            if (hasExtendedCrossfadeOverlapAtBoundary(track, b)) return true;
-            if (isAutoJoinedBoundaryCrossfadeEligible(track, b)) return true;
-        }
-        return false;
-    }
-
     function trackSegmentsAreContinuousSameClipChain(track) {
         const segments = getTrackSegments(track);
         if (segments.length <= 1) return false;
@@ -635,138 +620,6 @@
             if (t >= start - 0.0005 && t < end + 0.0005) return i;
         }
         return 0;
-    }
-
-    /**
-     * 波形 1 パス分の gain を前計算（バーごとの mapAllSegmentsAtTransport を避ける）。
-     */
-    function createWaveformVisualGainState(track) {
-        const segments = getTrackSegments(track);
-        const n = segments.length;
-        if (!n) {
-            return { simple: true, uniform: 1, at: () => 1 };
-        }
-
-        const segGain = [];
-        const playStart = [];
-        const playEnd = [];
-        const fadeInSec = [];
-        const fadeOutSec = [];
-        const needsCrossfade = trackWaveformNeedsCrossfadeVisualMap(track);
-        let needsManualDisplay = false;
-        let uniformGain = null;
-
-        for (let i = 0; i < n; i++) {
-            const g = getSegmentGainLinear(track, i);
-            segGain.push(g);
-            playStart.push(getSegmentPlaybackTimelineStart(track, i));
-            playEnd.push(getSegmentTimelineEnd(track, i));
-            fadeInSec.push(getSegmentFadeDurationSec(track, i, 'in'));
-            fadeOutSec.push(getSegmentFadeDurationSec(track, i, 'out'));
-            if (fadeInSec[i] > 0.0005 || fadeOutSec[i] > 0.0005) {
-                needsManualDisplay = true;
-            }
-            if (uniformGain === null) uniformGain = g;
-            else if (Math.abs(uniformGain - g) > 0.001) uniformGain = NaN;
-        }
-        for (let b = 0; b < n - 1; b++) {
-            if (hasManualSegmentFadeAtJoinedBoundary(track, b)) {
-                needsManualDisplay = true;
-                break;
-            }
-        }
-
-        const simple =
-            !needsCrossfade && !needsManualDisplay && Number.isFinite(uniformGain);
-
-        if (simple) {
-            return {
-                simple: true,
-                uniform: uniformGain,
-                at: () => uniformGain,
-            };
-        }
-
-        const crossfadeCache = new Map();
-
-        function crossfadeAt(segmentIndex, transportSec) {
-            if (!needsCrossfade) return 1;
-            const bucket = Math.round(Number(transportSec) * 500);
-            const key = segmentIndex + ':' + bucket;
-            if (crossfadeCache.has(key)) return crossfadeCache.get(key);
-            const hits = mapAllSegmentsAtTransport(track, transportSec, {
-                forPlayback: true,
-            });
-            let v = 1;
-            if (hits.length > 1) {
-                const pos = hits.findIndex((h) => h.segmentIndex === segmentIndex);
-                if (
-                    pos >= 0 &&
-                    typeof computeEqualPowerCrossfadeGainsForGroup === 'function'
-                ) {
-                    const gains = computeEqualPowerCrossfadeGainsForGroup(
-                        hits,
-                        transportSec,
-                        {
-                            groupBySlot: false,
-                            sameSlotOnly: false,
-                            trackRefFromHit: () => track,
-                        },
-                    );
-                    v = Math.max(0, gains.get(hits[pos].key) ?? 1);
-                }
-            }
-            crossfadeCache.set(key, v);
-            return v;
-        }
-
-        return {
-            simple: false,
-            uniform: null,
-            at(segmentIndex, transportSec) {
-                const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
-                    track,
-                    segmentIndex,
-                    transportSec,
-                );
-                if (manualG != null) return manualG * segGain[segmentIndex];
-                let gIn = 1;
-                let gOut = 1;
-                const t = transportSec;
-                const i = segmentIndex;
-                if (fadeInSec[i] > 0.0005 && t <= playStart[i] + fadeInSec[i]) {
-                    gIn = segmentFadeCurve((t - playStart[i]) / fadeInSec[i]);
-                }
-                if (fadeOutSec[i] > 0.0005 && t >= playEnd[i] - fadeOutSec[i]) {
-                    gOut = segmentFadeCurve((playEnd[i] - t) / fadeOutSec[i]);
-                }
-                return crossfadeAt(i, t) * gIn * gOut * segGain[i];
-            },
-        };
-    }
-
-    /** 再生ミックスと同じ等パワー・重なり（波形振幅表示用） */
-    function computeSegmentCrossfadeVisualGain(track, segmentIndex, transportSec) {
-        const manualG = computeManualJoinedBoundaryFadeLinearForDisplay(
-            track,
-            segmentIndex,
-            transportSec,
-        );
-        if (manualG != null) return manualG;
-        if (!trackWaveformNeedsCrossfadeVisualMap(track)) return 1;
-        const hits = mapAllSegmentsAtTransport(track, transportSec, {
-            forPlayback: true,
-        });
-        if (hits.length <= 1) return 1;
-        const pos = hits.findIndex((h) => h.segmentIndex === segmentIndex);
-        if (pos < 0) return 1;
-        if (typeof computeEqualPowerCrossfadeGainsForGroup !== 'function') return 1;
-        const gains = computeEqualPowerCrossfadeGainsForGroup(hits, transportSec, {
-            groupBySlot: false,
-            sameSlotOnly: false,
-            trackRefFromHit: () => track,
-        });
-        return Math.max(0, gains.get(hits[pos].key) ?? 1);
     }
 
     function getSegmentPeaksForDraw(slot, clipId) {

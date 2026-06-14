@@ -636,36 +636,6 @@
         return row;
     }
 
-    function attachLiveSessionFieldsToRowForExtraPersist(row) {
-        if (typeof getMarkersSnapshot === 'function') {
-            const mem = getMarkersSnapshot();
-            if (mem && mem.length) {
-                row.markers = mem;
-            } else if (!sessionRowHasMarkers(row)) {
-                delete row.markers;
-            }
-        }
-        if (typeof getMarkerMemoSnapshot === 'function') {
-            const memo = getMarkerMemoSnapshot();
-            if (String(memo || '').trim()) {
-                row.markerMemo = memo;
-            } else if (!sessionRowHasMarkerMemo(row)) {
-                delete row.markerMemo;
-            }
-        }
-        if (typeof getMixPersistSnapshot === 'function') {
-            row.mix = getMixPersistSnapshot();
-        }
-        if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
-            row.laneUi = getWaveformLaneUiPersistSnapshot();
-        }
-        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
-            const playbackRegion = getPlaybackRegionPersistSnapshot();
-            if (playbackRegion) row.playbackRegion = playbackRegion;
-            else delete row.playbackRegion;
-        }
-    }
-
     function normalizeExtraTracksEntriesBySlot(entries) {
         if (!Array.isArray(entries)) return [];
         const bySlot = new Map();

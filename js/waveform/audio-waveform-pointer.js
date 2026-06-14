@@ -58,14 +58,6 @@
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
     }
 
-    function waveformExtraLaneSlotFromTarget(target) {
-        if (!target || !target.closest) return -1;
-        const lane = target.closest('.audio-waveform-lane--extra');
-        if (!lane || !lane.id) return -1;
-        const m = /^extraAudioLane(\d+)$/.exec(lane.id);
-        return m ? parseInt(m[1], 10) : -1;
-    }
-
     function waveformExtraLaneSlotFromClientY(clientY) {
         const lanes = waveformScrubTargetEl();
         if (!lanes || !Number.isFinite(clientY)) return -1;
@@ -215,16 +207,6 @@
     window.getLastActiveMixExtraSlot = getLastActiveMixExtraSlot;
     window.setActiveMixExtraSlot = setActiveMixExtraSlot;
     window.ensureDefaultActiveMixExtraSlot = ensureDefaultActiveMixExtraSlot;
-
-    /** マーカー帯の上でも Y 座標で Ex レーンを判定 */
-    function waveformExtraLaneSlotFromPointer(ev) {
-        if (!ev) return -1;
-        const slot = waveformExtraLaneSlotFromTarget(ev.target);
-        if (slot >= 0) return slot;
-        const lanes = waveformScrubTargetEl();
-        if (!lanes || !ev.target || !lanes.contains(ev.target)) return -1;
-        return waveformExtraLaneSlotFromClientY(ev.clientY);
-    }
 
     function canDragWaveformTrackTimelineStart(slot) {
         return (

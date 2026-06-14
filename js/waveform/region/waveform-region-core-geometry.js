@@ -45,31 +45,6 @@
         }
         return base;
     }
-    /** カーソル表示用（↔）。操作判定そのものは resolveRegionResizeHandleAtPointer の三角テスト */
-    function isPointerOnAnyRegionFadeHandle(clientX, clientY) {
-        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
-        const n = getExtraTrackCount();
-        for (let slot = 0; slot < n; slot++) {
-            const track = { type: 'extra', slot };
-            const lane = document.getElementById('extraAudioLane' + track.slot);
-            if (!lane || lane.hidden) continue;
-            const container = getPlaybackRegionsContainerEl(track);
-            if (!container || container.hidden) continue;
-            const regions = container.querySelectorAll(
-                '.audio-waveform-lane__playback-region',
-            );
-            for (let r = 0; r < regions.length; r++) {
-                const regionEl = regions[r];
-                if (
-                    isPointerInFadeHandleHitZone(regionEl, 'in', clientX, clientY) ||
-                    isPointerInFadeHandleHitZone(regionEl, 'out', clientX, clientY)
-                ) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
     function isPointerOnAnyRegionResizeHandle(clientX, clientY, opt) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
         const slots = [];

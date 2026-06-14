@@ -295,10 +295,6 @@
         reviewMixVideoMonitorTapPrimedUrl = '';
     }
 
-    function cancelReviewMixVideoMonitorTapRetry() {
-        stopReviewMixVideoMonitorTapRetryOnly();
-    }
-
     function shouldRetryReviewMixVideoMonitorTap() {
         if (videoMonitorStreamSrc) return false;
         if (shouldPlayVideoAudioViaWebAudio() || shouldPlayVideoAudioViaCaptureBoost()) {

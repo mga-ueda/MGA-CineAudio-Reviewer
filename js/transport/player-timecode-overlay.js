@@ -637,19 +637,6 @@
         void el.offsetHeight;
     }
 
-    function measureTcOverlayTextLayoutInBox(el) {
-        const textEl = el && el.querySelector('.video-timecode__text');
-        if (!el || !textEl || el.offsetHeight < 1) return null;
-        const boxRect = el.getBoundingClientRect();
-        const textRect = textEl.getBoundingClientRect();
-        if (boxRect.height < 1) return null;
-        return {
-            textTop: textRect.top - boxRect.top,
-            textLeft: textRect.left - boxRect.left,
-            textHeight: textRect.height,
-        };
-    }
-
     function tcCanvasFontString(fontPx) {
         return '700 ' + fontPx + 'px Consolas, Monaco, "Cascadia Mono", monospace';
     }

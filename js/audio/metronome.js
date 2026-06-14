@@ -208,16 +208,6 @@
         return metronomeGain;
     }
 
-    function setMetronomeOutputAudible(ctx, audible) {
-        wireMetronomeOutputIfNeeded(ctx);
-        if (!audible) {
-            metronomeGainTargetLevel = NaN;
-            muteMetronomeOutput(ctx);
-            return;
-        }
-        syncMetronomeOutputGain(ctx);
-    }
-
     function metronomeBeatScheduleKey(transportSec) {
         return Math.round(transportSec * 1000) / 1000;
     }

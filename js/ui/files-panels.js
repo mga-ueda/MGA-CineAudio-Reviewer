@@ -648,33 +648,6 @@
         return secFromFrames * fMod + ff;
     }
 
-    function parseTimecodeToTransportSec(tcStr) {
-        if (!transportControlsReady()) return null;
-        const fps = masterFpsFloatForTransport();
-        const targetIdx = parseTimecodeStringToClipFrameIndex(tcStr, fps);
-        if (targetIdx == null || !Number.isFinite(targetIdx)) return null;
-        if (videoReady()) {
-            reconcileContainerSampleCountForSide('main');
-        }
-        const dur =
-            typeof getMasterTransportDurationSec === 'function'
-                ? getMasterTransportDurationSec()
-                : getDuration(videoMain);
-        if (!dur || dur <= 0) return 0;
-        let lo = 0;
-        let hi = dur - 0.001;
-        for (let i = 0; i < 48; i++) {
-            const mid = (lo + hi) * 0.5;
-            if (playbackFrameIndexForSide(mid, 'main') < targetIdx) lo = mid;
-            else hi = mid;
-        }
-        let sec = hi;
-        if (playbackFrameIndexForSide(sec, 'main') < targetIdx) {
-            sec = Math.min(dur - 0.001, sec + masterFrameSec);
-        }
-        return Math.max(0, Math.min(dur - 0.001, sec));
-    }
-
     function getSeekableEnd(v) {
         try {
             if (!v.seekable || v.seekable.length === 0) return 0;
@@ -745,10 +718,6 @@
 
     function videoReady() {
         return getDuration(videoMain) > 0;
-    }
-
-    function videoHasFrameData() {
-        return videoMain.readyState >= 2;
     }
 
     function hasPlayableWaveformTimeline() {

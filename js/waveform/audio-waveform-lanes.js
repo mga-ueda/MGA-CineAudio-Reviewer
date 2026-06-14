@@ -190,10 +190,6 @@
     let videoLaneUiOpen = true;
     let refreshingVideoAudioLaneVisibility = false;
 
-    function containerReportsVideoAudioTrack() {
-        return containerHasAudio.main === true;
-    }
-
     function notifyVideoAudioLoadSettledIfNoVideoAudio() {
         if (containerHasAudio.main === false) {
             notifyVideoAudioLoadSettled();
@@ -206,10 +202,6 @@
         if (!hasVideo) return false;
         if (containerHasAudio.main === false) return false;
         return true;
-    }
-
-    function mainVideoHasAudioTrack() {
-        return containerReportsVideoAudioTrack();
     }
 
     /** 新規動画読み込み時に Video Audio 枠を再表示可能にする */

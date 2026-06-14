@@ -589,28 +589,6 @@
         return null;
     }
 
-    function trimAudioBufferToDuration(buffer, durationSec) {
-        if (!buffer || !(durationSec > 0)) return buffer;
-        if (buffer.duration <= durationSec + 0.00001) return buffer;
-        const sampleRate = buffer.sampleRate;
-        const channels = buffer.numberOfChannels;
-        const frames = Math.max(
-            1,
-            Math.min(buffer.length, Math.floor(durationSec * sampleRate)),
-        );
-        const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-        const scratch = new OfflineCtx(channels, 1, sampleRate);
-        const out = scratch.createBuffer(channels, frames, sampleRate);
-        for (let c = 0; c < channels; c++) {
-            const src = buffer.getChannelData(c);
-            const dst = out.getChannelData(c);
-            for (let i = 0; i < frames; i++) {
-                dst[i] = src[i] || 0;
-            }
-        }
-        return out;
-    }
-
     function pitchSliceTimelineDurationSec(track, segmentIndex) {
         if (typeof getSegmentPlaybackTimelineStart !== 'function') {
             return null;

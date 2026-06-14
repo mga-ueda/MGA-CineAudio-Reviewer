@@ -751,37 +751,6 @@
         return start + span;
     }
 
-    function getAllRegionTimelineIntervals(exclude) {
-        const list = [];
-        const n =
-            getExtraTrackCount();
-        for (let slot = 0; slot < n; slot++) {
-            const track = { type: 'extra', slot };
-            if (!isTrackRegionActive(track)) continue;
-            const segs = getTrackSegments(track);
-            for (let i = 0; i < segs.length; i++) {
-                if (
-                    exclude &&
-                    exclude.slot === slot &&
-                    exclude.segmentIndex === i
-                ) {
-                    continue;
-                }
-                const start = getSegmentTimelineStart(track, i);
-                const end = getSegmentTimelineEnd(track, i);
-                list.push({ slot, segmentIndex: i, start, end });
-            }
-        }
-        return list;
-    }
-
-    function intervalsOverlapTimeline(aStart, aEnd, bStart, bEnd) {
-        return (
-            aStart < bEnd - SEGMENT_BOUNDARY_JOIN_EPS_SEC &&
-            aEnd > bStart + SEGMENT_BOUNDARY_JOIN_EPS_SEC
-        );
-    }
-
     function clampSegmentTimelineStart(_track, _segmentIndex, desiredStart) {
         return Math.max(0, Number(desiredStart) || 0);
     }

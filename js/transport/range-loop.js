@@ -535,19 +535,6 @@
         return setRangeLoopBounds(inSec, outSec);
     }
 
-    /** @returns {boolean} true if transport was wrapped to range In */
-    function enforceRangeLoopPlaybackPosition() {
-        return snapRangeLoopPlaybackIfNeeded();
-    }
-
-    function rangeLoopAudioTimeInSpan(audioT) {
-        return (
-            Number.isFinite(audioT) &&
-            audioT >= loopRangeInSec - 0.001 &&
-            audioT < loopRangeOutSec
-        );
-    }
-
     /**
      * 範囲ループ中の tick で毎フレーム video.currentTime を書き換えると再生が途切れる。
      * ループ区間内の通常再生では動画に追従し、巻き戻しシーク中・テール部のみ同期する。

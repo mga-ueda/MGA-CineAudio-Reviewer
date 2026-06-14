@@ -1281,40 +1281,6 @@
         }
         return Math.max(0, n);
     }
-    function snapBoundaryBarIndexForTransportSec(
-        transportSec,
-        barBoundaries,
-        boundaryIndex,
-        counts,
-    ) {
-        const b = boundaryIndex | 0;
-        const sumBefore = sumGroupBarCounts(counts, b);
-        if (b < 0 || b >= counts.length - 1) {
-            return sumBefore + 1;
-        }
-        const pairEnd = sumBefore + counts[b] + counts[b + 1];
-        const minK = sumBefore;
-        const maxK = pairEnd;
-        const s = Number(transportSec);
-        if (!Number.isFinite(s)) return sumBefore + counts[b];
-        let targetSec = s;
-        if (getMusicalGridVisible()) {
-            let bestSec = null;
-            let bestDist = Infinity;
-            for (let bar = minK; bar <= maxK; bar++) {
-                const sec = barBoundaries[bar];
-                if (!Number.isFinite(sec)) continue;
-                const d = Math.abs(sec - s);
-                if (d < bestDist) {
-                    bestDist = d;
-                    bestSec = sec;
-                }
-            }
-            if (Number.isFinite(bestSec)) targetSec = bestSec;
-        }
-        const bar = barIndexForBoundarySec(targetSec, barBoundaries);
-        return Math.max(minK, Math.min(maxK, bar));
-    }
     function repositionPhraseBoundaryHandlesFromSnapshot() {
         if (!phraseBoundaryRoot || phraseBoundaryRoot.hidden) return;
         const ranges = getPhraseGroupRangesSnapshot();
@@ -1329,25 +1295,6 @@
         for (let i = 0; i < handles.length && i < ranges.length - 1; i++) {
             handles[i].style.left =
                 transportSecToOverlayLeftPercent(ranges[i].endSec, master) + '%';
-        }
-    }
-    function applyPhraseGroupBarCounts(counts, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        const text = formatPhraseTextFromGroupBarCounts(counts, {
-            optimize: o.optimize !== false,
-        });
-        musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
-        if (musicalGridPhraseInput) {
-            musicalGridPhraseInput.value = musicalGridPhraseText;
-        }
-        if (phraseBoundaryDragActive) {
-            drawMusicalGridOverlay();
-            updatePhraseBoundaryOverlay();
-        } else {
-            scheduleMusicalGridRedraw();
-        }
-        if (o.persist !== false) {
-            persistMusicalGridToStorage();
         }
     }
     const phraseBoundaryRoot =

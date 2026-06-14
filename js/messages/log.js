@@ -3,14 +3,6 @@
  */
 (function messagesLogModule() {
     registerMessages({
-        'log.weOnly.sampleWarn':
-            'Test output: sample warning (W/E Only filter check)',
-        'log.weOnly.sampleError':
-            'Test output: sample error (W/E Only filter check)',
-        'log.debug.enabled':
-            'Debug Log enabled ([RegionRestore], [MusicalSlot], [KeyPlayback], [VideoAnalyzer], [WaveformViewport], etc.)',
-        'log.debug.disabled': 'Debug Log disabled',
-
         'log.clipboard.copied': 'Log copied to clipboard',
         'log.clipboard.copyFailed': 'Log could not copy',
         'log.download.saved': (fileName) => 'Log downloaded (“' + fileName + '”)',

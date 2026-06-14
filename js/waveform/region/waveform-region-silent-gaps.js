@@ -125,17 +125,6 @@
         });
     }
 
-    /** セグメント Region In が属する最大 Phrase スロット */
-    function lastPhraseSlotIndexForSegmentLeaders(track) {
-        let maxIdx = -1;
-        const segments = getTrackSegments(track);
-        for (let si = 0; si < segments.length; si++) {
-            const pi = phraseSlotIndexForSegment(track, si);
-            if (pi != null && pi >= 0) maxIdx = Math.max(maxIdx, pi);
-        }
-        return maxIdx;
-    }
-
     function attachSilentGapNeighborIndices(gaps, track, eps) {
         if (!track || !isExtraTrackRef(track) || !gaps.length) return;
         const segments = getTrackSegments(track);

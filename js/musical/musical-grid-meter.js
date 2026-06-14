@@ -781,17 +781,6 @@
         return sizes[sizes.length - 1];
     }
 
-    function getTimeSignatureForBar(spec, barIndex) {
-        if (!spec || !spec.signatures || !spec.signatures.length) return null;
-        const sigs = spec.signatures;
-        if (spec.mode === 'fixed') return sigs[0];
-        if (spec.mode === 'alternate') {
-            return sigs[((barIndex % sigs.length) + sigs.length) % sigs.length];
-        }
-        if (barIndex < sigs.length) return sigs[barIndex];
-        return sigs[sigs.length - 1];
-    }
-
     function beatDurationSec(sig, bpm) {
         return ((4 / sig.den) * 60) / bpm;
     }

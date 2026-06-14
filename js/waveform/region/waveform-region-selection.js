@@ -234,26 +234,10 @@
         if (idx >= 0) regionSelectionEntries.splice(idx, 1);
     }
 
-    function removeSilentGapSelectionEntry(slot, gapIndex) {
-        const idx = regionSelectionEntries.findIndex(
-            (e) =>
-                e.slot === slot &&
-                e.segmentIndex < 0 &&
-                e.silentGapIndex === gapIndex,
-        );
-        if (idx >= 0) regionSelectionEntries.splice(idx, 1);
-    }
-
     function addRegionSelectionEntry(slot, segmentIndex) {
         if (!(slot >= 0) || !(segmentIndex >= 0)) return;
         if (isRegionEntrySelected(slot, segmentIndex)) return;
         regionSelectionEntries.push({ slot, segmentIndex });
-    }
-
-    function addSilentGapSelectionEntry(slot, gapIndex) {
-        if (!(slot >= 0) || !(gapIndex >= 0)) return;
-        if (isSilentGapEntrySelected(slot, gapIndex)) return;
-        regionSelectionEntries.push({ slot, segmentIndex: -1, silentGapIndex: gapIndex });
     }
 
     function toggleSilentGapSelection(slot, gapIndex) {

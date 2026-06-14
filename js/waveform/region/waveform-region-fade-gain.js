@@ -30,13 +30,6 @@
         return Math.pow(2, pitch / 12);
     }
 
-    /** ピッチ変更に伴う playbackRate の速度変化を打ち消す係数（playDur 補正と対）。 */
-    function segmentPitchTimelineCompensationRate(pitchSemitones) {
-        const pitch = clampRegionPitchSemitones(pitchSemitones);
-        if (pitch === 0) return 1;
-        return Math.pow(2, -pitch / 12);
-    }
-
     function applySegmentPitchToBufferSource(src, pitchSemitones) {
         if (!src) return 1;
         const pitch = clampRegionPitchSemitones(pitchSemitones);
@@ -97,11 +90,6 @@
     /** リージョン端 Fade Out（残量 remaining 1→0 に ease-in = 序盤急降下） */
     function segmentFadeOutGainFromRemaining(remaining) {
         return segmentFadeEaseIn(remaining);
-    }
-
-    /** @deprecated 互換用 — fadeIn 進行度向け */
-    function segmentFadeCurve(norm) {
-        return segmentFadeEaseIn(norm);
     }
 
     /** 結合境界の手動 Fade Out/In（二次 ease） */

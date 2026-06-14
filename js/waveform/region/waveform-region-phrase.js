@@ -1,40 +1,6 @@
 /**
  * waveform-region-phrase.js — Phrase スロット解決・無音 gap・Phrase 欄レイアウト
  */
-    function validatePhraseSpecForContentSwap() {
-        if (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            !getMusicalGridPhraseFillVisible()
-        ) {
-            return { ok: false, reason: 'phrase fill off' };
-        }
-        if (typeof parsePhraseGroupingSpec !== 'function') {
-            return { ok: false, reason: 'invalid phrase spec' };
-        }
-        const text = regionSwapDiagPhraseText();
-        const spec = parsePhraseGroupingSpec(text);
-        if (!spec || !spec.sizes || !spec.sizes.length) {
-            return { ok: false, reason: 'invalid phrase spec' };
-        }
-        for (let i = 0; i < spec.sizes.length; i++) {
-            if (!(spec.sizes[i] > 0)) {
-                return { ok: false, reason: 'invalid phrase spec' };
-            }
-        }
-        return { ok: true, text, slotCount: spec.sizes.length };
-    }
-
-    function ensurePhraseSpecReadyForContentSwap(context) {
-        const check = validatePhraseSpecForContentSwap();
-        if (check.ok) return true;
-        regionSwapDiagLog('phrase/spec-blocked', {
-            context: context || '',
-            reason: check.reason,
-            text: check.text || regionSwapDiagPhraseText(),
-        });
-        return false;
-    }
-
     /** セッション復元完了時 — SwapUnit baseline（[MusicalSlot] dump/session-restore） */
     function logSessionRestoreRegionPhraseSnapshot() {
         if (typeof window.logSessionRestoreMusicalSlotSnapshot === 'function') {
@@ -144,11 +110,6 @@
         const cycle = phraseSpecCycleSlotCount();
         if (cycle > 0 && idx >= cycle) return null;
         return idx;
-    }
-
-    /** 展開 index → spec 1 サイクル内 index（長尺末尾の繰り返し index は null） */
-    function phraseSpecCycleSlotForTransportSec(transportSec) {
-        return phraseSpecCycleSlotIndex(phraseSlotIndexAtTransportSec(transportSec));
     }
 
     /** 入れ替え E 用 — spec 1 サイクル内スロットのみ（Region In 基準） */
@@ -340,19 +301,6 @@
         if (start == null) return null;
         const eps = segmentBoundaryJoinEpsilonSec();
         return start + eps * 2;
-    }
-
-    /** 展開 counts 上で slot 先頭までの累積小節数（0 始まり） */
-    function phraseSlotStartBarIndex(slotIndex, countsOpt) {
-        const counts =
-            countsOpt && countsOpt.length
-                ? countsOpt
-                : expandedPhraseGroupBarCountsSnapshot();
-        const idx = slotIndex | 0;
-        if (!counts.length || idx < 0 || idx >= counts.length) return null;
-        let sum = 0;
-        for (let i = 0; i < idx; i++) sum += counts[i] | 0;
-        return sum;
     }
 
     function phraseSlotOverlapsGap(slotIndex, gap) {
@@ -657,27 +605,6 @@
             phraseSwap: gapSlot != null && segSlot != null && gapSlot !== segSlot,
             notes,
         };
-    }
-
-    /** timelineSlots cache の musical.phraseSlotIndex（regionIn 誤判定より優先） */
-    function phraseMusicalSlotIndexFromPersistedTimelineSlots(track, segmentIndex) {
-        const state = getPlaybackRegionsState(track);
-        const persisted =
-            state && Array.isArray(state.timelineSlots) ? state.timelineSlots : null;
-        if (!persisted || !persisted.length) return null;
-        const idx = segmentIndex | 0;
-        for (let i = 0; i < persisted.length; i++) {
-            const slot = persisted[i];
-            if (!slot || slot.kind === 'silent' || !slot.segmentRefs) continue;
-            for (let r = 0; r < slot.segmentRefs.length; r++) {
-                const ref = slot.segmentRefs[r];
-                if ((ref.segmentIndex | 0) !== idx) continue;
-                if (slot.musical && slot.musical.phraseSlotIndex >= 0) {
-                    return slot.musical.phraseSlotIndex | 0;
-                }
-            }
-        }
-        return null;
     }
 
     function phraseJoinSlotIndexForSegment(track, segmentIndex) {
@@ -1124,58 +1051,6 @@
         }
     }
 
-    function phraseSlotRegionInTargetSecDiag(track, slotIndex, segmentIndex, segmentsOpt) {
-        const slotStart = phraseSlotPlacementSec(slotIndex);
-        if (slotStart == null) {
-            return { slotStart: null, targetIn: null, clamped: false, reason: 'slot start unresolved' };
-        }
-        const segments = segmentsOpt || getTrackSegments(track);
-        const seg = segments[segmentIndex];
-        if (!seg) {
-            return { slotStart, targetIn: slotStart, clamped: false, reason: 'no segment' };
-        }
-        const eps = segmentBoundaryJoinEpsilonSec();
-        const segDur = segmentCopySourceDurSec(seg);
-        let maxIn = Infinity;
-        let limitReason = null;
-        const ranges = phraseSlotRangesSnapshot();
-        const slotRange = ranges[slotIndex | 0];
-        if (slotRange && Number.isFinite(slotRange.endSec)) {
-            const slotEndLimit = slotRange.endSec - eps - segDur;
-            if (slotEndLimit < maxIn) {
-                maxIn = slotEndLimit;
-                limitReason = 'slot end';
-            }
-        }
-        const nextIn = nextSegmentRegionInAfter(
-            track,
-            segmentIndex,
-            slotStart,
-            segmentsOpt,
-        );
-        if (nextIn != null) {
-            const nextLimit = nextIn - eps - segDur;
-            if (nextLimit < maxIn) {
-                maxIn = nextLimit;
-                limitReason = 'next region in ' + regionSwapDiagFmtSec(nextIn);
-            }
-        }
-        if (!Number.isFinite(maxIn)) {
-            return { slotStart, targetIn: slotStart, clamped: false, limitReason: null };
-        }
-        if (slotStart > maxIn + eps * 0.5) {
-            return {
-                slotStart,
-                targetIn: maxIn,
-                clamped: true,
-                limitReason,
-                maxIn: regionSwapDiagFmtSec(maxIn),
-                segDur: regionSwapDiagFmtSec(segDur),
-            };
-        }
-        return { slotStart, targetIn: slotStart, clamped: false, limitReason: null };
-    }
-
     /** 指定 Region In より後ろで最も早い他セグメント In */
     function nextSegmentRegionInAfter(track, segmentIndex, regionIn, segmentsOpt) {
         const segments = segmentsOpt || getTrackSegments(track);
@@ -1226,50 +1101,6 @@
             return maxIn;
         }
         return slotStart;
-    }
-
-    /** 移動済みセグメントコピー — 次リージョン／slot 終端との誤差重なりを解消 */
-    function clampMovedSegmentCopiesToAvoidOverlap(track, segments, movedIndices, gapSlotIdx) {
-        const eps = segmentBoundaryJoinEpsilonSec();
-        const t0 = getTrackTimelineStartSec(track);
-        for (let m = 0; m < movedIndices.length; m++) {
-            const mi = movedIndices[m] | 0;
-            const seg = segments[mi];
-            if (!seg) continue;
-            const targetIn = phraseSlotRegionInTargetSec(track, gapSlotIdx, mi, segments);
-            if (targetIn == null) continue;
-            const curIn = segmentCopyRegionIn(seg);
-            if (Math.abs(curIn - targetIn) <= eps * 0.5) continue;
-            regionSwapDiagLog('swap/overlap-clamp', {
-                region: mi + 1,
-                before: regionSwapDiagFmtSec(curIn),
-                after: regionSwapDiagFmtSec(targetIn),
-                nextIn: regionSwapDiagFmtSec(
-                    nextSegmentRegionInAfter(track, mi, curIn, segments),
-                ),
-            });
-            applySegmentToSilentGapPosition(track, mi, seg, targetIn, t0);
-        }
-    }
-
-    /** タイムラインのみ入れ替え — leader の Region In を targetSec へ再スナップ（従属は相対位置維持） */
-    function snapSilentGapSwapSegmentCopiesToTarget(track, segments, indices, targetSec) {
-        if (targetSec == null || !Number.isFinite(targetSec) || !indices || !indices.length) {
-            return;
-        }
-        const eps = segmentBoundaryJoinEpsilonSec();
-        const t0 = getTrackTimelineStartSec(track);
-        const leader = indices[0] | 0;
-        const seg = segments[leader];
-        if (!seg) return;
-        const curIn = segmentCopyRegionIn(seg);
-        if (Math.abs(curIn - targetSec) <= eps * 0.5) return;
-        regionSwapDiagLog('swap/silent-gap/snap-target', {
-            region: leader + 1,
-            from: regionSwapDiagFmtSec(curIn),
-            to: regionSwapDiagFmtSec(targetSec),
-        });
-        applySegmentToSilentGapPosition(track, leader, seg, targetSec, t0);
     }
 
     /**

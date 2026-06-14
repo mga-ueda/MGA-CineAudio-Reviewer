@@ -1561,10 +1561,6 @@
         return out;
     }
     
-    function spectrumYAtDb(plotY, plotH, db) {
-        return plotY + plotH * (1 - spectrumDbNormLinear(db));
-    }
-    
     function spectrumLedRowCount(loDb) {
         const loInt = Math.ceil(loDb - 1e-9);
         return Math.max(1, -loInt);

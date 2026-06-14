@@ -186,20 +186,6 @@
         return manualJoinedBoundaryFadeInGain(p);
     }
 
-    /** 波形表示: リージョン内のみ（タイムライン外へは伸ばさない） */
-    function computeManualJoinedBoundaryFadeLinearForDisplay(
-        track,
-        segmentIndex,
-        transportSec,
-    ) {
-        const t = Number(transportSec);
-        if (!Number.isFinite(t)) return null;
-        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
-        const absEnd = getSegmentTimelineEnd(track, segmentIndex);
-        if (t < playbackStart - 0.0005 || t > absEnd + 0.0005) return null;
-        return computeManualJoinedBoundaryFadeLinear(track, segmentIndex, transportSec);
-    }
-
     function segmentSourceSecForManualJoinedCrossfade(
         track,
         segmentIndex,

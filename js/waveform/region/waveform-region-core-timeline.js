@@ -2,16 +2,6 @@
  * waveform-region-core-timeline.js — タイムライン修復・無音 gap・入れ替え
  */
     window.repairTrackMicroTimelineGaps = repairTrackMicroTimelineGaps;
-    function segmentEntryTimelineEnd(seg) {
-        const anchor = Number.isFinite(seg.timelineStartSec) ? seg.timelineStartSec : 0;
-        return (
-            anchor +
-            Math.max(
-                PLAYBACK_REGION_MIN_SEC,
-                (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0),
-            )
-        );
-    }
     function mergeTimelineCoverageIntervals(intervals, eps) {
         if (!intervals.length) return [];
         const sorted = intervals.slice().sort((a, b) => a.startSec - b.startSec);
@@ -693,20 +683,6 @@
         }
         return true;
     }
-    function isSegmentTimelineInSilentGap(track, segmentIndex, gap, eps) {
-        if (!gap || !(segmentIndex >= 0)) return false;
-        const segStart = getSegmentRegionTimelineIn(track, segmentIndex);
-        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
-        const mid = (segStart + segEnd) * 0.5;
-        return mid >= gap.startSec - eps && mid <= gap.endSec + eps;
-    }
-    function segmentEffectivelySilent(track, segmentIndex) {
-        const segments = getTrackSegments(track);
-        const seg = segments[segmentIndex];
-        if (!seg) return false;
-        const dur = (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0);
-        return !(dur > 0.0005);
-    }
     /** 境界結合列 / regionGroupId グループを含む入れ替え単位 */
     function resolveRegionSwapUnitSegmentIndices(track, segmentIndex) {
         const idx = segmentIndex | 0;
@@ -750,13 +726,6 @@
                 t0,
             );
         }
-    }
-    function previewPhraseSlotPlacementSecFromCounts(counts, slotIndex) {
-        if (typeof window.previewPhraseSlotStartSecFromCounts !== 'function') return null;
-        const start = window.previewPhraseSlotStartSecFromCounts(counts, slotIndex);
-        if (start == null) return null;
-        const eps = segmentBoundaryJoinEpsilonSec();
-        return start + eps * 2;
     }
     function playbackRegionSwapBlockReason() {
         if (

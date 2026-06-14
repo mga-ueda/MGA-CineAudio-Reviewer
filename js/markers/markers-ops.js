@@ -88,19 +88,6 @@
 
     window.isMarkerListEditableFieldActive = isMarkerListEditableFieldActive;
 
-    function isWaveformDrawingAreaActive(opt) {
-        const inWaveform = (el) =>
-            el &&
-            el.nodeType === 1 &&
-            el.closest &&
-            (el.closest('#audioWaveformComposite') ||
-                el.closest('#audioWaveformLanesTracks') ||
-                el.closest('#audioWaveformLanesInner'));
-        if (inWaveform(opt && opt.target)) return true;
-        if (waveformLanesPointerInside) return true;
-        return inWaveform(document.activeElement);
-    }
-
     function handleMarkerPendingRangeEscapeKeydown(e) {
         if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
         if (e.repeat) return false;
@@ -127,13 +114,6 @@
             return true;
         }
         return false;
-    }
-
-    function handleMarkerEscapeKeydown(e) {
-        return (
-            handleMarkerPendingRangeEscapeKeydown(e) ||
-            handleMarkerSelectionEscapeKeydown(e)
-        );
     }
 
     function persistMarkersAfterChange(opt) {
@@ -173,14 +153,6 @@
             writeLog('Marker: point at ' + tcLabelForSec(t));
         }
         flashSeekHint('Marker', tcLabelForSec(t), 'notice');
-    }
-
-    function addPointMarkerAtCurrentTime() {
-        if (!markerTimelineReady()) {
-            writeLog('Marker: load a video first');
-            return;
-        }
-        addPointMarkerAtSec(currentTransportSec());
     }
 
     function beginPendingRangeAtSec(sec) {
@@ -1032,59 +1004,6 @@
         return transportSecFromPlaybackFrameIndex(targetIdx);
     }
 
-    function applyMarkerOutFrameOffset(markerId, frameDelta) {
-        const m = currentMarkers.find((x) => x.id === markerId);
-        if (!m || !markerTimelineReady() || !Number.isFinite(frameDelta)) return false;
-        const inIdx = playbackFrameIndexForSide(
-            markerVideoSecForTransportSec(markerInSec(m)),
-            'main',
-        );
-        const outIdx = clampFrameIndexToClip(inIdx + frameDelta, 'main');
-        const startSec = transportSecFromPlaybackFrameIndex(inIdx);
-        const endSec = transportSecFromPlaybackFrameIndex(outIdx);
-        if (startSec == null || endSec == null) return false;
-        if (m.type === 'point') {
-            m.type = 'range';
-            delete m.timeSec;
-        }
-        m.startSec = startSec;
-        m.endSec = endSec;
-        if (m.endSec < m.startSec) {
-            const swap = m.startSec;
-            m.startSec = m.endSec;
-            m.endSec = swap;
-        }
-        sortMarkersInPlace();
-        activeMarkerId = m.id;
-        persistMarkersAfterChange();
-        writeLog(
-            'Marker: Out ' +
-                (frameDelta >= 0 ? '+' : '') +
-                frameDelta +
-                'f -> ' +
-                markerTimeLabel(m)
-        );
-        flashSeekHint('Range Out', tcLabelForSec(m.endSec));
-        return true;
-    }
-
-    /** Out 欄: 絶対 TC または In からのフレーム相対（例 +120） */
-    function parseMarkerOutTcInput(raw, m) {
-        const trimmed = String(raw || '').trim();
-        if (!trimmed) return null;
-        const rel = trimmed.match(/^([+-])(\d+)$/);
-        if (rel) {
-            if (!markerTimelineReady() || !m) return null;
-            const sign = rel[1] === '+' ? 1 : -1;
-            const frameDelta = parseInt(rel[2], 10);
-            if (!Number.isFinite(frameDelta)) return null;
-            return { kind: 'frames', frameDelta: sign * frameDelta };
-        }
-        const sec = transportSecFromMarkerTcString(trimmed);
-        if (sec == null) return null;
-        return { kind: 'sec', sec: sec };
-    }
-
     /** 範囲マーカーの Out TC を削除し、同じ In 位置の点マーカーに戻す */
     function clearMarkerOutTc(markerId, opt) {
         const m = currentMarkers.find((x) => x.id === markerId);
@@ -1149,35 +1068,6 @@
         }
         flashSeekHint('Marker TC', tcLabelForSec(t));
         return true;
-    }
-
-    function markerTcFrameIndexForEdge(m, edge) {
-        const sec = markerTcSecForEdge(m, edge);
-        if (sec == null || !Number.isFinite(sec)) return null;
-        return playbackFrameIndexForSide(markerVideoSecForTransportSec(sec), 'main');
-    }
-
-    /** +/- 用: Out が空の点マーカーは In 位置を基準にする（従来どおり） */
-    function markerVideoSecForTcInputRaw(raw, m, edge) {
-        const trimmed = String(raw || '').trim();
-        if (trimmed) {
-            const transportSec = transportSecFromMarkerTcString(trimmed);
-            if (transportSec != null) {
-                return markerVideoSecForTransportSec(transportSec);
-            }
-        }
-        const transportSec = markerTcSecForEdge(m, edge);
-        if (transportSec != null) {
-            return markerVideoSecForTransportSec(transportSec);
-        }
-        if (edge === 'out' && m.type === 'point') {
-            return markerVideoSecForTransportSec(markerInSec(m));
-        }
-        return markerVideoSecForTransportSec(currentTransportSec());
-    }
-
-    function frameIndexFromMarkerTcInputRaw(raw, m, edge) {
-        return playbackFrameIndexForSide(markerVideoSecForTcInputRaw(raw, m, edge), 'main');
     }
 
     function isMarkerTcInputElement(el) {

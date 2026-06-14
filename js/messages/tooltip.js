@@ -94,8 +94,6 @@
         'tooltip.logWeOnly': '警告・エラーのみ表示（再読み込みで OFF に戻る）',
         'tooltip.logOpsOnly':
             '操作の結果のみ表示（詳細手順・診断ログは除く。警告/エラーは常に表示。再読み込みで OFF に戻る）',
-        'tooltip.logDebug':
-            '診断用の詳細ログ（F10 の開発者向け定数パネル内。再読み込みで OFF）',
         'tooltip.extraAudioMoveUp':
             '直上の Audio Track と入れ替え（読み込み内容・ミックス設定ごと）',
         'tooltip.extraAudioMoveDown':

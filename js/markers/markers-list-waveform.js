@@ -1213,25 +1213,6 @@
         seekToMarker(m, seekOpt);
     }
 
-    function bindSeekBarMarkerPointerSeek(el, m, resolveTargetSec) {
-        el.addEventListener('pointerdown', (ev) => {
-            if (ev.button !== 0) return;
-            if (ev.target.closest && ev.target.closest('.seek-bar-marker__handle')) return;
-            ev.preventDefault();
-            ev.stopPropagation();
-            const target = resolveTargetSec(ev);
-            if (target == null || !Number.isFinite(target)) return;
-            const wasPlaying =
-                typeof isTransportPlaying === 'function'
-                    ? isTransportPlaying()
-                    : !videoMain.paused;
-            seekToMarker(m, {
-                targetSec: target,
-                resumeAfterSeek: wasPlaying,
-            });
-        });
-    }
-
     function bindSeekBarMarkerDrag(el, m, edge, opt) {
         el.addEventListener('pointerdown', (ev) => {
             if (ev.button !== 0) return;
@@ -1817,22 +1798,6 @@
         return Math.max(minTop, baseTop - upRow * rowStep);
     }
 
-    function applyMarkerFeedbackLabelRows(items, baseTop, rowStep, minTop, maxTop, maxDownRows) {
-        for (let i = 0; i < items.length; i++) {
-            const it = items[i];
-            const top = markerFeedbackTopForRow(
-                it.assignedRow || 0,
-                baseTop,
-                rowStep,
-                minTop,
-                maxTop,
-                maxDownRows,
-            );
-            it.topPx = top;
-            it.span.style.top = top + 'px';
-        }
-    }
-
     function markerFeedbackLabelsOverlap(items, layerW, padX, padY) {
         for (let i = 0; i < items.length; i++) {
             const boxI = markerFeedbackLabelTextBox(items[i], layerW, items[i].topPx);
@@ -2143,16 +2108,6 @@
             bindSeekBarMarkerListHighlight(el, opt.id);
         }
         return el;
-    }
-
-    function isMarkerVisibleOnSeekBar(m, dur) {
-        if (!m || !dur || dur <= 0) return false;
-        if (m.type === 'range') {
-            const span = Math.abs(m.endSec - m.startSec);
-            return span > markerOneFrameSec() + 1e-9;
-        }
-        const t = Number(m.timeSec);
-        return Number.isFinite(t) && t >= 0 && t <= dur;
     }
 
     function renderTimelineMarkersLayer(containerEl) {

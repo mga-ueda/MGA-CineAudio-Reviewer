@@ -78,10 +78,6 @@
             : 1 / 60;
     }
 
-    function videoDriftThresholdFrames() {
-        return Math.max(1, Math.round(VIDEO_STEADY_FOLLOW_DRIFT_SEC / playbackDriftFrameSec()));
-    }
-
     /** 映像 currentTime と音声マスターから求めた目標映像位置の差（秒, 符号付き）。 */
     function measureVideoPlaybackDriftSec(audioSec) {
         if (!videoMain || typeof videoReady !== 'function' || !videoReady()) return null;
@@ -136,11 +132,6 @@
             '<span class="transport-drift-prefix">Playback Drift - </span>' +
             '<span class="transport-drift-ms transport-drift-ms--safe">0000</span>' +
             '<span class="transport-drift-suffix"> f</span>';
-    }
-
-    function clearPlaybackDriftDisplay(statEl) {
-        if (!statEl) return;
-        statEl.textContent = '';
     }
 
     function setPlaybackDriftDisplay(statEl, absDriftSec) {
@@ -1803,8 +1794,3 @@
             setLaneContentEndMarker(document.getElementById('extraAudioContentEnd' + i), 0);
         }
     }
-
-    function updateAudioWaveformPlayhead() {
-        updateAllWaveformPlayheads();
-    }
-

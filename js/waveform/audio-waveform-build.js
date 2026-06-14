@@ -929,10 +929,6 @@
         abortWaveformSchedule();
     }
 
-    function cancelDeferredWaveformBuild() {
-        abortWaveformBuildInFlight();
-    }
-
     function shouldBuildMainVideoWaveform() {
         if (containerHasAudio.main === false) return false;
         if (isVideoAudioLaneShown()) return true;
