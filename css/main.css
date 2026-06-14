@@ -57,12 +57,18 @@
             --layout-section-gap: 7px;
             /** 波形トラック以外の主要ブロックの最大幅 */
             --layout-content-max-w: 1300px;
-            --marker-table-visible-rows: 10;
+            --marker-table-visible-rows: 8;
             --marker-table-row-h: 1.85rem;
             --marker-table-head-h: 2.1rem;
             --marker-table-scroll-h: calc(
                 var(--marker-table-head-h) +
                     var(--marker-table-row-h) * var(--marker-table-visible-rows)
+            );
+            --marker-panel-head-block-h: 3.25rem;
+            --marker-panel-memo-block-h: calc(0.66rem + 4px + calc(1.35em * 6 + 12px) + 18px);
+            --marker-panel-min-h: calc(
+                var(--marker-panel-head-block-h) + var(--marker-table-scroll-h) +
+                    var(--marker-panel-memo-block-h)
             );
             --player-panel-min-h: calc(
                 7.5rem + var(--marker-table-scroll-h) +
@@ -239,6 +245,7 @@
         }
         .layout-dock-panel-content--markers .marker-panel__body {
             flex: 1 1 auto;
+            min-height: 0;
         }
         .layout-dock-panel-content--waveform .audio-waveform-composite {
             flex: 1 1 auto;
@@ -318,41 +325,36 @@
             --layout-h-fixed-media-col-w: calc(var(--layout-content-max-w) * 0.5 * 0.75);
             --layout-h-analyzer-col-min-w: 500px;
             --layout-h-analyzer-col-max-w: 1000px;
+            /** 1段目の高さ — マーカー枠（head + table + memo）が唯一の基準 */
+            --layout-h-row1-cross-size: var(--marker-panel-min-h);
         }
         body.layout-mode-horizontal .layout-dock-shell {
             max-width: none;
             width: 100%;
         }
-        /** 1段目 — 動画は規定幅固定、アナライザー列は上限まで、余剰幅はマーカー列 */
+        /** ── 横型 1段目 ── 高さはマーカー列のみが決める。アナライザー・動画は同高へ追従 */
+        /** 1段目 — 高さをマーカー枠サイズに固定 */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child {
+            flex: 0 0 auto !important;
+            height: var(--layout-h-row1-cross-size);
+            max-height: var(--layout-h-row1-cross-size);
+            min-height: 0;
+            overflow: hidden;
+        }
         body.layout-mode-horizontal
             .layout-dock-shell
             > .layout-dock-split--column
             > .layout-dock-split__pane:first-child
             > .layout-dock-split--row {
             align-items: stretch;
+            height: 100%;
+            min-height: 0;
+            max-height: 100%;
         }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:first-child {
-            flex: 0 1 var(--layout-h-analyzer-col-max-w) !important;
-            width: auto;
-            max-width: var(--layout-h-analyzer-col-max-w);
-            min-width: var(--layout-h-analyzer-col-min-w);
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2) {
-            flex: 0 0 var(--layout-h-fixed-media-col-w) !important;
-            width: var(--layout-h-fixed-media-col-w);
-            max-width: var(--layout-h-fixed-media-col-w);
-            min-width: 0;
-        }
+        /** マーカー列 — row 高さの基準 */
         body.layout-mode-horizontal
             .layout-dock-shell
             > .layout-dock-split--column
@@ -363,14 +365,9 @@
             min-width: var(--layout-h-fixed-media-col-w);
             width: auto;
             max-width: none;
+            min-height: 0;
+            align-self: stretch;
         }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .layout-dock-panel-content--player,
         body.layout-mode-horizontal
             .layout-dock-shell
             > .layout-dock-split--column
@@ -390,81 +387,7 @@
             max-width: none;
             height: 100%;
             min-height: 0;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .layout-dock-panel-content--player {
-            flex: 1 1 auto !important;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .player-stage__main {
-            flex: 1 1 auto !important;
-            height: 100%;
-            min-height: 0;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .video-panel {
-            height: 100%;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .video-panel__stage {
-            flex: 1 1 auto;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            container-type: size;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .video-panel__stage
-            .video-frame {
-            flex: 0 0 auto;
-            width: min(100cqw, calc(100cqh * 16 / 9));
-            max-width: 100%;
-            height: auto;
-            aspect-ratio: 16 / 9;
-            margin: 0;
-            align-self: center;
-        }
-        body.layout-mode-horizontal
-            .layout-dock-shell
-            > .layout-dock-split--column
-            > .layout-dock-split__pane:first-child
-            > .layout-dock-split--row
-            > .layout-dock-split__pane:nth-child(2)
-            .video-frame
-            video {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
+            max-height: 100%;
         }
         body.layout-mode-horizontal
             .layout-dock-shell
@@ -476,33 +399,31 @@
             flex: 1 1 auto;
             min-height: 0;
         }
-        body.layout-mode-horizontal .layout-dock-shell > .layout-dock-split {
-            flex: 1 1 auto;
-            min-height: calc(100vh - 36px);
-        }
-        body.layout-mode-horizontal .layout-dock-shell .layout-dock-split--column > .layout-dock-split__pane {
-            min-height: 0;
-        }
-        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header {
-            padding: 6px 0 2px;
-            margin: 0;
-        }
-        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header-inner {
-            transform: none;
-        }
-        body.layout-mode-horizontal .layout-dock-panel-content--header h2.app-title {
-            font-size: 1.15rem;
-        }
-        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header-note {
-            font-size: 0.72rem;
-            line-height: 1.3;
-        }
-        /** 1段目 — 行高は動画・マーカー基準。アナライザー列は monitor のみ伸縮し transport 下端を揃える */
         body.layout-mode-horizontal
             .layout-dock-shell
             > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(3)
+            .marker-table-wrap {
+            flex: 0 0 auto;
+            min-height: var(--marker-table-scroll-h);
+            max-height: var(--marker-table-scroll-h);
+        }
+        /** アナライザー列 — マーカー高さ（row stretch）に追従 */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
             > .layout-dock-split__pane:first-child {
-            flex: 0 0 auto !important;
+            flex: 0 1 var(--layout-h-analyzer-col-max-w) !important;
+            width: auto;
+            max-width: var(--layout-h-analyzer-col-max-w);
+            min-width: var(--layout-h-analyzer-col-min-w);
+            min-height: 0;
+            align-self: stretch;
+            overflow: hidden;
         }
         body.layout-mode-horizontal
             .layout-dock-shell
@@ -547,6 +468,122 @@
             flex: 0 0 auto !important;
             margin-top: auto;
         }
+        /** 動画列 — マーカー高さ（row stretch）に追従。映像は列内に収める */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2) {
+            flex: 0 0 var(--layout-h-fixed-media-col-w) !important;
+            width: var(--layout-h-fixed-media-col-w);
+            max-width: var(--layout-h-fixed-media-col-w);
+            min-width: 0;
+            min-height: 0;
+            align-self: stretch;
+            overflow: hidden;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .layout-dock-panel-content--player,
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .player-stage__main,
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel {
+            height: 100%;
+            min-height: 0;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel {
+            display: flex;
+            flex-direction: column;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel__stage {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-panel__stage
+            .video-frame {
+            flex: 0 1 auto;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 100%;
+            aspect-ratio: 16 / 9;
+            margin: 0;
+            align-self: center;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:first-child
+            > .layout-dock-split--row
+            > .layout-dock-split__pane:nth-child(2)
+            .video-frame
+            video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        /** 横型シェル — 2段目以降の flex 配分用 */
+        body.layout-mode-horizontal .layout-dock-shell > .layout-dock-split {
+            flex: 1 1 auto;
+            min-height: calc(100vh - 36px);
+        }
+        body.layout-mode-horizontal .layout-dock-shell .layout-dock-split--column > .layout-dock-split__pane {
+            min-height: 0;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header {
+            padding: 6px 0 2px;
+            margin: 0;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header-inner {
+            transform: none;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--header h2.app-title {
+            font-size: 1.15rem;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--header .app-header-note {
+            font-size: 0.72rem;
+            line-height: 1.3;
+        }
+        /** 横型 アナライザー — 列高（= マーカー）に合わせて伸縮 */
         body.layout-mode-horizontal .layout-dock-panel-content--monitor {
             flex: 1 1 auto;
             min-height: 0;
@@ -582,24 +619,27 @@
             min-height: 0;
         }
         body.layout-mode-horizontal .layout-dock-panel-content--monitor .master-meter-inner {
-            height: 100%;
+            height: auto;
             min-height: 0;
-            align-items: stretch;
+            align-items: flex-start;
         }
         body.layout-mode-horizontal .layout-dock-panel-content--monitor .master-meter-unit {
-            height: 100%;
+            height: auto;
             min-height: 0;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--monitor .master-meter-scale-col {
+            flex: 0 0 auto;
+            align-self: flex-start;
         }
         body.layout-mode-horizontal .layout-dock-panel-content--monitor .m-meter-scale-labels {
             height: var(--spectrum-led-track-px, 270px);
-            flex: 1 1 auto;
-            min-height: 0;
-        }
-        body.layout-mode-horizontal .layout-dock-panel-content--playback {
             flex: 0 0 auto;
         }
         body.layout-mode-horizontal .layout-dock-panel-content--waveform {
             min-height: 140px;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--playback {
+            flex: 0 0 auto;
         }
         /** オプション — 2・3行目を1行に統合（1行目 Tempo/Sig 行はそのまま） */
         body.layout-mode-horizontal .layout-dock-panel-content--transport .transport-bar__options-cluster {
@@ -615,6 +655,11 @@
         }
         body.layout-mode-horizontal .layout-dock-panel-content--transport .session-io-actions {
             padding-block: var(--transport-bar-chip-pad-y);
+        }
+        /** 横型 — フロアー設定は非表示（display: contents 親下でも確実に隠す） */
+        body.layout-mode-horizontal .transport-bar .monitor-floor-options,
+        body.layout-mode-horizontal .transport-bar .monitor-floor-options[hidden] {
+            display: none !important;
         }
         /** 4段目 — ログ高さをドキュメントに同期（Grid + JS で下端揃え） */
         body.layout-mode-horizontal
@@ -1058,12 +1103,12 @@
         .marker-panel .marker-table-wrap {
             flex: 1 1 0;
             min-height: 0;
-            max-height: var(--marker-table-scroll-h);
+            max-height: none;
         }
         .marker-table-wrap {
             flex: 1 1 0;
-            min-height: var(--marker-table-scroll-h);
-            max-height: var(--marker-table-scroll-h);
+            min-height: 0;
+            max-height: none;
             overflow-x: hidden;
             overflow-y: auto;
             scroll-padding-top: var(--marker-table-head-h);
@@ -1549,8 +1594,9 @@
                 max-height: none;
             }
             .marker-table-wrap {
-                max-height: var(--marker-table-scroll-h);
-                min-height: var(--marker-table-scroll-h);
+                flex: 1 1 0;
+                min-height: 0;
+                max-height: none;
             }
         }
 

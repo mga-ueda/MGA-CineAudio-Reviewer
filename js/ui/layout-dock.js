@@ -65,7 +65,7 @@
         root: {
             type: 'split',
             dir: 'column',
-            sizes: [0.38, 0.26, 0.12, 0.20, 0.04],
+            sizes: [0.38, 0.28, 0.12, 0.18, 0.04],
             children: [
                 {
                     type: 'split',

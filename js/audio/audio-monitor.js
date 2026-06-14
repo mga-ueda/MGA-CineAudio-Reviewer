@@ -309,12 +309,21 @@
     let reviewMixMasterLinearGain = 1;
     let masterAnalyserConnected = false;
 
+    const HORIZONTAL_LAYOUT_FLOOR_DB = -50;
+
     let spectrumDisplayDbMin = DISPLAY_ANALYSIS_FLOOR_DB.includes(DEFAULT_SPECTRUM_FLOOR_DB)
         ? DEFAULT_SPECTRUM_FLOOR_DB
-        : -50;
+        : HORIZONTAL_LAYOUT_FLOOR_DB;
     let meterDisplayDbMin = DISPLAY_ANALYSIS_FLOOR_DB.includes(DEFAULT_METER_FLOOR_DB)
         ? DEFAULT_METER_FLOOR_DB
-        : -50;
+        : HORIZONTAL_LAYOUT_FLOOR_DB;
+    /** ユーザー保存値（横型レイアウト時の一時 -50 dB 上書きとは別） */
+    let userSpectrumDisplayDbMin = spectrumDisplayDbMin;
+    let userMeterDisplayDbMin = meterDisplayDbMin;
+
+    function isHorizontalLayoutMode() {
+        return typeof getLayoutDockMode === 'function' && getLayoutDockMode() === 'horizontal';
+    }
     /** アナライザーは常時表示。チェックボックスと A キーは Live（解析）↔ 解析停止のみ */
     let analyzeStopped = false;
 
@@ -330,10 +339,47 @@
     const reviewMixMonitorEl = document.getElementById('reviewMixMonitor');
     const monitorFloorOptionsEl = document.querySelector('.monitor-floor-options');
 
+    function applyMonitorFloorForLayoutMode() {
+        const horizontal = isHorizontalLayoutMode();
+        if (monitorFloorOptionsEl) {
+            monitorFloorOptionsEl.hidden = horizontal;
+            monitorFloorOptionsEl.setAttribute('aria-hidden', horizontal ? 'true' : 'false');
+        }
+
+        const nextSpec = horizontal ? HORIZONTAL_LAYOUT_FLOOR_DB : userSpectrumDisplayDbMin;
+        const nextMet = horizontal ? HORIZONTAL_LAYOUT_FLOOR_DB : userMeterDisplayDbMin;
+        const specChanged = nextSpec !== spectrumDisplayDbMin;
+        const metChanged = nextMet !== meterDisplayDbMin;
+
+        if (specChanged) {
+            spectrumDisplayDbMin = nextSpec;
+            spectrumBandEnv = null;
+            spectrumPeakHoldDb = null;
+            spectrumPeakHoldUntil = null;
+            lastSpectrumDrawT = 0;
+        }
+        if (metChanged) meterDisplayDbMin = nextMet;
+
+        const specSel = document.getElementById('spectrumFloorDbSelect');
+        const metSel = document.getElementById('meterFloorDbSelect');
+        if (specSel) specSel.value = String(userSpectrumDisplayDbMin);
+        if (metSel) metSel.value = String(userMeterDisplayDbMin);
+
+        if (metChanged) {
+            installMasterMeterScaleUI();
+            resetMeterChState();
+        }
+        if (specChanged && isAnalyzeLive() && !requestAnimId) {
+            paintSpectrumIdle();
+        } else if (metChanged && !requestAnimId) {
+            extinguishMonitorDisplays();
+        }
+    }
+
     function applyAnalyzeUiVisibility() {
         if (analyzeOnCheckbox) analyzeOnCheckbox.checked = isAnalyzeLive();
         if (reviewMixMonitorEl) reviewMixMonitorEl.hidden = false;
-        if (monitorFloorOptionsEl) monitorFloorOptionsEl.hidden = false;
+        applyMonitorFloorForLayoutMode();
         if (typeof setLayoutDockPanelHostHidden === 'function') {
             setLayoutDockPanelHostHidden('monitor', false);
         }
@@ -410,8 +456,8 @@
     
     function getMonitorUiPersistSnapshot() {
         return {
-            spectrumFloor: spectrumDisplayDbMin,
-            meterFloor: meterDisplayDbMin,
+            spectrumFloor: userSpectrumDisplayDbMin,
+            meterFloor: userMeterDisplayDbMin,
             analyzeVisible: true,
             analyzeStopped: !!analyzeStopped,
             analyzeOn: isAnalyzeLive(),
@@ -425,17 +471,13 @@
             typeof snap.spectrumFloor === 'number' &&
             DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.spectrumFloor)
         ) {
-            spectrumDisplayDbMin = snap.spectrumFloor;
+            userSpectrumDisplayDbMin = snap.spectrumFloor;
         }
         if (typeof snap.meterFloor === 'number' && DISPLAY_ANALYSIS_FLOOR_DB.includes(snap.meterFloor)) {
-            meterDisplayDbMin = snap.meterFloor;
+            userMeterDisplayDbMin = snap.meterFloor;
         }
         const prevStopped = analyzeStopped;
         readAnalyzeStateFromPrefsSnap(snap);
-        const specSel = document.getElementById('spectrumFloorDbSelect');
-        const metSel = document.getElementById('meterFloorDbSelect');
-        if (specSel) specSel.value = String(spectrumDisplayDbMin);
-        if (metSel) metSel.value = String(meterDisplayDbMin);
         if (typeof snap.masterVol === 'number' && isFinite(snap.masterVol)) {
             applyMasterVolToMix(snap.masterVol, false);
         }
@@ -456,8 +498,8 @@
             localStorage.setItem(
                 UI_PREFS_STORAGE_KEY,
                 JSON.stringify({
-                    spectrumFloor: spectrumDisplayDbMin,
-                    meterFloor: meterDisplayDbMin,
+                    spectrumFloor: userSpectrumDisplayDbMin,
+                    meterFloor: userMeterDisplayDbMin,
                     analyzeVisible: true,
                     analyzeStopped: !!analyzeStopped,
                     analyzeOn: isAnalyzeLive(),
@@ -839,6 +881,23 @@
             el.style.backgroundColor = 'transparent';
         }
     }
+
+    /** 目盛ラベル列の高さをメーター本体と同じ px に揃える（横型 stretch 対策）。 */
+    function syncMasterMeterScaleLabelHeights(pxHeight) {
+        const mCont = document.querySelector('.master-meter-inner .m-meter-container');
+        const h = Math.max(
+            48,
+            pxHeight != null && pxHeight > 0
+                ? pxHeight | 0
+                : mCont && mCont.clientHeight > 8
+                  ? mCont.clientHeight
+                  : defaultSpectrumLedTrackHeightPx(),
+        );
+        document.querySelectorAll('.m-meter-scale-labels').forEach((el) => {
+            el.style.height = `${h}px`;
+        });
+        return h;
+    }
     
     function masterMeterLineColorForDb(db) {
         if (!isFinite(db)) return meterLevelColorLerp(0);
@@ -923,11 +982,13 @@
         const specSel = document.getElementById('spectrumFloorDbSelect');
         const metSel = document.getElementById('meterFloorDbSelect');
         if (!specSel || !metSel) return;
-        specSel.value = String(spectrumDisplayDbMin);
-        metSel.value = String(meterDisplayDbMin);
+        specSel.value = String(userSpectrumDisplayDbMin);
+        metSel.value = String(userMeterDisplayDbMin);
         specSel.addEventListener('change', () => {
             const v = parseInt(specSel.value, 10);
             if (!Number.isFinite(v) || !DISPLAY_ANALYSIS_FLOOR_DB.includes(v)) return;
+            userSpectrumDisplayDbMin = v;
+            if (isHorizontalLayoutMode()) return;
             spectrumDisplayDbMin = v;
             spectrumBandEnv = null;
             spectrumPeakHoldDb = null;
@@ -940,6 +1001,8 @@
         metSel.addEventListener('change', () => {
             const v = parseInt(metSel.value, 10);
             if (!Number.isFinite(v) || !DISPLAY_ANALYSIS_FLOOR_DB.includes(v)) return;
+            userMeterDisplayDbMin = v;
+            if (isHorizontalLayoutMode()) return;
             meterDisplayDbMin = v;
             installMasterMeterScaleUI();
             resetMeterChState();
@@ -1527,6 +1590,7 @@
         document.documentElement.style.setProperty('--spectrum-led-track-px', `${trackPx}px`);
         document.documentElement.style.setProperty('--spectrum-canvas-outer-px', `${outerPx}px`);
         syncMasterMeterBarBackgroundStyles(trackPx);
+        syncMasterMeterScaleLabelHeights(trackPx);
     }
 
     let monitorSpectrumRepaintRaf = 0;
@@ -2271,10 +2335,6 @@
         spectrumDrawSpectrumLedPeaks(bands, plotY, plotH, rects, cellsDraw);
     }
 
-    function isHorizontalLayoutMode() {
-        return typeof getLayoutDockMode === 'function' && getLayoutDockMode() === 'horizontal';
-    }
-
     /** 横型 — monitor ペインの実高に合わせてスペクトラム／メーター高さを同期 */
     function syncHorizontalMonitorHeightsFromLayout() {
         if (!isHorizontalLayoutMode()) return false;
@@ -2307,6 +2367,7 @@
                     ? mCont.clientHeight
                     : defaultSpectrumLedTrackHeightPx();
             syncMasterMeterBarBackgroundStyles(meterStackH);
+            syncMasterMeterScaleLabelHeights(meterStackH);
             scheduleMonitorSpectrumRepaint();
         };
         if (isHorizontalLayoutMode()) {
