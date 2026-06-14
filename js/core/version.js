@@ -1,10 +1,20 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.16';
+    const APP_VERSION = '0.17';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.17',
+            date: '2026年6月15日',
+            items: [
+                'スワップ・結合・テンポ変更後も Phrase 赤青着色がリージョン境界と一致するよう、展開 counts override を relayout で維持し端数小節の着色を修正。',
+                'テンポストレッチ後の小節境界・メトロノーム・Phrase ナビを再生タイムラインに揃え、Tempo/Sig 接頭辞変更時はリージョンを比例スケール。',
+                'Ctrl+A で対象 Audio Track の全リージョンを選択（ページ全体の文字選択を抑止）。',
+                'F10 診断パネル・リージョン操作帯デバッグと Fade 三角操作を改善、ログ UI を整理。',
+            ],
+        },
         {
             version: '0.16',
             date: '2026年6月13日',

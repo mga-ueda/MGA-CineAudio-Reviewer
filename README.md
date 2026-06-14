@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.16 |
+| **バージョン** | v0.17 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,13 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.17 - 2026年6月15日
+
+- スワップ・結合・テンポ変更後も Phrase 赤青着色がリージョン境界と一致するよう、展開 counts override を relayout で維持し端数小節の着色を修正。
+- テンポストレッチ後の小節境界・メトロノーム・Phrase ナビを再生タイムラインに揃え、Tempo/Sig 接頭辞変更時はリージョンを比例スケール。
+- Ctrl+A で対象 Audio Track の全リージョンを選択（ページ全体の文字選択を抑止）。
+- F10 診断パネル・リージョン操作帯デバッグと Fade 三角操作を改善、ログ UI を整理。
 
 ### v0.16 - 2026年6月13日
 
