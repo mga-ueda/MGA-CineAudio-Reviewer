@@ -472,8 +472,9 @@
 
     /**
      * @param {string} [kind] 'notice' = 長め表示, 'error' = 赤トースト, 省略 = 通常（短い・白）
+     * @param {{ center?: boolean }} [opt] center: true で画面中央に表示
      */
-    function flashSeekHint(primary, secondary, kind) {
+    function flashSeekHint(primary, secondary, kind, opt) {
         const root = document.getElementById('seekFlashOverlay');
         const pEl = document.getElementById('seekFlashPrimary');
         const sEl = document.getElementById('seekFlashSecondary');
@@ -481,12 +482,16 @@
         clearTimeout(seekFlashHideTimer);
         clearTimeout(seekFlashAriaTimer);
         const gen = ++seekFlashShowGen;
+        const o = opt && typeof opt === 'object' ? opt : {};
 
-        root.classList.remove('seek-flash--notice', 'seek-flash--error');
+        root.classList.remove('seek-flash--notice', 'seek-flash--error', 'seek-flash--center');
         if (kind === 'notice') {
             root.classList.add('seek-flash--notice');
         } else if (kind === 'error') {
             root.classList.add('seek-flash--error');
+        }
+        if (o.center) {
+            root.classList.add('seek-flash--center');
         }
 
         pEl.textContent = primary != null ? String(primary) : '';
@@ -513,7 +518,7 @@
             if (gen !== seekFlashShowGen) return;
             seekFlashAriaTimer = 0;
             root.setAttribute('aria-hidden', 'true');
-            root.classList.remove('seek-flash--notice', 'seek-flash--error');
+            root.classList.remove('seek-flash--notice', 'seek-flash--error', 'seek-flash--center');
         }, holdMs + fadeOutMs + 40);
     }
 

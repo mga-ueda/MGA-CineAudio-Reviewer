@@ -344,6 +344,10 @@
             return;
         }
 
+        if (typeof handleLayoutModeShortcutKeydown === 'function' && handleLayoutModeShortcutKeydown(e)) {
+            return;
+        }
+
         if (matchUserShortcut(e, 'musicalGridToggle') && callWindowShortcut('toggleMusicalGridVisible', e)) {
             e.preventDefault();
             return;

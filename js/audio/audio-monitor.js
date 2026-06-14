@@ -2271,16 +2271,59 @@
         spectrumDrawSpectrumLedPeaks(bands, plotY, plotH, rects, cellsDraw);
     }
 
+    function isHorizontalLayoutMode() {
+        return typeof getLayoutDockMode === 'function' && getLayoutDockMode() === 'horizontal';
+    }
+
+    /** 横型 — monitor ペインの実高に合わせてスペクトラム／メーター高さを同期 */
+    function syncHorizontalMonitorHeightsFromLayout() {
+        if (!isHorizontalLayoutMode()) return false;
+        const wrap = document.querySelector(
+            '.layout-dock-panel-content--monitor .spectrum-canvas-wrap',
+        );
+        if (!wrap) return false;
+        const outerPx = Math.round(wrap.clientHeight);
+        if (outerPx < 24) return false;
+        const refOuter = spectrumCanvasOuterHeightPx();
+        const refTrack = defaultSpectrumLedTrackHeightPx();
+        const trackPx = Math.max(
+            48,
+            Math.round(refTrack * (outerPx / Math.max(refOuter, 1))),
+        );
+        document.documentElement.style.setProperty('--spectrum-canvas-outer-px', `${outerPx}px`);
+        document.documentElement.style.setProperty('--spectrum-led-track-px', `${trackPx}px`);
+        return true;
+    }
+
     function refreshMonitorAnalysisLayoutAfterDockChange() {
         applyAnalyzeUiVisibility();
-        syncMonitorAnalysisLayoutHeights();
-        const mCont = document.querySelector('.m-meter-container');
-        const meterStackH =
-            mCont && mCont.clientHeight > 8 ? mCont.clientHeight : defaultSpectrumLedTrackHeightPx();
-        syncMasterMeterBarBackgroundStyles(meterStackH);
-        scheduleMonitorSpectrumRepaint();
+        const applyMeterSync = () => {
+            if (!syncHorizontalMonitorHeightsFromLayout()) {
+                syncMonitorAnalysisLayoutHeights();
+            }
+            const mCont = document.querySelector('.m-meter-container');
+            const meterStackH =
+                mCont && mCont.clientHeight > 8
+                    ? mCont.clientHeight
+                    : defaultSpectrumLedTrackHeightPx();
+            syncMasterMeterBarBackgroundStyles(meterStackH);
+            scheduleMonitorSpectrumRepaint();
+        };
+        if (isHorizontalLayoutMode()) {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(applyMeterSync);
+            });
+            return;
+        }
+        applyMeterSync();
     }
 
     window.refreshMonitorAnalysisLayoutAfterDockChange = refreshMonitorAnalysisLayoutAfterDockChange;
     window.addEventListener('layoutdockchange', refreshMonitorAnalysisLayoutAfterDockChange);
+    let horizontalMonitorResizeTimer = 0;
+    window.addEventListener('resize', () => {
+        if (!isHorizontalLayoutMode()) return;
+        clearTimeout(horizontalMonitorResizeTimer);
+        horizontalMonitorResizeTimer = setTimeout(refreshMonitorAnalysisLayoutAfterDockChange, 120);
+    });
 })();

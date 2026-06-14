@@ -6,5 +6,7 @@
         'toast.markers.pastedPrimary': 'Markers',
         'toast.markers.pastedSecondary': 'Pasted',
         'toast.markers.pasteFailedSecondary': 'Paste failed',
+        'toast.layout.defaultView': 'Default View',
+        'toast.layout.horizontalView': 'Horizontal View',
     });
 })();
