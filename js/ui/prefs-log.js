@@ -149,10 +149,20 @@
         if (cb) cb.checked = !!logWeOnlyFilter;
     }
 
+    function emitLogWeOnlySampleLines() {
+        if (typeof msg !== 'function') return;
+        writeLogWarn(msg('log.weOnly.sampleWarn'), { tier: 'meta', category: 'Log' });
+        writeLogError(msg('log.weOnly.sampleError'), { tier: 'meta', category: 'Log' });
+    }
+
     function setLogWeOnlyFilter(on) {
         logWeOnlyFilter = !!on;
         syncLogWeOnlyCheckbox();
-        syncLogEl();
+        if (logWeOnlyFilter) {
+            emitLogWeOnlySampleLines();
+        } else {
+            syncLogEl();
+        }
     }
 
     function isLogActionsOnlyFilterEnabled() {

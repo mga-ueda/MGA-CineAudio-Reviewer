@@ -3,10 +3,10 @@
  */
 (function messagesLogModule() {
     registerMessages({
-        'log.debug.enabledSampleWarn':
-            'Test: sample warning (for W/E Only filter and [Warning] tag check)',
-        'log.debug.enabledSampleError':
-            'Test: sample error (for W/E Only filter and [Error] tag check)',
+        'log.weOnly.sampleWarn':
+            'Test output: sample warning (W/E Only filter check)',
+        'log.weOnly.sampleError':
+            'Test output: sample error (W/E Only filter check)',
         'log.debug.enabled':
             'Debug Log enabled ([RegionRestore], [MusicalSlot], [KeyPlayback], [VideoAnalyzer], [WaveformViewport], etc.)',
         'log.debug.disabled': 'Debug Log disabled',

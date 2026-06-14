@@ -5988,11 +5988,13 @@
         .log-line--info {
             color: #f0f0f5;
         }
-        .log-line--warn {
+        .log-line--warn .log-line__msg,
+        .log-line--warn .log-line__level-tag {
             color: #ffff00;
         }
-        .log-line--error {
-            color: #ff5050;
+        .log-line--error .log-line__msg,
+        .log-line--error .log-line__level-tag {
+            color: #c42a30;
         }
         .log-actions {
             position: absolute;

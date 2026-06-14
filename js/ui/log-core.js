@@ -132,7 +132,7 @@
         { re: /^Seek bar: scrub to/i, tier: 'detail', category: 'Transport' },
         { re: /^Log (?:copied|download|Debug)/i, tier: 'meta', category: 'Log' },
         { re: /^Debug Log (?:enabled|disabled)/i, tier: 'meta', category: 'Log' },
-        { re: /^Test: sample/i, tier: 'meta', category: 'Log' },
+        { re: /^Test output: sample/i, tier: 'meta', category: 'Log' },
         { re: /^MGA CineAudio Reviewer started/i, tier: 'meta', category: 'System' },
         { re: /^Keyboard: Space -> transport toggle/i, tier: 'detail', category: 'Transport' },
     ];
