@@ -71,7 +71,17 @@
         }
     }
 
-    /** マーカー・ラベル（全行オーバーレイ）より前面に出すため lanes-inner 直下へ配置 */
+    function ensureLoadingInLane(lane, loadingEl) {
+        if (!lane || !loadingEl) return;
+        if (loadingEl.parentElement !== lane) {
+            lane.appendChild(loadingEl);
+        }
+        loadingEl.style.gridRow = '';
+        loadingEl.style.gridColumn = '';
+        loadingEl.classList.remove('audio-waveform-lane__loading--overlay');
+    }
+
+    /** マーカー・プレイヘッド等より前面 — lanes-inner 直下へ該当行に配置 */
     function syncLoadingOverlayPlacement(lane, loadingEl) {
         syncLaneOverlayGridPlacement(lane, loadingEl);
         if (loadingEl) loadingEl.classList.add('audio-waveform-lane__loading--overlay');
@@ -93,14 +103,14 @@
     function syncAllLoadingOverlayPlacement() {
         if (typeof audioWaveformLaneVideo !== 'undefined' && audioWaveformLaneVideo) {
             const el = loadingElForLane(audioWaveformLaneVideo);
-            if (el) syncLoadingOverlayPlacement(audioWaveformLaneVideo, el);
+            if (el && !el.hidden) syncLoadingOverlayPlacement(audioWaveformLaneVideo, el);
         }
         const n = typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
         for (let i = 0; i < n; i++) {
             const lane = document.getElementById('extraAudioLane' + i);
             if (!lane) continue;
             const el = loadingElForLane(lane);
-            if (el) syncLoadingOverlayPlacement(lane, el);
+            if (el && !el.hidden) syncLoadingOverlayPlacement(lane, el);
         }
         syncAllRehearsalMarksOverlayPlacement();
     }
@@ -110,8 +120,12 @@
         if (!lane) return;
         const el = loadingElForLane(lane);
         if (!el) return;
-        syncLoadingOverlayPlacement(lane, el);
         el.hidden = !visible;
+        if (visible) {
+            syncLoadingOverlayPlacement(lane, el);
+        } else {
+            ensureLoadingInLane(lane, el);
+        }
         if (visible) el.setAttribute('aria-busy', 'true');
         else el.removeAttribute('aria-busy');
     }
@@ -159,8 +173,8 @@
         syncAllLoadingOverlayPlacement();
     };
 
-    window.syncAllLoadingOverlayPlacement = syncAllLoadingOverlayPlacement;
     window.syncLaneOverlayGridPlacement = syncLaneOverlayGridPlacement;
+    window.syncAllLoadingOverlayPlacement = syncAllLoadingOverlayPlacement;
     window.syncAllRehearsalMarksOverlayPlacement = syncAllRehearsalMarksOverlayPlacement;
 
     syncAllTrackWaveformLoading();

@@ -89,13 +89,13 @@
             '<div class="audio-waveform-lane__content-end" id="extraAudioContentEnd' +
             slot +
             '" hidden aria-hidden="true"></div></div>' +
+            '<div class="audio-waveform-lane__playback-regions" data-track="extra:' +
+            slot +
+            '" hidden aria-hidden="true"></div>' +
             '<div class="audio-waveform-lane__loading" id="extraAudioTrackLoading' +
             slot +
             '" hidden aria-live="polite">' +
-            '<span class="audio-waveform-lane__loading-box">- Now Loading -</span></div>' +
-            '<div class="audio-waveform-lane__playback-regions" data-track="extra:' +
-            slot +
-            '" hidden aria-hidden="true"></div>';
+            '<span class="audio-waveform-lane__loading-box">Now loading</span></div>';
         return wrap;
     }
 

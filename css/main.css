@@ -2287,9 +2287,9 @@
         .audio-waveform-composite__lanes-inner > .audio-waveform-composite__region-cursor {
             z-index: 8;
         }
-        /* 波形ローディング文言: マーカー(7)・ラベル(10)・プレイヘッド(8)より前面 */
+        /* 波形ローディング: 該当レーン行の最前面（マーカー・プレイヘッド・リージョン UI より上） */
         .audio-waveform-composite__lanes-inner > .audio-waveform-lane__loading {
-            z-index: 14;
+            z-index: 15;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -2300,19 +2300,30 @@
             min-width: var(--wave-lanes-viewport-w, 100%);
             min-height: 0;
             pointer-events: none;
-            background: rgba(57, 82, 162, 0.25);
+            background: rgba(22, 24, 32, 0.16);
+            backdrop-filter: blur(8px) saturate(125%);
+            -webkit-backdrop-filter: blur(8px) saturate(125%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
             box-sizing: border-box;
         }
         /* overlay 移行前の一瞬もレーン全面を覆う */
         .audio-waveform-lane > .audio-waveform-lane__loading {
             position: absolute;
-            inset: 0;
-            z-index: 14;
+            top: 0;
+            right: 0;
+            bottom: var(--playback-lane-bottom-inset, 0px);
+            left: 0;
+            z-index: 9;
             display: flex;
             align-items: center;
             justify-content: center;
             pointer-events: none;
-            background: rgba(57, 82, 162, 0.25);
+            background: rgba(22, 24, 32, 0.16);
+            backdrop-filter: blur(8px) saturate(125%);
+            -webkit-backdrop-filter: blur(8px) saturate(125%);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
             box-sizing: border-box;
         }
         /* 映像のみ（音声トラックなし）: Video Audio 行を除き Ex レーンを上から連番（JS でも再割当） */
@@ -2876,14 +2887,15 @@
             display: none !important;
         }
         .audio-waveform-lane__loading-box {
-            color: rgba(150, 156, 168, 0.92);
+            color: rgba(190, 196, 208, 0.9);
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
             font-size: clamp(0.44rem, 1.1vmin, 0.58rem);
-            font-weight: 400;
+            font-weight: 500;
             letter-spacing: 0.06em;
             line-height: 1.2;
             text-align: center;
             white-space: nowrap;
+            text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
         }
         .audio-waveform-lane__lkfs {
             position: absolute;
