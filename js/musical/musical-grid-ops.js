@@ -911,15 +911,13 @@
         for (let gi = 0; gi < counts.length && barIndex < totalBars; gi++) {
             const groupBars = Math.max(0, counts[gi] | 0);
             if (groupBars <= 0) continue;
+            const remainingBars = totalBars - barIndex;
+            const effectiveBars = Math.min(groupBars, remainingBars);
             const startSec = barBoundaries[barIndex];
-            const endBarIndex = Math.min(totalBars, barIndex + groupBars);
-            // 最終グループが末尾 1 小節以内なら duration まで伸ばす（テンポストレッチ後の端数を別 Phrase にしない）
-            const endSec =
-                gi === lastGi && endBarIndex >= totalBars - 1
-                    ? durationSec
-                    : endBarIndex < totalBars
-                      ? barBoundaries[endBarIndex]
-                      : durationSec;
+            const endBarIndex = barIndex + effectiveBars;
+            const isLastGroup = gi === lastGi || endBarIndex >= totalBars;
+            // 最終グループは duration まで伸ばす（テンポストレッチ後の端数小節を別 Phrase にしない）
+            const endSec = isLastGroup ? durationSec : barBoundaries[endBarIndex];
             if (endSec > startSec + 1e-9) {
                 ranges.push({
                     startSec,
@@ -927,17 +925,11 @@
                     paletteIndex: gi,
                 });
             }
-            barIndex = gi === lastGi && endBarIndex >= totalBars - 1 ? totalBars : endBarIndex;
+            barIndex = isLastGroup ? totalBars : endBarIndex;
         }
-        if (barIndex < totalBars) {
-            const startSec = barBoundaries[barIndex];
-            if (durationSec > startSec + 1e-9) {
-                ranges.push({
-                    startSec,
-                    endSec: durationSec,
-                    paletteIndex: counts.length,
-                });
-            }
+        // counts 合計が totalBars 未満の端数 — 最終帯へ吸収（余分な palette を増やさない）
+        if (barIndex < totalBars && ranges.length) {
+            ranges[ranges.length - 1].endSec = durationSec;
         }
         return ranges;
     }

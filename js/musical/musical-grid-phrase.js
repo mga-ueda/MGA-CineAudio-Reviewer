@@ -314,7 +314,6 @@
         if (o.preservePhraseText) {
             setPhraseGroupBarCountsOverride(counts);
         } else {
-            clearPhraseGroupBarCountsOverride();
             const text = formatPhraseTextFromGroupBarCounts(counts, {
                 optimize: o.optimize !== false,
             });
@@ -322,6 +321,8 @@
             if (musicalGridPhraseInput) {
                 musicalGridPhraseInput.value = musicalGridPhraseText;
             }
+            // Phrase 欄は "1,4,8" 等に圧縮されても、着色は展開 counts（例: 1,4,8,8）に合わせる
+            setPhraseGroupBarCountsOverride(counts);
         }
         clearMusicalGridPositionCache();
     }

@@ -417,6 +417,8 @@
             skipUndo: !!o.skipUndo,
             relayoutRegions: true,
             relayoutSilent: o.relayoutSilent !== false,
+            // applyExplicitPhraseGroupBarCounts 直後 — 展開 counts を relayout で消さない
+            preservePhraseBarCountsOverride: o.preservePhraseBarCountsOverride !== false,
         });
     }
     function persistMusicalGridAndRedraw(opt) {
@@ -456,9 +458,6 @@
             typeof window.scaleAllExtraTrackRegionsForTempoStretch === 'function'
         );
         if (shouldScaleRegionsForTempoStretch) {
-            if (typeof clearPhraseGroupBarCountsOverride === 'function') {
-                clearPhraseGroupBarCountsOverride();
-            }
             window.scaleAllExtraTrackRegionsForTempoStretch(
                 o.stretchPrevSpec,
                 o.stretchNextSpec,
@@ -471,6 +470,7 @@
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
                 preservePhraseBarCountsOverride:
+                    !!o.preservePhraseBarCountsOverride ||
                     !!o.preservePhraseTextOnMeterRelayout ||
                     (shouldRelayoutFromMeter && !shouldCompressPhrase),
                 skipUndo: !!o.skipUndo,
