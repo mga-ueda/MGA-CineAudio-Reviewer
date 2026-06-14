@@ -536,6 +536,72 @@
         buffers,
         transportNowSec,
     ) {
+        const playbackAligned =
+            typeof window.isAnyExtraTrackTempoStretched === 'function' &&
+            window.isAnyExtraTrackTempoStretched();
+        const rate =
+            playbackAligned &&
+            typeof window.currentTempoStretchPlaybackRate === 'function'
+                ? window.currentTempoStretchPlaybackRate()
+                : 1;
+        const specForBar =
+            playbackAligned && Math.abs(rate - 1) > 0.00001
+                ? Object.assign({}, meterSpec, { stretchDelta: 0 })
+                : meterSpec;
+
+        if (
+            playbackAligned &&
+            Math.abs(rate - 1) > 0.00001 &&
+            typeof window.collectPlaybackAlignedBarBoundarySecs === 'function'
+        ) {
+            const boundaries = window.collectPlaybackAlignedBarBoundarySecs(
+                meterSpec,
+                maxSec,
+            );
+            const synced = positionMetronomeScanAtSec(
+                meterSpec,
+                meterKey,
+                fromSec,
+                maxSec,
+            );
+            if (!synced) return;
+            let barIndex = metronomeScan.barIndex | 0;
+            let barStartSec = metronomeScan.barStartSec;
+            const skipFirstBar = isMetronomeRehearsalOffsetSkipFirstBar();
+            const beatScale = 1 / rate;
+            while (barIndex < boundaries.length - 1 && barStartSec < endSec - 1e-9) {
+                const entry = getMeterEntryForBar(specForBar, barIndex);
+                if (!entry) break;
+                if (!(skipFirstBar && barIndex === 0)) {
+                    const beatDur =
+                        beatDurationSec(entry.sig, entry.bpm) * beatScale;
+                    const numBeats = entry.sig ? entry.sig.num | 0 : 0;
+                    for (let beat = 0; beat < numBeats; beat++) {
+                        const beatSec = barStartSec + beat * beatDur;
+                        if (beatSec >= endSec - 1e-9) break;
+                        if (beatSec < fromSec - 1e-9) continue;
+                        if (
+                            scheduleMetronomeClick(
+                                ctx,
+                                beatSec,
+                                beat === 0,
+                                buffers,
+                                transportNowSec,
+                            )
+                        ) {
+                            metronomeLastScheduledBeatSec = beatSec;
+                        }
+                    }
+                }
+                barIndex += 1;
+                barStartSec = boundaries[barIndex];
+            }
+            metronomeScan.barIndex = barIndex;
+            metronomeScan.barStartSec = barStartSec;
+            metronomeScan.meterKey = meterKey;
+            return;
+        }
+
         const barDurationSec =
             typeof window.meterBarDurationSec === 'function'
                 ? window.meterBarDurationSec

@@ -641,29 +641,32 @@
         const gen = ++tempoStretchApplyGen;
         tempoStretchInFlight = true;
         const slots = loadedExtraSlotsForStretch();
-        if (typeof writeLog === 'function') {
-            if (typeof writeActionLog === 'function') {
-                writeActionLog(
-                    'Tempo',
-                    'begin (×' +
-                        rate.toFixed(4) +
-                        ', prev ×' +
-                        prevRate.toFixed(4) +
-                        ') — ' +
-                        slots.length +
-                        ' Ex track(s)',
-                );
-            } else {
-                writeLog(
-                    'Tempo stretch: begin (×' +
-                        rate.toFixed(4) +
-                        ', prev ×' +
-                        prevRate.toFixed(4) +
-                        ') — ' +
-                        slots.length +
-                        ' Ex track(s)',
-                );
-            }
+        const stretchSummary =
+            typeof formatTempoStretchActionSummary === 'function'
+                ? formatTempoStretchActionSummary(spec)
+                : '\u00d7' + rate.toFixed(4);
+        const prevStretchSummary =
+            typeof formatTempoStretchActionSummary === 'function' && o.prevSpec
+                ? formatTempoStretchActionSummary(o.prevSpec)
+                : '\u00d7' + prevRate.toFixed(4);
+        const prevPart =
+            prevStretchSummary !== 'no tempo offset'
+                ? 'prev ' + prevStretchSummary
+                : 'prev none';
+        const beginMsg =
+            'begin \u2014 ' +
+            stretchSummary +
+            ' \u2014 ' +
+            prevPart +
+            ' \u2014 ' +
+            slots.length +
+            ' Ex track(s)';
+        if (typeof logTempoAction === 'function') {
+            logTempoAction(beginMsg);
+        } else if (typeof writeActionLog === 'function') {
+            writeActionLog('Tempo', beginMsg);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Tempo stretch: ' + beginMsg);
         }
         if (slots.length) {
             setTempoStretchLoadingForSlots(slots, true);
@@ -689,20 +692,42 @@
             if (typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            if (typeof writeLog === 'function' && slots.length) {
-            const msg =
-                (isTempoStretchActiveForSpec(spec)
-                    ? 'applied (×' + rate.toFixed(4) + ')'
-                    : 'cleared') +
-                ' — ' +
-                slots.length +
-                ' Ex track(s)';
-            if (typeof writeActionLog === 'function') {
-                writeActionLog('Tempo', msg);
-            } else {
-                writeLog('Tempo stretch ' + msg);
+            if (slots.length) {
+                const appliedSummary =
+                    typeof formatTempoStretchActionSummary === 'function'
+                        ? formatTempoStretchActionSummary(spec)
+                        : '\u00d7' + rate.toFixed(4);
+                let doneMsg;
+                if (isTempoStretchActiveForSpec(spec)) {
+                    doneMsg =
+                        'applied \u2014 ' +
+                        appliedSummary +
+                        ' \u2014 ' +
+                        slots.length +
+                        ' Ex track(s)';
+                } else {
+                    const wasSummary =
+                        o.prevSpec &&
+                        typeof formatTempoStretchActionSummary === 'function'
+                            ? formatTempoStretchActionSummary(o.prevSpec)
+                            : '';
+                    doneMsg =
+                        'cleared' +
+                        (wasSummary && wasSummary !== 'no tempo offset'
+                            ? ' \u2014 was ' + wasSummary
+                            : '') +
+                        ' \u2014 ' +
+                        slots.length +
+                        ' Ex track(s)';
+                }
+                if (typeof logTempoAction === 'function') {
+                    logTempoAction(doneMsg);
+                } else if (typeof writeActionLog === 'function') {
+                    writeActionLog('Tempo', doneMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog('Tempo stretch: ' + doneMsg);
+                }
             }
-        }
             return true;
         } catch (err) {
             if (typeof writeLog === 'function') {
@@ -727,6 +752,103 @@
                 syncExtraAudioToTransport({ force: true });
             }
         }
+    }
+
+    function tempoStretchRegionScaleFactor(prevSpec, nextSpec) {
+        const prevRate =
+            prevSpec && typeof computeTempoStretchRateFromSpec === 'function'
+                ? computeTempoStretchRateFromSpec(prevSpec)
+                : 1;
+        const nextRate =
+            nextSpec && typeof computeTempoStretchRateFromSpec === 'function'
+                ? computeTempoStretchRateFromSpec(nextSpec)
+                : 1;
+        if (!(prevRate > 0) || !(nextRate > 0)) return 1;
+        return prevRate / nextRate;
+    }
+
+    function scaleSegmentTimesForTempoStretch(seg, scale) {
+        if (!seg || !(scale > 0) || Math.abs(scale - 1) <= 0.00001) {
+            return seg ? Object.assign({}, seg) : seg;
+        }
+        const s = Object.assign({}, seg);
+        const mul = (v) => (Number.isFinite(v) ? v * scale : v);
+        if (Number.isFinite(s.timelineStartSec)) s.timelineStartSec = mul(s.timelineStartSec);
+        if (Number.isFinite(s.regionTimelineInSec)) {
+            s.regionTimelineInSec = mul(s.regionTimelineInSec);
+        }
+        if (Number.isFinite(s.regionLeadPadSec)) {
+            s.regionLeadPadSec = mul(s.regionLeadPadSec);
+        }
+        if (Number.isFinite(s.sourceInSec)) s.sourceInSec = mul(s.sourceInSec);
+        if (Number.isFinite(s.sourceOutSec)) s.sourceOutSec = mul(s.sourceOutSec);
+        if (Number.isFinite(s.fadeInSec)) s.fadeInSec = mul(s.fadeInSec);
+        if (Number.isFinite(s.fadeOutSec)) s.fadeOutSec = mul(s.fadeOutSec);
+        return s;
+    }
+
+    /** Tempo/Sig 接頭辞のみ変更時 — Phrase 再配置せず region 列を比例スケール */
+    function scaleAllExtraTrackRegionsForTempoStretch(prevSpec, nextSpec, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const scale = tempoStretchRegionScaleFactor(prevSpec, nextSpec);
+        if (!(scale > 0) || Math.abs(scale - 1) <= 0.00001) return 0;
+        if (typeof getExtraTrackCount !== 'function') return 0;
+        const n = getExtraTrackCount();
+        let scaledTracks = 0;
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            if (
+                typeof isTrackRegionActive !== 'function' ||
+                !isTrackRegionActive(track) ||
+                typeof getTrackSegments !== 'function' ||
+                typeof setTrackSegments !== 'function'
+            ) {
+                continue;
+            }
+            const segments = getTrackSegments(track).map((seg) =>
+                scaleSegmentTimesForTempoStretch(seg, scale),
+            );
+            if (!segments.length) continue;
+            const state =
+                typeof getPlaybackRegionsState === 'function'
+                    ? getPlaybackRegionsState(track)
+                    : null;
+            if (state) {
+                if (Number.isFinite(state.headPadSec)) state.headPadSec *= scale;
+                if (Number.isFinite(state.regionTimelineInSec)) {
+                    state.regionTimelineInSec *= scale;
+                }
+                if (Number.isFinite(state.regionLeadPadSec)) {
+                    state.regionLeadPadSec *= scale;
+                }
+                delete state.timelineSlots;
+            }
+            if (
+                setTrackSegments(track, segments, {
+                    silent: true,
+                    skipUndo: !!o.skipUndo,
+                    segmentStructureChanged: false,
+                    affectedSegmentIndices: segments.map((_, i) => i),
+                })
+            ) {
+                scaledTracks++;
+            }
+        }
+        tempoStretchDiagLog('regions/scaled', {
+            scale,
+            tracks: scaledTracks,
+            prevRate: computeTempoStretchRateFromSpec(prevSpec),
+            nextRate: computeTempoStretchRateFromSpec(nextSpec),
+        });
+        if (scaledTracks > 0) {
+            if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+            if (typeof syncExtraAudioToTransport === 'function') {
+                syncExtraAudioToTransport({ force: true });
+            }
+        }
+        return scaledTracks;
     }
 
     async function applyTempoStretchForCurrentMeter(opt) {
@@ -783,4 +905,6 @@
     window.dumpTempoStretchVerifyState = dumpTempoStretchVerifyState;
     window.restoreAllExtraTracksFromBackup = restoreAllExtraTracksFromBackup;
     window.audioBufferToWavArrayBuffer = audioBufferToWavArrayBuffer;
+    window.tempoStretchRegionScaleFactor = tempoStretchRegionScaleFactor;
+    window.scaleAllExtraTrackRegionsForTempoStretch = scaleAllExtraTrackRegionsForTempoStretch;
 })();

@@ -120,6 +120,38 @@
         actionLog('Session', message, opt);
     }
 
+    /** Tempo/Sig 先頭接頭辞（±N BPM）を Actions 向けに要約する */
+    function formatTempoStretchActionSummary(spec) {
+        if (!spec || !spec.entries || !spec.entries.length) return 'no tempo offset';
+        const delta = spec.stretchDelta || 0;
+        if (!delta) return 'no tempo offset';
+        const sourceBpm = spec.entries[0].bpm;
+        const effectiveBpm = sourceBpm + delta;
+        const parts = [];
+        if (delta < 0) {
+            parts.push('lowered by ' + (-delta) + ' BPM');
+        } else {
+            parts.push('raised by ' + delta + ' BPM');
+        }
+        if (sourceBpm > 0 && effectiveBpm > 0) {
+            parts.push('(' + sourceBpm + '\u2192' + effectiveBpm + ')');
+        }
+        const rate =
+            typeof window.computeTempoStretchRateFromSpec === 'function'
+                ? window.computeTempoStretchRateFromSpec(spec)
+                : sourceBpm > 0 && effectiveBpm > 0
+                  ? effectiveBpm / sourceBpm
+                  : 1;
+        if (Math.abs(rate - 1) > 0.00001) {
+            parts.push('\u00d7' + rate.toFixed(4));
+        }
+        return parts.join(', ');
+    }
+
+    function logTempoAction(message, opt) {
+        actionLog('Tempo', message, opt);
+    }
+
     window.actionLog = actionLog;
     window.detailLog = detailLog;
     window.formatActionTc = formatActionTc;
@@ -136,4 +168,6 @@
     window.logMixAction = logMixAction;
     window.logVideoAction = logVideoAction;
     window.logSessionAction = logSessionAction;
+    window.formatTempoStretchActionSummary = formatTempoStretchActionSummary;
+    window.logTempoAction = logTempoAction;
 })();

@@ -103,6 +103,8 @@
         },
         { re: /^Tempo stretch: begin\b/i, tier: 'action', category: 'Tempo' },
         { re: /^Tempo stretch (?:applied|cleared)/i, tier: 'action', category: 'Tempo' },
+        { re: /^begin — (?:lowered|raised|no tempo)/i, tier: 'action', category: 'Tempo' },
+        { re: /^(?:applied|cleared) — (?:lowered|raised|was |no tempo)/i, tier: 'action', category: 'Tempo' },
         { re: /^Tempo stretch failed/i, tier: 'action', category: 'Tempo' },
         {
             re: /^Marker: (?:point at|range |removed|all cleared|pasted|copied to|paste started|TC updated|drag )/i,

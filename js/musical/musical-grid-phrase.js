@@ -18,11 +18,93 @@
         }
         return boundaries;
     }
+
+    /** Ex トラックにテンポストレッチ済みバッファがあるか */
+    function isAnyExtraTrackTempoStretched() {
+        const n =
+            typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
+        for (let slot = 0; slot < n; slot++) {
+            if (
+                typeof isExtraTrackTempoStretched === 'function' &&
+                isExtraTrackTempoStretched(slot)
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function currentTempoStretchPlaybackRate() {
+        if (
+            typeof parseMeterSpec !== 'function' ||
+            typeof getCommittedMusicalGridMeterText !== 'function' ||
+            typeof computeTempoStretchRateFromSpec !== 'function'
+        ) {
+            return 1;
+        }
+        const spec = parseMeterSpec(getCommittedMusicalGridMeterText());
+        if (!spec) return 1;
+        return computeTempoStretchRateFromSpec(spec);
+    }
+
+    /**
+     * 波形ストレッチ後 — 小節境界は「接頭辞なし BPM × 比例スケール」と Ex リージョンを一致させる。
+     * （接頭辞付き BPM で master 全体を再分割すると sequence meter で ~0.5s ずれる）
+     */
+    function collectPlaybackAlignedBarBoundarySecs(meterSpec, durationSec) {
+        if (!isAnyExtraTrackTempoStretched()) {
+            return collectBarBoundarySecs(meterSpec, durationSec);
+        }
+        const rate = currentTempoStretchPlaybackRate();
+        if (!(rate > 0) || Math.abs(rate - 1) <= 0.00001) {
+            return collectBarBoundarySecs(meterSpec, durationSec);
+        }
+        const specBaseline = Object.assign({}, meterSpec, { stretchDelta: 0 });
+        const unstretchedDur = durationSec * rate;
+        const raw = collectBarBoundarySecs(specBaseline, unstretchedDur);
+        const scale = 1 / rate;
+        const boundaries = [];
+        for (let i = 0; i < raw.length; i++) {
+            boundaries.push(Math.min(durationSec, raw[i] * scale));
+        }
+        if (
+            !boundaries.length ||
+            boundaries[boundaries.length - 1] < durationSec - 1e-9
+        ) {
+            boundaries.push(durationSec);
+        }
+        return boundaries;
+    }
+
+    /** 末尾の未完サイクル（例: 1,8,4,8 + 1 bar）を最終グループへ吸収する */
+    function mergePartialPhraseCycleTail(counts, sizes) {
+        if (!counts || !sizes || !sizes.length || counts.length <= sizes.length) {
+            return counts;
+        }
+        const cycleLen = sizes.length;
+        const remainder = counts.length % cycleLen;
+        if (remainder === 0) return counts;
+        const tailStart = counts.length - remainder;
+        const mergeTarget = tailStart - 1;
+        if (mergeTarget < 0) return counts;
+        let tailBars = 0;
+        for (let i = tailStart; i < counts.length; i++) {
+            tailBars += counts[i] | 0;
+        }
+        const merged = counts.slice(0, tailStart);
+        merged[mergeTarget] = (merged[mergeTarget] | 0) + tailBars;
+        return merged;
+    }
+
     /** phraseSpec から各 Phrase グループの小節数列を展開する。 */
     function expandPhraseSpecToGroupBarCounts(meterSpec, durationSec, phraseSpec) {
-        const boundaries = collectBarBoundarySecs(meterSpec, durationSec);
+        const boundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, durationSec)
+                : collectBarBoundarySecs(meterSpec, durationSec);
         const totalBars = Math.max(0, boundaries.length - 1);
         if (!totalBars || !phraseSpec || !phraseSpec.sizes) return [];
+        const sizes = phraseSpec.sizes;
         const counts = [];
         let groupIndex = 0;
         let barsInGroup = 0;
@@ -30,13 +112,13 @@
             if (barsInGroup === 0) counts.push(0);
             counts[counts.length - 1] += 1;
             barsInGroup += 1;
-            const groupSize = barGroupSizeForIndex(groupIndex, phraseSpec.sizes);
+            const groupSize = barGroupSizeForIndex(groupIndex, sizes);
             if (barsInGroup >= groupSize) {
                 groupIndex += 1;
                 barsInGroup = 0;
             }
         }
-        return counts;
+        return mergePartialPhraseCycleTail(counts, sizes);
     }
     function groupBarCountsMatchPhraseSizes(counts, sizes) {
         if (!counts || !counts.length || !sizes || !sizes.length) return false;
@@ -289,7 +371,10 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return null;
-        const boundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const boundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
+                : collectBarBoundarySecs(settings.meterSpec, master);
         const totalBars = Math.max(0, boundaries.length - 1);
         if (totalBars < 2) return null;
         const s = Number(transportSec);

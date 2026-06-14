@@ -86,6 +86,42 @@
         return getPhraseGroupRangesSnapshot();
     }
 
+    /** リハーサル名／Phrase ナビ — 実リージョン In があればそちらを優先（Tempo ストレッチ後の grid 差を吸収） */
+    function resolveSegmentIndexForPhraseSlot(track, phraseSlotIndex) {
+        if (!track || phraseSlotIndex == null || phraseSlotIndex < 0) return -1;
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        if (!segments.length) return -1;
+        const slot = phraseSlotIndex | 0;
+
+        if (typeof getTrackTimelineSlots === 'function') {
+            const units = getTrackTimelineSlots(track, { writeCache: false });
+            for (let ui = 0; ui < units.length; ui++) {
+                const unit = units[ui];
+                const mus = unit && unit.musical;
+                if (!mus || (mus.phraseSlotIndex | 0) !== slot) continue;
+                if (unit.segmentRefs && unit.segmentRefs.length) {
+                    return unit.segmentRefs[0].segmentIndex | 0;
+                }
+            }
+        }
+
+        if (slot < segments.length) return slot;
+        return -1;
+    }
+
+    function phraseNavStartSecForSlot(track, phraseSlotIndex, gridStartSec) {
+        const si = resolveSegmentIndexForPhraseSlot(track, phraseSlotIndex);
+        if (
+            si >= 0 &&
+            typeof getSegmentRegionTimelineIn === 'function'
+        ) {
+            const regionIn = getSegmentRegionTimelineIn(track, si);
+            if (Number.isFinite(regionIn)) return regionIn;
+        }
+        return gridStartSec;
+    }
+
     /** Phrase 欄 1 サイクル分のスロット数。長尺マスター展開 index とは別。 */
     function phraseSpecCycleSlotCount() {
         if (typeof musicalGridDrawSettings === 'function') {
@@ -894,22 +930,45 @@
         let cursor = { partIndex: 0, offsetSec: 0 };
         const nextSegments = [];
         const eps = segmentBoundaryJoinEpsilonSec();
+        const mapSourceFromBarRanges =
+            !!o.mapSourceFromBarRanges &&
+            stream.length === 1 &&
+            (() => {
+                const fullDur = getTrackSourceDurationSec(track);
+                if (!(fullDur > PLAYBACK_REGION_MIN_SEC)) return false;
+                const part = stream[0];
+                const inS = Number(part.sourceInSec) || 0;
+                const outS = Number(part.sourceOutSec) || 0;
+                return inS <= eps && outS >= fullDur - eps;
+            })();
 
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
             if (!r || !Number.isFinite(r.startSec) || !Number.isFinite(r.endSec)) continue;
             const slotDur = r.endSec - r.startSec;
             if (!(slotDur > eps)) continue;
-            const placementSec = phraseLayoutPlacementSecForRange(r);
+            const placementSec = mapSourceFromBarRanges
+                ? r.startSec
+                : phraseLayoutPlacementSecForRange(r);
             if (placementSec == null) continue;
 
-            const slice = takeSourceSliceFromStream(
-                stream,
-                cursor,
-                slotDur,
-                defaultClip,
-            );
-            cursor = slice.cursor;
+            let slice;
+            if (mapSourceFromBarRanges) {
+                slice = {
+                    clipId: stream[0].clipId || defaultClip,
+                    sourceInSec: r.startSec,
+                    sourceOutSec: r.endSec,
+                    takenSec: slotDur,
+                };
+            } else {
+                slice = takeSourceSliceFromStream(
+                    stream,
+                    cursor,
+                    slotDur,
+                    defaultClip,
+                );
+                cursor = slice.cursor;
+            }
             if (!(slice.takenSec >= PLAYBACK_REGION_MIN_SEC)) continue;
 
             const seg = {
@@ -1020,6 +1079,7 @@
                 applyPhraseCompositionToTrackRegions(track, {
                     silent: true,
                     skipUndo: true,
+                    mapSourceFromBarRanges: !!o.mapSourceFromBarRanges,
                 })
             ) {
                 rebuilt++;
@@ -1345,6 +1405,8 @@
     window.applyPhraseCompositionToAllExtraTrackRegions =
         applyPhraseCompositionToAllExtraTrackRegions;
     window.phraseSlotIndexAtRegionInSec = phraseSlotIndexAtRegionInSec;
+    window.resolveSegmentIndexForPhraseSlot = resolveSegmentIndexForPhraseSlot;
+    window.phraseNavStartSecForSlot = phraseNavStartSecForSlot;
     window.phraseSlotIndexForSilentGap = phraseSlotIndexForSilentGap;
     window.phraseSlotStartSec = phraseSlotStartSec;
     window.collectPhraseSlotJoinedSegmentIndices = collectPhraseSlotJoinedSegmentIndices;

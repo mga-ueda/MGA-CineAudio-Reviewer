@@ -42,6 +42,51 @@
     function getMusicalGridBarBySec(meterSpec, sec, maxSec) {
         const t = clampMusicalGridSec(sec, maxSec);
         const meterKey = musicalGridMeterText || '';
+        if (
+            typeof isAnyExtraTrackTempoStretched === 'function' &&
+            isAnyExtraTrackTempoStretched() &&
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+        ) {
+            const rate =
+                typeof currentTempoStretchPlaybackRate === 'function'
+                    ? currentTempoStretchPlaybackRate()
+                    : 1;
+            const specForBar =
+                Math.abs(rate - 1) > 0.00001
+                    ? Object.assign({}, meterSpec, { stretchDelta: 0 })
+                    : meterSpec;
+            const boundaries = collectPlaybackAlignedBarBoundarySecs(
+                meterSpec,
+                maxSec,
+            );
+            if (boundaries.length > 1) {
+                let barIndex = 0;
+                while (
+                    barIndex < boundaries.length - 2 &&
+                    t >= boundaries[barIndex + 1] - 1e-9
+                ) {
+                    barIndex += 1;
+                }
+                const barStartSec = boundaries[barIndex];
+                const barEndSec = boundaries[barIndex + 1];
+                const entry = getMeterEntryForBar(specForBar, barIndex);
+                if (!entry) return null;
+                musicalGridPosCache = {
+                    meterKey,
+                    barIndex,
+                    barStartSec,
+                    barEndSec,
+                    entry,
+                };
+                return {
+                    barIndex,
+                    barStartSec,
+                    barEndSec,
+                    entry,
+                    sec: t,
+                };
+            }
+        }
         if (!musicalGridPosCache || musicalGridPosCache.meterKey !== meterKey) {
             musicalGridPosCache = {
                 meterKey,
@@ -403,7 +448,26 @@
         clearMusicalGridPositionCache();
         persistMusicalGridToStorage();
         scheduleMusicalGridRedraw();
-        if (shouldRelayoutRegions) {
+        const shouldScaleRegionsForTempoStretch = !!(
+            shouldRelayoutFromMeter &&
+            o.preservePhraseTextOnMeterRelayout &&
+            o.stretchPrevSpec &&
+            o.stretchNextSpec &&
+            typeof window.scaleAllExtraTrackRegionsForTempoStretch === 'function'
+        );
+        if (shouldScaleRegionsForTempoStretch) {
+            if (typeof clearPhraseGroupBarCountsOverride === 'function') {
+                clearPhraseGroupBarCountsOverride();
+            }
+            window.scaleAllExtraTrackRegionsForTempoStretch(
+                o.stretchPrevSpec,
+                o.stretchNextSpec,
+                {
+                    silent: o.relayoutSilent !== false,
+                    skipUndo: !!o.skipUndo,
+                },
+            );
+        } else if (shouldRelayoutRegions) {
             relayoutExtraTrackRegionsToPhraseComposition({
                 silent: o.relayoutSilent !== false,
                 preservePhraseBarCountsOverride:
@@ -428,7 +492,10 @@
         ) {
             refreshAllRegionRehearsalMarkLabels();
         }
-        if (shouldRelayoutRegions && typeof flushPersistSessionNow === 'function') {
+        if (
+            (shouldRelayoutRegions || shouldScaleRegionsForTempoStretch) &&
+            typeof flushPersistSessionNow === 'function'
+        ) {
             return flushPersistSessionNow().catch((err) => {
                 if (typeof writeLog === 'function') {
                     writeLog(
@@ -965,11 +1032,33 @@
     function buildPhraseNavStops() {
         const ranges = getPhraseGroupRangesSnapshot();
         if (!ranges.length) return [];
-        return ranges.map((r) => ({
-            sec: r.startSec,
-            label: phraseRehearsalDisplayMarkForSlot(r.paletteIndex),
-            paletteIndex: r.paletteIndex,
-        }));
+        let navTrack = null;
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            const track = { type: 'extra', slot };
+            if (
+                typeof isTrackRegionActive === 'function' &&
+                isTrackRegionActive(track)
+            ) {
+                navTrack = track;
+                break;
+            }
+        }
+        return ranges.map((r) => {
+            const paletteIndex = r.paletteIndex;
+            let sec = r.startSec;
+            if (
+                navTrack &&
+                typeof phraseNavStartSecForSlot === 'function'
+            ) {
+                sec = phraseNavStartSecForSlot(navTrack, paletteIndex, sec);
+            }
+            return {
+                sec,
+                label: phraseRehearsalDisplayMarkForSlot(paletteIndex),
+                paletteIndex,
+            };
+        });
     }
 
     function phraseNavStopEpsilonSec() {
@@ -1615,7 +1704,10 @@
         if (!(master > 0)) return false;
         const spans = collectPlaybackRegionSpansForBarLabels();
         if (!spans.length) return false;
-        const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
+                : collectBarBoundarySecs(settings.meterSpec, master);
         if (!barBoundaries.length) return false;
         const t =
             typeof getTransportSec === 'function'
@@ -1740,7 +1832,10 @@
         if (!getMusicalGridVisible() || !barLines.length || !meterSpec) return;
         const spans = collectPlaybackRegionSpansForBarLabels();
         if (!spans.length) return;
-        const barBoundaries = collectBarBoundarySecs(meterSpec, master);
+        const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, master)
+                : collectBarBoundarySecs(meterSpec, master);
         if (!barBoundaries.length) return;
         const phraseRanges = resolvePhraseGroupRanges({ requireFillVisible: false });
         const usePhraseBarNumbers = phraseRanges.length > 0;

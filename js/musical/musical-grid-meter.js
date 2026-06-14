@@ -801,6 +801,45 @@
         const showBeats = o.showBeats !== false;
         const lines = [];
         if (!(durationSec > 0) || !meterSpec) return lines;
+
+        const playbackAligned =
+            typeof isAnyExtraTrackTempoStretched === 'function' &&
+            isAnyExtraTrackTempoStretched();
+        const rate =
+            playbackAligned && typeof currentTempoStretchPlaybackRate === 'function'
+                ? currentTempoStretchPlaybackRate()
+                : 1;
+        const specForBar =
+            playbackAligned && Math.abs(rate - 1) > 0.00001
+                ? Object.assign({}, meterSpec, { stretchDelta: 0 })
+                : meterSpec;
+
+        if (
+            playbackAligned &&
+            Math.abs(rate - 1) > 0.00001 &&
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+        ) {
+            const boundaries = collectPlaybackAlignedBarBoundarySecs(
+                meterSpec,
+                durationSec,
+            );
+            for (let barIndex = 0; barIndex < boundaries.length - 1; barIndex++) {
+                const t = boundaries[barIndex];
+                lines.push({ sec: t, kind: 'bar' });
+                if (showBeats) {
+                    const entry = getMeterEntryForBar(specForBar, barIndex);
+                    if (entry) {
+                        forEachMeterBarBeat(t, entry, (beat) => {
+                            if (beat.beatInBar === 0) return;
+                            if (beat.sec >= durationSec - 1e-9) return;
+                            lines.push({ sec: beat.sec, kind: 'beat' });
+                        });
+                    }
+                }
+            }
+            return lines;
+        }
+
         let t = 0;
         let barIndex = 0;
         const maxLines = 24000;

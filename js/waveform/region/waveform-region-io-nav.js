@@ -242,14 +242,21 @@
         if (phraseSlot < 0 || phraseSlot >= ranges.length) return false;
         const r = ranges[phraseSlot];
         if (!r || !Number.isFinite(r.startSec)) return false;
+        const seekSec =
+            typeof phraseNavStartSecForSlot === 'function'
+                ? phraseNavStartSecForSlot(track, phraseSlot, r.startSec)
+                : r.startSec;
         const mark = rehearsalMarkLabelForPhraseSlotIndex(phraseSlot);
         const markHint = rehearsalMarkDisplayLabel(mark) || mark;
         return seekToRegionNavStop(
             {
-                sec: r.startSec,
+                sec: seekSec,
                 edge: 'in',
                 slot: track.slot,
-                segmentIndex: -1,
+                segmentIndex:
+                    typeof resolveSegmentIndexForPhraseSlot === 'function'
+                        ? resolveSegmentIndexForPhraseSlot(track, phraseSlot)
+                        : -1,
             },
             {
                 resumeAfterSeek: !!(opt && opt.resumeAfterSeek),

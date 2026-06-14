@@ -551,7 +551,10 @@
             return null;
         }
 
-        const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
+                : collectBarBoundarySecs(settings.meterSpec, master);
         const startBarK =
             sumGroupBarCounts(counts, phraseBoundaryIndex) + counts[phraseBoundaryIndex];
         return {
@@ -892,16 +895,31 @@
     function collectPhraseGroupRangesFromBarCounts(meterSpec, durationSec, counts) {
         const ranges = [];
         if (!(durationSec > 0) || !meterSpec || !counts || !counts.length) return ranges;
-        const barBoundaries = collectBarBoundarySecs(meterSpec, durationSec);
+        const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, durationSec)
+                : collectBarBoundarySecs(meterSpec, durationSec);
         const totalBars = Math.max(0, barBoundaries.length - 1);
+        let lastGi = -1;
+        for (let gi = counts.length - 1; gi >= 0; gi--) {
+            if ((counts[gi] | 0) > 0) {
+                lastGi = gi;
+                break;
+            }
+        }
         let barIndex = 0;
         for (let gi = 0; gi < counts.length && barIndex < totalBars; gi++) {
             const groupBars = Math.max(0, counts[gi] | 0);
             if (groupBars <= 0) continue;
             const startSec = barBoundaries[barIndex];
             const endBarIndex = Math.min(totalBars, barIndex + groupBars);
+            // 最終グループが末尾 1 小節以内なら duration まで伸ばす（テンポストレッチ後の端数を別 Phrase にしない）
             const endSec =
-                endBarIndex < totalBars ? barBoundaries[endBarIndex] : durationSec;
+                gi === lastGi && endBarIndex >= totalBars - 1
+                    ? durationSec
+                    : endBarIndex < totalBars
+                      ? barBoundaries[endBarIndex]
+                      : durationSec;
             if (endSec > startSec + 1e-9) {
                 ranges.push({
                     startSec,
@@ -909,7 +927,7 @@
                     paletteIndex: gi,
                 });
             }
-            barIndex = endBarIndex;
+            barIndex = gi === lastGi && endBarIndex >= totalBars - 1 ? totalBars : endBarIndex;
         }
         if (barIndex < totalBars) {
             const startSec = barBoundaries[barIndex];
@@ -1090,7 +1108,10 @@
         if (!(master > 0)) return null;
         const phraseRange = phraseRangeAfterGridBoundarySec(sec);
         if (phraseRange) {
-            const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+            const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
+                : collectBarBoundarySecs(settings.meterSpec, master);
             if (barBoundaries.length) {
                 const localBar = localBarNumberForPhraseAtSec(
                     phraseRange.startSec,
@@ -1447,7 +1468,10 @@
             endAudioWaveformScrub({ force: true });
         }
 
-        const barBoundaries = collectBarBoundarySecs(settings.meterSpec, master);
+        const barBoundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
+                : collectBarBoundarySecs(settings.meterSpec, master);
         phraseBoundaryDragActive = true;
         phraseBoundaryDragPointerId = ev.pointerId;
         phraseBoundaryDragBoundaryIndex = b;
@@ -1705,6 +1729,8 @@
                     relayoutSlotsFromMeter: true,
                     forceRelayoutFromMeter: true,
                     preservePhraseTextOnMeterRelayout: stretchDeltaOnly,
+                    stretchPrevSpec: stretchPrevSpec,
+                    stretchNextSpec: committedSpec,
                     strictMeterCommit: true,
                 });
                 if (musicalGridMeterInput) musicalGridMeterInput.blur();
@@ -1904,6 +1930,10 @@
     window.getCommittedMusicalGridMeterText = getCommittedMusicalGridMeterText;
     window.getMeterEntryForBar = getMeterEntryForBar;
     window.meterBarDurationSec = meterBarDurationSec;
+    window.isAnyExtraTrackTempoStretched = isAnyExtraTrackTempoStretched;
+    window.currentTempoStretchPlaybackRate = currentTempoStretchPlaybackRate;
+    window.collectPlaybackAlignedBarBoundarySecs =
+        collectPlaybackAlignedBarBoundarySecs;
     window.forEachMeterBarBeat = forEachMeterBarBeat;
     window.getMeterSigSegments = getMeterSigSegments;
     window.parseTimeSignatureSpec = parseTimeSignatureSpec;
