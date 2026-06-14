@@ -157,6 +157,8 @@
     window.handlePlaybackRegionDeleteKeydown = handlePlaybackRegionDeleteKeydown;
     window.handlePlaybackRegionCopyKeydown = handlePlaybackRegionCopyKeydown;
     window.handlePlaybackRegionPasteKeydown = handlePlaybackRegionPasteKeydown;
+    window.handlePlaybackRegionSelectAllKeydown = handlePlaybackRegionSelectAllKeydown;
+    window.selectAllRegionsOnTargetTrack = selectAllRegionsOnTargetTrack;
     window.handlePlaybackRegionFadeInKeydown = handlePlaybackRegionFadeInKeydown;
     window.handlePlaybackRegionFadeOutKeydown = handlePlaybackRegionFadeOutKeydown;
     window.handlePlaybackRegionInNudgeKeydown = handlePlaybackRegionInNudgeKeydown;

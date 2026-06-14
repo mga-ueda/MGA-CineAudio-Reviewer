@@ -84,6 +84,18 @@
             max-width: none;
             width: 100%;
             box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /** 入力欄・マニュアル本文のみ文字選択可（Ctrl+A のページ全選択を抑止） */
+        input,
+        textarea,
+        select,
+        [contenteditable='true'],
+        .app-manual {
+            user-select: text;
+            -webkit-user-select: text;
         }
 
         .layout-narrow {

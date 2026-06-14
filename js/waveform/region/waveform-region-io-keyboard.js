@@ -73,6 +73,22 @@
         return true;
     }
 
+    function handlePlaybackRegionSelectAllKeydown(e) {
+        if (!matchUserShortcut(e, 'regionSelectAll')) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        if (typeof markRegionSelectAllSuppressPageSelection === 'function') {
+            markRegionSelectAllSuppressPageSelection();
+        }
+        if (typeof document.getSelection === 'function') {
+            const sel = document.getSelection();
+            if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+        }
+        selectAllRegionsOnTargetTrack();
+        return true;
+    }
+
     function handlePlaybackRegionCopyKeydown(e) {
         if (!e.ctrlKey && !e.metaKey) return false;
         if (!matchUserShortcut(e, 'regionCopy')) return false;

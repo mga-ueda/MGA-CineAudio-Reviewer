@@ -192,6 +192,7 @@
         regionDelete: { codes: ['Delete', 'Backspace'] },
         regionCopy: { code: 'KeyC', primary: true, shift: false, alt: false },
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
+        regionSelectAll: { code: 'KeyA', primary: true, shift: false, alt: false },
         regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
         regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
         // Phrase 着色 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）

@@ -159,6 +159,94 @@
         return true;
     }
 
+    /** Ctrl+A リージョン全選択直後 — ブラウザのページ全選択を抑止 */
+    let regionSelectAllSuppressPageSelectionUntilMs = 0;
+
+    function markRegionSelectAllSuppressPageSelection() {
+        regionSelectAllSuppressPageSelectionUntilMs = performance.now() + 300;
+    }
+
+    function shouldSuppressPageSelectionAfterRegionSelectAll() {
+        return performance.now() < regionSelectAllSuppressPageSelectionUntilMs;
+    }
+
+    function isTextSelectionAllowedTarget(el) {
+        if (
+            typeof isTypingTarget === 'function' &&
+            isTypingTarget(el)
+        ) {
+            return true;
+        }
+        return !!(el && el.closest && el.closest('.app-manual'));
+    }
+
+    function clearDocumentTextSelection() {
+        if (typeof document.getSelection !== 'function') return;
+        const sel = document.getSelection();
+        if (sel && sel.rangeCount > 0) sel.removeAllRanges();
+    }
+
+    function scheduleClearDocumentTextSelectionAfterRegionSelectAll() {
+        clearDocumentTextSelection();
+        requestAnimationFrame(() => {
+            clearDocumentTextSelection();
+            requestAnimationFrame(clearDocumentTextSelection);
+        });
+    }
+
+    window.markRegionSelectAllSuppressPageSelection = markRegionSelectAllSuppressPageSelection;
+
+    document.addEventListener(
+        'selectstart',
+        (e) => {
+            if (!shouldSuppressPageSelectionAfterRegionSelectAll()) return;
+            if (isTextSelectionAllowedTarget(e.target)) return;
+            e.preventDefault();
+        },
+        true,
+    );
+
+    document.addEventListener('selectionchange', () => {
+        if (!shouldSuppressPageSelectionAfterRegionSelectAll()) return;
+        const ae = document.activeElement;
+        if (isTextSelectionAllowedTarget(ae)) return;
+        const sel = document.getSelection && document.getSelection();
+        if (!sel || sel.isCollapsed || !sel.rangeCount) return;
+        const anchorNode = sel.anchorNode;
+        if (
+            anchorNode &&
+            isTextSelectionAllowedTarget(
+                anchorNode.nodeType === 1 ? anchorNode : anchorNode.parentElement,
+            )
+        ) {
+            return;
+        }
+        clearDocumentTextSelection();
+    });
+
+    /** Ctrl+A — ブラウザのページ全選択より先に横取り（capture） */
+    window.addEventListener(
+        'keydown',
+        (e) => {
+            if (
+                typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+                isGlobalShortcutBlockedForTextInput(e)
+            ) {
+                return;
+            }
+            if (
+                typeof matchUserShortcut === 'function' &&
+                matchUserShortcut(e, 'regionSelectAll') &&
+                typeof window.handlePlaybackRegionSelectAllKeydown === 'function' &&
+                window.handlePlaybackRegionSelectAllKeydown(e)
+            ) {
+                scheduleClearDocumentTextSelectionAfterRegionSelectAll();
+                return;
+            }
+        },
+        true,
+    );
+
     window.addEventListener('keydown', (e) => {
         if (
             typeof handleDevConstantsPanelKeydown === 'function' &&

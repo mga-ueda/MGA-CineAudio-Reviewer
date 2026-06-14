@@ -332,6 +332,55 @@
         return regionSelectionEntries.length;
     }
 
+    /** 対象 Audio Track（アクティブ/ポインタ下）の全リージョンを選択 */
+    function selectAllRegionsOnTargetTrack() {
+        if (typeof resolveTargetExtraSlot !== 'function') return false;
+        const slot = resolveTargetExtraSlot();
+        if (slot < 0) {
+            if (typeof writeLog === 'function') {
+                writeLog('Playback region: no target Audio Track for select all');
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'No target track', 'notice');
+            }
+            return false;
+        }
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) {
+            if (typeof writeLog === 'function') {
+                writeLog('Playback region: target Audio Track has no regions');
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'No regions', 'notice');
+            }
+            return false;
+        }
+        const count = getSegmentCount(track);
+        if (count < 1) {
+            if (typeof writeLog === 'function') {
+                writeLog('Playback region: target Audio Track has no regions');
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'No regions', 'notice');
+            }
+            return false;
+        }
+        regionSelectionEntries.length = 0;
+        for (let i = 0; i < count; i++) {
+            regionSelectionEntries.push({ slot, segmentIndex: i });
+        }
+        syncRegionSelectionClasses();
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Playback region: selected all ' +
+                    count +
+                    ' region(s) on Ex' +
+                    (slot + 1),
+            );
+        }
+        return true;
+    }
+
     /** 選択中セグメント + regionGroupId グループメンバーを重複排除して列挙 */
     function expandRegionSegmentEditTargetsFromSelection() {
         const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
