@@ -1516,10 +1516,11 @@
         }
         .seek-bar-marker__feedback {
             position: absolute;
-            max-width: 7.5rem;
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-size: 0.58rem;
+            max-width: calc(6.5rem * var(--wave-lane-font-scale, 1));
+            padding: clamp(1px, calc(var(--wave-lane-label-h, 92px) * 0.009), 2px)
+                clamp(2px, calc(var(--wave-lane-label-h, 92px) * 0.045), 6px);
+            border-radius: clamp(2px, calc(var(--wave-lane-label-h, 92px) * 0.028), 4px);
+            font-size: calc(0.52rem * var(--wave-lane-font-scale, 1));
             font-weight: 600;
             line-height: 1.25;
             color: #f4f0e8;
@@ -1558,7 +1559,7 @@
             text-overflow: clip;
             overflow: visible;
             line-height: 1.2;
-            max-width: 9.5rem;
+            max-width: calc(8.2rem * var(--wave-lane-font-scale, 1));
         }
         .seek-bar-marker--range {
             background: var(--marker-orange-bg);
@@ -2194,6 +2195,53 @@
         }
         .audio-waveform-composite__lanes {
             position: relative;
+            --wave-lanes-width-ref: 640px;
+            --wave-lanes-width-scale: clamp(
+                0.85,
+                calc(var(--wave-lanes-viewport-w, var(--wave-lanes-width-ref)) / var(--wave-lanes-width-ref)),
+                2.25
+            );
+            --wave-lane-label-size-ratio: 0.82;
+            /* トラック高さ拡大時: ラベルは高さ方向の成長を 1/6 に抑え（400% 時 ≒ 150%） */
+            --wave-lane-label-h-scale: calc(
+                1 + (var(--wave-lane-height-scale, 1) - 1) / 6
+            );
+            --wave-lane-label-h: calc(92px * var(--wave-lane-label-h-scale, 1));
+            --wave-lane-font-scale: calc(
+                var(--wave-lanes-width-scale, 1)
+                * var(--wave-lane-label-h-scale, 1)
+                * var(--wave-lane-label-size-ratio, 1)
+            );
+            --wave-lane-label-inset-sm: clamp(
+                0.06rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.0105),
+                0.10rem
+            );
+            --wave-lane-label-inset-md: clamp(
+                0.10rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.0165),
+                0.15rem
+            );
+            --wave-lane-label-inset-lg: clamp(
+                0.14rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.026),
+                0.14rem
+            );
+            --wave-lane-label-inset-xl: clamp(
+                0.22rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.041),
+                0.22rem
+            );
+            --region-key-offset-pitch: clamp(
+                0.22rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.150),
+                0.88rem
+            );
+            --region-key-offset-gain: clamp(
+                0.10rem,
+                calc(var(--wave-lane-label-h, 92px) * 0.050),
+                0.29rem
+            );
             --wave-lanes-scrollbar-h: 0px;
             height: calc(
                 (var(--wave-lane-count, 3) * var(--wave-lane-h)) + var(--wave-lanes-scrollbar-h)
@@ -2941,10 +2989,10 @@
         }
         .audio-waveform-lane__lkfs {
             position: absolute;
-            left: 0.35rem;
-            bottom: 0.28rem;
+            left: var(--wave-lane-label-inset-xl, 0.35rem);
+            bottom: var(--wave-lane-label-inset-xl, 0.28rem);
             z-index: 3;
-            font-size: clamp(0.44rem, 1.05vmin, 0.58rem);
+            font-size: calc(0.52rem * var(--wave-lane-font-scale, 1));
             font-weight: 500;
             line-height: 1.15;
             letter-spacing: 0.03em;
@@ -2962,13 +3010,13 @@
         }
         .audio-waveform-lane__playback-region__index {
             position: absolute;
-            left: 0.18rem;
-            bottom: 0.18rem;
+            left: var(--wave-lane-label-inset-lg, 0.18rem);
+            bottom: var(--wave-lane-label-inset-lg, 0.18rem);
             top: auto;
             transform: none;
             z-index: 5;
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.62rem;
+            font-size: calc(0.55rem * var(--wave-lane-font-scale, 1));
             font-weight: 700;
             line-height: 1;
             letter-spacing: 0.02em;
@@ -3057,13 +3105,13 @@
         }
         .audio-waveform-lane__rehearsal-mark__label {
             position: absolute;
-            left: 0.18rem;
-            bottom: 0.18rem;
+            left: var(--wave-lane-label-inset-lg, 0.18rem);
+            bottom: var(--wave-lane-label-inset-lg, 0.18rem);
             top: auto;
             transform: none;
             z-index: 1;
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.62rem;
+            font-size: calc(0.55rem * var(--wave-lane-font-scale, 1));
             font-weight: 700;
             line-height: 1;
             letter-spacing: 0.02em;
@@ -3077,13 +3125,13 @@
         }
         .audio-waveform-lane__phrase-meta__label {
             position: absolute;
-            left: 0.12rem;
-            bottom: 0.12rem;
+            left: var(--wave-lane-label-inset-md, 0.12rem);
+            bottom: var(--wave-lane-label-inset-md, 0.12rem);
             top: auto;
             transform: none;
             z-index: 2;
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.46rem;
+            font-size: calc(0.41rem * var(--wave-lane-font-scale, 1));
             font-weight: 600;
             line-height: 1.05;
             letter-spacing: 0.01em;
@@ -3095,13 +3143,13 @@
             user-select: none;
             -webkit-user-select: none;
             white-space: nowrap;
-            max-width: calc(100% - 0.16rem);
+            max-width: calc(100% - var(--wave-lane-label-inset-md, 0.12rem) * 2);
             overflow: hidden;
             text-overflow: ellipsis;
         }
         .audio-waveform-lane__phrase-meta__label--chain-next {
             left: auto;
-            right: 0.12rem;
+            right: var(--wave-lane-label-inset-md, 0.12rem);
             text-align: right;
         }
         /* Phrase 着色 OFF — リハーサル名（A B …）・Tempo/Sig メタは非表示 */
@@ -3112,9 +3160,9 @@
             display: none !important;
         }
         .audio-waveform-lane__rehearsal-mark--narrow .audio-waveform-lane__phrase-meta__label {
-            left: 0.08rem;
-            bottom: 0.08rem;
-            font-size: 0.42rem;
+            left: var(--wave-lane-label-inset-sm, 0.08rem);
+            bottom: var(--wave-lane-label-inset-sm, 0.08rem);
+            font-size: calc(0.38rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-lane__rehearsal-mark--narrow
             .audio-waveform-lane__phrase-meta__label--chain-next,
@@ -3123,41 +3171,41 @@
         .audio-waveform-lane__playback-region--phrase-narrow
             .audio-waveform-lane__phrase-meta__label--chain-next {
             left: auto;
-            right: 0.08rem;
+            right: var(--wave-lane-label-inset-sm, 0.08rem);
         }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__phrase-meta__label {
-            font-size: 0.48rem;
+            font-size: calc(0.43rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite--phrase-fill
             .audio-waveform-lane__rehearsal-mark--narrow
             .audio-waveform-lane__phrase-meta__label {
-            font-size: 0.42rem;
+            font-size: calc(0.38rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-lane__playback-region--narrow .audio-waveform-lane__phrase-meta__label,
         .audio-waveform-lane__playback-region--phrase-narrow
             .audio-waveform-lane__phrase-meta__label {
-            left: 0.08rem;
-            bottom: 0.08rem;
-            font-size: 0.42rem;
+            left: var(--wave-lane-label-inset-sm, 0.08rem);
+            bottom: var(--wave-lane-label-inset-sm, 0.08rem);
+            font-size: calc(0.38rem * var(--wave-lane-font-scale, 1));
         }
         /* Phrase 着色 ON — リハーサル名・Key・音量（Key↔音量は固定、レーン縮小時は全体を収める） */
         .audio-waveform-composite--phrase-fill {
             --region-phrase-label-reserve: min(
-                2.35rem,
-                max(1.35rem, calc(var(--wave-lane-h, 92px) * 0.42))
+                1rem,
+                max(0.55rem, calc(var(--wave-lane-label-h, 92px) * 0.36))
             );
             --region-phrase-label-step-mark-key: min(
-                1.55rem,
+                0.65rem,
                 max(
-                    0.38rem,
-                    calc((var(--wave-lane-h, 92px) - var(--region-phrase-label-reserve)) * 0.46)
+                    0.32rem,
+                    calc((var(--wave-lane-label-h, 92px) - var(--region-phrase-label-reserve)) * 0.42)
                 )
             );
             --region-phrase-label-step-key-gain: min(
-                1.15rem,
+                0.48rem,
                 max(
-                    0.34rem,
-                    calc((var(--wave-lane-h, 92px) - var(--region-phrase-label-reserve)) * 0.36)
+                    0.28rem,
+                    calc((var(--wave-lane-label-h, 92px) - var(--region-phrase-label-reserve)) * 0.33)
                 )
             );
         }
@@ -3166,14 +3214,14 @@
             top: calc(50% - var(--region-phrase-label-step-mark-key));
             bottom: auto;
             transform: translate(-50%, -50%);
-            font-size: 1.05rem;
+            font-size: calc(0.92rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__rehearsal-mark__label {
             left: 50%;
             top: calc(50% - var(--region-phrase-label-step-mark-key));
             bottom: auto;
             transform: translate(-50%, -50%);
-            font-size: 1.05rem;
+            font-size: calc(0.92rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite--phrase-fill .audio-waveform-lane__region-meta-slot .audio-waveform-lane__playback-region__pitch {
             top: 50%;
@@ -3198,12 +3246,12 @@
         .audio-waveform-composite--phrase-fill
             .audio-waveform-lane__playback-region--phrase-narrow
             .audio-waveform-lane__playback-region__index {
-            font-size: 0.82rem;
+            font-size: calc(0.72rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite--phrase-fill
             .audio-waveform-lane__rehearsal-mark--narrow
             .audio-waveform-lane__rehearsal-mark__label {
-            font-size: 0.82rem;
+            font-size: calc(0.72rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
             .audio-waveform-lane__playback-region--narrow
@@ -3211,16 +3259,16 @@
         .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
             .audio-waveform-lane__playback-region--phrase-narrow
             .audio-waveform-lane__playback-region__index {
-            left: 0.12rem;
-            bottom: 0.12rem;
-            font-size: 0.52rem;
+            left: var(--wave-lane-label-inset-md, 0.12rem);
+            bottom: var(--wave-lane-label-inset-md, 0.12rem);
+            font-size: calc(0.46rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-composite:not(.audio-waveform-composite--phrase-fill)
             .audio-waveform-lane__rehearsal-mark--narrow
             .audio-waveform-lane__rehearsal-mark__label {
-            left: 0.12rem;
-            bottom: 0.12rem;
-            font-size: 0.52rem;
+            left: var(--wave-lane-label-inset-md, 0.12rem);
+            bottom: var(--wave-lane-label-inset-md, 0.12rem);
+            font-size: calc(0.46rem * var(--wave-lane-font-scale, 1));
         }
         .audio-waveform-lane__playback-region__gain-db,
         .audio-waveform-lane__playback-region__pitch {
@@ -3229,7 +3277,7 @@
             transform: translateX(-50%);
             z-index: 4;
             font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', sans-serif;
-            font-size: 0.58rem;
+            font-size: calc(0.52rem * var(--wave-lane-font-scale, 1));
             font-weight: 700;
             line-height: 1.25;
             letter-spacing: 0.02em;
@@ -3237,18 +3285,19 @@
             -webkit-text-fill-color: rgba(255, 244, 220, 0.95);
             background: rgb(0, 0, 0);
             mix-blend-mode: normal;
-            padding: 1px 5px;
-            border-radius: 3px;
+            padding: clamp(1px, calc(var(--wave-lane-label-h, 92px) * 0.009), 2px)
+                clamp(2px, calc(var(--wave-lane-label-h, 92px) * 0.045), 6px);
+            border-radius: clamp(2px, calc(var(--wave-lane-label-h, 92px) * 0.028), 4px);
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
             white-space: nowrap;
         }
         .audio-waveform-lane__playback-region__gain-db {
-            top: calc(50% + 0.35rem);
+            top: calc(50% + var(--region-key-offset-gain, 0.29rem));
         }
         .audio-waveform-lane__playback-region__pitch {
-            top: calc(50% - 1.05rem);
+            top: calc(50% - var(--region-key-offset-pitch, 0.86rem));
         }
         .audio-waveform-composite__markers.seek-bar-markers .seek-bar-marker {
             pointer-events: auto;
