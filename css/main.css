@@ -1499,20 +1499,20 @@
             box-sizing: border-box;
         }
         .seek-bar-marker--point {
-            width: 2px;
-            margin-left: -1px;
+            width: 1px;
+            margin-left: 0;
             background: linear-gradient(180deg, var(--marker-orange-pale) 0%, var(--marker-orange) 100%);
             border-radius: 0;
-            box-shadow: 0 0 3px rgba(184, 101, 16, 0.55);
+            box-shadow: none;
             cursor: pointer;
             z-index: 3;
             overflow: visible;
         }
         .seek-bar-marker--point.seek-bar-marker--active {
-            width: 2px;
-            margin-left: -1px;
+            width: 1px;
+            margin-left: 0;
             background: linear-gradient(180deg, var(--marker-orange-pale) 0%, var(--marker-orange) 100%);
-            box-shadow: 0 0 5px rgba(184, 101, 16, 0.8);
+            box-shadow: none;
         }
         .seek-bar-marker__feedback {
             position: absolute;

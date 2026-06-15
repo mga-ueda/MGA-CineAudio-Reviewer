@@ -2059,20 +2059,60 @@
         }
     }
 
-    function createSeekBarRangeBandElement(startSec, endSec, dur, opt) {
+    function timelineMarkerLayerWidthPx() {
+        return typeof masterTimelineWidthCss === 'function'
+            ? Math.max(1, masterTimelineWidthCss() | 0)
+            : 0;
+    }
+
+    function secToTimelineMarkerPx(sec, dur, layerW) {
+        if (!dur || dur <= 0 || !layerW) return 0;
+        const x = (Number(sec) / dur) * layerW;
+        return Math.max(0, Math.min(layerW, x));
+    }
+
+    /** 1px 縦線をピクセル格子に揃える（Canvas の Math.round(x)+0.5 と同等の見え方） */
+    function snapTimelineMarkerLinePx(sec, dur, layerW) {
+        return Math.round(secToTimelineMarkerPx(sec, dur, layerW));
+    }
+
+    function applySeekBarPointMarkerPosition(el, sec, dur, layerW) {
+        if (layerW > 0) {
+            el.style.left = snapTimelineMarkerLinePx(sec, dur, layerW) + 'px';
+        } else {
+            el.style.left = secToSeekRatio(sec, dur) + '%';
+        }
+    }
+
+    function applySeekBarRangeBandPosition(el, startSec, endSec, dur, layerW, opt) {
+        if (layerW > 0) {
+            const leftPx = snapTimelineMarkerLinePx(startSec, dur, layerW);
+            const rightPx = snapTimelineMarkerLinePx(endSec, dur, layerW);
+            const minW = opt && opt.pending ? Math.max(1, Math.round(layerW * 0.0012)) : 0;
+            const widthPx = Math.max(minW, rightPx - leftPx);
+            if (widthPx <= 0 && !(opt && opt.pending)) return false;
+            el.style.left = leftPx + 'px';
+            el.style.width = widthPx + 'px';
+            return true;
+        }
         const left = secToSeekRatio(startSec, dur);
         const right = secToSeekRatio(endSec, dur);
         const widthPct = Math.max(opt && opt.pending ? 0.12 : 0, right - left);
-        if (widthPct <= 0 && !(opt && opt.pending)) return null;
+        if (widthPct <= 0 && !(opt && opt.pending)) return false;
+        el.style.left = left + '%';
+        el.style.width = widthPct + '%';
+        return true;
+    }
+
+    function createSeekBarRangeBandElement(startSec, endSec, dur, opt, layerW) {
         const el = document.createElement('div');
         const isActive = !!(opt && opt.active);
         const isPending = !!(opt && opt.pending);
+        if (!applySeekBarRangeBandPosition(el, startSec, endSec, dur, layerW, opt)) return null;
         el.className =
             'seek-bar-marker seek-bar-marker--range' +
             (isPending ? ' seek-bar-marker--range-pending' : '') +
             (isActive ? ' seek-bar-marker--active' : '');
-        el.style.left = left + '%';
-        el.style.width = widthPct + '%';
         if (opt && opt.id) el.dataset.markerId = opt.id;
         if (opt && opt.title) el.title = opt.title;
         if (opt && opt.marker && !isPending) {
@@ -2093,12 +2133,12 @@
         return el;
     }
 
-    function createSeekBarPointElement(sec, dur, opt) {
+    function createSeekBarPointElement(sec, dur, opt, layerW) {
         const el = document.createElement('div');
         const isActive = !!(opt && opt.active);
         el.className =
             'seek-bar-marker seek-bar-marker--point' + (isActive ? ' seek-bar-marker--active' : '');
-        el.style.left = secToSeekRatio(sec, dur) + '%';
+        applySeekBarPointMarkerPosition(el, sec, dur, layerW);
         if (opt && opt.id) el.dataset.markerId = opt.id;
         if (opt && opt.title) el.title = opt.title;
         if (opt && opt.marker) {
@@ -2123,6 +2163,7 @@
             containerEl.hidden = true;
             return;
         }
+        const layerW = timelineMarkerLayerWidthPx();
 
         const frag = document.createDocumentFragment();
         const feedbackLabelSpans = [];
@@ -2135,13 +2176,19 @@
                     0,
                     secToSeekRatio(m.endSec, dur) - left,
                 );
-                const el = createSeekBarRangeBandElement(m.startSec, m.endSec, dur, {
-                    id: m.id,
-                    active: active,
-                    marker: m,
-                    comment: m.comment || '',
-                    title: markerTimeLabel(m) + (m.comment ? ' — ' + m.comment : ''),
-                });
+                const el = createSeekBarRangeBandElement(
+                    m.startSec,
+                    m.endSec,
+                    dur,
+                    {
+                        id: m.id,
+                        active: active,
+                        marker: m,
+                        comment: m.comment || '',
+                        title: markerTimeLabel(m) + (m.comment ? ' — ' + m.comment : ''),
+                    },
+                    layerW,
+                );
                 if (el) {
                     frag.appendChild(el);
                     drew += 1;
@@ -2163,13 +2210,18 @@
                 }
             } else {
                 const leftPct = secToSeekRatio(m.timeSec, dur);
-                const el = createSeekBarPointElement(m.timeSec, dur, {
-                    id: m.id,
-                    active: active,
-                    marker: m,
-                    comment: m.comment || '',
-                    title: tcLabelForSec(m.timeSec) + (m.comment ? ' — ' + m.comment : ''),
-                });
+                const el = createSeekBarPointElement(
+                    m.timeSec,
+                    dur,
+                    {
+                        id: m.id,
+                        active: active,
+                        marker: m,
+                        comment: m.comment || '',
+                        title: tcLabelForSec(m.timeSec) + (m.comment ? ' — ' + m.comment : ''),
+                    },
+                    layerW,
+                );
                 if (el) {
                     frag.appendChild(el);
                     drew += 1;
@@ -2196,13 +2248,19 @@
                 start = end;
                 end = swap;
             }
-            const pendingEl = createSeekBarRangeBandElement(start, end, dur, {
-                pending: true,
-                title:
-                    'Range In ' +
-                    tcLabelForSec(pendingRangeStartSec) +
-                    ' — press ] for Out',
-            });
+            const pendingEl = createSeekBarRangeBandElement(
+                start,
+                end,
+                dur,
+                {
+                    pending: true,
+                    title:
+                        'Range In ' +
+                        tcLabelForSec(pendingRangeStartSec) +
+                        ' — press ] for Out',
+                },
+                layerW,
+            );
             if (pendingEl) {
                 frag.appendChild(pendingEl);
                 drew += 1;
