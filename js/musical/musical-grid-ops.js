@@ -1764,12 +1764,30 @@
                     (e.key === '+' || e.key === '-') &&
                     !e.altKey &&
                     !e.ctrlKey &&
-                    !e.metaKey &&
-                    typeof insertMeterStretchSignAtEditorStart === 'function' &&
-                    insertMeterStretchSignAtEditorStart(e.key)
+                    !e.metaKey
                 ) {
-                    e.preventDefault();
-                    return;
+                    const raw = musicalGridMeterInput
+                        ? normalizeMusicalGridMeterText(musicalGridMeterInput.value)
+                        : '';
+                    const caret = musicalGridMeterInput
+                        ? musicalGridMeterInput.selectionStart
+                        : 0;
+                    if (
+                        typeof caretInTempoStretchPrefix === 'function' &&
+                        caretInTempoStretchPrefix(raw, caret) &&
+                        typeof bumpMeterStretchDeltaBy === 'function'
+                    ) {
+                        e.preventDefault();
+                        bumpMeterStretchDeltaBy(e.key === '+' ? 1 : -1);
+                        return;
+                    }
+                    if (
+                        typeof insertMeterStretchSignAtEditorStart === 'function' &&
+                        insertMeterStretchSignAtEditorStart(e.key)
+                    ) {
+                        e.preventDefault();
+                        return;
+                    }
                 }
                 if (
                     matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||

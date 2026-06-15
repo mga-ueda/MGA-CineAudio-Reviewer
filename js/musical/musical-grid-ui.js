@@ -708,7 +708,7 @@
                 committed ||
                 MUSICAL_GRID_DEFAULT_METER_TEXT;
         }
-        const nextText = sign + '0,' + body;
+        const nextText = formatTempoStretchPrefix(0, { keepZero: true }) + body;
         musicalGridMeterText = nextText;
         input.value = nextText;
         input.setSelectionRange(1, 1);
@@ -734,17 +734,10 @@
             spec.stretchDelta = Math.max(-998, Math.min(998, nextDelta));
             if (!meterSpecStretchDeltaValid(spec)) return;
         }
-        const nextText = formatMeterSpec(spec);
+        const nextText = formatMeterSpec(spec, { keepZero: nextDelta === 0 });
         musicalGridMeterText = nextText;
         if (input) {
-            if (nextDelta === 0) {
-                input.value = nextText;
-                if (typeof input.setSelectionRange === 'function') {
-                    input.setSelectionRange(0, 0);
-                }
-            } else {
-                setMeterInputValuePreserveStretchPrefixCaret(input, nextText, digitOffset);
-            }
+            setMeterInputValuePreserveStretchPrefixCaret(input, nextText, digitOffset);
         }
         scheduleMusicalGridRedraw();
         scheduleMusicalGridAutosave();

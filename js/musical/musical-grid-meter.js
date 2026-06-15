@@ -492,9 +492,20 @@
         return found;
     }
 
-    /** 先頭のテンポストレッチ接頭辞（例: +8, / -10,）を分離する */
+    /** ストレッチ delta=0 の編集中接頭辞（± は U+00B1、機種依存文字ではない） */
+    const TEMPO_STRETCH_ZERO_PREFIX = '±0,';
+
+    /** 先頭のテンポストレッチ接頭辞（例: +8, / -10, / ±0,）を分離する */
     function parseTempoStretchPrefix(raw) {
         const s = normalizeMusicalGridMeterText(raw);
+        const zeroM = /^±0,/.exec(s);
+        if (zeroM) {
+            return {
+                stretchDelta: 0,
+                text: s.slice(zeroM[0].length),
+                prefixLen: zeroM[0].length,
+            };
+        }
         const m = /^([+-]\d+),/.exec(s);
         if (!m) {
             return { stretchDelta: 0, text: s, prefixLen: 0 };
@@ -517,9 +528,11 @@
         return pos < info.prefixLen;
     }
 
-    function formatTempoStretchPrefix(delta) {
+    function formatTempoStretchPrefix(delta, opt) {
         const d = delta | 0;
-        if (!d) return '';
+        if (!d) {
+            return opt && opt.keepZero ? TEMPO_STRETCH_ZERO_PREFIX : '';
+        }
         return (d > 0 ? '+' : '') + d + ',';
     }
 
@@ -605,12 +618,12 @@
         return Math.abs(bpm - Math.round(bpm)) < 1e-9 ? String(Math.round(bpm)) : String(bpm);
     }
 
-    function formatMeterSpec(spec) {
+    function formatMeterSpec(spec, opt) {
         if (!spec || !spec.entries || !spec.entries.length) return '';
         const parts = spec.entries.map((e) => formatMeterEntryToken(e));
         let joined = parts.join(',');
         if (spec.mode === 'alternate') joined = '(' + joined + ')';
-        const prefix = formatTempoStretchPrefix(spec.stretchDelta || 0);
+        const prefix = formatTempoStretchPrefix(spec.stretchDelta || 0, opt);
         return prefix + joined;
     }
 
