@@ -95,7 +95,7 @@
             '<div class="audio-waveform-lane__loading" id="extraAudioTrackLoading' +
             slot +
             '" hidden aria-live="polite">' +
-            '<span class="audio-waveform-lane__loading-box">Now loading</span></div>';
+            '<span class="audio-waveform-lane__loading-box">Now Loading</span></div>';
         return wrap;
     }
 

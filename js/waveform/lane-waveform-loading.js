@@ -123,12 +123,29 @@
         el.hidden = !visible;
         if (visible) {
             syncLoadingOverlayPlacement(lane, el);
+            const box = el.querySelector('.audio-waveform-lane__loading-box');
+            if (box && !box.querySelector('.audio-waveform-lane__loading-ellipsis')) {
+                const plain = (box.textContent || '').trim();
+                if (loadingMessageAnimatedLabel(plain)) {
+                    setLaneWaveformLoadingMessage(lane, plain);
+                }
+            }
         } else {
             ensureLoadingInLane(lane, el);
-            setLaneWaveformLoadingMessage(lane, 'Now loading');
+            setLaneWaveformLoadingMessage(lane, 'Now Loading');
         }
         if (visible) el.setAttribute('aria-busy', 'true');
         else el.removeAttribute('aria-busy');
+    }
+
+    const LOADING_MSG_ANIMATED_LABELS = {
+        'time stretching': 'Time Stretching',
+        'now loading': 'Now Loading',
+    };
+
+    function loadingMessageAnimatedLabel(message) {
+        const key = String(message || 'now loading').trim().toLowerCase();
+        return LOADING_MSG_ANIMATED_LABELS[key] || null;
     }
 
     function setLaneWaveformLoadingMessage(laneEl, message) {
@@ -137,7 +154,22 @@
         const el = loadingElForLane(lane);
         if (!el) return;
         const box = el.querySelector('.audio-waveform-lane__loading-box');
-        if (box) box.textContent = message || 'Now loading';
+        if (!box) return;
+        const label = loadingMessageAnimatedLabel(message);
+        if (label) {
+            box.replaceChildren();
+            const labelEl = document.createElement('span');
+            labelEl.className = 'audio-waveform-lane__loading-label';
+            labelEl.textContent = label;
+            const dots = document.createElement('span');
+            dots.className = 'audio-waveform-lane__loading-ellipsis';
+            dots.setAttribute('aria-hidden', 'true');
+            box.appendChild(labelEl);
+            box.appendChild(document.createTextNode(' '));
+            box.appendChild(dots);
+            return;
+        }
+        box.textContent = message || 'Now Loading';
     }
 
     window.setExtraTrackWaveformLoadingMessage = function setExtraTrackWaveformLoadingMessage(
