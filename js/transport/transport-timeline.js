@@ -510,6 +510,7 @@
     window.isAtMasterTransportEnd = isAtMasterTransportEnd;
     window.getVideoPlaybackEndSec = getVideoPlaybackEndSec;
     window.getMasterTransportDurationSec = getMasterTransportDurationSec;
+    window.computeLiveMasterTransportDurationSec = computeLiveMasterTransportDurationSec;
     window.shouldBlackoutVideoForTransport = shouldBlackoutVideoForTransport;
     window.shouldBlackoutVideoPicture = shouldBlackoutVideoPicture;
     window.getTransportPlaybackClockSec = getTransportPlaybackClockSec;
@@ -653,7 +654,17 @@
         return getDuration(videoMain);
     }
 
-    function getMasterTransportDurationSec() {
+    function computeLiveMasterTransportDurationSec() {
+        if (
+            typeof waveformOffsetDragActive !== 'undefined' &&
+            waveformOffsetDragActive &&
+            typeof getRegionOffsetDragMasterFreezeSec === 'function'
+        ) {
+            const frozen = getRegionOffsetDragMasterFreezeSec();
+            if (Number.isFinite(frozen) && frozen > 0) {
+                return frozen;
+            }
+        }
         let m = 0;
         const vd = getVideoTransportDurationSec();
         if (vd > 0) m = vd;
@@ -663,6 +674,16 @@
             if (ed > m) m = ed;
         }
         return Math.max(m, 0.01);
+    }
+
+    function getMasterTransportDurationSec() {
+        if (typeof getRegionOffsetDragMasterFreezeSec === 'function') {
+            const frozen = getRegionOffsetDragMasterFreezeSec();
+            if (Number.isFinite(frozen) && frozen > 0) {
+                return frozen;
+            }
+        }
+        return computeLiveMasterTransportDurationSec();
     }
 
     function clampTransportSec(t) {

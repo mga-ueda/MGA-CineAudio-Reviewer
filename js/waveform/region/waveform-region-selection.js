@@ -93,20 +93,20 @@
     }
 
     /** グループ平行移動: いずれかが TC0 手前に出ないよう delta を共有クランプ */
-    function clampRegionGroupMoveDelta(members, deltaRaw, startRegionInByKey) {
+    function clampRegionGroupMoveDelta(members, deltaRaw, startRegionInByKey, opt) {
         if (!Number.isFinite(deltaRaw)) return 0;
         if (!members || !members.length) return deltaRaw;
+        const useCurrent = !!(opt && opt.useCurrentRegionInBase);
         let minStart = Infinity;
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
+            const track = { type: 'extra', slot: m.slot };
             const key = regionGroupMemberKey(m.slot, m.segmentIndex);
-            const rin =
-                startRegionInByKey && Number.isFinite(startRegionInByKey[key])
-                    ? startRegionInByKey[key]
-                    : getSegmentRegionTimelineIn(
-                          { type: 'extra', slot: m.slot },
-                          m.segmentIndex,
-                      );
+            const rin = useCurrent
+                ? getSegmentRegionTimelineIn(track, m.segmentIndex)
+                : startRegionInByKey && Number.isFinite(startRegionInByKey[key])
+                  ? startRegionInByKey[key]
+                  : getSegmentRegionTimelineIn(track, m.segmentIndex);
             if (Number.isFinite(rin)) minStart = Math.min(minStart, rin);
         }
         if (!Number.isFinite(minStart) || minStart === Infinity) return deltaRaw;

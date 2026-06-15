@@ -4,6 +4,7 @@
 (function devConstantsPanelModule() {
     const DEBUG_LOG_ORDER = [
         'REGION_RESTORE',
+        'REGION_SNAP',
         'MUSICAL_SLOT',
         'WAVEFORM_VIEWPORT',
         'VIDEO_ANALYZER',
@@ -17,6 +18,11 @@
             label: 'セッション復元',
             tag: '[RegionRestore]',
             desc: 'F5 復元・overlay 再描画・All Clear の段階追跡。リージョン欠落・二重表示・slots 空の調査。',
+        },
+        REGION_SNAP: {
+            label: 'リージョン移動スナップ',
+            tag: '[RegionSnap]',
+            desc: '平行移動ドラッグ確定時のポインタ位置・スナップ後・実際の region In。境界ずれの調査に。',
         },
         MUSICAL_SLOT: {
             label: 'Musical / Phrase スロット',
@@ -366,14 +372,31 @@
         headerText.appendChild(title);
         headerText.appendChild(hint);
 
+        const headerActions = document.createElement('div');
+        headerActions.className = 'dev-constants-panel__header-actions';
+
         const allOffBtn = document.createElement('button');
         allOffBtn.type = 'button';
         allOffBtn.className = 'dev-constants-panel__all-off-btn';
         allOffBtn.textContent = '全オフ';
         allOffBtn.addEventListener('click', () => setAllOff());
 
+        const logClearBtn = document.createElement('button');
+        logClearBtn.type = 'button';
+        logClearBtn.className = 'dev-constants-panel__all-off-btn';
+        logClearBtn.textContent = 'ログクリア';
+        if (typeof msg === 'function') {
+            logClearBtn.title = msg('tooltip.logClear');
+        }
+        logClearBtn.addEventListener('click', () => {
+            if (typeof clearLog === 'function') clearLog();
+        });
+
+        headerActions.appendChild(allOffBtn);
+        headerActions.appendChild(logClearBtn);
+
         header.appendChild(headerText);
-        header.appendChild(allOffBtn);
+        header.appendChild(headerActions);
 
         bodyEl = document.createElement('div');
         bodyEl.className = 'dev-constants-panel__body';

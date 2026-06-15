@@ -135,6 +135,43 @@
             ? regionOutDragExtentSec
             : 0;
     };
+    function beginRegionOffsetDragMasterFreeze() {
+        regionOffsetDragStickyHeadSec = NaN;
+        regionOffsetDragMasterFreezeSec =
+            typeof computeLiveMasterTransportDurationSec === 'function'
+                ? computeLiveMasterTransportDurationSec()
+                : typeof getMasterTransportDurationSec === 'function'
+                  ? getMasterTransportDurationSec()
+                  : 0;
+    }
+    function updateRegionOffsetDragMasterFreeze() {
+        if (!Number.isFinite(regionOffsetDragMasterFreezeSec) || regionOffsetDragMasterFreezeSec <= 0) {
+            return;
+        }
+        if (typeof waveformOffsetDragActive !== 'undefined' && waveformOffsetDragActive) {
+            return;
+        }
+        const live =
+            typeof computeLiveMasterTransportDurationSec === 'function'
+                ? computeLiveMasterTransportDurationSec()
+                : 0;
+        if (live > regionOffsetDragMasterFreezeSec + 0.01) {
+            regionOffsetDragMasterFreezeSec = live;
+        }
+    }
+    function endRegionOffsetDragMasterFreeze() {
+        regionOffsetDragMasterFreezeSec = NaN;
+        regionOffsetDragStickyHeadSec = NaN;
+    }
+    window.getRegionOffsetDragMasterFreezeSec = function () {
+        return Number.isFinite(regionOffsetDragMasterFreezeSec) &&
+            regionOffsetDragMasterFreezeSec > 0
+            ? regionOffsetDragMasterFreezeSec
+            : 0;
+    };
+    window.beginRegionOffsetDragMasterFreeze = beginRegionOffsetDragMasterFreeze;
+    window.updateRegionOffsetDragMasterFreeze = updateRegionOffsetDragMasterFreeze;
+    window.endRegionOffsetDragMasterFreeze = endRegionOffsetDragMasterFreeze;
     window.clearPlaybackRegion = clearPlaybackRegion;
     window.clearTrackRegion = clearTrackRegion;
     window.setTrackSegments = setTrackSegments;

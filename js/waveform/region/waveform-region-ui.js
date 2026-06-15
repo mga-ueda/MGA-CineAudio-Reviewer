@@ -1160,18 +1160,21 @@
         if (!members || !members.length || !Number.isFinite(delta)) return;
         const startRegionInByKey = (opt && opt.startRegionInByKey) || null;
         const startAnchorByKey = (opt && opt.startAnchorByKey) || null;
+        const useCurrentBase = !!(opt && opt.useCurrentRegionInBase);
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
             const track = { type: 'extra', slot: m.slot };
             const key = regionGroupMemberKey(m.slot, m.segmentIndex);
-            const dragStartRegionIn =
-                startRegionInByKey && Number.isFinite(startRegionInByKey[key])
-                    ? startRegionInByKey[key]
-                    : getSegmentRegionTimelineIn(track, m.segmentIndex);
-            const dragStartAnchor =
-                startAnchorByKey && Number.isFinite(startAnchorByKey[key])
-                    ? startAnchorByKey[key]
-                    : getSegmentTimelineStart(track, m.segmentIndex);
+            const dragStartRegionIn = useCurrentBase
+                ? getSegmentRegionTimelineIn(track, m.segmentIndex)
+                : startRegionInByKey && Number.isFinite(startRegionInByKey[key])
+                  ? startRegionInByKey[key]
+                  : getSegmentRegionTimelineIn(track, m.segmentIndex);
+            const dragStartAnchor = useCurrentBase
+                ? getSegmentTimelineStart(track, m.segmentIndex)
+                : startAnchorByKey && Number.isFinite(startAnchorByKey[key])
+                  ? startAnchorByKey[key]
+                  : getSegmentTimelineStart(track, m.segmentIndex);
             moveSegmentClipByTimelineDelta(track, m.segmentIndex, delta, {
                 dragStartRegionIn,
                 dragStartAnchor,
@@ -1183,6 +1186,54 @@
         }
     }
 
+    function logRegionMoveSnapDragIfNeeded(
+        track,
+        segmentIndex,
+        proposedHeadSec,
+        snapDetail,
+        opt,
+        headBeforeApply,
+        headAfterApply,
+    ) {
+        if (typeof window.regionSnapDiagLogMoveCommit !== 'function') return;
+        if (!(opt && opt.geometryOnly)) return;
+        window.regionSnapDiagLogMoveCommit(
+            track,
+            segmentIndex,
+            proposedHeadSec,
+            snapDetail,
+            Object.assign({}, opt || {}, {
+                phase: 'drag',
+                headBeforeApply,
+                headAfterApply,
+            }),
+        );
+    }
+
+    function logRegionMoveSnapCommitIfNeeded(
+        track,
+        segmentIndex,
+        proposedHeadSec,
+        snapDetail,
+        opt,
+        headBeforeApply,
+        headAfterApply,
+    ) {
+        if (typeof window.regionSnapDiagLogMoveCommit !== 'function') return;
+        if (opt && opt.geometryOnly) return;
+        window.regionSnapDiagLogMoveCommit(
+            track,
+            segmentIndex,
+            proposedHeadSec,
+            snapDetail,
+            Object.assign({}, opt || {}, {
+                phase: 'commit',
+                headBeforeApply,
+                headAfterApply,
+            }),
+        );
+    }
+
     function setSegmentTimelineStartSec(track, segmentIndex, sec, opt) {
         if (!isExtraTrackRef(track)) return;
         if (!(opt && opt.skipUndo) && !regionUndoPaused) {
@@ -1190,19 +1241,56 @@
         }
         const state = getPlaybackRegionsState(track);
         if (!state || !state.segments[segmentIndex]) return;
+        const headBeforeApply = getSegmentRegionTimelineIn(track, segmentIndex);
+        const proposedHeadSec = Number(sec) || 0;
         const dragStartRegionIn =
             opt && Number.isFinite(opt.dragStartRegionIn)
                 ? opt.dragStartRegionIn
                 : getSegmentRegionTimelineIn(track, segmentIndex);
         let desiredRegionIn;
+        let snapDetail = null;
         if (opt && opt.skipSnap) {
-            desiredRegionIn = snapTimelineSec(Number(sec) || 0, opt);
+            desiredRegionIn = snapTimelineSec(proposedHeadSec, opt);
+            snapDetail = {
+                proposedHeadSec,
+                pointerSec: proposedHeadSec,
+                frameSec: desiredRegionIn,
+                snappedSec: desiredRegionIn,
+                edge: 'skip',
+                stopSec: null,
+                thresholdSec: null,
+            };
+        } else if (typeof snapRegionMoveRegionInSecDetail === 'function') {
+            const snapResult = snapRegionMoveRegionInSecDetail(
+                proposedHeadSec,
+                track,
+                segmentIndex,
+                {
+                    exclude: { slot: track.slot, segmentIndex },
+                    dragStartRegionIn: opt && opt.dragStartRegionIn,
+                    dragStartAnchor: opt && opt.dragStartAnchor,
+                    commitSnap: !(opt && opt.geometryOnly),
+                    lastProposedHeadSec: opt && opt.lastProposedHeadSec,
+                    geometryOnly: !!(opt && opt.geometryOnly),
+                },
+            );
+            desiredRegionIn = snapResult.sec;
+            snapDetail = snapResult.detail;
         } else {
-            desiredRegionIn = snapRegionMoveRegionInSec(sec, track, segmentIndex, {
+            desiredRegionIn = snapRegionMoveRegionInSec(proposedHeadSec, track, segmentIndex, {
                 exclude: { slot: track.slot, segmentIndex },
                 dragStartRegionIn: opt && opt.dragStartRegionIn,
                 dragStartAnchor: opt && opt.dragStartAnchor,
             });
+            snapDetail = {
+                proposedHeadSec,
+                pointerSec: proposedHeadSec,
+                frameSec: desiredRegionIn,
+                snappedSec: desiredRegionIn,
+                edge: 'unknown',
+                stopSec: null,
+                thresholdSec: null,
+            };
         }
         if (
             !isParallelRegionOffsetDragOpt(opt) &&
@@ -1214,19 +1302,79 @@
             if (desiredRegionIn < REGION_IN_MIN_TRANSPORT_SEC - 0.00001) {
                 desiredRegionIn = REGION_IN_MIN_TRANSPORT_SEC;
             }
+            if (snapDetail) snapDetail.snappedSec = desiredRegionIn;
             applySegmentRegionInFromTransport(track, segmentIndex, desiredRegionIn, opt);
+            if (opt && opt.geometryOnly) {
+                logRegionMoveSnapDragIfNeeded(
+                    track,
+                    segmentIndex,
+                    proposedHeadSec,
+                    snapDetail,
+                    opt,
+                    headBeforeApply,
+                    getSegmentRegionTimelineIn(track, segmentIndex),
+                );
+            } else {
+                logRegionMoveSnapCommitIfNeeded(
+                    track,
+                    segmentIndex,
+                    proposedHeadSec,
+                    snapDetail,
+                    opt,
+                    headBeforeApply,
+                    getSegmentRegionTimelineIn(track, segmentIndex),
+                );
+            }
             return;
         }
-        const delta = desiredRegionIn - dragStartRegionIn;
-        if (dragStartRegionIn + delta < REGION_IN_MIN_TRANSPORT_SEC - 0.00001) {
-            desiredRegionIn = REGION_IN_MIN_TRANSPORT_SEC;
+        const currentRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        let delta = desiredRegionIn - dragStartRegionIn;
+        let moveOpt = opt;
+        if (isParallelRegionOffsetDragOpt(opt)) {
+            const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
+            delta = desiredRegionIn - currentRegionIn;
+            moveOpt = Object.assign({}, opt, {
+                dragStartRegionIn: currentRegionIn,
+                dragStartAnchor: currentAnchor,
+            });
         }
-        moveSegmentClipByTimelineDelta(
-            track,
-            segmentIndex,
-            desiredRegionIn - dragStartRegionIn,
-            opt,
-        );
+        if (
+            (isParallelRegionOffsetDragOpt(opt)
+                ? currentRegionIn
+                : dragStartRegionIn) +
+                delta <
+            REGION_IN_MIN_TRANSPORT_SEC - 0.00001
+        ) {
+            desiredRegionIn = REGION_IN_MIN_TRANSPORT_SEC;
+            delta = desiredRegionIn - (moveOpt.dragStartRegionIn ?? dragStartRegionIn);
+        }
+        if (snapDetail) {
+            snapDetail.snappedSec = desiredRegionIn;
+            snapDetail.currentHeadSec = currentRegionIn;
+            snapDetail.appliedDeltaSec = delta;
+        }
+        moveSegmentClipByTimelineDelta(track, segmentIndex, delta, moveOpt);
+        if (opt && opt.geometryOnly) {
+            logRegionMoveSnapDragIfNeeded(
+                track,
+                segmentIndex,
+                proposedHeadSec,
+                snapDetail,
+                opt,
+                headBeforeApply,
+                getSegmentRegionTimelineIn(track, segmentIndex),
+            );
+        } else {
+            logRegionMoveSnapCommitIfNeeded(
+                track,
+                segmentIndex,
+                proposedHeadSec,
+                snapDetail,
+                opt,
+                headBeforeApply,
+                getSegmentRegionTimelineIn(track, segmentIndex),
+            );
+        }
     }
 
     function resolveRegionSegmentFromPointer(clientX, clientY) {

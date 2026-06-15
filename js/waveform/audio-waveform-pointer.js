@@ -45,6 +45,20 @@
     function endWaveformTrackOffsetDrag(opt) {
         if (!waveformOffsetDragActive && !(opt && opt.force)) return;
         detachWaveformOffsetDragDocListeners();
+        const releaseId =
+            opt && opt.event && opt.event.pointerId != null
+                ? opt.event.pointerId
+                : waveformOffsetDragPointerId;
+        const lanes = waveformScrubTargetEl();
+        if (
+            lanes &&
+            releaseId != null &&
+            typeof lanes.releasePointerCapture === 'function'
+        ) {
+            try {
+                lanes.releasePointerCapture(releaseId);
+            } catch (_) {}
+        }
         waveformOffsetDragActive = false;
         waveformOffsetDragSlot = -1;
         waveformOffsetDragSegmentIndex = -1;
@@ -54,8 +68,20 @@
         waveformOffsetDragGroupStartAnchorByKey = null;
         waveformOffsetDragGroupStartRegionInByKey = null;
         waveformOffsetDragGrabTransportOffsetSec = NaN;
-        const lanes = waveformScrubTargetEl();
+        waveformOffsetDragStartScrubW = NaN;
+        waveformOffsetDragStartPointerRatio = NaN;
+        waveformOffsetDragStartXContent = NaN;
+        waveformOffsetDragStartMasterSec = NaN;
+        if (typeof endRegionOffsetDragMasterFreeze === 'function') {
+            endRegionOffsetDragMasterFreeze();
+        }
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
+        if (typeof window.commitWaveformOffsetDragIfActive === 'function') {
+            window.commitWaveformOffsetDragIfActive = null;
+        }
     }
 
     function waveformExtraLaneSlotFromClientY(clientY) {
@@ -216,6 +242,165 @@
             typeof setExtraTrackTimelineStartSec === 'function'
         );
     }
+
+    function regionOffsetDragScrollRatioFromClientX(clientX, scrubWCss) {
+        const lanes = typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        const m =
+            typeof waveformTimelineMetrics === 'function' ? waveformTimelineMetrics(lanes) : null;
+        const w = Number(scrubWCss);
+        if (!m || !(w > 0) || !Number.isFinite(clientX)) return 0;
+        const xInViewport = clientX - m.contentLeft;
+        const xInScrub = xInViewport + (m.scrollable ? m.scrollLeft : 0);
+        return xInScrub / w;
+    }
+
+    function regionOffsetDragRatioFromClientX(clientX) {
+        if (
+            typeof window.scrubRatioUnclampedFromClientX === 'function' &&
+            waveformOffsetDragStartScrubW > 0
+        ) {
+            return window.scrubRatioUnclampedFromClientX(
+                clientX,
+                waveformOffsetDragStartScrubW,
+            );
+        }
+        if (
+            waveformOffsetDragStartScrubW > 0 &&
+            typeof regionOffsetDragScrollRatioFromClientX === 'function'
+        ) {
+            return regionOffsetDragScrollRatioFromClientX(
+                clientX,
+                waveformOffsetDragStartScrubW,
+            );
+        }
+        return NaN;
+    }
+
+    /** Region body drag: keep px grab offset; scale delta with master frozen at drag start. */
+    function regionOffsetDragRegionInSecFromClientX(clientX) {
+        if (
+            waveformOffsetDragActive &&
+            Number.isFinite(waveformOffsetDragStartTimelineSec) &&
+            Number.isFinite(waveformOffsetDragStartPointerRatio) &&
+            Number.isFinite(waveformOffsetDragStartMasterSec) &&
+            waveformOffsetDragStartMasterSec > 0
+        ) {
+            const ratioNow = regionOffsetDragRatioFromClientX(clientX);
+            if (Number.isFinite(ratioNow)) {
+                return (
+                    waveformOffsetDragStartTimelineSec +
+                    (ratioNow - waveformOffsetDragStartPointerRatio) *
+                        waveformOffsetDragStartMasterSec
+                );
+            }
+        }
+        const delta = timelineSecDeltaFromClientXDelta(clientX, waveformOffsetDragStartClientX);
+        return waveformOffsetDragStartTimelineSec + delta;
+    }
+
+    /** F10 診断: ポインタ秒の複数経路を照合 */
+    function regionSnapDiagCollectDragPointerContext(clientX) {
+        if (!Number.isFinite(clientX)) return null;
+        const round = (v) => (Number.isFinite(v) ? Math.round(v * 10000) / 10000 : v);
+        const ctx = { clientX: round(clientX) };
+        if (waveformOffsetDragActive) {
+            ctx.dragActive = true;
+            ctx.startTimelineSec = round(waveformOffsetDragStartTimelineSec);
+            ctx.startMasterSec = round(waveformOffsetDragStartMasterSec);
+            ctx.startScrubW = round(waveformOffsetDragStartScrubW);
+            ctx.startPointerRatio = round(waveformOffsetDragStartPointerRatio);
+            ctx.startClientX = round(waveformOffsetDragStartClientX);
+            if (
+                waveformOffsetDragStartScrubW > 0 &&
+                typeof regionOffsetDragScrollRatioFromClientX === 'function'
+            ) {
+                ctx.ratioNow = round(regionOffsetDragRatioFromClientX(clientX));
+                ctx.ratioDelta = round(ctx.ratioNow - waveformOffsetDragStartPointerRatio);
+            }
+            ctx.proposedFromRatioDrag = round(
+                regionOffsetDragRegionInSecFromClientX(clientX),
+            );
+            if (Number.isFinite(ctx.ratioDelta)) {
+                ctx.proposedFromStartMasterDelta = round(
+                    waveformOffsetDragStartTimelineSec +
+                        ctx.ratioDelta * waveformOffsetDragStartMasterSec,
+                );
+                if (typeof computeLiveMasterTransportDurationSec === 'function') {
+                    ctx.liveMasterNow = round(computeLiveMasterTransportDurationSec());
+                    ctx.hypotheticalLiveMasterScaled = round(
+                        waveformOffsetDragStartTimelineSec +
+                            ctx.ratioDelta * ctx.liveMasterNow,
+                    );
+                }
+            }
+        } else {
+            ctx.dragActive = false;
+        }
+        const liveDelta = timelineSecDeltaFromClientXDelta(
+            clientX,
+            waveformOffsetDragStartClientX,
+        );
+        ctx.proposedFromPxDelta = round(
+            waveformOffsetDragStartTimelineSec + liveDelta,
+        );
+        if (typeof transportSecFromClientX === 'function') {
+            ctx.transportSecFromClientX = round(transportSecFromClientX(clientX));
+        }
+        if (
+            Number.isFinite(waveformOffsetDragGrabTransportOffsetSec) &&
+            Number.isFinite(ctx.transportSecFromClientX)
+        ) {
+            ctx.grabOffsetSec = round(waveformOffsetDragGrabTransportOffsetSec);
+            ctx.regionInFromTransportGrab = round(
+                ctx.transportSecFromClientX - waveformOffsetDragGrabTransportOffsetSec,
+            );
+        }
+        if (
+            Number.isFinite(ctx.proposedFromRatioDrag) &&
+            Number.isFinite(ctx.proposedFromPxDelta)
+        ) {
+            ctx.dragVsPxDeltaSec = round(
+                ctx.proposedFromRatioDrag - ctx.proposedFromPxDelta,
+            );
+        }
+        if (
+            Number.isFinite(ctx.proposedFromRatioDrag) &&
+            Number.isFinite(ctx.hypotheticalLiveMasterScaled)
+        ) {
+            ctx.dragVsLiveMasterSec = round(
+                ctx.proposedFromRatioDrag - ctx.hypotheticalLiveMasterScaled,
+            );
+        }
+        if (
+            Number.isFinite(ctx.proposedFromRatioDrag) &&
+            Number.isFinite(ctx.regionInFromTransportGrab)
+        ) {
+            ctx.dragVsGrabSec = round(
+                ctx.proposedFromRatioDrag - ctx.regionInFromTransportGrab,
+            );
+        }
+        if (
+            Number.isFinite(ctx.proposedFromRatioDrag) &&
+            Number.isFinite(ctx.proposedFromStartMasterDelta)
+        ) {
+            ctx.dragVsStartMasterSec = round(
+                ctx.proposedFromRatioDrag - ctx.proposedFromStartMasterDelta,
+            );
+        }
+        const el = typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
+        const m =
+            typeof waveformTimelineMetrics === 'function' ? waveformTimelineMetrics(el) : null;
+        if (m && m.scrubW > 0) {
+            ctx.scrubWNow = round(m.scrubW);
+            ctx.scrollLeftNow = round(m.scrollable ? m.scrollLeft : 0);
+            if (Number.isFinite(waveformOffsetDragStartScrubW) && waveformOffsetDragStartScrubW > 0) {
+                ctx.scrubWDriftPx = round(m.scrubW - waveformOffsetDragStartScrubW);
+            }
+        }
+        return ctx;
+    }
+    window.regionSnapDiagCollectDragPointerContext = regionSnapDiagCollectDragPointerContext;
+    window.regionOffsetDragRatioFromClientX = regionOffsetDragRatioFromClientX;
 
     function timelineSecDeltaFromClientXDelta(clientX, startClientX) {
         const master =
@@ -607,9 +792,15 @@
         };
         waveformPointerGestureDocUp = (e) => {
             if (e.pointerId !== waveformPointerGestureId) return;
-            if (!waveformOffsetDragActive) {
-                finishWaveformPointerSeek(e);
-            } else {
+            if (waveformOffsetDragActive) {
+                if (
+                    typeof window.commitWaveformOffsetDragIfActive === 'function' &&
+                    window.commitWaveformOffsetDragIfActive(e)
+                ) {
+                    /* commit handled */
+                } else if (typeof endWaveformTrackOffsetDrag === 'function') {
+                    endWaveformTrackOffsetDrag({ force: true, event: e });
+                }
                 isSeeking = false;
                 if (typeof resetWaveformScrubOverviewDrawState === 'function') {
                     resetWaveformScrubOverviewDrawState();
@@ -617,6 +808,8 @@
                 if (typeof endWaveformVisualRefreshDefer === 'function') {
                     endWaveformVisualRefreshDefer({ flush: true });
                 }
+            } else {
+                finishWaveformPointerSeek(e);
             }
             cancelWaveformPointerGesture();
         };

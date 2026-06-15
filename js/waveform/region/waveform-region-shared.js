@@ -24,6 +24,10 @@
     var regionOutDragStartScrubW = NaN;
     var regionOutDragStartScrubRatio = NaN;
     var regionOutDragExtentSec = NaN;
+    /** リージョン平行移動ドラッグ中の表示用マスター尺（ドラッグ中は縮まない／右延長時のみ拡大） */
+    var regionOffsetDragMasterFreezeSec = NaN;
+    /** ドラッグ中スナップのヒステリシス用 — 一度吸着した頭位置（秒） */
+    var regionOffsetDragStickyHeadSec = NaN;
 
     var hoveredPlaybackRegionEl = null;
     /** @type {HTMLElement[]} */

@@ -138,9 +138,17 @@
     let waveformOffsetDragSlot = -1;
     let waveformOffsetDragPointerId = null;
     let waveformOffsetDragStartClientX = 0;
+    let waveformOffsetDragStartScrubW = NaN;
+    let waveformOffsetDragStartPointerRatio = NaN;
+    /** ドラッグ開始時のタイムライン内容座標（px）— scrubW 変動に追従する delta 計算用 */
+    let waveformOffsetDragStartXContent = NaN;
+    /** ドラッグ開始時のマスター尺 — 伸長中もポインタの秒換算を一定に保つ */
+    let waveformOffsetDragStartMasterSec = NaN;
     let waveformOffsetDragStartTimelineSec = 0;
     let waveformOffsetDragPreserveInPadSec = 0;
     let waveformOffsetDragStartAnchorSec = 0;
+    /** 直前フレームのポインタ位置（スナップ方向判定用） */
+    let waveformOffsetDragLastProposedSec = NaN;
     let waveformOffsetDragGrabTransportOffsetSec = NaN;
     /** @type {{ slot: number, segmentIndex: number }[] | null} */
     let waveformOffsetDragGroupMembers = null;

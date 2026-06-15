@@ -19,6 +19,13 @@
      */
     window.LOG_MAX_LINES = 500;
 
+    /**
+     * リージョン平行移動スナップ — 隣接境界がこの秒数未満なら「密集」扱い（誤吸着防止）。
+     * 密集時の幅は REGION_MOVE_SNAP_DENSE_GAP_RATIO × 隣接間隔。
+     */
+    window.REGION_MOVE_SNAP_DENSE_GAP_SEC = 2.5;
+    window.REGION_MOVE_SNAP_DENSE_GAP_RATIO = 0.15;
+
     /** Fade 三角掴み帯（8×16px）と重ならない上端 inset — Phrase / スプリット / In/Out 共通 */
     window.REGION_FADE_RESERVE_TOP_INSET_PX = 18;
 
@@ -97,6 +104,12 @@
      * window.TEMPO_STRETCH_VERIFY.skipApply — ストレッチ適用をスキップ（A/B 比較）。
      * dumpTempoStretchVerifyState / restoreAllExtraTracksFromBackup — F10 の検証ボタン。
      *
+     * --- REGION_SNAP ---
+     * [RegionSnap] — リージョン平行移動のスナップ診断（ポインタ位置・スナップ後・確定位置）。
+     * モジュール: js/waveform/region-snap-diag.js
+     * 主な内容: move/commit（pointer / snapped / actual の TC と秒、edge・stop）。
+     * 有効化の目安: 他トラック境界へのスナップが意図とずれる・ドラッグ完了後に位置が飛ぶ。
+     *
      * --- SILENT_GAP_DELETE ---
      * [SilentGapDel] — 無音リージョン削除・Ctrl+クリック無音選択・Delete キー経路の追跡。
      * モジュール: js/waveform/region/waveform-region-core-undo.js（silentGapDeleteDiagLog）、
@@ -113,6 +126,7 @@
         /** 診断ログ — isDebugLogCategoryEnabled() が参照 */
         DEBUG_LOG: {
             REGION_RESTORE: false,
+            REGION_SNAP: false,
             MUSICAL_SLOT: false,
             WAVEFORM_VIEWPORT: false,
             VIDEO_ANALYZER: false,

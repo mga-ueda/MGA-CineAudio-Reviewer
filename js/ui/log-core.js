@@ -15,6 +15,7 @@
 
     const LOG_DIAG_CATEGORY = {
         REGION_RESTORE: 'Restore',
+        REGION_SNAP: 'RgSnap',
         MUSICAL_SLOT: 'Musical',
         WAVEFORM_VIEWPORT: 'Viewport',
         VIDEO_ANALYZER: 'VideoAnz',
@@ -24,6 +25,7 @@
     };
 
     const LEGACY_LOG_RULES = [
+        { re: /^\[RegionSnap\]/i, tier: 'diag', category: 'RgSnap' },
         { re: /^\[MusicalSlot\]/i, tier: 'diag', category: 'Musical' },
         { re: /^\[WaveformViewport\]/i, tier: 'diag', category: 'Viewport' },
         { re: /^\[TempoStretch/i, tier: 'diag', category: 'Tempo' },
