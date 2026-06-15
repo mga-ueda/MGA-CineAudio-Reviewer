@@ -3506,7 +3506,7 @@
             cursor: grab;
             user-select: none;
             -webkit-user-select: none;
-            min-width: 28px;
+            min-width: 0;
             overflow: visible;
         }
         .audio-waveform-composite__lanes--region-drag-forbidden
@@ -3789,7 +3789,7 @@
             box-sizing: border-box;
             pointer-events: none;
             z-index: 8;
-            min-width: 8px;
+            min-width: 0;
             overflow: visible;
         }
         .audio-waveform-lane__crossfade-marker__shape {

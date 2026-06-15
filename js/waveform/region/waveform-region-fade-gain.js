@@ -263,7 +263,6 @@
                     const axis = clampRegionAxisRatio(
                         (zone.oEnd - regionIn) / dur,
                     );
-                    if (axis <= 0.00001) return;
                     if (bestInAxis == null || zone.overlap >= bestInOverlap) {
                         bestInAxis = axis;
                         bestInOverlap = zone.overlap;
@@ -288,7 +287,6 @@
                     const axis = clampRegionAxisRatio(
                         (zone.oStart - regionIn) / dur,
                     );
-                    if (axis >= 0.99999) return;
                     if (bestOutAxis == null || zone.overlap >= bestOutOverlap) {
                         bestOutAxis = axis;
                         bestOutOverlap = zone.overlap;

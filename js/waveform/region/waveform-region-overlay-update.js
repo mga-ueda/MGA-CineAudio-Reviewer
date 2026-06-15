@@ -402,7 +402,6 @@
         for (let g = 0; g < silentGaps.length; g++) {
             positionSilentGapOverlayEl(silentGapEls[g], silentGaps[g]);
         }
-        applyDenseRegionBoundaryPresentation(track, container);
         refreshTrackFadeTriangleVisibility(track, container);
         scheduleWaveformRegionOverlayRefresh();
     }
@@ -595,9 +594,8 @@
         syncRegionSelectionClasses();
         if (!lightweight) {
             diagRun(
-                'overlay/densePresentation',
+                'overlay/fadeTriangles',
                 () => {
-                    applyDenseRegionBoundaryPresentation(track, container);
                     refreshTrackFadeTriangleVisibility(track, container);
                 },
                 diagEx,
