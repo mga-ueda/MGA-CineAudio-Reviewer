@@ -546,6 +546,7 @@
         if (!getMusicalGridVisible()) return false;
         splitPhraseAtWaveformPointer();
         e.preventDefault();
+        e.stopPropagation();
         return true;
     }
     function resolvePhraseGroupIndexAtTransportSec(transportSec) {
