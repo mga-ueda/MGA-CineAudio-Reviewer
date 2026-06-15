@@ -450,6 +450,7 @@
     window.writeLogError = writeLogError;
 
     window.clearLog = clearLog;
+    window.copyLogToClipboard = copyLogToClipboard;
 
     (function bindLogActionButtons() {
         const clearBtn = document.getElementById('logClearBtn');

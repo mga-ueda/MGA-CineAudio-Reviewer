@@ -11,6 +11,29 @@
     let regionSwapMotionBlurDefs = null;
     let regionSwapMotionBlurFilterSeq = 0;
 
+    /** 入れ替え後 — リージョン DOM・波形・グリッドを同期（シーク相当の flush を含む） */
+    function syncRegionSwapVisualPresentation(track, opt) {
+        if (!track || !isExtraTrackRef(track)) return;
+        const slot = track.slot | 0;
+        const ro = opt && typeof opt === 'object' ? opt : {};
+        if (typeof updateTrackRegionOverlays === 'function') {
+            updateTrackRegionOverlays(track);
+        }
+        if (typeof redrawAfterRegionChange === 'function') {
+            redrawAfterRegionChange(slot, {
+                invalidatePeakCache: ro.invalidatePeakCache !== false,
+            });
+        }
+        if (typeof flushWaveformVisualRefresh === 'function') {
+            flushWaveformVisualRefresh({ sync: true, force: true });
+        } else if (typeof scheduleRegionBoundaryPresentationRefresh === 'function') {
+            scheduleRegionBoundaryPresentationRefresh({ sync: true });
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+    }
+
     function normalizeRegionSwapSegmentPair(swapLo, swapHi) {
         const a = swapLo | 0;
         const b = swapHi | 0;
@@ -93,11 +116,19 @@
     }
 
     function timelineIntervalToPxRect(interval, metrics, master) {
-        const left = transportSecToOverlayPx(interval.start, metrics, master);
-        const right = transportSecToOverlayPx(interval.end, metrics, master);
+        const toPx =
+            typeof transportSecToOverlayPx === 'function'
+                ? transportSecToOverlayPx
+                : typeof window.transportSecToOverlayPx === 'function'
+                  ? window.transportSecToOverlayPx
+                  : null;
+        if (!toPx) return null;
+        const left = toPx(interval.start, metrics, master);
+        const right = toPx(interval.end, metrics, master);
+        if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
         return {
-            left: Number.isFinite(left) ? left : 0,
-            width: Math.max(1, (Number.isFinite(right) ? right : 0) - left),
+            left,
+            width: Math.max(1, right - left),
         };
     }
 
@@ -786,7 +817,6 @@
             const trackRef = { type: 'extra', slot };
             const runPersist = () => {
                 if (!applyOk) return;
-                if (typeof finalizeSwap === 'function') finalizeSwap();
                 if (typeof window.flushPersistSessionNow === 'function') {
                     void window.flushPersistSessionNow().catch((persistErr) => {
                         if (typeof writeLog === 'function') {
@@ -804,14 +834,8 @@
                 }
             };
             const runRedraw = () => {
-                if (applyOk && typeof updateTrackRegionOverlays === 'function') {
-                    updateTrackRegionOverlays(trackRef);
-                }
-                if (typeof redrawAfterRegionChange === 'function') {
-                    redrawAfterRegionChange(slot, redrawOpt || { invalidatePeakCache: true });
-                }
-                if (applyOk && typeof syncExtraAudioToTransport === 'function') {
-                    syncExtraAudioToTransport({ force: true });
+                if (applyOk && typeof syncRegionSwapVisualPresentation === 'function') {
+                    syncRegionSwapVisualPresentation(trackRef, redrawOpt || {});
                 }
                 if (typeof schedulePersistSession === 'function') {
                     schedulePersistSession();
@@ -821,6 +845,7 @@
                     fadeIn: true,
                     swapLayer: swapLayer || null,
                 });
+                if (applyOk && typeof finalizeSwap === 'function') finalizeSwap();
                 if (typeof onRedrawDone === 'function') onRedrawDone();
                 if (typeof requestIdleCallback === 'function') {
                     requestIdleCallback(runPersist, { timeout: 1200 });
@@ -877,11 +902,14 @@
             if (typeof window.regionSwapDiagLog === 'function') {
                 window.regionSwapDiagLog('swap/animation/recovered', { reason: reason || 'unknown' });
             }
+            const trackRef = { type: 'extra', slot };
             try {
-                if (applySwap({ deferRedraw: false })) {
-                    if (typeof finalizeSwap === 'function') finalizeSwap();
-                    return 'applied-recovered';
+                applySwap({ deferRedraw: false });
+                if (typeof syncRegionSwapVisualPresentation === 'function') {
+                    syncRegionSwapVisualPresentation(trackRef);
                 }
+                if (typeof finalizeSwap === 'function') finalizeSwap();
+                return 'applied-recovered';
             } catch (recoverErr) {
                 if (typeof window.regionSwapDiagLog === 'function') {
                     window.regionSwapDiagLog('swap/animation/recover-error', {
@@ -1016,5 +1044,6 @@
     }
 
     window.playPlaybackRegionSwapAnimation = playPlaybackRegionSwapAnimation;
+    window.syncRegionSwapVisualPresentation = syncRegionSwapVisualPresentation;
     window.isPlaybackRegionSwapAnimActive = isPlaybackRegionSwapAnimActive;
     window.isPlaybackRegionSwapPhraseFillSuppressed = isPlaybackRegionSwapPhraseFillSuppressed;

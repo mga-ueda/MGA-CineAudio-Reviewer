@@ -747,8 +747,10 @@
         return range.startSec + eps * 2;
     }
 
-    function phraseCompositionLayoutReady() {
+    function phraseCompositionLayoutReady(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         if (
+            !o.forceLayout &&
             typeof window.getMusicalGridPhraseFillVisible === 'function' &&
             !window.getMusicalGridPhraseFillVisible()
         ) {
@@ -819,7 +821,7 @@
     function applyPhraseCompositionToTrackRegions(track, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!isExtraTrackRef(track)) return false;
-        if (!phraseCompositionLayoutReady()) return false;
+        if (!phraseCompositionLayoutReady(o)) return false;
         const ranges = phraseLayoutExpandedRangesSnapshot();
         if (!ranges.length) return false;
         if (!isTrackRegionActive(track)) {
@@ -857,17 +859,27 @@
         let cursor = { partIndex: 0, offsetSec: 0 };
         const nextSegments = [];
         const eps = segmentBoundaryJoinEpsilonSec();
+        const sourceTimeOffsetSec = Math.max(0, Number(o.sourceTimeOffsetSec) || 0);
+        const gridLeadPadSec = Math.max(0, Number(o.gridLeadPadSec) || 0);
+        const fullClipDur = getTrackSourceDurationSec(track);
         const mapSourceFromBarRanges =
             !!o.mapSourceFromBarRanges &&
             stream.length === 1 &&
             (() => {
-                const fullDur = getTrackSourceDurationSec(track);
-                if (!(fullDur > PLAYBACK_REGION_MIN_SEC)) return false;
+                if (!(fullClipDur > PLAYBACK_REGION_MIN_SEC)) return false;
                 const part = stream[0];
                 const inS = Number(part.sourceInSec) || 0;
                 const outS = Number(part.sourceOutSec) || 0;
-                return inS <= eps && outS >= fullDur - eps;
+                return inS <= eps && outS >= fullClipDur - eps;
             })();
+
+        const fileGridOriginSec = mapSourceFromBarRanges
+            ? gridLeadPadSec > 0.00001
+                ? gridLeadPadSec
+                : sourceTimeOffsetSec > 0.00001
+                  ? sourceTimeOffsetSec
+                  : 0
+            : 0;
 
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
@@ -879,12 +891,47 @@
                 : phraseLayoutPlacementSecForRange(r);
             if (placementSec == null) continue;
 
+            const leadPad =
+                i === 0 && mapSourceFromBarRanges
+                    ? gridLeadPadSec > 0.00001
+                        ? gridLeadPadSec
+                        : sourceTimeOffsetSec > 0.00001
+                          ? sourceTimeOffsetSec
+                          : 0
+                    : 0;
+            let timelineAnchor = placementSec;
+
             let slice;
             if (mapSourceFromBarRanges) {
+                let fileIn = r.startSec - fileGridOriginSec;
+                let fileOut = r.endSec - fileGridOriginSec;
+                if (i === 0) {
+                    fileIn = 0;
+                    if (
+                        leadPad > 0.00001 &&
+                        sourceTimeOffsetSec > 0.00001 &&
+                        gridLeadPadSec > 0.00001
+                    ) {
+                        // GAC 無音 + MusicalUpbeat pickup — Out は slot 終端（1 小節目線）
+                        fileOut = sourceTimeOffsetSec;
+                        timelineAnchor = placementSec + leadPad;
+                    } else if (sourceTimeOffsetSec > 0.00001) {
+                        fileOut = r.endSec - sourceTimeOffsetSec;
+                        timelineAnchor = placementSec + sourceTimeOffsetSec;
+                    } else {
+                        fileOut = r.endSec;
+                    }
+                } else if (
+                    i === ranges.length - 1 &&
+                    fullClipDur > fileIn + PLAYBACK_REGION_MIN_SEC
+                ) {
+                    // 最終 slot — グリッド→ファイル変換の端数（GAC / sync 分）をファイル末尾まで含める
+                    fileOut = fullClipDur;
+                }
                 slice = {
                     clipId: stream[0].clipId || defaultClip,
-                    sourceInSec: r.startSec,
-                    sourceOutSec: r.endSec,
+                    sourceInSec: fileIn,
+                    sourceOutSec: fileOut,
                     takenSec: slotDur,
                 };
             } else {
@@ -903,11 +950,15 @@
                 clipId: slice.clipId,
                 sourceInSec: slice.sourceInSec,
                 sourceOutSec: slice.sourceOutSec,
-                timelineStartSec: placementSec,
-                regionTimelineInSec: placementSec,
+                timelineStartSec: timelineAnchor,
+                regionTimelineInSec:
+                    leadPad > 0.00001 ? placementSec : timelineAnchor,
             };
+            if (leadPad > 0.00001) {
+                seg.regionLeadPadSec = leadPad;
+            }
             const meta = i < metaBySegmentIndex.length ? metaBySegmentIndex[i] : null;
-            if (meta) {
+            if (meta && !mapSourceFromBarRanges) {
                 if (Number.isFinite(meta.gainDb) && Math.abs(meta.gainDb) > 0.0005) {
                     seg.gainDb = meta.gainDb;
                 }
@@ -937,7 +988,12 @@
             const firstIn = nextSegments[0].regionTimelineInSec;
             state.headPadSec = Math.max(0, (Number(firstIn) || 0) - t0);
             state.regionTimelineInSec = Math.max(0, Number(firstIn) || 0);
-            delete state.regionLeadPadSec;
+            const firstLead = Number(nextSegments[0].regionLeadPadSec) || 0;
+            if (firstLead > 0.00001) {
+                state.regionLeadPadSec = firstLead;
+            } else {
+                delete state.regionLeadPadSec;
+            }
         }
 
         if (!commitPhraseLayoutSegments(track, nextSegments, o)) {
@@ -984,13 +1040,15 @@
         ) {
             window.clearPhraseGroupBarCountsOverride();
         }
-        if (!phraseCompositionLayoutReady()) return 0;
+        if (!phraseCompositionLayoutReady(o)) return 0;
         if (!o.skipUndo && !regionUndoPaused) {
             requestRegionUndoCapture();
         }
         const n = getExtraTrackCount();
+        const onlySlot = Number.isFinite(o.onlySlot) ? o.onlySlot | 0 : null;
         let rebuilt = 0;
         for (let slot = 0; slot < n; slot++) {
+            if (onlySlot != null && slot !== onlySlot) continue;
             const track = { type: 'extra', slot };
             if (
                 typeof isExtraTrackLoaded === 'function' &&
@@ -1006,7 +1064,10 @@
                 applyPhraseCompositionToTrackRegions(track, {
                     silent: true,
                     skipUndo: true,
+                    forceLayout: !!o.forceLayout,
                     mapSourceFromBarRanges: !!o.mapSourceFromBarRanges,
+                    gridLeadPadSec: o.gridLeadPadSec,
+                    sourceTimeOffsetSec: o.sourceTimeOffsetSec,
                 })
             ) {
                 rebuilt++;

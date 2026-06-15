@@ -512,6 +512,13 @@
             typeof schedulePitchSliceRenderForSegment === 'function'
         ) {
             schedulePitchSliceRenderForSegment(track, segmentIndex);
+            if (
+                typeof warmupPitchStretchWorklet === 'function' &&
+                typeof ensureReviewMixCtx === 'function'
+            ) {
+                const mixCtx = ensureReviewMixCtx();
+                if (mixCtx) void warmupPitchStretchWorklet(mixCtx);
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Key', 'Processing…', 'notice');
             }

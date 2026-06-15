@@ -1,5 +1,5 @@
 /**
- * wav-markers.js — WAV cue / LIST(adtl) / plst マーカー・リージョンの読み取りと書き込み。
+ * wav-markers.js — WAV cue / LIST(adtl) / plst マーカー・リージョン、iXML メタデータの読み取りと書き込み。
  * Sound Forge 等互換: fmt → cue → LIST(adtl) → plst → data の順（書き込み時は data より前に配置）。
  * 日本語ラベルは js/vendor/tiny-sjis-encoder.js（MIT, t-kouyama）で CP932 エンコード。
  * 読み込み時は labl/note/ltxt の生バイトと ltxt の code page から文字コードを推定（UTF-8 / CP932 / UTF-16 LE 等）。
@@ -361,23 +361,70 @@
     }
 
     function parsePcmWavChunks(wavBytes) {
+        const listed = listWaveRiffChunks(wavBytes);
+        if (!listed) return null;
+        const fmt = listed.find((c) => c.id === 'fmt ');
+        const data = listed.find((c) => c.id === 'data');
+        if (!fmt || !data) return null;
+        return { fmt, data, all: listed };
+    }
+
+    /** RIFF / RF64 のチャンク列（data 以降も走査） */
+    function listWaveRiffChunks(wavBytes, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const bytes =
             wavBytes instanceof Uint8Array ? wavBytes : new Uint8Array(wavBytes);
         if (bytes.length < 12) return null;
-        if (readFourCc(bytes, 0) !== 'RIFF' || readFourCc(bytes, 8) !== 'WAVE') {
-            return null;
-        }
+        const container = readFourCc(bytes, 0);
+        if (container !== 'RIFF' && container !== 'RF64') return null;
+        if (readFourCc(bytes, 8) !== 'WAVE') return null;
 
         const chunks = [];
         let off = 12;
+        let ds64DataSize = null;
+        const dv = (pos) =>
+            new DataView(bytes.buffer, bytes.byteOffset + pos, bytes.byteLength - pos);
+
         while (off + 8 <= bytes.length) {
             const id = readFourCc(bytes, off);
-            const size = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(
-                off + 4,
-                true,
-            );
+            let size = dv(off).getUint32(4, true);
+
+            if (id === 'ds64' && size >= 28) {
+                const body = bytes.subarray(off + 8, off + 8 + size);
+                const bodyView = new DataView(
+                    body.buffer,
+                    body.byteOffset,
+                    body.byteLength,
+                );
+                const lo = bodyView.getUint32(20, true);
+                const hi = bodyView.getUint32(24, true);
+                ds64DataSize = hi * 4294967296 + lo;
+            }
+
+            if (id === 'data' && size === 0xffffffff && ds64DataSize != null) {
+                size = ds64DataSize;
+            }
+
+            if (size === 0xffffffff && id !== 'data') {
+                chunks.push({
+                    id,
+                    start: off,
+                    end: Math.min(off + 8, bytes.length),
+                    bytes: bytes.subarray(off, Math.min(off + 8, bytes.length)),
+                });
+                break;
+            }
+
             const total = 8 + size + (size % 2);
-            if (off + total > bytes.length) break;
+            if (off + total > bytes.length) {
+                chunks.push({
+                    id,
+                    start: off,
+                    end: bytes.length,
+                    bytes: bytes.subarray(off, bytes.length),
+                });
+                break;
+            }
             chunks.push({
                 id,
                 start: off,
@@ -385,12 +432,82 @@
                 bytes: bytes.subarray(off, off + total),
             });
             off += total;
+            if (id === 'data' && !o.scanPastData) break;
         }
+        return chunks.length ? chunks : null;
+    }
 
-        const fmt = chunks.find((c) => c.id === 'fmt ');
-        const data = chunks.find((c) => c.id === 'data');
-        if (!fmt || !data) return null;
-        return { fmt, data, all: chunks };
+    function listWaveRiffChunkIds(wavBytes) {
+        const chunks = listWaveRiffChunks(wavBytes, { scanPastData: true });
+        if (!chunks) return [];
+        return chunks.map((c) => c.id);
+    }
+
+    function scanWaveRiffChunkById(wavBytes, chunkId) {
+        const bytes =
+            wavBytes instanceof Uint8Array ? wavBytes : new Uint8Array(wavBytes);
+        if (!bytes.length || !chunkId || chunkId.length !== 4) return null;
+        const chunks = listWaveRiffChunks(bytes, { scanPastData: true });
+        if (chunks) {
+            const found = chunks.find((c) => c.id === chunkId);
+            if (found) return found;
+        }
+        return scanTrailingWaveRiffChunkById(bytes, chunkId);
+    }
+
+    /** data より後（ファイル末尾付近）に置かれた RIFF チャンク */
+    function scanTrailingWaveRiffChunkById(bytes, chunkId) {
+        if (!bytes || bytes.length < 16 || !chunkId || chunkId.length !== 4) return null;
+        const c0 = chunkId.charCodeAt(0);
+        const c1 = chunkId.charCodeAt(1);
+        const c2 = chunkId.charCodeAt(2);
+        const c3 = chunkId.charCodeAt(3);
+        const maxChunkBody = 16 * 1024 * 1024;
+        const searchFrom = Math.max(12, bytes.length - maxChunkBody - 8);
+        for (let off = bytes.length - 12; off >= searchFrom; off--) {
+            if (
+                bytes[off] !== c0 ||
+                bytes[off + 1] !== c1 ||
+                bytes[off + 2] !== c2 ||
+                bytes[off + 3] !== c3
+            ) {
+                continue;
+            }
+            const size = new DataView(
+                bytes.buffer,
+                bytes.byteOffset + off,
+                bytes.byteLength - off,
+            ).getUint32(4, true);
+            if (!size || size > maxChunkBody) continue;
+            const total = 8 + size + (size % 2);
+            if (off + total > bytes.length) continue;
+            return {
+                id: chunkId,
+                start: off,
+                end: off + total,
+                bytes: bytes.subarray(off, off + total),
+            };
+        }
+        return null;
+    }
+
+    function findWaveChunks(chunks, ids) {
+        if (!chunks || !ids || !ids.length) return [];
+        const out = [];
+        for (let i = 0; i < chunks.length; i++) {
+            if (ids.indexOf(chunks[i].id) >= 0) out.push(chunks[i]);
+        }
+        return out;
+    }
+
+    function findWaveChunk(chunks, ids) {
+        if (!chunks || !ids || !ids.length) return null;
+        for (let i = 0; i < ids.length; i++) {
+            const want = ids[i];
+            const found = chunks.find((c) => c.id === want);
+            if (found) return found;
+        }
+        return null;
     }
 
     function rebuildWavWithMarkerChunks(wavBytes, cueChunk, listChunk, plstChunk) {
@@ -1190,6 +1307,498 @@
         return frame / sampleRate;
     }
 
+    function readWavChunkBodyBytes(chunkBytes) {
+        if (!chunkBytes || chunkBytes.length < 8) return new Uint8Array(0);
+        const size = new DataView(
+            chunkBytes.buffer,
+            chunkBytes.byteOffset,
+            chunkBytes.byteLength,
+        ).getUint32(4, true);
+        const end = Math.min(8 + size, chunkBytes.length);
+        return chunkBytes.subarray(8, end);
+    }
+
+    function normalizeIxmlEncodingLabel(label) {
+        const enc = String(label || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[-_]/g, '');
+        if (!enc) return null;
+        if (enc === 'utf8') return 'utf-8';
+        if (enc.indexOf('utf16') >= 0) {
+            return enc.indexOf('be') >= 0 && enc.indexOf('le') < 0 ? 'utf-16be' : 'utf-16le';
+        }
+        if (enc === 'shiftjis' || enc === 'sjis' || enc === 'cp932' || enc === 'windows31j') {
+            return 'ms932';
+        }
+        if (enc === 'iso88591' || enc === 'latin1') return 'iso-8859-1';
+        if (enc === 'windows1252' || enc === 'cp1252') return 'windows-1252';
+        return null;
+    }
+
+    function detectIxmlTextEncoding(bytes) {
+        if (!bytes || !bytes.length) return 'utf-8';
+        if (hasUtf16LeBom(bytes, 0) || looksLikeUtf16LeMarkerBytes(bytes)) {
+            return 'utf-16le';
+        }
+        const utf8Dec = getMarkerTextDecoder('utf-8');
+        if (utf8Dec) {
+            const head = utf8Dec.decode(bytes.subarray(0, Math.min(bytes.length, 512)));
+            const encMatch = head.match(/<\?xml[^>]*encoding=["']([^"']+)["']/i);
+            if (encMatch) {
+                const normalized = normalizeIxmlEncodingLabel(encMatch[1]);
+                if (normalized) return normalized;
+            }
+        }
+        return 'utf-8';
+    }
+
+    function decodeIxmlBodyBytes(bodyBytes) {
+        let raw = stripTrailingNullBytes(bodyBytes);
+        if (!raw.length) return '';
+
+        const tryDecode = (bytes, encodingKey) => {
+            const dec = getMarkerTextDecoder(encodingKey);
+            if (!dec) return '';
+            let text = dec.decode(bytes).replace(/\0/g, '');
+            if (encodingKey === 'utf-16le' || encodingKey === 'utf-16be') {
+                text = text.replace(/^\uFEFF/, '');
+            }
+            return text.trim();
+        };
+
+        const candidates = [];
+        const primaryEnc = detectIxmlTextEncoding(raw);
+        candidates.push(primaryEnc);
+        candidates.push('utf-8', 'utf-16le', 'utf-16be', 'ms932', 'windows-1252', 'iso-8859-1');
+        const seen = new Set();
+        let fallbackText = '';
+        for (let i = 0; i < candidates.length; i++) {
+            const enc = candidates[i];
+            if (!enc || seen.has(enc)) continue;
+            seen.add(enc);
+            const text = tryDecode(stripUtf8Bom(raw), enc);
+            if (!text) continue;
+            if (
+                text.indexOf('<') >= 0 ||
+                text.indexOf('BWFXML') >= 0 ||
+                text.indexOf('STEINBERG') >= 0
+            ) {
+                return text;
+            }
+            if (!fallbackText) fallbackText = text;
+        }
+        return fallbackText || tryDecode(stripUtf8Bom(raw), primaryEnc);
+    }
+
+    const WAV_INFO_LIST_LABELS = {
+        INAM: 'Name',
+        ICMT: 'Comment',
+        ICRD: 'Created',
+        ISFT: 'Software',
+        IART: 'Artist',
+        IPRD: 'Product',
+        ISBJ: 'Subject',
+        IGNR: 'Genre',
+    };
+
+    function decodeInfoListTextField(bytes, start, end) {
+        const raw = extractMarkerTextBytes(bytes, start, end);
+        if (!raw.length) return '';
+        const enc = detectMarkerTextImportEncoding([raw], []);
+        return decodeMarkerTextBytes(raw, enc);
+    }
+
+    function parseInfoListChunkBody(listChunkBytes) {
+        const body = readWavChunkBodyBytes(listChunkBytes);
+        if (body.length < 4 || readFourCc(body, 0) !== 'INFO') return null;
+        const lines = [];
+        let off = 4;
+        while (off + 8 <= body.length) {
+            const id = readFourCc(body, off);
+            const size = new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(
+                off + 4,
+                true,
+            );
+            const dataStart = off + 8;
+            const dataEnd = Math.min(body.length, dataStart + size);
+            const label = WAV_INFO_LIST_LABELS[id] || ixmlElementLabel(id);
+            const text = decodeInfoListTextField(body, dataStart, dataEnd);
+            if (text) lines.push(label + ': ' + text);
+            off += 8 + size + (size & 1);
+        }
+        if (!lines.length) return null;
+        return {
+            source: 'info',
+            formattedText: ['[WAV INFO]', lines.join('\n')].join('\n'),
+        };
+    }
+
+    function parseInfoListsFromWavBytes(wavBytes) {
+        const chunks = listWaveRiffChunks(wavBytes, { scanPastData: true });
+        if (!chunks) return null;
+        const listChunks = findWaveChunks(chunks, ['LIST']);
+        const lines = [];
+        for (let i = 0; i < listChunks.length; i++) {
+            const parsed = parseInfoListChunkBody(listChunks[i].bytes);
+            if (!parsed || !parsed.formattedText) continue;
+            const bodyLines = parsed.formattedText.split('\n').slice(1);
+            for (let j = 0; j < bodyLines.length; j++) lines.push(bodyLines[j]);
+        }
+        if (!lines.length) return null;
+        return {
+            source: 'info',
+            formattedText: ['[WAV INFO]', lines.join('\n')].join('\n'),
+        };
+    }
+
+    function scanEmbeddedXmlMetadataInWavBytes(wavBytes) {
+        const bytes =
+            wavBytes instanceof Uint8Array ? wavBytes : new Uint8Array(wavBytes);
+        const xmlChunkIds = ['iXML', 'IXML', 'axml', 'AXML'];
+        for (let i = 0; i < xmlChunkIds.length; i++) {
+            const chunk = scanWaveRiffChunkById(bytes, xmlChunkIds[i]);
+            if (!chunk) continue;
+            const parsed = parseXmlMetadataFromChunk(
+                chunk,
+                chunk.id.toLowerCase() === 'axml' ? 'axml' : 'ixml',
+            );
+            if (parsed && parsed.formattedText) return parsed;
+        }
+        return null;
+    }
+
+    function parseXmlMetadataFromChunk(chunk, sourceDefault) {
+        if (!chunk) return null;
+        const bodyBytes = readWavChunkBodyBytes(chunk.bytes);
+        const xmlText = decodeIxmlBodyBytes(bodyBytes);
+        if (!xmlText) {
+            return {
+                source: sourceDefault,
+                chunkId: chunk.id,
+                decodeFailed: true,
+                bodySize: bodyBytes.length,
+            };
+        }
+        const formattedText = formatIxmlXmlToMarkerMemo(xmlText);
+        if (!formattedText) return null;
+        const header =
+            sourceDefault === 'axml'
+                ? '[AXML]'
+                : sourceDefault === 'ixml'
+                  ? '[iXML]'
+                  : '[' + chunk.id + ']';
+        return {
+            source: sourceDefault,
+            xmlText,
+            formattedText: formattedText.replace('[iXML]', header),
+            chunkId: chunk.id,
+        };
+    }
+
+    const IXML_FIELD_LABELS = {
+        IXML_VERSION: 'iXML Version',
+        PROJECT: 'Project',
+        SCENE: 'Scene',
+        TAKE: 'Take',
+        TAPE: 'Tape',
+        TAKE_TYPE: 'Take Type',
+        NOTE: 'Note',
+        FILE_UID: 'File UID',
+        CIRCLED: 'Circled',
+        UBITS: 'User Bits',
+    };
+
+    function ixmlElementLabel(tagName) {
+        const tag = String(tagName || '').toUpperCase();
+        if (IXML_FIELD_LABELS[tag]) return IXML_FIELD_LABELS[tag];
+        return tag
+            .toLowerCase()
+            .split('_')
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+            .join(' ');
+    }
+
+    function ixmlElementTextContent(el) {
+        if (!el) return '';
+        const parts = [];
+        for (let i = 0; i < el.childNodes.length; i++) {
+            const node = el.childNodes[i];
+            if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.CDATA_SECTION_NODE) {
+                const t = node.textContent;
+                if (t) parts.push(t);
+            }
+        }
+        return parts.join('').trim();
+    }
+
+    function ixmlFirstChildElementByTag(el, tagNames) {
+        if (!el) return null;
+        const want = tagNames.map((t) => String(t || '').toUpperCase());
+        for (let i = 0; i < el.childNodes.length; i++) {
+            const node = el.childNodes[i];
+            if (
+                node.nodeType === Node.ELEMENT_NODE &&
+                want.indexOf(String(node.tagName || '').toUpperCase()) >= 0
+            ) {
+                return node;
+            }
+        }
+        return null;
+    }
+
+    function formatSteinbergAttrElement(attrEl, indent) {
+        if (!attrEl) return [];
+        const nameEl = ixmlFirstChildElementByTag(attrEl, ['NAME']);
+        const valueEl = ixmlFirstChildElementByTag(attrEl, ['VALUE']);
+        const typeEl = ixmlFirstChildElementByTag(attrEl, ['TYPE']);
+        const name = nameEl ? ixmlElementTextContent(nameEl) : '';
+        const value = valueEl ? ixmlElementTextContent(valueEl) : '';
+        if (name && value) return [indent + name + ': ' + value];
+        if (name) return [indent + name + ':'];
+        if (value) return [indent + 'Value: ' + value];
+        const type = typeEl ? ixmlElementTextContent(typeEl) : '';
+        if (type) return [indent + 'Attr (' + type + ')'];
+        return [];
+    }
+
+    function formatIxmlElementLines(el, indent) {
+        if (!el || el.nodeType !== Node.ELEMENT_NODE) return [];
+        const lines = [];
+        const stack = [{ el, indent }];
+        while (stack.length) {
+            const item = stack.pop();
+            const node = item.el;
+            const ind = item.indent;
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) continue;
+            const tag = String(node.tagName || '').toUpperCase();
+            if (tag === 'ATTR') {
+                const attrLines = formatSteinbergAttrElement(node, ind);
+                for (let i = 0; i < attrLines.length; i++) lines.push(attrLines[i]);
+                continue;
+            }
+
+            const childElements = [];
+            for (let i = 0; i < node.childNodes.length; i++) {
+                const child = node.childNodes[i];
+                if (child.nodeType === Node.ELEMENT_NODE) childElements.push(child);
+            }
+            if (!childElements.length) {
+                const text = ixmlElementTextContent(node);
+                if (text) lines.push(ind + ixmlElementLabel(tag) + ': ' + text);
+                continue;
+            }
+
+            lines.push(ind + ixmlElementLabel(tag) + ':');
+            const childIndent = ind + '  ';
+            for (let i = childElements.length - 1; i >= 0; i--) {
+                stack.push({ el: childElements[i], indent: childIndent });
+            }
+        }
+        return lines;
+    }
+
+    function formatIxmlXmlToMarkerMemo(xmlText) {
+        const raw = String(xmlText || '').trim();
+        if (!raw) return '';
+        if (typeof DOMParser !== 'function') return raw;
+        try {
+            const doc = new DOMParser().parseFromString(raw, 'application/xml');
+            if (doc.getElementsByTagName('parsererror').length) return raw;
+            const root = doc.documentElement;
+            if (!root) return raw;
+            const lines = ['[iXML]'];
+            const rootChildren = [];
+            for (let i = 0; i < root.childNodes.length; i++) {
+                const node = root.childNodes[i];
+                if (node.nodeType === Node.ELEMENT_NODE) rootChildren.push(node);
+            }
+            for (let i = 0; i < rootChildren.length; i++) {
+                const childLines = formatIxmlElementLines(rootChildren[i], '');
+                for (let j = 0; j < childLines.length; j++) lines.push(childLines[j]);
+            }
+            const out = lines.join('\n').trim();
+            return out.length > 6 ? out : raw;
+        } catch (_) {
+            return raw;
+        }
+    }
+
+    function decodeBextAsciiField(bytes, offset, length) {
+        if (!bytes || offset >= bytes.length) return '';
+        const end = Math.min(bytes.length, offset + length);
+        const slice = bytes.subarray(offset, end);
+        const dec = getMarkerTextDecoder('utf-8') || getMarkerTextDecoder('iso-8859-1');
+        if (!dec) return '';
+        return dec
+            .decode(slice)
+            .replace(/\0/g, '')
+            .trim();
+    }
+
+    function parseBextFromWavBytes(wavBytes) {
+        const chunks = listWaveRiffChunks(wavBytes, { scanPastData: true });
+        if (!chunks) return null;
+        const bextChunk = findWaveChunk(chunks, ['bext']);
+        if (!bextChunk) return null;
+        const body = readWavChunkBodyBytes(bextChunk.bytes);
+        if (body.length < 602) return null;
+        const description = decodeBextAsciiField(body, 256, 256);
+        const originator = decodeBextAsciiField(body, 0, 32);
+        const originationDate = decodeBextAsciiField(body, 32, 10);
+        const originationTime = decodeBextAsciiField(body, 42, 8);
+        const lines = [];
+        if (description) lines.push('Description: ' + description);
+        if (originator) lines.push('Originator: ' + originator);
+        if (originationDate || originationTime) {
+            lines.push(
+                'Origination: ' +
+                    [originationDate, originationTime].filter(Boolean).join(' '),
+            );
+        }
+        if (!lines.length) return null;
+        return {
+            source: 'bext',
+            formattedText: ['[BWF bext]', lines.join('\n')].join('\n'),
+        };
+    }
+
+    function parseEmbeddedXmlMetadataFromWavBytes(wavBytes) {
+        const bytes =
+            wavBytes instanceof Uint8Array ? wavBytes : new Uint8Array(wavBytes);
+
+        const ixmlChunk =
+            scanWaveRiffChunkById(bytes, 'iXML') || scanWaveRiffChunkById(bytes, 'IXML');
+        if (ixmlChunk) {
+            const parsed = parseXmlMetadataFromChunk(ixmlChunk, 'ixml');
+            if (parsed && parsed.formattedText) return parsed;
+            if (parsed && parsed.decodeFailed && parsed.bodySize > 0) {
+                return {
+                    source: 'ixml',
+                    chunkId: ixmlChunk.id,
+                    formattedText:
+                        '[iXML]\n(chunk found, ' +
+                        parsed.bodySize +
+                        ' bytes — could not decode as text)',
+                };
+            }
+        }
+
+        const axmlChunk =
+            scanWaveRiffChunkById(bytes, 'axml') || scanWaveRiffChunkById(bytes, 'AXML');
+        if (axmlChunk) {
+            const parsed = parseXmlMetadataFromChunk(axmlChunk, 'axml');
+            if (parsed && parsed.formattedText) return parsed;
+        }
+
+        const embedded = scanEmbeddedXmlMetadataInWavBytes(bytes);
+        if (embedded && embedded.formattedText) return embedded;
+
+        const bext = parseBextFromWavBytes(bytes);
+        if (bext && bext.formattedText) return bext;
+
+        return parseInfoListsFromWavBytes(bytes);
+    }
+
+    /** RIFF WAVE の iXML チャンクを読み取り（Tempo/Sig・F10 診断ログ用） */
+    function parseIxmlFromWavBytes(wavBytes) {
+        const parsed = parseEmbeddedXmlMetadataFromWavBytes(wavBytes);
+        if (!parsed) return null;
+        return {
+            xmlText: parsed.xmlText || '',
+            formattedText: parsed.formattedText,
+            source: parsed.source || 'ixml',
+        };
+    }
+
+    function shouldSkipWavIxmlImport(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.fromSessionRestore || o.skipWavMarkerImport) return true;
+        return false;
+    }
+
+    function shouldSkipWavFileMetadataImport(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (o.fromSessionRestore || o.skipWavMarkerImport) return true;
+        if (
+            typeof hasSessionMarkersPendingRestore === 'function' &&
+            hasSessionMarkersPendingRestore()
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    /** F10 診断（DEBUG_LOG.IXML）— iXML / AXML / BWF / INFO 全文をログへ */
+    function ixmlDiagLogFormattedMetadata(parsed, logLabel) {
+        if (
+            typeof window.isDebugLogCategoryEnabled !== 'function' ||
+            !window.isDebugLogCategoryEnabled('IXML')
+        ) {
+            return;
+        }
+        if (!parsed || !parsed.formattedText) return;
+        const prefix = logLabel ? String(logLabel) + ': ' : '';
+        const source =
+            parsed.source === 'axml'
+                ? 'AXML'
+                : parsed.source === 'bext'
+                  ? 'BWF bext'
+                  : parsed.source === 'info'
+                    ? 'WAV INFO'
+                    : 'iXML';
+        if (typeof window.writeDiagLog === 'function') {
+            window.writeDiagLog('IXML', prefix + 'import/' + source, {
+                chunk: parsed.chunkId || '',
+                lines: parsed.formattedText.split('\n').length,
+            });
+        }
+        const lines = parsed.formattedText.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+            if (typeof window.appendLogEntry === 'function') {
+                window.appendLogEntry(lines[i], { tier: 'diag', category: 'iXML' });
+            }
+        }
+    }
+
+    function importWavIxmlOnWaveformLoad(ab, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (shouldSkipWavIxmlImport(o)) return null;
+        const label = o.logLabel ? o.logLabel + ': ' : '';
+        let parsed = null;
+        try {
+            parsed = parseIxmlFromWavBytes(ab);
+        } catch (err) {
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    label +
+                        'iXML import failed — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+            return null;
+        }
+        if (!parsed || !parsed.formattedText) {
+            if (typeof writeLog === 'function') {
+                const ids = listWaveRiffChunkIds(ab);
+                if (ids.length) {
+                    writeLog(
+                        label +
+                            'WAV metadata scan — chunks: ' +
+                            ids.join(', ') +
+                            ' (no iXML/INFO metadata imported)',
+                    );
+                } else {
+                    writeLog(label + 'WAV metadata scan — not a readable RIFF/WAVE file');
+                }
+            }
+            return parsed;
+        }
+        ixmlDiagLogFormattedMetadata(parsed, label.replace(/: $/, ''));
+        return parsed;
+    }
+
     /** RIFF WAVE の cue / LIST(adtl) / plst から点マーカー・リージョンを読み取る */
     function parseMarkersFromWavBytes(wavBytes) {
         const parsed = parsePcmWavChunks(wavBytes);
@@ -1297,13 +1906,7 @@
 
     function importWavMarkersOnWaveformLoad(ab, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        if (o.fromSessionRestore || o.skipWavMarkerImport) return null;
-        if (
-            typeof hasSessionMarkersPendingRestore === 'function' &&
-            hasSessionMarkersPendingRestore()
-        ) {
-            return null;
-        }
+        if (shouldSkipWavFileMetadataImport(o)) return null;
         const parsed = parseMarkersFromWavBytes(ab);
         if (!parsed || !parsed.markers.length) return parsed;
         if (typeof applyImportedFileMarkers !== 'function') return parsed;
@@ -1381,6 +1984,8 @@
     window.buildWavMarkerCueChunks = buildWavMarkerChunks;
     window.embedMarkerChunksInWavBytes = embedMarkerChunksInWavBytes;
     window.parseMarkersFromWavBytes = parseMarkersFromWavBytes;
+    window.parseIxmlFromWavBytes = parseIxmlFromWavBytes;
     window.importWavMarkersOnWaveformLoad = importWavMarkersOnWaveformLoad;
+    window.importWavIxmlOnWaveformLoad = importWavIxmlOnWaveformLoad;
     window.finalizeWaveExportBlobWithMarkers = finalizeWaveExportBlobWithMarkers;
 })();

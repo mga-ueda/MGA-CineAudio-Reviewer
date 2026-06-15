@@ -549,6 +549,22 @@
         return Math.max(0, (w / 100) * scrub);
     }
 
+    /** リージョン入れ替えアニメ — トランスポート秒をスクラブ上の CSS px に変換 */
+    function transportSecToOverlayPx(transportSec, metrics, masterDurSec) {
+        const sec = Number(transportSec);
+        const master = Number(masterDurSec);
+        const scrubW = metrics && Number.isFinite(metrics.scrubW) ? metrics.scrubW : 0;
+        if (!Number.isFinite(sec) || !(master > 0) || !(scrubW > 0)) return NaN;
+        const leftPct =
+            typeof transportSecToTimelineLeftPercent === 'function'
+                ? transportSecToTimelineLeftPercent(sec)
+                : (sec / master) * 100;
+        if (!Number.isFinite(leftPct)) return NaN;
+        return regionOverlayWidthPxFromPct(leftPct, scrubW);
+    }
+
+    window.transportSecToOverlayPx = transportSecToOverlayPx;
+
     function applySegmentFadeMarkerLinesToRegionEl(regionEl, marker) {
         if (!regionEl || !marker) return;
         const inLine = regionEl.querySelector(

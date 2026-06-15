@@ -324,37 +324,46 @@
                     ensureDefaultTrackRegion({ type: 'extra', slot }, { silent: true });
                 }
             }
-            if (
-                !(opt && opt.fromSessionRestore) &&
-                fileArrayBuffer &&
-                typeof importWavMarkersOnWaveformLoad === 'function'
-            ) {
-                let timelineOffsetSec = 0;
-                if (typeof getTrackSegments === 'function') {
-                    const trackRef = { type: 'extra', slot };
-                    const segs = getTrackSegments(trackRef);
-                    for (let si = 0; si < segs.length; si++) {
-                        const seg = segs[si];
-                        if (clipId && seg.clipId !== clipId) continue;
-                        const sourceIn = Number(seg.sourceInSec) || 0;
-                        let timelineIn = Number(seg.timelineStartSec);
-                        if (
-                            !Number.isFinite(timelineIn) &&
-                            typeof getSegmentRegionTimelineIn === 'function'
-                        ) {
-                            timelineIn = getSegmentRegionTimelineIn(trackRef, si);
+            let pendingIxmlXmlText = null;
+            let pendingWavMarkersForPhrase = null;
+            let pendingWavMarkerImport = false;
+            if (!(opt && opt.fromSessionRestore) && fileArrayBuffer) {
+                const trackRef = { type: 'extra', slot };
+                let ixmlXmlText = null;
+                if (typeof parseIxmlFromWavBytes === 'function') {
+                    try {
+                        const ixmlParsedEarly = parseIxmlFromWavBytes(fileArrayBuffer);
+                        if (ixmlParsedEarly && ixmlParsedEarly.xmlText) {
+                            ixmlXmlText = ixmlParsedEarly.xmlText;
                         }
-                        if (Number.isFinite(timelineIn)) {
-                            timelineOffsetSec = timelineIn - sourceIn;
-                            break;
+                    } catch (_) {}
+                }
+                if (typeof parseMarkersFromWavBytes === 'function') {
+                    try {
+                        const wavParsedEarly = parseMarkersFromWavBytes(fileArrayBuffer);
+                        if (wavParsedEarly && wavParsedEarly.markers && wavParsedEarly.markers.length) {
+                            pendingWavMarkersForPhrase = wavParsedEarly.markers;
                         }
+                    } catch (_) {}
+                }
+                pendingWavMarkerImport = true;
+                if (typeof importWavIxmlOnWaveformLoad === 'function') {
+                    try {
+                        importWavIxmlOnWaveformLoad(fileArrayBuffer, {
+                            logLabel: 'Extra audio ' + (slot + 1),
+                        });
+                    } catch (ixmlErr) {
+                        writeLog(
+                            'Extra audio ' +
+                                (slot + 1) +
+                                ': iXML import failed — ' +
+                                (ixmlErr && ixmlErr.message
+                                    ? ixmlErr.message
+                                    : String(ixmlErr)),
+                        );
                     }
                 }
-                importWavMarkersOnWaveformLoad(fileArrayBuffer, {
-                    timelineOffsetSec,
-                    fileDurationSec: buffer.duration,
-                    logLabel: 'Extra audio ' + (slot + 1),
-                });
+                pendingIxmlXmlText = ixmlXmlText;
             }
             const ch = buffer.numberOfChannels;
             const rate = buffer.sampleRate | 0;
@@ -377,6 +386,67 @@
                 skipRegionOverlay: restoreLoad,
                 skipDraw: restoreLoad,
             });
+            if (
+                pendingIxmlXmlText &&
+                typeof applyMusicalGridFromParsedIxml === 'function'
+            ) {
+                try {
+                    applyMusicalGridFromParsedIxml(pendingIxmlXmlText, {
+                        logLabel: 'Extra audio ' + (slot + 1),
+                        slot: slot,
+                        sampleRate: rate,
+                        waveMarkersForPhrase: pendingWavMarkersForPhrase,
+                    });
+                    if (!restoreLoad && typeof refreshExtraTrackUi === 'function') {
+                        refreshExtraTrackUi(slot, { skipRegionOverlay: false });
+                    }
+                } catch (gridErr) {
+                    writeLog(
+                        'Extra audio ' +
+                            (slot + 1) +
+                            ': Tempo/Sig from iXML failed — ' +
+                            (gridErr && gridErr.message
+                                ? gridErr.message
+                                : String(gridErr)),
+                    );
+                }
+            }
+            if (
+                pendingWavMarkerImport &&
+                fileArrayBuffer &&
+                !(opt && opt.fromSessionRestore)
+            ) {
+                const trackRef = { type: 'extra', slot };
+                let timelineOffsetSec = 0;
+                if (typeof importedMarkerTimelineOffsetSec === 'function') {
+                    timelineOffsetSec = importedMarkerTimelineOffsetSec(trackRef, clipId);
+                } else if (typeof getTrackSegments === 'function') {
+                    const segs = getTrackSegments(trackRef);
+                    for (let si = 0; si < segs.length; si++) {
+                        const seg = segs[si];
+                        if (clipId && seg.clipId !== clipId) continue;
+                        const sourceIn = Number(seg.sourceInSec) || 0;
+                        let timelineIn = Number(seg.timelineStartSec);
+                        if (
+                            !Number.isFinite(timelineIn) &&
+                            typeof getSegmentRegionTimelineIn === 'function'
+                        ) {
+                            timelineIn = getSegmentRegionTimelineIn(trackRef, si);
+                        }
+                        if (Number.isFinite(timelineIn)) {
+                            timelineOffsetSec = timelineIn - sourceIn;
+                            break;
+                        }
+                    }
+                }
+                if (typeof importWavMarkersOnWaveformLoad === 'function') {
+                    importWavMarkersOnWaveformLoad(fileArrayBuffer, {
+                        timelineOffsetSec,
+                        fileDurationSec: buffer.duration,
+                        logLabel: 'Extra audio ' + (slot + 1),
+                    });
+                }
+            }
             if (restoreLoad) {
                 applyExtraSlotMixFromSessionRestore(slot);
             } else {

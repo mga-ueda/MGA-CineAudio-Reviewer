@@ -717,7 +717,9 @@
     }
 
     function extraTrackSourceEntryScheduledOrAudibleOnCtx(entry, ctx) {
-        if (!entry || !entry.src || !ctx) return false;
+        if (!entry || !ctx) return false;
+        if (entry.pendingLiveStretch && !entry.src) return true;
+        if (!entry.src) return false;
         if (isSegmentSourceAudibleOnCtx(entry, ctx)) return true;
         if (!Number.isFinite(entry.playbackAnchorCtxTime)) return false;
         const ahead =

@@ -841,6 +841,28 @@
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i];
             if (o.preserveStored && slot.musical && slot.musical.phraseBarCount > 0) {
+                if (ranges.length && Number.isFinite(slot.timelineStartSec)) {
+                    const inferred = resolvePhraseIndexAtRegionInSec(
+                        slot.timelineStartSec,
+                        ranges,
+                        eps,
+                    );
+                    const cur = slot.musical.phraseSlotIndex | 0;
+                    if (
+                        inferred != null &&
+                        inferred >= 0 &&
+                        inferred < counts.length &&
+                        inferred !== cur
+                    ) {
+                        slot.musical.phraseSlotIndex = inferred;
+                        slot.musical.phraseBarCount = counts[inferred] | 0;
+                        let meterBarStart = 0;
+                        for (let c = 0; c < inferred; c++) {
+                            meterBarStart += counts[c] | 0;
+                        }
+                        slot.musical.meterBarStart = meterBarStart;
+                    }
+                }
                 continue;
             }
             const startSec = slot.timelineStartSec;
@@ -1053,27 +1075,35 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         let oldOverlayIntervals = null;
-        if (
-            o.anim &&
-            metrics &&
-            metrics.scrubW > 0 &&
-            master > 0 &&
-            typeof getSegmentRegionOverlayTimelineInterval === 'function' &&
-            typeof transportSecToOverlayPx === 'function'
-        ) {
-            oldOverlayIntervals = [];
-            for (let si = 0; si < segments.length; si++) {
-                const iv = getSegmentRegionOverlayTimelineInterval(track, si);
-                if (!iv) {
-                    oldOverlayIntervals = null;
-                    break;
+        if (o.anim) {
+            if (typeof window.captureTrackRegionOverlayIntervals === 'function') {
+                oldOverlayIntervals = window.captureTrackRegionOverlayIntervals(
+                    track,
+                    segments.length,
+                );
+            }
+            if (
+                !oldOverlayIntervals &&
+                metrics &&
+                metrics.scrubW > 0 &&
+                master > 0 &&
+                typeof getSegmentRegionOverlayTimelineInterval === 'function' &&
+                typeof transportSecToOverlayPx === 'function'
+            ) {
+                oldOverlayIntervals = [];
+                for (let si = 0; si < segments.length; si++) {
+                    const iv = getSegmentRegionOverlayTimelineInterval(track, si);
+                    if (!iv) {
+                        oldOverlayIntervals = null;
+                        break;
+                    }
+                    const left = transportSecToOverlayPx(iv.start, metrics, master);
+                    const right = transportSecToOverlayPx(iv.end, metrics, master);
+                    oldOverlayIntervals.push({
+                        left: Number.isFinite(left) ? left : 0,
+                        width: Math.max(1, (Number.isFinite(right) ? right : 0) - left),
+                    });
                 }
-                const left = transportSecToOverlayPx(iv.start, metrics, master);
-                const right = transportSecToOverlayPx(iv.end, metrics, master);
-                oldOverlayIntervals.push({
-                    left: Number.isFinite(left) ? left : 0,
-                    width: Math.max(1, (Number.isFinite(right) ? right : 0) - left),
-                });
             }
         }
 
@@ -1103,8 +1133,10 @@
                 skipUndo: !!o.skipUndo,
                 silent: o.silent !== false,
                 deferRedraw,
-                geometryOnly: deferRedraw && o.geometryOnly !== false,
-                invalidatePeakCache: !deferRedraw,
+                geometryOnly: ao.geometryOnly != null ? !!ao.geometryOnly : false,
+                skipMusicalRefresh: !!(ao.skipMusicalRefresh || o.skipMusicalRefresh),
+                invalidatePeakCache:
+                    ao.invalidatePeakCache != null ? ao.invalidatePeakCache : !deferRedraw,
                 skipPersist: !!ao.skipPersist,
                 skipSyncTransport: !!ao.skipSyncTransport,
             });
@@ -1135,19 +1167,36 @@
             return !!ok;
         }
 
+        function syncSwapPresentation() {
+            if (typeof window.syncRegionSwapVisualPresentation === 'function') {
+                window.syncRegionSwapVisualPresentation(track);
+            }
+        }
+
         const anim = o.anim;
-        if (
-            anim &&
-            typeof window.playPlaybackRegionSwapAnimation === 'function'
-        ) {
+        const hasAnim =
+            anim && typeof window.playPlaybackRegionSwapAnimation === 'function';
+        if (hasAnim) {
+            if (
+                !commitSegments({
+                    deferRedraw: true,
+                    skipMusicalRefresh: true,
+                    skipPersist: true,
+                    skipSyncTransport: true,
+                    invalidatePeakCache: false,
+                })
+            ) {
+                return false;
+            }
             const redrawOpt = { invalidatePeakCache: true };
             const animSpec = {
                 track,
                 forceTimelineSwap: true,
                 previewSegments: segments,
                 redrawOpt,
-                applySwap: (animOpt) => commitSegments(animOpt),
-                finalizeSwap: typeof o.finalizeSwap === 'function' ? o.finalizeSwap : function () {},
+                applySwap: () => true,
+                finalizeSwap:
+                    typeof o.finalizeSwap === 'function' ? o.finalizeSwap : function () {},
             };
             if (anim.gap) {
                 animSpec.gap = anim.gap;
@@ -1165,14 +1214,31 @@
             if (oldOverlayIntervals && oldOverlayIntervals.length === segments.length) {
                 animSpec.oldOverlayIntervals = oldOverlayIntervals;
             }
-            const animResult = window.playPlaybackRegionSwapAnimation(animSpec);
-            window.musicalSlotDiagLog('swap/animation', { result: animResult });
-            if (animResult === 'started' || animResult === 'applied-recovered') {
-                return true;
+            let animResult = false;
+            try {
+                animResult = window.playPlaybackRegionSwapAnimation(animSpec);
+            } catch (animErr) {
+                window.musicalSlotDiagLog('swap/animation/error', {
+                    message:
+                        animErr && animErr.message ? animErr.message : String(animErr),
+                });
             }
+            window.musicalSlotDiagLog('swap/animation', { result: animResult });
+            if (animResult !== 'started') {
+                if (typeof o.finalizeSwap === 'function') {
+                    o.finalizeSwap();
+                } else {
+                    syncSwapPresentation();
+                }
+            }
+            return true;
         }
 
-        return commitSegments();
+        if (!commitSegments({ skipMusicalRefresh: true })) {
+            return false;
+        }
+        syncSwapPresentation();
+        return true;
     }
 
     /** counts 更新後 — phraseSlotIndex に基づき phraseBarCount / meterBarStart を同期 */
@@ -1773,6 +1839,15 @@
                 slotA.musical.phraseSlotIndex = phraseIdxB;
                 slotB.musical.phraseSlotIndex = phraseIdxA;
             }
+
+            if (barA === barB) {
+                const tmpStart = slotA.timelineStartSec;
+                const tmpEnd = slotA.timelineEndSec;
+                slotA.timelineStartSec = slotB.timelineStartSec;
+                slotA.timelineEndSec = slotB.timelineEndSec;
+                slotB.timelineStartSec = tmpStart;
+                slotB.timelineEndSec = tmpEnd;
+            }
         }
 
         if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
@@ -1802,7 +1877,11 @@
 
         const timelineStartOverrides = {};
         if (involvesSilent && audioTargetSecOverride != null) {
-            timelineStartOverrides[slotA.kind === 'silent' ? idxB : idxA] = audioTargetSecOverride;
+            timelineStartOverrides[slotA.kind === 'silent' ? idxB : idxA] =
+                audioTargetSecOverride;
+        } else if (!involvesSilent && barA === barB) {
+            timelineStartOverrides[idxA] = slotA.timelineStartSec;
+            timelineStartOverrides[idxB] = slotB.timelineStartSec;
         }
         refreshSlotTimelineBoundsFromPhraseCounts(
             track,
@@ -1919,6 +1998,14 @@
             } else if (typeof window.schedulePersistExtraTrackSlot === 'function') {
                 window.schedulePersistExtraTrackSlot(track.slot);
             }
+            if (typeof window.syncRegionSwapVisualPresentation === 'function') {
+                window.syncRegionSwapVisualPresentation(track);
+            } else if (typeof window.updateTrackRegionOverlays === 'function') {
+                window.updateTrackRegionOverlays(track);
+                if (typeof window.redrawAfterRegionChange === 'function') {
+                    window.redrawAfterRegionChange(track.slot, { invalidatePeakCache: true });
+                }
+            }
             const phrase = window.musicalSlotDiagPhraseSnapshot();
             window.musicalSlotDiagLog('swap/done', {
                 mode: 'slot-engine/' + swapMode,
@@ -1937,71 +2024,23 @@
             }
         }
 
-        const deferPostSwapUi = !!(willAnimateSwap && swapAnim);
         const layoutOpt = {
             skipUndo: true,
             silent: o.silent,
             skipLayoutCorrections: true,
-            anim: swapAnim,
+            skipMusicalRefresh: true,
+            anim: willAnimateSwap && swapAnim ? swapAnim : null,
+            finalizeSwap: willAnimateSwap ? runDeferredSwapUiAndDiagnostics : null,
         };
-        if (deferPostSwapUi) {
-            layoutOpt.finalizeSwap = runDeferredSwapUiAndDiagnostics;
-        }
 
         if (!applySlotLayoutToSegments(track, slots, layoutOpt)) {
             return { ok: false, reason: 'layout apply incomplete' };
         }
         cacheTrackTimelineSlots(track, slots);
 
-        if (deferPostSwapUi) {
-            return { ok: true, slots, nextCounts };
+        if (!willAnimateSwap) {
+            runDeferredSwapUiAndDiagnostics();
         }
-
-        window.musicalSlotDiagLog('swap/after-cache', {
-            ex: track.slot + 1,
-            cachedUnits: slots.map((s, i) => ({
-                index: i,
-                identity: swapUnitIdentityKey(s),
-                musical: window.musicalSlotDiagSummarizeMusicalOrigin(s.musical),
-                unit: window.musicalSlotDiagSummarizeSwapUnit(s, i),
-            })),
-        });
-
-        if (typeof window.scheduleMusicalGridRedraw === 'function') {
-            window.scheduleMusicalGridRedraw();
-        }
-        const animActive =
-            typeof window.isPlaybackRegionSwapAnimActive === 'function' &&
-            window.isPlaybackRegionSwapAnimActive();
-        if (!animActive && typeof window.redrawAfterRegionChange === 'function') {
-            window.redrawAfterRegionChange(track.slot, { invalidatePeakCache: false });
-        }
-        if (!animActive) {
-            if (typeof window.schedulePersistExtraTrackLayout === 'function') {
-                window.schedulePersistExtraTrackLayout();
-            } else if (typeof window.schedulePersistExtraTrackSlot === 'function') {
-                window.schedulePersistExtraTrackSlot(track.slot);
-            }
-        }
-        if (typeof window.notifyMasterTransportDurationChanged === 'function') {
-            window.notifyMasterTransportDurationChanged();
-        }
-        if (typeof logRegionAction === 'function') {
-            logRegionAction(swapActionMessage);
-        } else if (typeof writeLog === 'function') {
-            writeLog('Playback region: ' + swapActionMessage);
-        }
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Swapped', 'notice');
-        }
-
-        const phrase = window.musicalSlotDiagPhraseSnapshot();
-        window.musicalSlotDiagLog('swap/done', {
-            mode: 'slot-engine/' + swapMode,
-            ex: track.slot + 1,
-            phraseText: phrase.text,
-            countsAfter: nextCounts.slice(0, 12),
-        });
 
         return { ok: true, slots, nextCounts };
     }

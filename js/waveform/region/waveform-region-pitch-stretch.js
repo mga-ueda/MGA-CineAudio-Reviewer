@@ -422,6 +422,73 @@
         let renderResult = null;
         for (let rateAttempt = 0; rateAttempt < 4; rateAttempt++) {
             const lastRateAttempt = rateAttempt === 3;
+            if (
+                !renderResult &&
+                typeof renderSignalsmithStretchMainThread === 'function'
+            ) {
+                try {
+                    const mtResult = await renderWithMainThread(stretchRate);
+                    if (mtResult && mtResult.outBuffer) {
+                        const outBuffer = mtResult.outBuffer;
+                        if (!isUsablePitchSliceBuffer(outBuffer, sourcePeak)) {
+                            pitchPlaybackLog('render/main-thread-silent', {
+                                semitones: pitch,
+                                stretchRate,
+                                outPeak: measureAudioBufferPeak(outBuffer),
+                            });
+                        } else {
+                            const shortfallFrames =
+                                targetFrames - mtResult.outFrames;
+                            if (
+                                shortfallFrames >
+                                    Math.ceil(sampleRate * 0.002) &&
+                                !lastRateAttempt
+                            ) {
+                                pitchPlaybackLog('render/shortfall-retry', {
+                                    semitones: pitch,
+                                    stretchRate,
+                                    targetFrames,
+                                    outFrames: mtResult.outFrames,
+                                    shortfallSec: shortfallFrames / sampleRate,
+                                    inputDurSec: inputDurationSec,
+                                    targetDurSec: targetDurationSec,
+                                    renderMode: 'main-thread',
+                                });
+                                stretchRate *= Math.max(
+                                    0.5,
+                                    mtResult.outFrames /
+                                        Math.max(1, targetFrames),
+                                );
+                            } else {
+                                pitchPlaybackLog('render/done', {
+                                    semitones: pitch,
+                                    sourceInSec,
+                                    sourceOutSec,
+                                    inputFrames: frameCount,
+                                    outFrames: mtResult.outFrames,
+                                    targetFrames,
+                                    inputDurSec: inputDurationSec,
+                                    targetDurSec: targetDurationSec,
+                                    outDurSec: outBuffer.duration,
+                                    stretchRate,
+                                    extractStartSamples: mtResult.extractStart,
+                                    sourcePeak,
+                                    outPeak: measureAudioBufferPeak(outBuffer),
+                                    renderMode: 'main-thread',
+                                });
+                                return outBuffer;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    pitchPlaybackLog('render/main-thread-no-output', {
+                        semitones: pitch,
+                        stretchRate,
+                        message:
+                            err && err.message ? err.message : String(err),
+                    });
+                }
+            }
             for (const attempt of workletAttempts) {
                 try {
                     renderResult = await attempt(stretchRate);
@@ -513,67 +580,6 @@
                 return outBuffer;
             }
 
-            if (!renderResult && typeof renderSignalsmithStretchMainThread === 'function') {
-                try {
-                    const mtResult = await renderWithMainThread(stretchRate);
-                    if (mtResult && mtResult.outBuffer) {
-                        const outBuffer = mtResult.outBuffer;
-                        if (!isUsablePitchSliceBuffer(outBuffer, sourcePeak)) {
-                            pitchPlaybackLog('render/main-thread-silent', {
-                                semitones: pitch,
-                                stretchRate,
-                                outPeak: measureAudioBufferPeak(outBuffer),
-                            });
-                        } else {
-                            const shortfallFrames = targetFrames - mtResult.outFrames;
-                            if (
-                                shortfallFrames > Math.ceil(sampleRate * 0.002) &&
-                                !lastRateAttempt
-                            ) {
-                                pitchPlaybackLog('render/shortfall-retry', {
-                                    semitones: pitch,
-                                    stretchRate,
-                                    targetFrames,
-                                    outFrames: mtResult.outFrames,
-                                    shortfallSec: shortfallFrames / sampleRate,
-                                    inputDurSec: inputDurationSec,
-                                    targetDurSec: targetDurationSec,
-                                    renderMode: 'main-thread',
-                                });
-                                stretchRate *= Math.max(
-                                    0.5,
-                                    mtResult.outFrames / Math.max(1, targetFrames),
-                                );
-                            } else {
-                                pitchPlaybackLog('render/done', {
-                                    semitones: pitch,
-                                    sourceInSec,
-                                    sourceOutSec,
-                                    inputFrames: frameCount,
-                                    outFrames: mtResult.outFrames,
-                                    targetFrames,
-                                    inputDurSec: inputDurationSec,
-                                    targetDurSec: targetDurationSec,
-                                    outDurSec: outBuffer.duration,
-                                    stretchRate,
-                                    extractStartSamples: mtResult.extractStart,
-                                    sourcePeak,
-                                    outPeak: measureAudioBufferPeak(outBuffer),
-                                    renderMode: 'main-thread',
-                                });
-                                return outBuffer;
-                            }
-                        }
-                    }
-                } catch (err) {
-                    pitchPlaybackLog('render/main-thread-no-output', {
-                        semitones: pitch,
-                        stretchRate,
-                        message: err && err.message ? err.message : String(err),
-                    });
-                }
-            }
-
             if (renderResult) break;
         }
 
@@ -596,75 +602,52 @@
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         if (!Number.isFinite(playbackStart)) return null;
 
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        const sourceSpan =
+            seg && Number.isFinite(seg.sourceOutSec) && Number.isFinite(seg.sourceInSec)
+                ? Math.max(0, seg.sourceOutSec - seg.sourceInSec)
+                : 0;
+
         let timelineEnd = null;
-        if (
-            typeof isSegmentBoundaryJoined === 'function' &&
-            typeof getTrackSegments === 'function' &&
-            typeof getSegmentTimelineStart === 'function'
-        ) {
-            const segments = getTrackSegments(track);
-            if (
-                segments &&
-                segmentIndex >= 0 &&
-                segmentIndex < segments.length - 1 &&
-                isSegmentBoundaryJoined(track, segmentIndex)
-            ) {
-                const nextStart = getSegmentTimelineStart(track, segmentIndex + 1);
-                if (Number.isFinite(nextStart)) {
-                    timelineEnd = nextStart;
-                }
-            }
-        }
-        if (
-            timelineEnd == null &&
-            typeof getSegmentTimelineEnd === 'function'
-        ) {
+        if (typeof getSegmentTimelineEnd === 'function') {
             timelineEnd = getSegmentTimelineEnd(track, segmentIndex);
         }
         if (
-            !Number.isFinite(timelineEnd) ||
-            timelineEnd <= playbackStart + 0.00001
+            typeof isSegmentBoundaryJoined === 'function' &&
+            isSegmentBoundaryJoined(track, segmentIndex) &&
+            typeof getSegmentPlaybackTimelineStart === 'function'
         ) {
-            return null;
+            const nextPlayback = getSegmentPlaybackTimelineStart(
+                track,
+                segmentIndex + 1,
+            );
+            if (Number.isFinite(nextPlayback)) {
+                timelineEnd = Number.isFinite(timelineEnd)
+                    ? Math.min(timelineEnd, nextPlayback)
+                    : nextPlayback;
+            }
         }
-        return timelineEnd - playbackStart;
+        if (Number.isFinite(timelineEnd) && timelineEnd > playbackStart + 0.00001) {
+            return timelineEnd - playbackStart;
+        }
+        return sourceSpan > 0.00001 ? sourceSpan : null;
     }
 
     function pitchSlicePlaybackSourceBounds(track, segmentIndex) {
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return null;
+        const sourceInSec = Number(seg.sourceInSec) || 0;
+        const sourceOutSec = Number(seg.sourceOutSec) || 0;
+        const sourceSpan = Math.max(0, sourceOutSec - sourceInSec);
+        if (!(sourceSpan > 0.00001)) return null;
         const timelineDur = pitchSliceTimelineDurationSec(track, segmentIndex);
-        if (
-            timelineDur != null &&
-            typeof getSegmentPlaybackTimelineStart === 'function' &&
-            typeof segmentSourceSecFromTransport === 'function'
-        ) {
-            const playbackStart = getSegmentPlaybackTimelineStart(
-                track,
-                segmentIndex,
-            );
-            return {
-                sourceInSec: segmentSourceSecFromTransport(
-                    track,
-                    segmentIndex,
-                    playbackStart,
-                ),
-                sourceOutSec: segmentSourceSecFromTransport(
-                    track,
-                    segmentIndex,
-                    playbackStart + timelineDur,
-                ),
-                timelineDur,
-            };
-        }
         return {
-            sourceInSec: seg.sourceInSec,
-            sourceOutSec: seg.sourceOutSec,
+            sourceInSec: sourceInSec,
+            sourceOutSec: sourceOutSec,
             timelineDur:
-                timelineDur != null
-                    ? timelineDur
-                    : Math.max(0, seg.sourceOutSec - seg.sourceInSec),
+                timelineDur != null && timelineDur > 0.00001 ? timelineDur : sourceSpan,
         };
     }
 
@@ -697,6 +680,14 @@
         if (pitchSliceRenderPending.has(pendingKey)) {
             return pitchSliceRenderPending.get(pendingKey);
         }
+
+        pitchPlaybackLog('render/begin', {
+            segmentIndex,
+            pitch,
+            sourceInSec: bounds.sourceInSec,
+            sourceOutSec: bounds.sourceOutSec,
+            timelineDurSec: bounds.timelineDur,
+        });
 
         const job = renderPitchShiftedSliceOffline(
             clip.buffer,
@@ -835,13 +826,36 @@
                         cachedPeak: measureAudioBufferPeak(cached),
                     });
                 } else {
-                    const sliceOff = Math.max(
+                    const sourceSpan = Math.max(
+                        0,
+                        bounds.sourceOutSec - bounds.sourceInSec,
+                    );
+                    const timelineDur =
+                        bounds.timelineDur != null && bounds.timelineDur > 0.00001
+                            ? bounds.timelineDur
+                            : sourceSpan;
+                    const sourceOff = Math.max(
                         0,
                         (Number(absoluteBufferOff) || 0) - bounds.sourceInSec,
                     );
+                    let sliceOff = sourceOff;
+                    if (
+                        sourceSpan > 0.00001 &&
+                        timelineDur > 0.00001 &&
+                        Math.abs(timelineDur - sourceSpan) > 0.0005
+                    ) {
+                        sliceOff = Math.min(
+                            timelineDur,
+                            (sourceOff / sourceSpan) * timelineDur,
+                        );
+                    }
+                    sliceOff = Math.max(0, sliceOff);
                     const resolved = {
                         buffer: cached,
-                        bufferOff: Math.min(sliceOff, Math.max(0, cached.duration - 0.002)),
+                        bufferOff: Math.min(
+                            sliceOff,
+                            Math.max(0, cached.duration - 0.002),
+                        ),
                         pitchRate: 1,
                         legacyPlaybackRate: false,
                         usesPitchSlice: true,
@@ -978,10 +992,11 @@
         };
     }
 
-    function createLivePitchStretchNode(ctx, channelCount) {
+    function createLivePitchStretchNode(ctx, channelCount, opt) {
         const channels = Math.max(1, channelCount | 0);
+        const liveInput = !!(opt && opt.liveInput);
         return SignalsmithStretch(ctx, {
-            numberOfInputs: 0,
+            numberOfInputs: liveInput ? 1 : 0,
             numberOfOutputs: 1,
             outputChannelCount: [channels],
         });
@@ -992,6 +1007,7 @@
     window.pitchSliceEnterBoundary = pitchSliceEnterBoundary;
     window.pitchSliceExitBoundary = pitchSliceExitBoundary;
     window.pitchSplitBoundaryHandoffSec = pitchSplitBoundaryHandoffSec;
+    window.pitchSliceStretchRateForTimeline = pitchSliceStretchRateForTimeline;
     window.pitchSliceTimelineDurationSec = pitchSliceTimelineDurationSec;
     window.pitchSlicePlaybackFitRate = pitchSlicePlaybackFitRate;
     window.isSignalsmithPitchStretchAvailable = isSignalsmithPitchStretchAvailable;

@@ -118,6 +118,11 @@
      *           grid/phrase-delete/*。併せて [MusicalSlot] silent-del/* へも転送（MUSICAL_SLOT 要）。
      * 有効化の目安: 無音 gap 削除後にフレーズ定義が崩れる、Delete が効かない/別リージョンが消える。
      *
+     * --- IXML ---
+     * [iXML] — WAV 読込時の iXML / AXML / BWF / INFO メタデータ全文（F10 診断ログ）。
+     * モジュール: js/export/wav-markers.js
+     * 有効化の目安: Nuendo 書き出しの ATTR・MusicalUpbeat 等の取り込み内容をログで確認する。
+     *
      * --- REGION_HANDLE_HIT_DEBUG ---
      * リージョン操作帯（Fade/In/Out/Split/クロスフェード/Phrase 境界）を波形上に色分け表示。
      * 診断ログ DEBUG_LOG とは別。FADE_TRIANGLE_HIT_DEBUG は後方互換エイリアス。
@@ -133,6 +138,7 @@
             KEY_PLAYBACK: false,
             TEMPO_STRETCH: false,
             SILENT_GAP_DELETE: false,
+            IXML: false,
         },
         /** 波形 overlay — リージョン操作帯デバッグ描画 */
         REGION_HANDLE_HIT_DEBUG: false,

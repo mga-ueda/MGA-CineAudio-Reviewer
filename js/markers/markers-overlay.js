@@ -842,6 +842,30 @@
         }
     }
 
+    /** WAV iXML 等のファイル取り込みで Additional Comments を更新 */
+    function setMarkerMemoFromFileImport(text, opt) {
+        const incoming = String(text ?? '').trim();
+        if (!incoming) return false;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        let next = incoming;
+        if (o.append && hasMarkerMemoText()) {
+            const existing = String(getCurrentMarkerMemoText() || '').trim();
+            if (existing) next = existing + '\n\n' + incoming;
+        }
+        setMarkerMemoText(next);
+        saveMarkerMemoToCache();
+        updateMarkerClearAllButton();
+        if (markerCopyBtn) {
+            markerCopyBtn.disabled = !(
+                markerTimelineReady() &&
+                (currentMarkers.length > 0 || hasMarkerMemoText())
+            );
+        }
+        return true;
+    }
+
+    window.setMarkerMemoFromFileImport = setMarkerMemoFromFileImport;
+
     function saveMarkerMemoToCache() {
         const k = getVideoMarkerKey() || resolveMarkerCacheKey();
         if (k) markerMemoByVideoKey.set(k, currentMarkerMemo);

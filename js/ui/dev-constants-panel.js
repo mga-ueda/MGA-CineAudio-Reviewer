@@ -11,6 +11,7 @@
         'KEY_PLAYBACK',
         'TEMPO_STRETCH',
         'SILENT_GAP_DELETE',
+        'IXML',
     ];
 
     const DEBUG_LOG_META = {
@@ -53,6 +54,11 @@
             label: '無音 gap 削除',
             tag: '[SilentGapDel]',
             desc: 'Ctrl+クリック無音選択・Delete 経路。削除効かない・フレーズ定義崩れの調査。',
+        },
+        IXML: {
+            label: 'iXML / WAV メタデータ',
+            tag: '[iXML]',
+            desc: 'WAV 読込時の iXML・AXML・BWF bext・INFO 全文をログへ。',
         },
     };
 
@@ -381,6 +387,34 @@
         allOffBtn.textContent = '全オフ';
         allOffBtn.addEventListener('click', () => setAllOff());
 
+        const logCopyBtn = document.createElement('button');
+        logCopyBtn.type = 'button';
+        logCopyBtn.className = 'dev-constants-panel__all-off-btn';
+        logCopyBtn.textContent = 'ログコピー';
+        if (typeof msg === 'function') {
+            logCopyBtn.title = msg('tooltip.logCopy');
+        }
+        logCopyBtn.addEventListener('click', async () => {
+            if (typeof window.copyLogToClipboard !== 'function') {
+                if (typeof writeLog === 'function') {
+                    writeLog('Log copy unavailable');
+                }
+                return;
+            }
+            const ok = await window.copyLogToClipboard();
+            if (ok) {
+                if (typeof writeMetaLog === 'function') {
+                    writeMetaLog('Log', msg('log.clipboard.copied'));
+                } else if (typeof writeLog === 'function') {
+                    writeLog(msg('log.clipboard.copied'));
+                }
+            } else if (typeof writeMetaLog === 'function') {
+                writeMetaLog('Log', msg('log.clipboard.copyFailed'));
+            } else if (typeof writeLog === 'function') {
+                writeLog(msg('log.clipboard.copyFailed'));
+            }
+        });
+
         const logClearBtn = document.createElement('button');
         logClearBtn.type = 'button';
         logClearBtn.className = 'dev-constants-panel__all-off-btn';
@@ -393,6 +427,7 @@
         });
 
         headerActions.appendChild(allOffBtn);
+        headerActions.appendChild(logCopyBtn);
         headerActions.appendChild(logClearBtn);
 
         header.appendChild(headerText);

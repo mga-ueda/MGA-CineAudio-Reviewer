@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.17 |
+| **バージョン** | v0.18 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,13 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.18 - 2026年6月16日
+
+- Nuendo/Cubase 等の iXML（Steinberg メタデータ）付き WAV 読み込み時に Tempo/Sig・Phrase・再生リージョンを自動取り込み。WAV サイクルリージョンから Phrase を構築し、アウフタクト時は R. Offset を自動 ON。
+- Phrase 着色 ON 時のリージョン入れ替え（E）の交差スライドアニメーションを修正し、確定直後に波形へ反映。
+- キー変更（Alt+Shift+ホイール）後の無音を修正。リージョン平行移動のスナップをドラッグ中の磁石吸着に変更。
+- 波形読込中・タイムストレッチ中オーバーレイに省略記号アニメーション。短尺リージョンの Fade 三角を実タイムライン幅どおりに表示。
 
 ### v0.17 - 2026年6月15日
 

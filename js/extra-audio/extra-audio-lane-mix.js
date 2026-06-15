@@ -714,6 +714,7 @@
             playEndOff - startAt + endPad,
             playbackBuffer.duration - startAt,
         );
+        const bufferPlayDurBeforeTimeline = playDur;
         let pitchSliceTimelineFitRate = 1;
         if (Number.isFinite(playTransportSec)) {
             let timelineEnd =
@@ -905,6 +906,7 @@
                 playbackBuffer,
                 startAt,
                 playDur,
+                bufferPlayDur: bufferPlayDurBeforeTimeline,
                 playTransportSec,
                 when,
                 anchorT,
@@ -1049,6 +1051,7 @@
             playbackBuffer,
             startAt,
             playDur,
+            bufferPlayDur,
             playTransportSec,
             when,
             anchorT,
@@ -1062,6 +1065,26 @@
             liveStretchGen,
         } = p;
         const startGen = liveStretchGen;
+        const channels = playbackBuffer.numberOfChannels;
+        const feedBufferDur = Math.min(
+            Number.isFinite(bufferPlayDur) && bufferPlayDur > 0
+                ? bufferPlayDur
+                : playDur,
+            Math.max(0, playbackBuffer.duration - startAt),
+            Number.isFinite(remain) && remain > 0 ? remain : Infinity,
+        );
+        const timelinePlayDur = Math.max(0, playDur);
+        let stretchRate = 1;
+        if (feedBufferDur > 0.001 && timelinePlayDur > 0.001) {
+            if (typeof pitchSliceStretchRateForTimeline === 'function') {
+                stretchRate = pitchSliceStretchRateForTimeline(
+                    feedBufferDur,
+                    timelinePlayDur,
+                );
+            } else {
+                stretchRate = feedBufferDur / timelinePlayDur;
+            }
+        }
         function liveStretchGenStale(reason) {
             const cur =
                 tr._livePitchStretchGenByKey &&
@@ -1101,14 +1124,13 @@
             }
             const stretch =
                 typeof createLivePitchStretchNode === 'function'
-                    ? await createLivePitchStretchNode(
-                          ctx,
-                          playbackBuffer.numberOfChannels,
-                      )
+                    ? await createLivePitchStretchNode(ctx, channels, {
+                          liveInput: true,
+                      })
                     : await SignalsmithStretch(ctx, {
-                          numberOfInputs: 0,
+                          numberOfInputs: 1,
                           numberOfOutputs: 1,
-                          outputChannelCount: [playbackBuffer.numberOfChannels],
+                          outputChannelCount: [channels],
                       });
             if (liveStretchGenStale('after-node-create')) {
                 try {
@@ -1116,16 +1138,8 @@
                 } catch (_) {}
                 return;
             }
-            const slice =
-                typeof extractBufferSliceChannelArrays === 'function'
-                    ? extractBufferSliceChannelArrays(
-                          playbackBuffer,
-                          startAt,
-                          playDur,
-                      )
-                    : null;
-            if (!slice || !slice.channelArrays.length) {
-                throw new Error('live stretch slice empty');
+            if (!(feedBufferDur > 0.002)) {
+                throw new Error('live stretch feed duration empty');
             }
             let liveWhen = when;
             let liveTransportSec = playTransportSec;
@@ -1135,35 +1149,36 @@
             }
             const segGain = ctx.createGain();
             segGain.gain.value = Math.max(0, gainLinear);
-            connectMonoAudioCentered(stretch, segGain, slice.channelArrays.length);
+            const feedSrc = ctx.createBufferSource();
+            feedSrc.buffer = playbackBuffer;
+            feedSrc.connect(stretch);
+            connectMonoAudioCentered(stretch, segGain, channels);
             segGain.connect(tr.gainNode);
-            await stretch.addBuffers(
-                slice.channelArrays,
-                slice.channelArrays.map((arr) => arr.buffer),
-            );
             const stretchLatency =
                 typeof stretch.latency === 'function'
                     ? Math.max(0, await stretch.latency())
                     : 0;
-            await stretch.start(liveWhen, 0, undefined, 1, segmentPitch);
+            if (liveStretchGenStale('after-latency')) {
+                try {
+                    feedSrc.disconnect();
+                } catch (_) {}
+                try {
+                    stretch.disconnect();
+                } catch (_) {}
+                return;
+            }
+            await stretch.start(liveWhen, 0, undefined, stretchRate, segmentPitch);
             const liveDurationPad =
                 typeof EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC === 'number'
                     ? EXTRA_AUDIO_SEGMENT_DURATION_PAD_SEC
                     : 0.08;
+            feedSrc.start(liveWhen, startAt, feedBufferDur);
             try {
-                stretch.stop(liveWhen + playDur + liveDurationPad);
+                stretch.stop(liveWhen + timelinePlayDur + liveDurationPad);
             } catch (_) {}
-            const src = ctx.createBufferSource();
-            src.buffer = playbackBuffer;
-            src.playbackRate.value = 1;
-            src.detune.value = 0;
-            const muteGain = ctx.createGain();
-            muteGain.gain.value = 0;
-            src.connect(muteGain);
-            muteGain.connect(tr.gainNode);
             if (liveStretchGenStale('after-stretch-start')) {
                 try {
-                    src.stop();
+                    feedSrc.stop();
                 } catch (_) {}
                 try {
                     stretch.stop();
@@ -1173,22 +1188,22 @@
                 } catch (_) {}
                 return;
             }
-            src.start(liveWhen, startAt, playDur);
             if (typeof pitchPlaybackLog === 'function') {
                 pitchPlaybackLog('start/live-stretch', {
                     slot,
                     segmentIndex: segHit.segmentIndex,
                     pitch: segmentPitch,
                     bufferOff: startAt,
-                    playDur,
+                    playDur: timelinePlayDur,
+                    feedBufferDur,
+                    stretchRate,
                     playTransportSec: liveTransportSec,
                     when: liveWhen,
-                    stretchStopWhen: liveWhen + playDur + liveDurationPad,
+                    stretchStopWhen: liveWhen + timelinePlayDur + liveDurationPad,
                     gainLinear,
-                    channels: playbackBuffer.numberOfChannels,
+                    channels,
                     ctxTime: ctx.currentTime,
-                    mode: 'addBuffers',
-                    sliceFrames: slice.frameCount,
+                    mode: 'live-input',
                     stretchLatency,
                 });
             }
@@ -1224,7 +1239,7 @@
                 }
             }
             tr.segmentSources[key] = {
-                src,
+                src: feedSrc,
                 stretch,
                 segGain,
                 transportAnchor: liveTransportSec,
@@ -1232,11 +1247,11 @@
                 bufferOff: startAt,
                 absoluteBufferOff: absoluteStartAt,
                 segmentIndex: segHit.segmentIndex,
-                pitchRate: 1,
+                pitchRate: stretchRate,
                 pitchSemitones: segmentPitch,
                 usesPitchSlice: false,
                 usesLiveStretch: true,
-                usesStretchBuffers: true,
+                usesStretchBuffers: false,
                 legacyPlaybackRate: false,
                 lastAppliedGain: Math.max(0, gainLinear),
             };
@@ -1255,10 +1270,10 @@
                     );
                 }
             }
-            tr.source = src;
+            tr.source = feedSrc;
             tr.playbackAnchorTransportSec = liveTransportSec;
             tr.playbackAnchorCtxTime = liveWhen;
-            src.onended = () => {
+            feedSrc.onended = () => {
                 if (typeof pitchPlaybackLog === 'function') {
                     pitchPlaybackLog('onended/live-stretch', {
                         slot,
@@ -1275,7 +1290,7 @@
                     ctx,
                     trackRef,
                     segHit,
-                    src,
+                    src: feedSrc,
                     gainLinear,
                     segmentPitch,
                 });

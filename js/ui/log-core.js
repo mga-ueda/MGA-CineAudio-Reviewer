@@ -22,6 +22,7 @@
         KEY_PLAYBACK: 'KeyPlay',
         TEMPO_STRETCH: 'Tempo',
         SILENT_GAP_DELETE: 'Silent',
+        IXML: 'iXML',
     };
 
     const LEGACY_LOG_RULES = [
@@ -33,6 +34,10 @@
         { re: /^\[RegionRestore\]/i, tier: 'diag', category: 'Restore' },
         { re: /^\[SilentGapDel\]/i, tier: 'diag', category: 'Silent' },
         { re: /^\[VideoAnalyzer\]/i, tier: 'diag', category: 'VideoAnz' },
+        { re: /^\[iXML\]/i, tier: 'diag', category: 'iXML' },
+        { re: /^\[WAV INFO\]/i, tier: 'diag', category: 'iXML' },
+        { re: /^\[BWF bext\]/i, tier: 'diag', category: 'iXML' },
+        { re: /^\[AXML\]/i, tier: 'diag', category: 'iXML' },
         { re: /^swapped .+ ↔ /i, tier: 'action', category: 'Region' },
         { re: /^undo — /i, tier: 'action', category: 'Region' },
         { re: /^redo — /i, tier: 'action', category: 'Region' },

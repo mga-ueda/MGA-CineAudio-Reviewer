@@ -43,7 +43,7 @@
                     <tr>
                         <td>ファイルの読み込み</td>
                         <td>ドロップ</td>
-                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当。WAV / WAVE に埋め込まれたマーカー/リージョンがあれば Markers パネルへ自動反映（Import Review / セッション復元時を除く）</td>
+                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当。<strong>WAV / WAVE のみ</strong> — 埋め込みマーカー/リージョンと<strong>埋め込み Comment（ラベル）</strong>を Markers パネルへ自動反映（FLAC / MP3 / OGG / M4A 等は非対応）。Nuendo/Cubase 等の <strong>iXML</strong>（Steinberg メタデータ）があれば Tempo/Sig・Phrase・再生リージョンも Audio Track へ自動反映（Import Review / セッション復元時を除く）</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生（動画読込後）</th>
@@ -504,7 +504,7 @@
                     <tr>
                         <td>入れ替え（フレーズ並び）</td>
                         <td><kbd>E</kbd></td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。成功時は交差スライドアニメーションで位置を入れ替え、確定直後に波形へ反映。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
                     </tr>
                     <tr>
                         <td>ソース In/Out・スプリット点</td>
@@ -529,17 +529,17 @@
                     <tr>
                         <td>クリップ開始位置（タイムライン）</td>
                         <td>ドラッグ（Audio Track）</td>
-                        <td>リージョン上でドラッグ（他リージョン・動画終端・マーカーへスナップ可。重なり可・重なり部は等パワー・クロスフェード）</td>
+                        <td>リージョン上でドラッグ（他リージョン・動画終端・マーカーへスナップ可。ドラッグ中は磁石吸着でスナップ位置へ引き寄せ、離すと確定。重なり可・重なり部は等パワー・クロスフェード）</td>
                     </tr>
                     <tr>
                         <td>リージョン音量（補正 dB）</td>
                         <td><kbd>Alt</kbd>+ホイール（Audio Track）</td>
-                        <td>選択中のリージョンを±1dB刻み（上＝上げ・下＝下げ）。複数選択時はまとめて同じ dB だけ変更。0 dB以外はリージョン中央に赤文字表示。補正のたびにリージョン In〜Outの範囲マーカーを付け/更新し、コメント列に補正dBと操作（例: 3.0dB上げる/-3.0dB下げる）。0.0dBに戻すと同範囲の自動マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
+                        <td>選択中のリージョンを±1dB刻み（上＝上げ・下＝下げ）。複数選択時はまとめて同じ dB だけ変更。0 dB以外はリージョン中央に赤文字表示。補正のたびにリージョン In〜Out の範囲マーカーを自動付与し、Markers パネルの <strong>Comment</strong> 列に補正内容（例: <code>3.0dB上げる</code>/<code>-3.0dB下げる</code>）を入力（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。0.0dBに戻すと同範囲の自動付与マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
                     </tr>
                     <tr>
                         <td>リージョンキー（±半音）</td>
                         <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（Audio Track）</td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを付け/更新し、コメント列に <code>キーを +1 する</code> 等。Key 0 に戻すと同範囲の自動マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
+                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを自動付与し、Markers パネルの <strong>Comment</strong> 列に <code>キーを +1 する</code> 等を入力（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。Key 0 に戻すと同範囲の自動付与マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
                     </tr>
                     <tr>
                         <td>リージョン情報をコピー</td>

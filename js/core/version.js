@@ -1,10 +1,20 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.17';
+    const APP_VERSION = '0.18';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.18',
+            date: '2026年6月16日',
+            items: [
+                'Nuendo/Cubase 等の iXML（Steinberg メタデータ）付き WAV 読み込み時に Tempo/Sig・Phrase・再生リージョンを自動取り込み。WAV サイクルリージョンから Phrase を構築し、アウフタクト時は R. Offset を自動 ON。',
+                'Phrase 着色 ON 時のリージョン入れ替え（E）の交差スライドアニメーションを修正し、確定直後に波形へ反映。',
+                'キー変更（Alt+Shift+ホイール）後の無音を修正。リージョン平行移動のスナップをドラッグ中の磁石吸着に変更。',
+                '波形読込中・タイムストレッチ中オーバーレイに省略記号アニメーション。短尺リージョンの Fade 三角を実タイムライン幅どおりに表示。',
+            ],
+        },
         {
             version: '0.17',
             date: '2026年6月15日',
