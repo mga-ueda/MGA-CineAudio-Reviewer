@@ -3551,6 +3551,9 @@
         }
         .audio-waveform-lane__playback-region--hover:not(
                 .audio-waveform-lane__playback-region--grouped
+            ),
+        .audio-waveform-lane__playback-region--offset-drag:not(
+                .audio-waveform-lane__playback-region--grouped
             ) {
             z-index: 9;
             border-top: 0.5px solid rgba(150, 156, 168, 0.88);
@@ -3558,11 +3561,17 @@
         }
         .audio-waveform-lane__playback-region--hover:not(
                 .audio-waveform-lane__playback-region--grouped
+            ).audio-waveform-lane__playback-region--edge-in,
+        .audio-waveform-lane__playback-region--offset-drag:not(
+                .audio-waveform-lane__playback-region--grouped
             ).audio-waveform-lane__playback-region--edge-in {
             border-left-width: 0.5px;
             border-left-color: rgba(150, 156, 168, 0.88) !important;
         }
         .audio-waveform-lane__playback-region--hover:not(
+                .audio-waveform-lane__playback-region--grouped
+            ).audio-waveform-lane__playback-region--edge-out,
+        .audio-waveform-lane__playback-region--offset-drag:not(
                 .audio-waveform-lane__playback-region--grouped
             ).audio-waveform-lane__playback-region--edge-out {
             border-right-width: 0.5px;

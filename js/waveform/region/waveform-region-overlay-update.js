@@ -339,13 +339,21 @@
             updateTrackRegionOverlays(track);
             return;
         }
+        const offsetDragActive = isOffsetDragRegionWaveformPreviewActive();
+        const offsetDragSegmentIndices =
+            typeof collectOffsetDragSegmentIndicesForTrack === 'function'
+                ? collectOffsetDragSegmentIndicesForTrack(track)
+                : null;
         for (let i = 0; i < segments.length; i++) {
             positionRegionOverlayEl(regionEls[i], track, i, segments[i]);
+            regionEls[i].classList.toggle(
+                'audio-waveform-lane__playback-region--offset-drag',
+                !!(offsetDragSegmentIndices && offsetDragSegmentIndices.has(i)),
+            );
         }
         const splitHandles = container.querySelectorAll(
             '.audio-waveform-lane__playback-region__handle--split',
         );
-        const offsetDragActive = isOffsetDragRegionWaveformPreviewActive();
         const activeSplitBoundaryIndex =
             isSplitBoundaryRegionDragActive() &&
             Number.isFinite(regionHandleDragBoundaryIndex)
@@ -358,7 +366,12 @@
                 el.hidden = true;
                 continue;
             }
-            if (offsetDragActive) {
+            if (
+                offsetDragActive &&
+                (!offsetDragSegmentIndices ||
+                    typeof isSplitBoundaryAdjacentToOffsetDragSegments !== 'function' ||
+                    !isSplitBoundaryAdjacentToOffsetDragSegments(b, offsetDragSegmentIndices))
+            ) {
                 el.hidden = true;
                 continue;
             }

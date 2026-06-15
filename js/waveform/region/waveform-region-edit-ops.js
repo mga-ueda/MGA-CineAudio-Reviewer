@@ -941,7 +941,7 @@
         return !!(regionHandleDragActive && regionHandleDragSplitBoundary);
     }
 
-    /** リージョン平行移動ドラッグ中（スプリットハンドル非表示など overlay 専用処理用） */
+    /** リージョン平行移動ドラッグ中（overlay 専用処理用） */
     function isOffsetDragRegionWaveformPreviewActive() {
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
@@ -949,6 +949,44 @@
             lanes &&
             lanes.classList.contains('audio-waveform-composite__lanes--offset-drag')
         );
+    }
+
+    /** 平行移動ドラッグ中の対象セグメント index（当該トラックのみ）。なければ null */
+    function collectOffsetDragSegmentIndicesForTrack(track) {
+        if (
+            typeof waveformOffsetDragActive === 'undefined' ||
+            !waveformOffsetDragActive ||
+            !isOffsetDragRegionWaveformPreviewActive()
+        ) {
+            return null;
+        }
+        if (!isExtraTrackRef(track)) return null;
+        const indices = new Set();
+        if (
+            typeof waveformOffsetDragGroupMembers !== 'undefined' &&
+            waveformOffsetDragGroupMembers &&
+            waveformOffsetDragGroupMembers.length
+        ) {
+            for (let i = 0; i < waveformOffsetDragGroupMembers.length; i++) {
+                const m = waveformOffsetDragGroupMembers[i];
+                if (m && m.slot === track.slot && Number.isFinite(m.segmentIndex)) {
+                    indices.add(m.segmentIndex | 0);
+                }
+            }
+        } else if (
+            typeof waveformOffsetDragSegmentIndex === 'number' &&
+            waveformOffsetDragSegmentIndex >= 0 &&
+            typeof waveformOffsetDragSlot === 'number' &&
+            waveformOffsetDragSlot === track.slot
+        ) {
+            indices.add(waveformOffsetDragSegmentIndex | 0);
+        }
+        return indices.size ? indices : null;
+    }
+
+    function isSplitBoundaryAdjacentToOffsetDragSegments(boundaryIndex, dragIndices) {
+        const b = boundaryIndex | 0;
+        return dragIndices.has(b) || dragIndices.has(b + 1);
     }
 
     /** geometryOnly ドラッグ中でも波形プレビューが必要なとき（フェードハンドル / 重なり開始） */
