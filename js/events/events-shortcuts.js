@@ -390,6 +390,7 @@
                     'handlePlaybackRegionGroupKeydown',
                     'handlePlaybackRegionSwapKeydown',
                     'handlePlaybackRegionRehearsalMarkJumpKeydown',
+                    'handlePlaybackRegionSelectAtSeekbarKeydown',
                 ],
                 e,
             )

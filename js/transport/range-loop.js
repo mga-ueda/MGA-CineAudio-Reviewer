@@ -26,6 +26,7 @@
 
     const RANGE_LOOP_MIN_SEC = 0.05;
     const RANGE_LOOP_CLICK_MOVE_PX = 5;
+    const RANGE_LOOP_KEYBOARD_PAGE_STEP_SEC = 10;
 
     function armRangeLoopContextMenuSuppress() {
         suppressRangeLoopContextMenuUntil =
@@ -212,6 +213,42 @@
         );
     }
 
+    function isRangeLoopShiftPageKeydown(e) {
+        if (!e || e.altKey) return false;
+        if (typeof matchUserShortcut !== 'function') return false;
+        return (
+            matchUserShortcut(e, 'rangeLoopPageUp10', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'rangeLoopPageDown10', { allowRepeat: true })
+        );
+    }
+
+    function handleRangeLoopShiftPageKeydown(e) {
+        if (!isRangeLoopShiftPageKeydown(e)) return;
+        if (typeof isTypingTarget === 'function') {
+            if (isTypingTarget(e.target) || isTypingTarget(document.activeElement)) return;
+        }
+        if (!isMediaReadyForRangeLoop()) return;
+        if (typeof isOperationBlockingActive === 'function' && isOperationBlockingActive()) {
+            return;
+        }
+        if (loopRangeShiftHoldActive) {
+            cancelRangeLoopShiftHold();
+        }
+        const dir = matchUserShortcut(e, 'rangeLoopPageDown10', { allowRepeat: true }) ? 1 : -1;
+        if (
+            !extendRangeLoopViaKeyboard(
+                dir,
+                RANGE_LOOP_KEYBOARD_PAGE_STEP_SEC,
+                false,
+                e.repeat,
+            )
+        ) {
+            return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
     function logRangeLoopShiftArrowDebounced(line) {
         if (typeof logArrowSeekDebounced === 'function') {
             logArrowSeekDebounced(line);
@@ -268,7 +305,9 @@
         return true;
     }
 
-    function extendRangeLoopViaShiftArrow(dir, useStopMode, fromRepeat) {
+    function extendRangeLoopViaKeyboard(dir, stepSec, useStopMode, fromRepeat) {
+        const step = Number(stepSec);
+        if (!Number.isFinite(step) || step <= 0) return false;
         const cur = getTransportSecForRangeLoop();
         let inSec;
         let outSec;
@@ -287,9 +326,9 @@
                     inSec = prev;
                 }
             } else if (dir > 0) {
-                outSec += 1;
+                outSec += step;
             } else {
-                inSec -= 1;
+                inSec -= step;
             }
             return setRangeLoopBounds(inSec, outSec, {
                 skipJumpToIn: true,
@@ -309,12 +348,16 @@
             }
         } else if (dir > 0) {
             inSec = cur;
-            outSec = cur + 1;
+            outSec = cur + step;
         } else {
-            inSec = cur - 1;
+            inSec = cur - step;
             outSec = cur;
         }
         return setRangeLoopBounds(inSec, outSec, { fromRepeat: fromRepeat });
+    }
+
+    function extendRangeLoopViaShiftArrow(dir, useStopMode, fromRepeat) {
+        return extendRangeLoopViaKeyboard(dir, 1, useStopMode, fromRepeat);
     }
 
     function handleRangeLoopShiftArrowKeydown(e) {
@@ -730,6 +773,7 @@
         window.addEventListener('keyup', onRangeLoopShiftHoldKeyup, true);
         window.addEventListener('keydown', onRangeLoopShiftHoldOtherKeydown, true);
         window.addEventListener('keydown', handleRangeLoopShiftArrowKeydown, true);
+        window.addEventListener('keydown', handleRangeLoopShiftPageKeydown, true);
         window.addEventListener('blur', cancelRangeLoopShiftHold);
     }
 

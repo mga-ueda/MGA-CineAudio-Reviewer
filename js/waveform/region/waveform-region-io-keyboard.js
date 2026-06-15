@@ -89,6 +89,14 @@
         return true;
     }
 
+    function handlePlaybackRegionSelectAtSeekbarKeydown(e) {
+        if (!matchUserShortcut(e, 'regionSelectAtSeekbar')) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        if (!selectPlaybackRegionsAtActiveTrackEnter()) return false;
+        e.preventDefault();
+        return true;
+    }
+
     function handlePlaybackRegionCopyKeydown(e) {
         if (!e.ctrlKey && !e.metaKey) return false;
         if (!matchUserShortcut(e, 'regionCopy')) return false;

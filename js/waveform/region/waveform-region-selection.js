@@ -533,4 +533,195 @@
         return true;
     }
 
+    function resolveActiveExtraSlotForRegionEnter() {
+        if (typeof getActiveMixExtraSlotFromDom === 'function') {
+            const domSlot = getActiveMixExtraSlotFromDom();
+            if (
+                domSlot >= 0 &&
+                typeof isExtraSlotUsableForRegion === 'function' &&
+                isExtraSlotUsableForRegion(domSlot)
+            ) {
+                return domSlot;
+            }
+        }
+        if (typeof getWaveformTargetExtraSlot === 'function') {
+            const slot = getWaveformTargetExtraSlot();
+            if (
+                slot >= 0 &&
+                typeof isExtraSlotUsableForRegion === 'function' &&
+                isExtraSlotUsableForRegion(slot)
+            ) {
+                return slot;
+            }
+        }
+        return -1;
+    }
+
+    function regionSelectTransportEpsilonSec() {
+        if (typeof transportBoundaryEpsilonSec === 'function') {
+            return transportBoundaryEpsilonSec();
+        }
+        return 1e-4;
+    }
+
+    /** リージョン長に対する選択重なりの最小比率（境界付近の誤ヒット除外） */
+    function regionEnterSelectMinOverlapRatio() {
+        return 0.1;
+    }
+
+    /** 選択区間がリージョン内に占める割合（0〜1）。点選択時は境界からの内側深さで算出 */
+    function regionSelectedFraction(track, segmentIndex, inSec, outSec) {
+        const start = getSegmentRegionTimelineIn(track, segmentIndex);
+        const end = getSegmentTimelineEnd(track, segmentIndex);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+        const dur = end - start;
+        const eps = regionSelectTransportEpsilonSec();
+        if (!(dur > eps)) return 0;
+
+        const inT = Number(inSec);
+        const outT = Number(outSec);
+        if (!Number.isFinite(inT) || !Number.isFinite(outT)) return 0;
+
+        if (Math.abs(outT - inT) <= eps) {
+            const t = inT;
+            if (t < start - eps || t >= end - eps) return 0;
+            return (2 * Math.min(t - start, end - t)) / dur;
+        }
+
+        const overlap = Math.max(0, Math.min(end, outT) - Math.max(start, inT));
+        return overlap / dur;
+    }
+
+    function isRegionMeaningfullySelectedByRange(track, segmentIndex, inSec, outSec) {
+        return (
+            regionSelectedFraction(track, segmentIndex, inSec, outSec) >=
+            regionEnterSelectMinOverlapRatio()
+        );
+    }
+
+    /** 隣接リージョン間のスプリット境界上か（トラック端の In/Out は除く） */
+    function isTransportAtSplitBoundary(track, transportSec) {
+        const segments = getTrackSegments(track);
+        if (segments.length < 2) return false;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        const eps = regionSelectTransportEpsilonSec();
+        for (let b = 0; b < segments.length - 1; b++) {
+            const leftEnd = getSegmentTimelineEnd(track, b);
+            const rightStart = getSegmentTimelineStart(track, b + 1);
+            if (Math.abs(t - leftEnd) <= eps) return true;
+            if (Math.abs(t - rightStart) <= eps) return true;
+            const mid = (leftEnd + rightStart) * 0.5;
+            if (Math.abs(t - mid) <= eps) return true;
+        }
+        return false;
+    }
+
+    function regionIntervalOverlapsTransportRange(track, segmentIndex, inSec, outSec) {
+        const start = getSegmentRegionTimelineIn(track, segmentIndex);
+        const end = getSegmentTimelineEnd(track, segmentIndex);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
+        const eps = regionSelectTransportEpsilonSec();
+        return start < outSec - eps && end > inSec + eps;
+    }
+
+    function collectRegionIndicesOverlappingTransportRange(track, inSec, outSec) {
+        const count = getSegmentCount(track);
+        const eps = regionSelectTransportEpsilonSec();
+        const isPoint = Math.abs(Number(outSec) - Number(inSec)) <= eps;
+        const indices = [];
+        let bestIndex = -1;
+        let bestFraction = 0;
+        for (let i = 0; i < count; i++) {
+            if (!isRegionMeaningfullySelectedByRange(track, i, inSec, outSec)) continue;
+            if (isPoint) {
+                const frac = regionSelectedFraction(track, i, inSec, outSec);
+                if (frac > bestFraction) {
+                    bestFraction = frac;
+                    bestIndex = i;
+                }
+                continue;
+            }
+            if (regionIntervalOverlapsTransportRange(track, i, inSec, outSec)) {
+                indices.push(i);
+            }
+        }
+        if (isPoint) {
+            return bestIndex >= 0 ? [bestIndex] : [];
+        }
+        return indices;
+    }
+
+    function setRegionSelectionOnTrack(slot, segmentIndices) {
+        if (!(slot >= 0) || !segmentIndices || !segmentIndices.length) return false;
+        regionSelectionEntries.length = 0;
+        for (let i = 0; i < segmentIndices.length; i++) {
+            const segmentIndex = segmentIndices[i];
+            if (!(segmentIndex >= 0)) continue;
+            regionSelectionEntries.push({ slot, segmentIndex });
+        }
+        if (!regionSelectionEntries.length) return false;
+        syncRegionSelectionClasses();
+        return true;
+    }
+
+    function resolveRegionSegmentIndexAtSeekbar(track) {
+        const seekSec =
+            typeof transportSecFromSeekbar === 'function'
+                ? transportSecFromSeekbar()
+                : typeof getTransportSec === 'function'
+                  ? getTransportSec()
+                  : 0;
+        const hits = collectRegionIndicesOverlappingTransportRange(track, seekSec, seekSec);
+        return hits.length ? hits[0] : -1;
+    }
+
+    /** Enter — アクティブ Audio Track でシークバー直下、または範囲ループ区間のリージョンを選択 */
+    function selectPlaybackRegionsAtActiveTrackEnter() {
+        const slot = resolveActiveExtraSlotForRegionEnter();
+        if (slot < 0) return false;
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) return false;
+
+        const rangeActive =
+            typeof isRangeLoopPlaybackActive === 'function' &&
+            isRangeLoopPlaybackActive();
+        if (rangeActive) {
+            const inSec =
+                typeof getRangeLoopInSec === 'function' ? getRangeLoopInSec() : NaN;
+            const outSec =
+                typeof getRangeLoopOutSec === 'function' ? getRangeLoopOutSec() : NaN;
+            if (!Number.isFinite(inSec) || !Number.isFinite(outSec) || outSec <= inSec) {
+                return false;
+            }
+
+            const inAtBoundary = isTransportAtSplitBoundary(track, inSec);
+            const outAtBoundary = isTransportAtSplitBoundary(track, outSec);
+            const eps = regionSelectTransportEpsilonSec();
+
+            if (inAtBoundary && outAtBoundary) {
+                if (Math.abs(inSec - outSec) <= eps) {
+                    return false;
+                }
+                const between = collectRegionIndicesOverlappingTransportRange(
+                    track,
+                    inSec,
+                    outSec,
+                );
+                return setRegionSelectionOnTrack(slot, between);
+            }
+
+            const overlapping = collectRegionIndicesOverlappingTransportRange(
+                track,
+                inSec,
+                outSec,
+            );
+            return setRegionSelectionOnTrack(slot, overlapping);
+        }
+
+        const segmentIndex = resolveRegionSegmentIndexAtSeekbar(track);
+        if (segmentIndex < 0) return false;
+        return setRegionSelectionOnTrack(slot, [segmentIndex]);
+    }
+
 

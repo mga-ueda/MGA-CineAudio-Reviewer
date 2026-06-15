@@ -459,6 +459,11 @@
                         <td><kbd>→</kbd>＝現在地〜+1秒、<kbd>←</kbd>＝−1秒〜現在地。押すたびに同方向へ1秒ずつ拡張（キーリピート可）</td>
                     </tr>
                     <tr>
+                        <td>範囲指定（10秒）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>PgUp</kbd>/<kbd>PgDn</kbd></td>
+                        <td><kbd>PgDn</kbd>＝現在地〜+10秒、<kbd>PgUp</kbd>＝−10秒〜現在地。押すたびに同方向へ10秒ずつ拡張（キーリピート可）</td>
+                    </tr>
+                    <tr>
                         <td>範囲指定（停止点まで）</td>
                         <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
                         <td>現在地から <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の次ジャンプ先まで。押すたびに同方向へ停止点を追加（キーリピート可）</td>
@@ -495,6 +500,11 @@
                         <td>全選択（対象トラック）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>A</kbd></td>
                         <td>対象 Audio Track（アクティブ/ポインタ下）の<strong>全リージョン</strong>を選択。他トラックの選択は解除。無音スロットは含まない。入力欄フォーカス中は無効</td>
+                    </tr>
+                    <tr>
+                        <td>選択（シークバー/範囲ループ）</td>
+                        <td><kbd>Enter</kbd></td>
+                        <td>アクティブな Audio Track で、シークバー直下のリージョンを選択。範囲ループ指定中はその区間に属するリージョンを選択（境界のみ・わずかな重なりのみは除外）。入力欄フォーカス中は無効</td>
                     </tr>
                     <tr>
                         <td>グループ化 / 解除</td>

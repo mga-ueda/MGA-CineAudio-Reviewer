@@ -77,6 +77,18 @@
             shift: false,
             alt: false,
         },
+        rangeLoopPageUp10: {
+            code: 'PageUp',
+            primary: true,
+            shift: true,
+            alt: false,
+        },
+        rangeLoopPageDown10: {
+            code: 'PageDown',
+            primary: true,
+            shift: true,
+            alt: false,
+        },
         loopToggle: { code: 'KeyL', primary: false, ctrl: false, meta: false, alt: false, shift: false },
 
         // ---------- 表示 ----------
@@ -193,6 +205,14 @@
         regionCopy: { code: 'KeyC', primary: true, shift: false, alt: false },
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
         regionSelectAll: { code: 'KeyA', primary: true, shift: false, alt: false },
+        regionSelectAtSeekbar: {
+            codes: ['Enter', 'NumpadEnter'],
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+            primary: false,
+        },
         regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
         regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
         // Phrase 着色 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）

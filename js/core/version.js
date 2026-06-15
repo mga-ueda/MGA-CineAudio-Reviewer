@@ -1,10 +1,18 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.18';
+    const APP_VERSION = '0.19';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.19',
+            date: '2026年6月16日',
+            items: [
+                'Enter でアクティブ Audio Track のシークバー直下、または範囲ループ区間のリージョンを選択（境界付近の誤選択を重なり比率で除外）。',
+                'Ctrl+Shift+PgUp/PgDn で範囲ループを10秒単位で指定・拡張。',
+            ],
+        },
         {
             version: '0.18',
             date: '2026年6月16日',
