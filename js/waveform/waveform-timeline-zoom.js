@@ -1,4 +1,4 @@
-﻿/**
+/**
  * waveform-timeline-zoom.js — 波形タイムライン 1×/4×/8×/16×/32× ズーム・横スクロール・レイアウト。
  */
 (function waveformTimelineZoomModule() {
