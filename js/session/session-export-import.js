@@ -1092,18 +1092,6 @@
         return isExportVideoAvailable() ? 'webm' : 'wave';
     }
 
-    let lastSessionExportMediaBtnMode = null;
-
-    function flashSessionExportMediaBtn(btn) {
-        if (!btn) return;
-        btn.classList.remove('session-io-btn--export-media-glow');
-        void btn.offsetWidth;
-        btn.classList.add('session-io-btn--export-media-glow');
-        setTimeout(() => {
-            btn.classList.remove('session-io-btn--export-media-glow');
-        }, 900);
-    }
-
     function updateSessionExportMediaBtnUi(hasVideo) {
         const btn = document.getElementById('sessionExportVideoBtn');
         if (!btn) return;
@@ -1115,10 +1103,6 @@
         btn.dataset.exportMediaMode = mode;
         btn.classList.toggle('session-io-btn--export-webm', mode === 'webm');
         btn.classList.toggle('session-io-btn--export-wave', mode === 'wave');
-        if (lastSessionExportMediaBtnMode && lastSessionExportMediaBtnMode !== mode) {
-            flashSessionExportMediaBtn(btn);
-        }
-        lastSessionExportMediaBtnMode = mode;
     }
 
     function triggerDownload(buffer, filename) {
