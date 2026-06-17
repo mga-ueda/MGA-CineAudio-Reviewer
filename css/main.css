@@ -671,8 +671,42 @@
             height: var(--spectrum-led-track-px, 270px);
             flex: 0 0 auto;
         }
+        /** 2段目 — 波形高さをレーン内容に同期（拡大率・トラック数に追従、下余白なし） */
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:nth-child(2) {
+            flex: 0 0 auto !important;
+            min-height: 0;
+            overflow: visible;
+        }
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:nth-child(2)
+            > .layout-dock-panel,
+        body.layout-mode-horizontal
+            .layout-dock-shell
+            > .layout-dock-split--column
+            > .layout-dock-split__pane:nth-child(2)
+            > .layout-dock-panel
+            > .layout-dock-panel__body {
+            flex: 0 0 auto;
+            height: auto;
+            overflow: visible;
+        }
         body.layout-mode-horizontal .layout-dock-panel-content--waveform {
-            min-height: 140px;
+            flex: 0 0 auto;
+            height: auto;
+            min-height: 0;
+        }
+        body.layout-mode-horizontal .layout-dock-panel-content--waveform .audio-waveform-composite {
+            flex: 0 0 auto;
+            height: auto;
+        }
+        body.layout-mode-horizontal .audio-waveform-composite__lanes-inner {
+            height: auto;
+            min-height: 0;
         }
         body.layout-mode-horizontal .layout-dock-panel-content--playback {
             flex: 0 0 auto;
