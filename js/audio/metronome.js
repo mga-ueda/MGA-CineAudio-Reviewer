@@ -1,6 +1,5 @@
 /**
  * metronome.js — Click ON かつ再生中、BPM/拍子グリッドに同期したクリックを鳴らす。
- * R. Offset ON 時は先頭小節（アウフタクト）はクリックしない。
  * 再生開始直後 METRONOME_FIXED_GAIN_WINDOW_SEC は楽曲 RMS に依存せず METRONOME_FIXED_GAIN_DB でクリックする。
  */
 (function metronomeModule() {
@@ -31,6 +30,13 @@
     /** 連続再生中の transport 更新幅より大きい変化 = シーク／ジャンプ */
     const METRONOME_TRANSPORT_JUMP_SEC =
         METRONOME_SYNC_INTERVAL_MS / 1000 + METRONOME_MIN_BEAT_GAP_SEC + 0.2;
+    /** 再生開始／シーク直後、トランスポートが小節頭を僅かに過ぎても 1 拍目を鳴らす猶予（秒） */
+    const METRONOME_DOWNBEAT_CATCHUP_SEC = 0.12;
+    /**
+     * prime + play など短時間に force 同期が重なったとき、1 拍目を二重に鳴らさない猶予（秒）。
+     * シーク等の大きな transport 変化はこの閾値を超えるため通常どおりリセットされる。
+     */
+    const METRONOME_FORCE_RESET_DEBOUNCE_SEC = 0.1;
 
     const METRONOME_WAV = {
         accent: 'wav/High.wav',
@@ -53,6 +59,14 @@
     let metronomeClickEnabled = false;
     let metronomeGainTargetLevel = NaN;
     let metronomeFixedGainUntilTransportSec = -Infinity;
+    /** resetMetronomeSchedule 直後の 1 回だけ、現在小節の 1 拍目を先読み範囲に含める */
+    let metronomeCatchUpCurrentDownbeat = false;
+    /** flush 時に stop するため、スケジュール済みクリックの BufferSource を保持 */
+    const metronomeActiveClickSources = new Set();
+    let metronomeScheduleAfterDecodePending = false;
+    let metronomeScheduleAfterDecodeOpt = null;
+    /** 1 拍目の短時間再スケジュール抑止（beatKey + 時刻） */
+    let metronomeLastAccentSchedule = { beatKey: NaN, atMs: 0 };
 
     const metronomeClickCheckbox = document.getElementById('metronomeClickCheckbox');
 
@@ -72,14 +86,6 @@
         }
         if (barIndex < entries.length) return entries[barIndex];
         return entries[entries.length - 1];
-    }
-
-    /** R. Offset ON 時は先頭小節（アウフタクト）のクリックを鳴らさない */
-    function isMetronomeRehearsalOffsetSkipFirstBar() {
-        return (
-            typeof getRehearsalMarkOffsetEnabled === 'function' &&
-            getRehearsalMarkOffsetEnabled()
-        );
     }
 
     function getMetronomeMeterKey() {
@@ -212,8 +218,40 @@
         return Math.round(transportSec * 1000) / 1000;
     }
 
+    function shouldSkipMetronomeAccentReplay(beatKey) {
+        const nowMs = performance.now();
+        return (
+            beatKey === metronomeLastAccentSchedule.beatKey &&
+            nowMs - metronomeLastAccentSchedule.atMs <
+                METRONOME_FORCE_RESET_DEBOUNCE_SEC * 1000
+        );
+    }
+
+    function noteMetronomeAccentScheduled(beatKey) {
+        metronomeLastAccentSchedule = { beatKey, atMs: performance.now() };
+    }
+
     function clearMetronomeScheduledBeatKeys() {
         metronomeScheduledBeatKeys.clear();
+    }
+
+    function stopMetronomeActiveClickSources() {
+        for (const src of metronomeActiveClickSources) {
+            try {
+                src.stop(0);
+            } catch (_) {}
+            try {
+                src.disconnect();
+            } catch (_) {}
+        }
+        metronomeActiveClickSources.clear();
+    }
+
+    function registerMetronomeClickSource(src) {
+        metronomeActiveClickSources.add(src);
+        src.onended = () => {
+            metronomeActiveClickSources.delete(src);
+        };
     }
 
     function pruneMetronomeScheduledBeatKeys(beforeSec) {
@@ -254,6 +292,7 @@
 
     function flushMetronomeScheduledAudio(ctx) {
         if (!ctx) return;
+        stopMetronomeActiveClickSources();
         try {
             if (metronomeGain) metronomeGain.disconnect();
         } catch (_) {}
@@ -274,7 +313,46 @@
             transportSec + METRONOME_FIXED_GAIN_WINDOW_SEC;
         clearMetronomeScheduledBeatKeys();
         resetMetronomeScan(metronomeMeterKey);
+        metronomeCatchUpCurrentDownbeat = true;
+        metronomeLastAccentSchedule = { beatKey: NaN, atMs: 0 };
         flushMetronomeScheduledAudio(ctx);
+    }
+
+    function firstBeatDurationSec(entry) {
+        if (!entry || !entry.sig) return 0;
+        if (typeof window.forEachMeterBarBeat === 'function') {
+            let dur = 0;
+            window.forEachMeterBarBeat(0, entry, (beat) => {
+                if (beat.beatInBar === 0) dur = beat.beatDur;
+            });
+            if (dur > 0) return dur;
+        }
+        return beatDurationSec(entry.sig, entry.bpm);
+    }
+
+    function resolveMetronomeScheduleFromSec(meterSpec, meterKey, transportSec, maxSec) {
+        let fromSec = Math.max(
+            transportSec - 0.01,
+            metronomeLastScheduledBeatSec + METRONOME_MIN_BEAT_GAP_SEC,
+        );
+        if (!metronomeCatchUpCurrentDownbeat || !meterSpec) {
+            return fromSec;
+        }
+        metronomeCatchUpCurrentDownbeat = false;
+        const pos = positionMetronomeScanAtSec(meterSpec, meterKey, transportSec, maxSec);
+        if (!pos || !pos.entry) {
+            return fromSec;
+        }
+        const barStartSec = metronomeScan.barStartSec;
+        const elapsedIntoBar = transportSec - barStartSec;
+        const catchUpWindow = Math.max(
+            firstBeatDurationSec(pos.entry),
+            METRONOME_DOWNBEAT_CATCHUP_SEC,
+        );
+        if (elapsedIntoBar >= -1e-9 && elapsedIntoBar < catchUpWindow - 1e-9) {
+            fromSec = Math.min(fromSec, barStartSec);
+        }
+        return fromSec;
     }
 
     function isMetronomeTransportPlaybackCatchUp(delta) {
@@ -303,6 +381,16 @@
             }
         }
         if (force) {
+            if (
+                metronomeActive &&
+                meterKey === metronomeMeterKey &&
+                Number.isFinite(metronomeLastSeenTransportSec) &&
+                Math.abs(transportSec - metronomeLastSeenTransportSec) <
+                    METRONOME_FORCE_RESET_DEBOUNCE_SEC
+            ) {
+                metronomeLastSeenTransportSec = transportSec;
+                return;
+            }
             resetMetronomeSchedule(ctx, transportSec, meterKey);
             return;
         }
@@ -460,6 +548,9 @@
         if (metronomeScheduledBeatKeys.has(beatKey)) {
             return false;
         }
+        if (accent && shouldSkipMetronomeAccentReplay(beatKey)) {
+            return false;
+        }
         const when = transportSecToCtxTime(ctx, transportSec, transportNowSec);
         if (!buffers || !buffers.accent || !buffers.beat) return false;
         const buffer = accent ? buffers.accent : buffers.beat;
@@ -475,8 +566,10 @@
             if (!gainNode || gainNode.context !== ctx) return false;
             connectMonoAudioCentered(src, gainNode, buffer.numberOfChannels);
         }
+        registerMetronomeClickSource(src);
         src.start(when);
         metronomeScheduledBeatKeys.add(beatKey);
+        if (accent) noteMetronomeAccentScheduled(beatKey);
         return true;
     }
 
@@ -538,60 +631,6 @@
             playbackAligned && Math.abs(rate - 1) > 0.00001
                 ? Object.assign({}, meterSpec, { stretchDelta: 0 })
                 : meterSpec;
-
-        if (
-            playbackAligned &&
-            Math.abs(rate - 1) > 0.00001 &&
-            typeof window.collectPlaybackAlignedBarBoundarySecs === 'function'
-        ) {
-            const boundaries = window.collectPlaybackAlignedBarBoundarySecs(
-                meterSpec,
-                maxSec,
-            );
-            const synced = positionMetronomeScanAtSec(
-                meterSpec,
-                meterKey,
-                fromSec,
-                maxSec,
-            );
-            if (!synced) return;
-            let barIndex = metronomeScan.barIndex | 0;
-            let barStartSec = metronomeScan.barStartSec;
-            const skipFirstBar = isMetronomeRehearsalOffsetSkipFirstBar();
-            const beatScale = 1 / rate;
-            while (barIndex < boundaries.length - 1 && barStartSec < endSec - 1e-9) {
-                const entry = getMeterEntryForBar(specForBar, barIndex);
-                if (!entry) break;
-                if (!(skipFirstBar && barIndex === 0)) {
-                    const beatDur =
-                        beatDurationSec(entry.sig, entry.bpm) * beatScale;
-                    const numBeats = entry.sig ? entry.sig.num | 0 : 0;
-                    for (let beat = 0; beat < numBeats; beat++) {
-                        const beatSec = barStartSec + beat * beatDur;
-                        if (beatSec >= endSec - 1e-9) break;
-                        if (beatSec < fromSec - 1e-9) continue;
-                        if (
-                            scheduleMetronomeClick(
-                                ctx,
-                                beatSec,
-                                beat === 0,
-                                buffers,
-                                transportNowSec,
-                            )
-                        ) {
-                            metronomeLastScheduledBeatSec = beatSec;
-                        }
-                    }
-                }
-                barIndex += 1;
-                barStartSec = boundaries[barIndex];
-            }
-            metronomeScan.barIndex = barIndex;
-            metronomeScan.barStartSec = barStartSec;
-            metronomeScan.meterKey = meterKey;
-            return;
-        }
-
         const barDurationSec =
             typeof window.meterBarDurationSec === 'function'
                 ? window.meterBarDurationSec
@@ -614,6 +653,53 @@
                       }
                   };
 
+        if (
+            playbackAligned &&
+            Math.abs(rate - 1) > 0.00001 &&
+            typeof window.collectPlaybackAlignedBarBoundarySecs === 'function'
+        ) {
+            const boundaries = window.collectPlaybackAlignedBarBoundarySecs(
+                meterSpec,
+                maxSec,
+            );
+            const synced = positionMetronomeScanAtSec(
+                meterSpec,
+                meterKey,
+                fromSec,
+                maxSec,
+            );
+            if (!synced) return;
+            let barIndex = metronomeScan.barIndex | 0;
+            let barStartSec = metronomeScan.barStartSec;
+            const beatScale = 1 / rate;
+            while (barIndex < boundaries.length - 1 && barStartSec < endSec - 1e-9) {
+                const entry = getMeterEntryForBar(specForBar, barIndex);
+                if (!entry) break;
+                eachBarBeat(barStartSec, entry, (beat) => {
+                    const beatSec = barStartSec + (beat.sec - barStartSec) * beatScale;
+                    if (beatSec >= endSec - 1e-9) return;
+                    if (beatSec < fromSec - 1e-9) return;
+                    if (
+                        scheduleMetronomeClick(
+                            ctx,
+                            beatSec,
+                            beat.beatInBar === 0,
+                            buffers,
+                            transportNowSec,
+                        )
+                    ) {
+                        metronomeLastScheduledBeatSec = beatSec;
+                    }
+                });
+                barIndex += 1;
+                barStartSec = boundaries[barIndex];
+            }
+            metronomeScan.barIndex = barIndex;
+            metronomeScan.barStartSec = barStartSec;
+            metronomeScan.meterKey = meterKey;
+            return;
+        }
+
         const synced = positionMetronomeScanAtSec(meterSpec, meterKey, fromSec, maxSec);
         if (!synced) return;
 
@@ -622,26 +708,23 @@
         let entry = synced.entry;
 
         let guard = 0;
-        const skipFirstBar = isMetronomeRehearsalOffsetSkipFirstBar();
         while (barStartSec < endSec - 1e-9 && guard < 48000) {
             if (!entry) break;
-            if (!(skipFirstBar && barIndex === 0)) {
-                eachBarBeat(barStartSec, entry, (beat) => {
-                    if (beat.sec >= endSec - 1e-9) return;
-                    if (beat.sec < fromSec - 1e-9) return;
-                    if (
-                        scheduleMetronomeClick(
-                            ctx,
-                            beat.sec,
-                            !!beat.isDownbeat,
-                            buffers,
-                            transportNowSec,
-                        )
-                    ) {
-                        metronomeLastScheduledBeatSec = beat.sec;
-                    }
-                });
-            }
+            eachBarBeat(barStartSec, entry, (beat) => {
+                if (beat.sec >= endSec - 1e-9) return;
+                if (beat.sec < fromSec - 1e-9) return;
+                if (
+                    scheduleMetronomeClick(
+                        ctx,
+                        beat.sec,
+                        !!beat.isDownbeat,
+                        buffers,
+                        transportNowSec,
+                    )
+                ) {
+                    metronomeLastScheduledBeatSec = beat.sec;
+                }
+            });
 
             barStartSec += barDurationSec(entry);
             barIndex += 1;
@@ -677,9 +760,14 @@
         metronomeLastSeenTransportSec = -Infinity;
         metronomeMeterKey = '';
         metronomeFixedGainUntilTransportSec = -Infinity;
+        metronomeCatchUpCurrentDownbeat = false;
+        metronomeScheduleAfterDecodePending = false;
+        metronomeScheduleAfterDecodeOpt = null;
+        metronomeLastAccentSchedule = { beatKey: NaN, atMs: 0 };
         resetMetronomeScan('');
         stopMetronomeSyncTimer();
         clearMetronomeScheduledBeatKeys();
+        stopMetronomeActiveClickSources();
         const ctx =
             typeof ensureReviewMixCtx === 'function' ? ensureReviewMixCtx() : null;
         if (ctx) muteMetronomeOutput(ctx);
@@ -714,9 +802,12 @@
         );
         if (!(scheduleEnd > transportSec + 0.001)) return;
 
-        const fromSec = Math.max(
-            transportSec - 0.01,
-            metronomeLastScheduledBeatSec + METRONOME_MIN_BEAT_GAP_SEC,
+        const maxSec = masterDur > 0 ? masterDur : scheduleEnd;
+        const fromSec = resolveMetronomeScheduleFromSec(
+            settings.meterSpec,
+            meterKey,
+            transportSec,
+            maxSec,
         );
         scheduleMetronomeBeatsInRange(
             ctx,
@@ -724,11 +815,29 @@
             meterKey,
             fromSec,
             scheduleEnd,
-            masterDur > 0 ? masterDur : scheduleEnd,
+            maxSec,
             metronomeClickBuffers,
             transportSec,
         );
         syncMetronomeOutputGain(ctx);
+    }
+
+    function queueMetronomeScheduleAfterDecode(ctx, opt) {
+        metronomeScheduleAfterDecodeOpt = opt;
+        if (metronomeScheduleAfterDecodePending) return;
+        metronomeScheduleAfterDecodePending = true;
+        void ensureMetronomeClickBuffers(ctx)
+            .then(() => {
+                const pendingOpt = metronomeScheduleAfterDecodeOpt;
+                metronomeScheduleAfterDecodePending = false;
+                metronomeScheduleAfterDecodeOpt = null;
+                if (!shouldMetronomeRun()) return;
+                runMetronomeSchedule(ctx, pendingOpt);
+            })
+            .catch(() => {
+                metronomeScheduleAfterDecodePending = false;
+                metronomeScheduleAfterDecodeOpt = null;
+            });
     }
 
     function syncMetronomeToTransport(opt) {
@@ -745,10 +854,7 @@
             return;
         }
 
-        void ensureMetronomeClickBuffers(ctx).then(() => {
-            if (!shouldMetronomeRun()) return;
-            runMetronomeSchedule(ctx, opt);
-        });
+        queueMetronomeScheduleAfterDecode(ctx, opt);
     }
 
     function applyMetronomeClickUi() {

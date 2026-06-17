@@ -473,7 +473,7 @@
                     beatInBar1: beatInBar + 1,
                     segmentIndex: si,
                     beatInSegment: b,
-                    isDownbeat: b === 0,
+                    isDownbeat: beatInBar === 0,
                     beatDur,
                 });
                 t += beatDur;
