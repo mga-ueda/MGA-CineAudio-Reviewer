@@ -633,6 +633,42 @@
     }
 
     /** 指定小節範囲に適用される Tempo/Sig をグローバル spec から抽出（連続同一は 1 つにまとめる） */
+    /** Phrase グループ除去に合わせ、sequence meter から該当小節分の Tempo/Sig エントリを削除 */
+    function spliceMusicalGridMeterForRemovedPhraseGroup(countsBefore, removedGroupIndex) {
+        const counts = countsBefore;
+        const pi = removedGroupIndex | 0;
+        if (!counts || pi < 0 || pi >= counts.length) return false;
+        let barStart = 0;
+        for (let c = 0; c < pi; c++) barStart += counts[c] | 0;
+        const barCount = counts[pi] | 0;
+        if (!(barCount > 0)) return false;
+        readMusicalGridFromInputs();
+        const spec = parseMeterSpec(getCommittedMusicalGridMeterText());
+        if (!spec || !spec.entries || !spec.entries.length) return false;
+        if (spec.mode !== 'sequence') return false;
+        if (barStart + barCount > spec.entries.length) return false;
+        const nextEntries = spec.entries
+            .slice(0, barStart)
+            .concat(spec.entries.slice(barStart + barCount));
+        if (!nextEntries.length) return false;
+        const nextSpec = Object.assign({}, spec, {
+            entries: nextEntries,
+            mode: nextEntries.length === 1 ? 'fixed' : 'sequence',
+        });
+        const nextText = formatMeterSpec(nextSpec);
+        musicalGridMeterText = nextText;
+        if (musicalGridMeterInput) {
+            musicalGridMeterInput.value = nextText;
+        }
+        if (typeof clearMusicalGridPositionCache === 'function') {
+            clearMusicalGridPositionCache();
+        }
+        if (typeof persistMusicalGridToStorage === 'function') {
+            persistMusicalGridToStorage({ skipSessionPersist: false });
+        }
+        return true;
+    }
+
     function formatMeterTextForBarRange(spec, barStart, barCount) {
         if (!spec || !spec.entries || !spec.entries.length || !(barCount > 0)) return '';
         const parts = [];

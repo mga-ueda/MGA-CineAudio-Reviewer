@@ -395,6 +395,7 @@
                         logLabel: 'Extra audio ' + (slot + 1),
                         slot: slot,
                         sampleRate: rate,
+                        clipDurationSec: buffer.duration,
                         waveMarkersForPhrase: pendingWavMarkersForPhrase,
                     });
                     if (!restoreLoad && typeof refreshExtraTrackUi === 'function') {

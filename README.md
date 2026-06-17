@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.19 |
+| **バージョン** | v0.20 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,13 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.20 - 2026年6月18日
+
+- Nuendo/Cubase 等の iXML 付き WAV で途中のテンポチェンジ・拍子チェンジ（AudioTempiList）に対応し、Tempo/Sig・Phrase・再生リージョンを自動構築。
+- 無音 gap 削除時にマーカー・Phrase・Meter をタイムラインと同期してリップル編集。Phrase 着色範囲を Meter/Phrase 定義のレイアウト長に整合。
+- 横型レイアウトで波形パネルが内容高さに追従し、トラック下の余白が出ないようにする。
+- メトロノーム起動直後の二重クリックを防止し、アウフタクトも鳴るよう復元。Export Wave / Export WebM 切り替え時のボタン発光を削除。
 
 ### v0.19 - 2026年6月16日
 

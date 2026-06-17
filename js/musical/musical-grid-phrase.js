@@ -76,6 +76,56 @@
         return boundaries;
     }
 
+    /** Phrase 欄が 3 項以上の明示グループ列のとき、その小節数合計（例: 8,3,1,…,2 → 22） */
+    function minimumBarCountFromExplicitPhraseSpec(phraseSpec) {
+        if (!phraseSpec || !phraseSpec.sizes || phraseSpec.sizes.length < 3) return 0;
+        let sum = 0;
+        for (let i = 0; i < phraseSpec.sizes.length; i++) {
+            const n = phraseSpec.sizes[i] | 0;
+            if (n > 0) sum += n;
+        }
+        return sum;
+    }
+
+    /** meterSpec 上で barCount 小節ぶんの秒（小節 0 起点） */
+    function durationSecForBarCount(meterSpec, barCount) {
+        const n = barCount | 0;
+        if (!(n > 0) || !meterSpec) return 0;
+        let t = 0;
+        for (let barIndex = 0; barIndex < n; barIndex++) {
+            const entry = getMeterEntryForBar(meterSpec, barIndex);
+            if (!entry) break;
+            t += meterBarDurationSec(entry);
+        }
+        return t;
+    }
+
+    /**
+     * Phrase 展開・着色・リージョン再配置用のタイムライン尺。
+     * クリップ長 < 明示 Phrase 全小節（GAC 先頭無音など）のとき、後半グループが切れないよう延長する。
+     */
+    function resolvePhraseLayoutDurationSec(meterSpec, durationSec, phraseSpec) {
+        const master = Number(durationSec);
+        if (!Number.isFinite(master) || !(master > 0) || !meterSpec) {
+            return Number.isFinite(master) && master > 0 ? master : 0;
+        }
+        const minBars = minimumBarCountFromExplicitPhraseSpec(phraseSpec);
+        if (!(minBars > 0)) return master;
+        let gridDur = durationSecForBarCount(meterSpec, minBars);
+        if (!(gridDur > master + 1e-9)) return master;
+        if (
+            typeof isAnyExtraTrackTempoStretched === 'function' &&
+            isAnyExtraTrackTempoStretched() &&
+            typeof currentTempoStretchPlaybackRate === 'function'
+        ) {
+            const rate = currentTempoStretchPlaybackRate();
+            if (rate > 0 && Math.abs(rate - 1) > 0.00001) {
+                gridDur /= rate;
+            }
+        }
+        return gridDur;
+    }
+
     /** 末尾の未完サイクル（例: 1,8,4,8 + 1 bar）を最終グループへ吸収する */
     function mergePartialPhraseCycleTail(counts, sizes) {
         if (!counts || !sizes || !sizes.length || counts.length <= sizes.length) {
@@ -98,10 +148,15 @@
 
     /** phraseSpec から各 Phrase グループの小節数列を展開する。 */
     function expandPhraseSpecToGroupBarCounts(meterSpec, durationSec, phraseSpec) {
+        const effectiveDuration = resolvePhraseLayoutDurationSec(
+            meterSpec,
+            durationSec,
+            phraseSpec,
+        );
         const boundaries =
             typeof collectPlaybackAlignedBarBoundarySecs === 'function'
-                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, durationSec)
-                : collectBarBoundarySecs(meterSpec, durationSec);
+                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, effectiveDuration)
+                : collectBarBoundarySecs(meterSpec, effectiveDuration);
         const totalBars = Math.max(0, boundaries.length - 1);
         if (!totalBars || !phraseSpec || !phraseSpec.sizes) return [];
         const sizes = phraseSpec.sizes;

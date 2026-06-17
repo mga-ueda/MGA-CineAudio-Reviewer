@@ -1548,15 +1548,52 @@
         return null;
     }
 
+    const IXML_STEINBERG_ATTR_META_TAGS = [
+        'NAME',
+        'TYPE',
+        'VALUE',
+        'FLAGS',
+        'NUMERATOR',
+        'DENOMINATOR',
+    ];
+
     function formatSteinbergAttrElement(attrEl, indent) {
         if (!attrEl) return [];
         const nameEl = ixmlFirstChildElementByTag(attrEl, ['NAME']);
         const valueEl = ixmlFirstChildElementByTag(attrEl, ['VALUE']);
+        const numEl = ixmlFirstChildElementByTag(attrEl, ['NUMERATOR']);
+        const denEl = ixmlFirstChildElementByTag(attrEl, ['DENOMINATOR']);
         const typeEl = ixmlFirstChildElementByTag(attrEl, ['TYPE']);
         const name = nameEl ? ixmlElementTextContent(nameEl) : '';
         const value = valueEl ? ixmlElementTextContent(valueEl) : '';
         if (name && value) return [indent + name + ': ' + value];
-        if (name) return [indent + name + ':'];
+        if (name && numEl && denEl) {
+            return [
+                indent +
+                    name +
+                    ': ' +
+                    ixmlElementTextContent(numEl) +
+                    '/' +
+                    ixmlElementTextContent(denEl),
+            ];
+        }
+        if (name) {
+            const lines = [indent + name + ':'];
+            for (let i = 0; i < attrEl.childNodes.length; i++) {
+                const child = attrEl.childNodes[i];
+                if (child.nodeType !== Node.ELEMENT_NODE) continue;
+                if (
+                    IXML_STEINBERG_ATTR_META_TAGS.indexOf(
+                        String(child.tagName || '').toUpperCase(),
+                    ) >= 0
+                ) {
+                    continue;
+                }
+                const childLines = formatIxmlElementLines(child, indent + '  ');
+                for (let j = 0; j < childLines.length; j++) lines.push(childLines[j]);
+            }
+            return lines;
+        }
         if (value) return [indent + 'Value: ' + value];
         const type = typeEl ? ixmlElementTextContent(typeEl) : '';
         if (type) return [indent + 'Attr (' + type + ')'];

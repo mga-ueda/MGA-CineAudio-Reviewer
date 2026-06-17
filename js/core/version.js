@@ -1,10 +1,20 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.19';
+    const APP_VERSION = '0.20';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.20',
+            date: '2026年6月18日',
+            items: [
+                'Nuendo/Cubase 等の iXML 付き WAV で途中のテンポチェンジ・拍子チェンジ（AudioTempiList）に対応し、Tempo/Sig・Phrase・再生リージョンを自動構築。',
+                '無音 gap 削除時にマーカー・Phrase・Meter をタイムラインと同期してリップル編集。Phrase 着色範囲を Meter/Phrase 定義のレイアウト長に整合。',
+                '横型レイアウトで波形パネルが内容高さに追従し、トラック下の余白が出ないようにする。',
+                'メトロノーム起動直後の二重クリックを防止し、アウフタクトも鳴るよう復元。Export Wave / Export WebM 切り替え時のボタン発光を削除。',
+            ],
+        },
         {
             version: '0.19',
             date: '2026年6月16日',

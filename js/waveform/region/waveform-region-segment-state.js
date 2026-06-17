@@ -12,6 +12,7 @@
         const prevSegmentCount = state.segments ? state.segments.length : 0;
         state.segments = segments;
         state.active = true;
+        syncTrackRegionHeadStateFromFirstSegment(track);
         bumpRegionPersistEpoch(track.slot);
         if (
             !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) &&

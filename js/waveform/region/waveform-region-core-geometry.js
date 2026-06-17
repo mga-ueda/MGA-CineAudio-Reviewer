@@ -222,6 +222,57 @@
         }
         return lead;
     }
+    /**
+     * 先頭セグメント変更後 — state 上の region In / lead pad を segment[0] と同期。
+     * 無音リージョン削除後に regionLeadPadSec が残り、次リージョンが 0s から跨がるのを防ぐ。
+     */
+    function syncTrackRegionHeadStateFromFirstSegment(track) {
+        const state = getPlaybackRegionsState(track);
+        if (!state || !Array.isArray(state.segments) || !state.segments.length) {
+            return;
+        }
+        const t0 = getTrackTimelineStartSec(track);
+        const raw = state.segments[0];
+        const lead = Math.max(0, Number(raw.regionLeadPadSec) || 0);
+        const anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+
+        if (lead > 0.00001) {
+            state.regionLeadPadSec = lead;
+            const regionIn = Number.isFinite(raw.regionTimelineInSec)
+                ? Math.max(0, raw.regionTimelineInSec)
+                : Math.max(0, anchor - lead);
+            state.regionTimelineInSec = regionIn;
+            state.headPadSec = Math.max(0, regionIn - t0);
+            return;
+        }
+
+        delete state.regionLeadPadSec;
+        if (Number.isFinite(raw.regionTimelineInSec)) {
+            state.regionTimelineInSec = Math.max(0, raw.regionTimelineInSec);
+        } else {
+            delete state.regionTimelineInSec;
+        }
+        const regionIn = Number.isFinite(state.regionTimelineInSec)
+            ? state.regionTimelineInSec
+            : anchor;
+        state.headPadSec = Math.max(0, regionIn - t0);
+    }
+    /** Phrase 無音判定 — スロット内をリージョンが占有するタイムライン区間 */
+    function getSegmentPhraseCoverageInterval(track, segmentIndex) {
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        const eps = segmentBoundaryJoinEpsilonSec();
+        const sourceSpan = seg
+            ? Math.max(0, (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0))
+            : 0;
+        if (sourceSpan <= eps && regionOut - regionIn > eps) {
+            return { startSec: regionIn, endSec: regionOut };
+        }
+        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        return { startSec: playbackStart, endSec: regionOut };
+    }
     /** 波形描画のタイムライン左端（リージョン In / 再生開始と同一） */
     function getSegmentWaveformDrawTimelineStart(track, segmentIndex) {
         return getSegmentWaveformVisibleTimelineStart(track, segmentIndex);

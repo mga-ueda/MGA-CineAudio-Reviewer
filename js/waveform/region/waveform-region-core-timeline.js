@@ -323,12 +323,37 @@
         return false;
     }
 
+    function isGridOnlySegmentEntry(seg, eps) {
+        if (!seg) return false;
+        const inS = Number(seg.sourceInSec) || 0;
+        const outS = Number(seg.sourceOutSec) || 0;
+        return outS - inS <= eps;
+    }
+
+    /** gap 内に収まるファイル未消費（GAC 先頭グリッド等）セグメント index */
+    function collectGridOnlySegmentIndicesInsideGap(track, gap, eps) {
+        const indices = [];
+        if (!gap || !isExtraTrackRef(track)) return indices;
+        const segments = getTrackSegments(track);
+        for (let si = 0; si < segments.length; si++) {
+            if (!isGridOnlySegmentEntry(segments[si], eps)) continue;
+            const regionIn = getSegmentRegionTimelineIn(track, si);
+            const regionOut = getSegmentRegionTimelineOut(track, si);
+            if (!(regionOut - regionIn > eps)) continue;
+            if (regionIn >= gap.startSec - eps && regionOut <= gap.endSec + eps * 4) {
+                indices.push(si);
+            }
+        }
+        return indices;
+    }
+
     /** gap 区間の内部に音源リージョンが無い（境界のみ）= 専用無音フレーズ削除 */
     function isDedicatedSilentPhraseGapDelete(track, gap) {
         if (!gap || !isExtraTrackRef(track)) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segments = getTrackSegments(track);
         for (let si = 0; si < segments.length; si++) {
+            if (isGridOnlySegmentEntry(segments[si], eps)) continue;
             const regionIn = getSegmentRegionTimelineIn(track, si);
             if (regionIn > gap.startSec + eps * 4 && regionIn < gap.endSec - eps * 4) {
                 return false;
@@ -374,6 +399,7 @@
             return {
                 mode: 'ripple-only',
                 next: counts.slice(),
+                countsBefore: counts.slice(),
                 shrinkOnly: false,
                 skipPhraseApply: true,
                 dedicatedSilent,
@@ -394,6 +420,7 @@
             return {
                 mode: 'shrink-partial',
                 next,
+                countsBefore: counts.slice(),
                 shrinkOnly: true,
                 skipPhraseApply: false,
                 dedicatedSilent,
@@ -407,6 +434,7 @@
         return {
             mode: dedicatedSilent ? 'splice-dedicated' : 'splice',
             next: spliced.next,
+            countsBefore: counts.slice(),
             shrinkOnly: false,
             skipPhraseApply: false,
             dedicatedSilent,
@@ -460,6 +488,12 @@
             silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'counts-update-failed' });
             return false;
         }
+        const countsBefore =
+            precomputedPlan && precomputedPlan.countsBefore
+                ? precomputedPlan.countsBefore.slice()
+                : typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
+                  ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                  : [];
         const phraseBefore = regionSwapDiagPhraseText();
         silentGapDeleteDiagLog('phrase-sync/plan', {
             mode: plan.mode,
@@ -491,6 +525,22 @@
             }
             if (!plan.shrinkOnly && isExtraTrackRef(track)) {
                 remapTimelineSlotPhraseIndicesAfterGroupRemoval(track, pi);
+            }
+            if (
+                !plan.shrinkOnly &&
+                countsBefore.length &&
+                pi < countsBefore.length &&
+                typeof window.spliceMusicalGridMeterForRemovedPhraseGroup === 'function'
+            ) {
+                const meterChanged = window.spliceMusicalGridMeterForRemovedPhraseGroup(
+                    countsBefore,
+                    pi,
+                );
+                silentGapDeleteDiagLog('phrase-sync/meter-splice', {
+                    phraseSlot: pi + 1,
+                    removedBars: countsBefore[pi] | 0,
+                    changed: !!meterChanged,
+                });
             }
             if (typeof window.compressPhraseDefinitionFromExpandedCounts === 'function') {
                 const phraseMid = regionSwapDiagPhraseText();
@@ -596,15 +646,42 @@
             silentGapDeleteDiagLog('delete/reject', { reason: 'no-segments' });
             return false;
         }
-        let fromIndex = gap.beforeSegmentIndex;
+        const shouldRemoveGridSegments =
+            phrasePlanBeforeRipple &&
+            !phrasePlanBeforeRipple.shrinkOnly &&
+            phrasePlanBeforeRipple.mode !== 'ripple-only';
+        let removedGridSegmentIndices = [];
+        if (shouldRemoveGridSegments) {
+            removedGridSegmentIndices = collectGridOnlySegmentIndicesInsideGap(track, gap, eps);
+            for (let r = removedGridSegmentIndices.length - 1; r >= 0; r--) {
+                segments.splice(removedGridSegmentIndices[r], 1);
+            }
+            if (!segments.length) {
+                silentGapDeleteDiagLog('delete/reject', { reason: 'no-segments-after-grid-remove' });
+                return false;
+            }
+        }
+        let fromIndex = -1;
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const regionIn = Number.isFinite(seg.regionTimelineInSec)
+                ? seg.regionTimelineInSec
+                : Number.isFinite(seg.timelineStartSec)
+                  ? seg.timelineStartSec
+                  : getSegmentRegionTimelineIn(track, i);
+            if (regionIn >= gap.endSec - eps) {
+                fromIndex = i;
+                break;
+            }
+        }
         if (!(fromIndex >= 0)) {
-            fromIndex = 0;
-            for (let i = 0; i < segments.length; i++) {
-                if (getSegmentTimelineStart(track, i) >= gap.endSec - eps) {
-                    fromIndex = i;
-                    break;
+            fromIndex = gap.beforeSegmentIndex >= 0 ? gap.beforeSegmentIndex : segments.length;
+            if (removedGridSegmentIndices.length) {
+                for (let r = 0; r < removedGridSegmentIndices.length; r++) {
+                    if (removedGridSegmentIndices[r] < fromIndex) fromIndex--;
                 }
             }
+            fromIndex = Math.max(0, Math.min(fromIndex, segments.length));
         }
         if (typeof shiftSegmentEntriesTimelineFromIndex === 'function') {
             shiftSegmentEntriesTimelineFromIndex(
@@ -628,18 +705,36 @@
             gapIndex: gapIndex | 0,
             gapDur: regionSwapDiagFmtSec(gapDur),
             fromIndex: fromIndex >= 0 ? fromIndex + 1 : null,
+            removedGridSegments: removedGridSegmentIndices.map((i) => i + 1),
             segCount: segments.length,
         });
         applySegmentsToState(track, normalized, {
             skipUndo: true,
             skipMusicalRefresh: phraseFillOn,
-            segmentStructureChanged: false,
+            segmentStructureChanged: removedGridSegmentIndices.length > 0,
             affectedSegmentIndices: normalized.map((_, i) => i),
         });
+        if (removedGridSegmentIndices.length && typeof notifyMasterTransportDurationChanged === 'function') {
+            notifyMasterTransportDurationChanged();
+        }
         silentGapDeleteDiagLog('delete/after-ripple', {
             ex: track.slot + 1,
             after: silentGapDeleteDiagSnapshotTrack(track),
         });
+        if (typeof window.rippleMarkersForRemovedTimelineInterval === 'function') {
+            const markersRippled = window.rippleMarkersForRemovedTimelineInterval(
+                gap.startSec,
+                gap.endSec,
+            );
+            if (markersRippled) {
+                silentGapDeleteDiagLog('delete/markers-rippled', {
+                    ex: track.slot + 1,
+                    gapStart: regionSwapDiagFmtSec(gap.startSec),
+                    gapEnd: regionSwapDiagFmtSec(gap.endSec),
+                    gapDur: regionSwapDiagFmtSec(gapDur),
+                });
+            }
+        }
         if (phraseFillOn) {
             syncPhraseGridAfterSilentGapDelete(gap, track, phrasePlanBeforeRipple);
             if (typeof window.scheduleMusicalGridRedraw === 'function') {

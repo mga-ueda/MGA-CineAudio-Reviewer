@@ -658,12 +658,20 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
+        const layoutDuration =
+            typeof window.resolvePhraseLayoutDurationSec === 'function'
+                ? window.resolvePhraseLayoutDurationSec(
+                      settings.meterSpec,
+                      master,
+                      settings.phraseSpec,
+                  )
+                : master;
         const counts = expandedPhraseGroupBarCountsSnapshot();
         if (!counts.length) return [];
         if (typeof window.collectPhraseGroupRangesFromBarCounts === 'function') {
             return window.collectPhraseGroupRangesFromBarCounts(
                 settings.meterSpec,
-                master,
+                layoutDuration,
                 counts,
             );
         }
@@ -795,6 +803,7 @@
         if (!state) return false;
         state.segments = normalized;
         state.active = true;
+        syncTrackRegionHeadStateFromFirstSegment(track);
         bumpRegionPersistEpoch(track.slot);
         if (typeof window.refreshTrackTimelineMusicalSlots === 'function') {
             window.refreshTrackTimelineMusicalSlots(track, { preserveStored: false });
@@ -914,6 +923,10 @@
                     ) {
                         // GAC 無音 + MusicalUpbeat pickup — Out は slot 終端（1 小節目線）
                         fileOut = sourceTimeOffsetSec;
+                        timelineAnchor = placementSec + leadPad;
+                    } else if (leadPad > 0.00001) {
+                        // GAC 先頭 Phrase（例: 8 小節 @ 140）— グリッドのみ、ファイルは消費しない
+                        fileOut = 0;
                         timelineAnchor = placementSec + leadPad;
                     } else if (sourceTimeOffsetSec > 0.00001) {
                         fileOut = r.endSec - sourceTimeOffsetSec;

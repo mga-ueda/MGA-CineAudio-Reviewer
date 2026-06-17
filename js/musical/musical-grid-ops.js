@@ -1891,6 +1891,7 @@
     window.currentTempoStretchPlaybackRate = currentTempoStretchPlaybackRate;
     window.collectPlaybackAlignedBarBoundarySecs =
         collectPlaybackAlignedBarBoundarySecs;
+    window.resolvePhraseLayoutDurationSec = resolvePhraseLayoutDurationSec;
     window.forEachMeterBarBeat = forEachMeterBarBeat;
     window.getMeterSigSegments = getMeterSigSegments;
     window.parseTimeSignatureSpec = parseTimeSignatureSpec;
@@ -1943,9 +1944,17 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
+        const layoutDuration =
+            typeof resolvePhraseLayoutDurationSec === 'function'
+                ? resolvePhraseLayoutDurationSec(
+                      settings.meterSpec,
+                      master,
+                      settings.phraseSpec,
+                  )
+                : master;
         return resolvePhraseGroupBarCounts(
             settings.meterSpec,
-            master,
+            layoutDuration,
             settings.phraseSpec,
         );
     };
@@ -1992,9 +2001,17 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return null;
+        const layoutDuration =
+            typeof resolvePhraseLayoutDurationSec === 'function'
+                ? resolvePhraseLayoutDurationSec(
+                      settings.meterSpec,
+                      master,
+                      settings.phraseSpec,
+                  )
+                : master;
         const ranges = collectPhraseGroupRangesFromBarCounts(
             settings.meterSpec,
-            master,
+            layoutDuration,
             counts,
         );
         const r = ranges[slotIndex | 0];
@@ -2003,6 +2020,8 @@
     window.resolvePhraseGroupIndexAtTransportSec = resolvePhraseGroupIndexAtTransportSec;
     window.formatPhraseSlotMusicalMetaText = formatPhraseSlotMusicalMetaText;
     window.formatMeterTextForBarRange = formatMeterTextForBarRange;
+    window.spliceMusicalGridMeterForRemovedPhraseGroup =
+        spliceMusicalGridMeterForRemovedPhraseGroup;
     window.getMusicalGridMeterDisplayText = getMusicalGridMeterDisplayText;
     window.musicalGridDrawSettings = musicalGridDrawSettings;
     window.getMusicalGridBarBySec = getMusicalGridBarBySec;

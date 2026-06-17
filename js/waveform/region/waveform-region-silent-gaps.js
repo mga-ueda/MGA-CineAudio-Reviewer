@@ -159,10 +159,9 @@
             if (!r || !(r.endSec - r.startSec > eps)) continue;
             const covers = [];
             for (let si = 0; si < segments.length; si++) {
-                const a = getSegmentRegionTimelineIn(track, si);
-                const b = getSegmentRegionTimelineOut(track, si);
-                const lo = Math.max(r.startSec, a);
-                const hi = Math.min(r.endSec, b);
+                const cover = getSegmentPhraseCoverageInterval(track, si);
+                const lo = Math.max(r.startSec, cover.startSec);
+                const hi = Math.min(r.endSec, cover.endSec);
                 if (hi - lo > eps) {
                     covers.push({ startSec: lo, endSec: hi });
                 }
@@ -308,9 +307,11 @@
         const segments = getTrackSegments(track);
         const eps = segmentBoundaryJoinEpsilonSec();
         for (let si = 0; si < segments.length; si++) {
-            const start = getSegmentRegionTimelineIn(track, si);
-            const end = getSegmentRegionTimelineOut(track, si);
-            if (transportSec >= start - eps && transportSec < end - eps) {
+            const cover = getSegmentPhraseCoverageInterval(track, si);
+            if (
+                transportSec >= cover.startSec - eps &&
+                transportSec < cover.endSec - eps
+            ) {
                 regionUnderSpan = si + 1;
                 break;
             }

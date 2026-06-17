@@ -42,21 +42,439 @@
         return ixmlElementPlainText(el);
     }
 
+    function ixmlSteinbergAttrValueText(attrEl) {
+        const valueEl = ixmlFirstChildElementByTag(attrEl, ['VALUE']);
+        if (valueEl) return ixmlElementInnerXml(valueEl);
+        const numEl = ixmlFirstChildElementByTag(attrEl, ['NUMERATOR']);
+        const denEl = ixmlFirstChildElementByTag(attrEl, ['DENOMINATOR']);
+        if (numEl && denEl) {
+            return ixmlElementPlainText(numEl) + '/' + ixmlElementPlainText(denEl);
+        }
+        const itemListEl = ixmlFirstChildElementByTag(attrEl, ['ITEM_LIST']);
+        if (itemListEl) return ixmlElementInnerXml(itemListEl);
+        return ixmlElementPlainText(attrEl);
+    }
+
     function parseSteinbergAttrMapFromIxmlDoc(doc) {
         const attrs = Object.create(null);
         if (!doc) return attrs;
-        const attrEls = doc.getElementsByTagName('ATTR');
-        for (let i = 0; i < attrEls.length; i++) {
-            const attrEl = attrEls[i];
+        const steinberg = doc.getElementsByTagName('STEINBERG')[0];
+        const attrList =
+            steinberg && ixmlFirstChildElementByTag(steinberg, ['ATTR_LIST']);
+        if (!attrList) return attrs;
+        for (let i = 0; i < attrList.childNodes.length; i++) {
+            const attrEl = attrList.childNodes[i];
+            if (
+                !attrEl ||
+                attrEl.nodeType !== Node.ELEMENT_NODE ||
+                String(attrEl.tagName || '').toUpperCase() !== 'ATTR'
+            ) {
+                continue;
+            }
             const nameEl = ixmlFirstChildElementByTag(attrEl, ['NAME']);
             if (!nameEl) continue;
             const name = ixmlElementPlainText(nameEl);
             if (!name) continue;
-            const valueEl = ixmlFirstChildElementByTag(attrEl, ['VALUE']);
-            const value = valueEl ? ixmlElementInnerXml(valueEl) : ixmlElementPlainText(attrEl);
-            attrs[name] = value;
+            attrs[name] = ixmlSteinbergAttrValueText(attrEl);
         }
         return attrs;
+    }
+
+    function cloneMeterSig(sig) {
+        if (!sig) return { num: 4, den: 4 };
+        if (sig.alternates && sig.alternates.length) {
+            return {
+                alternates: sig.alternates.map((a) => ({ num: a.num, den: a.den })),
+            };
+        }
+        return { num: sig.num, den: sig.den };
+    }
+
+    /** Nuendo iXML rational — NUM=1 DEN=4 は 4/4 として書き出されることが多い */
+    function parseSteinbergMusicalSignaturePair(numRaw, denRaw) {
+        const num = parseInt(String(numRaw || '').trim(), 10);
+        const den = parseInt(String(denRaw || '').trim(), 10);
+        if (num === 1 && den === 4) return { num: 4, den: 4 };
+        if (num > 0 && num <= 32 && den > 0 && den <= 32) return { num, den };
+        return null;
+    }
+
+    function parseSteinbergAttrByName(doc, attrName) {
+        const steinberg = doc.getElementsByTagName('STEINBERG')[0];
+        const attrList =
+            steinberg && ixmlFirstChildElementByTag(steinberg, ['ATTR_LIST']);
+        if (!attrList) return null;
+        const want = String(attrName || '').toUpperCase();
+        for (let i = 0; i < attrList.childNodes.length; i++) {
+            const attrEl = attrList.childNodes[i];
+            if (
+                !attrEl ||
+                attrEl.nodeType !== Node.ELEMENT_NODE ||
+                String(attrEl.tagName || '').toUpperCase() !== 'ATTR'
+            ) {
+                continue;
+            }
+            const nameEl = ixmlFirstChildElementByTag(attrEl, ['NAME']);
+            if (!nameEl) continue;
+            if (String(ixmlElementPlainText(nameEl) || '').toUpperCase() !== want) continue;
+            return attrEl;
+        }
+        return null;
+    }
+
+    function parseSteinbergItemListMarkers(attrEl) {
+        if (!attrEl) return [];
+        const itemListEl = ixmlFirstChildElementByTag(attrEl, ['ITEM_LIST']);
+        if (!itemListEl) return [];
+        const markers = [];
+        for (let i = 0; i < itemListEl.childNodes.length; i++) {
+            const itemEl = itemListEl.childNodes[i];
+            if (
+                !itemEl ||
+                itemEl.nodeType !== Node.ELEMENT_NODE ||
+                String(itemEl.tagName || '').toUpperCase() !== 'ITEM'
+            ) {
+                continue;
+            }
+            const itemAttrList = ixmlFirstChildElementByTag(itemEl, ['ATTR_LIST']);
+            if (!itemAttrList) continue;
+            let position = NaN;
+            let value = NaN;
+            for (let j = 0; j < itemAttrList.childNodes.length; j++) {
+                const nestedAttr = itemAttrList.childNodes[j];
+                if (
+                    !nestedAttr ||
+                    nestedAttr.nodeType !== Node.ELEMENT_NODE ||
+                    String(nestedAttr.tagName || '').toUpperCase() !== 'ATTR'
+                ) {
+                    continue;
+                }
+                const nestedNameEl = ixmlFirstChildElementByTag(nestedAttr, ['NAME']);
+                const nestedValueEl = ixmlFirstChildElementByTag(nestedAttr, ['VALUE']);
+                const nestedName = nestedNameEl
+                    ? ixmlElementPlainText(nestedNameEl).toUpperCase()
+                    : '';
+                const nestedValue = nestedValueEl ? ixmlElementPlainText(nestedValueEl) : '';
+                if (nestedName === 'AUDIOMARKERPOSITION') {
+                    position = parseInt(String(nestedValue || '').trim(), 10);
+                } else if (nestedName === 'AUDIOMARKERVALUE') {
+                    value = Number(String(nestedValue || '').trim());
+                }
+            }
+            if (position > 0 && Number.isFinite(value)) {
+                markers.push({ position, value });
+            }
+        }
+        markers.sort((a, b) => a.position - b.position);
+        return markers;
+    }
+
+    function parseAudioTempiListFromDoc(doc) {
+        return parseSteinbergItemListMarkers(parseSteinbergAttrByName(doc, 'AudioTempiList'));
+    }
+
+    /** GACAssetStartTime ≒ preRollBars × 4/4 @ preRollBpm（Nuendo 書き出し） */
+    function inferPreRollFromGacAssetStartTime(gacStartSec, preRollBpm) {
+        const gac = Number(gacStartSec);
+        const bpm = Number(preRollBpm);
+        if (!(gac > 0.001) || !(bpm > 0)) return null;
+        const barDur = (4 * 60) / bpm;
+        if (!(barDur > 0)) return null;
+        const bars = Math.round(gac / barDur);
+        if (bars < 1 || bars > 999) return null;
+        if (Math.abs(gac - bars * barDur) > 0.02) return null;
+        return { bars, bpm: Math.round(bpm), sig: { num: 4, den: 4 } };
+    }
+
+    function inferPreRollFromGacAssetStartTimeAuto(gacStartSec) {
+        const candidates = [140, 120, 134, 100, 160, 180, 200];
+        for (let i = 0; i < candidates.length; i++) {
+            const found = inferPreRollFromGacAssetStartTime(gacStartSec, candidates[i]);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    function steinbergTempoBpmFromMarkerValue(baseTempo, value) {
+        const classified = classifySteinbergAudioMarkerValue(baseTempo, value);
+        if (classified && classified.kind === 'tempo') return classified.bpm;
+        return null;
+    }
+
+    /** AudioTempiList — クリップ先頭（= プロジェクト bar 9 相当）からの 0 始まり拍位置 */
+    function buildNuendoClipBeatChanges(data) {
+        const baseTempo = data && data.tempo;
+        if (!(baseTempo > 0)) return [];
+        const baseSig = cloneMeterSig(data.signature || { num: 4, den: 4 });
+        const markers = Array.isArray(data.audioTempiMarkers) ? data.audioTempiMarkers : [];
+        const changes = [{ beat: 0, bpm: Math.round(baseTempo), sig: cloneMeterSig(baseSig) }];
+        for (let i = 0; i < markers.length; i++) {
+            const marker = markers[i];
+            const beat = marker.position | 0;
+            if (beat < 0) continue;
+            const bpm = steinbergTempoBpmFromMarkerValue(baseTempo, marker.value);
+            if (!(bpm > 0)) continue;
+            changes.push({ beat, bpm, sig: null });
+        }
+        changes.sort((a, b) => a.beat - b.beat);
+        const deduped = [];
+        for (let i = 0; i < changes.length; i++) {
+            const cur = changes[i];
+            if (deduped.length && deduped[deduped.length - 1].beat === cur.beat) {
+                deduped[deduped.length - 1] = cur;
+            } else {
+                deduped.push(cur);
+            }
+        }
+        for (let i = 0; i < deduped.length; i++) {
+            if (deduped[i].sig) continue;
+            const prev = i > 0 ? deduped[i - 1] : null;
+            const nextBeat = i + 1 < deduped.length ? deduped[i + 1].beat : null;
+            const delta = nextBeat != null && prev != null ? nextBeat - deduped[i].beat : null;
+            deduped[i].sig = inferSteinbergSigForBeatSpan(delta, deduped[i].bpm);
+            if (prev && prev.sig == null && nextBeat != null) {
+                const prevDelta = deduped[i].beat - prev.beat;
+                prev.sig = inferSteinbergSigForBeatSpan(prevDelta, prev.bpm);
+            }
+        }
+        if (deduped.length && !deduped[0].sig) {
+            deduped[0].sig = cloneMeterSig(baseSig);
+        }
+        return deduped;
+    }
+
+    function inferSteinbergSigForBeatSpan(beatSpan, bpm) {
+        const beats = beatSpan | 0;
+        if (beats === 1) return { num: 1, den: 4 };
+        if (beats === 2) return { num: 2, den: 4 };
+        if (beats === 3) return { num: 3, den: 4 };
+        if (beats === 5) return { num: 5, den: 4 };
+        if (beats === 6) return { num: 6, den: 4 };
+        if (beats === 7) return { num: 7, den: 4 };
+        if (beats === 9) return { num: 9, den: 4 };
+        if (beats === 4 || beats === 8 || beats === 12 || beats === 16) {
+            return { num: 4, den: 4 };
+        }
+        if (beats > 0 && beats <= 32) {
+            return { num: beats, den: 4 };
+        }
+        return { num: 4, den: 4 };
+    }
+
+    function pushBarEntriesForBeatSpan(entries, bpm, sig, beatSpan) {
+        let beatsLeft = Math.max(1, beatSpan | 0);
+        while (beatsLeft > 0) {
+            let barSig;
+            if (beatsLeft === 1) barSig = { num: 1, den: 4 };
+            else if (beatsLeft === 2) barSig = { num: 2, den: 4 };
+            else if (beatsLeft === 3) barSig = { num: 3, den: 4 };
+            else if (beatsLeft === 5) barSig = { num: 5, den: 4 };
+            else if (beatsLeft === 6) barSig = { num: 6, den: 4 };
+            else if (beatsLeft === 7) barSig = { num: 7, den: 4 };
+            else if (beatsLeft === 9) barSig = { num: 9, den: 4 };
+            else if (sig && sig.num > 0 && sig.num <= beatsLeft) {
+                barSig = { num: sig.num, den: sig.den || 4 };
+            } else {
+                barSig = { num: 4, den: 4 };
+            }
+            entries.push({ bpm, sig: cloneMeterSig(barSig) });
+            beatsLeft -= barSig.num;
+        }
+    }
+
+    function buildNuendoProjectMeterEntries(data, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!data || !(data.tempo > 0)) return [];
+        const clipDurationSec =
+            Number(o.clipDurationSec) > 0
+                ? Number(o.clipDurationSec)
+                : data.gacAssetLength;
+        const changes = buildNuendoClipBeatChanges(data);
+        if (!changes.length) return [];
+
+        const entries = [];
+        const preRoll = inferPreRollFromGacAssetStartTimeAuto(data.gacAssetStartTime);
+        if (preRoll && preRoll.bars > 0) {
+            for (let i = 0; i < preRoll.bars; i++) {
+                entries.push({
+                    bpm: preRoll.bpm,
+                    sig: cloneMeterSig(preRoll.sig),
+                });
+            }
+        }
+
+        let clipBeatCursor = 0;
+        for (let i = 0; i < changes.length; i++) {
+            const cur = changes[i];
+            if (clipDurationSec > 0 && entries.length > (preRoll ? preRoll.bars : 0)) {
+                let usedSec = 0;
+                const clipStartIdx = preRoll ? preRoll.bars : 0;
+                for (let ei = clipStartIdx; ei < entries.length; ei++) {
+                    usedSec += steinbergMeterEntryBarDuration(entries[ei]);
+                }
+                if (usedSec >= clipDurationSec - 0.25 && i < changes.length - 1) {
+                    break;
+                }
+            }
+            const nextBeat = i + 1 < changes.length ? changes[i + 1].beat : null;
+            let span =
+                nextBeat != null
+                    ? Math.max(1, nextBeat - cur.beat)
+                    : estimateRemainingClipBeats(data, changes, clipDurationSec, cur.beat);
+            if (nextBeat == null && i === changes.length - 1) {
+                span = Math.max(span, 4);
+            }
+            pushBarEntriesForBeatSpan(entries, cur.bpm, cur.sig, span);
+            clipBeatCursor = nextBeat != null ? nextBeat : clipBeatCursor + span;
+        }
+
+        if (!(clipDurationSec > 0)) return entries;
+
+        const clipEntriesStart = preRoll ? preRoll.bars : 0;
+        while (entries.length > clipEntriesStart + 1) {
+            const last = entries[entries.length - 1];
+            const lastDur = steinbergMeterEntryBarDuration(last);
+            let totalSec = 0;
+            for (let i = clipEntriesStart; i < entries.length; i++) {
+                totalSec += steinbergMeterEntryBarDuration(entries[i]);
+            }
+            if (totalSec <= clipDurationSec + 0.05) break;
+            entries.pop();
+        }
+
+        trimPartialTailBarFromClipDuration(entries, clipEntriesStart, clipDurationSec);
+        return entries;
+    }
+
+    function estimateRemainingClipBeats(data, changes, clipDurationSec, fromBeat) {
+        if (!(clipDurationSec > 0) || !changes.length) return 4;
+        const last = changes[changes.length - 1];
+        let t = 0;
+        let beat = 0;
+        for (let i = 0; i < changes.length; i++) {
+            const cur = changes[i];
+            const nextBeat = i + 1 < changes.length ? changes[i + 1].beat : null;
+            if (nextBeat != null && nextBeat <= fromBeat) {
+                beat = nextBeat;
+                continue;
+            }
+            const span = nextBeat != null ? nextBeat - cur.beat : 4;
+            const entry = { bpm: cur.bpm, sig: cur.sig || { num: 4, den: 4 } };
+            for (let b = 0; b < span; b++) {
+                if (beat >= fromBeat) {
+                    t += steinbergMeterEntryBarDuration(entry);
+                    if (t >= clipDurationSec - 0.01) {
+                        return Math.max(1, beat - fromBeat + 1);
+                    }
+                }
+                beat += entry.sig.num;
+            }
+        }
+        return Math.max(4, Math.ceil((clipDurationSec / steinbergMeterEntryBarDuration(last)) * 4));
+    }
+
+    function trimPartialTailBarFromClipDuration(entries, clipEntriesStart, clipDurationSec) {
+        if (!entries.length || clipEntriesStart >= entries.length) return;
+        let totalSec = 0;
+        for (let i = clipEntriesStart; i < entries.length; i++) {
+            totalSec += steinbergMeterEntryBarDuration(entries[i]);
+        }
+        if (totalSec <= clipDurationSec + 0.05) return;
+        while (entries.length > clipEntriesStart + 1) {
+            const lastDur = steinbergMeterEntryBarDuration(entries[entries.length - 1]);
+            if (totalSec - lastDur >= clipDurationSec - 0.05) {
+                totalSec -= lastDur;
+                entries.pop();
+            } else {
+                break;
+            }
+        }
+    }
+
+    function nearestSteinbergSignatureRatio(value) {
+        const v = Number(value);
+        if (!Number.isFinite(v) || v <= 0) return null;
+        let best = null;
+        let bestErr = Infinity;
+        const dens = [2, 4, 8, 16];
+        for (let di = 0; di < dens.length; di++) {
+            const den = dens[di];
+            for (let num = 1; num <= 16; num++) {
+                const ratio = num / den;
+                const err = Math.abs(ratio - v);
+                if (err < bestErr) {
+                    bestErr = err;
+                    best = { num, den };
+                }
+            }
+        }
+        return bestErr <= 0.002 ? best : null;
+    }
+
+    function classifySteinbergAudioMarkerValue(baseTempo, value) {
+        const v = Number(value);
+        const tempo = Number(baseTempo);
+        if (!Number.isFinite(v) || !Number.isFinite(tempo) || tempo <= 0) return null;
+        const bpmRaw = tempo * v;
+        const bpmRounded = Math.round(bpmRaw);
+        const tempoMatch =
+            Math.abs(bpmRaw - bpmRounded) < 0.02 &&
+            bpmRounded >= 30 &&
+            bpmRounded <= 400;
+        const sigMatch = nearestSteinbergSignatureRatio(v);
+        if (tempoMatch) {
+            return { kind: 'tempo', bpm: bpmRounded };
+        }
+        if (sigMatch) {
+            return { kind: 'signature', sig: sigMatch };
+        }
+        if (Number.isFinite(bpmRaw) && bpmRaw > 0) {
+            return { kind: 'tempo', bpm: Math.max(1, Math.min(999, Math.round(bpmRaw))) };
+        }
+        return null;
+    }
+
+    function steinbergMeterEntryBarDuration(entry) {
+        if (
+            typeof meterBarDurationSec === 'function' &&
+            entry &&
+            entry.bpm > 0 &&
+            entry.sig
+        ) {
+            return meterBarDurationSec(entry);
+        }
+        const sig = entry && entry.sig ? entry.sig : { num: 4, den: 4 };
+        const bpm = entry && entry.bpm > 0 ? entry.bpm : 120;
+        return (sig.num * (4 / sig.den) * 60) / bpm;
+    }
+
+    function meterEntryTokenKey(entry) {
+        if (!entry || !entry.sig) return '';
+        const sig = entry.sig;
+        if (sig.alternates && sig.alternates.length) {
+            return (
+                entry.bpm +
+                ':' +
+                sig.alternates.map((a) => a.num + '/' + a.den).join('+')
+            );
+        }
+        return entry.bpm + '-' + sig.num + '/' + sig.den;
+    }
+
+    function phraseBarCountsFromSequenceMeterEntries(entries) {
+        if (!Array.isArray(entries) || !entries.length) return null;
+        const counts = [];
+        let i = 0;
+        while (i < entries.length) {
+            const key = meterEntryTokenKey(entries[i]);
+            let run = 1;
+            while (i + run < entries.length && meterEntryTokenKey(entries[i + run]) === key) {
+                run += 1;
+            }
+            counts.push(run);
+            i += run;
+        }
+        return counts.length ? counts : null;
     }
 
     function parseNuendoTimeSignature(raw) {
@@ -64,9 +482,12 @@
         if (!s) return null;
         const slash = /^(\d+)\s*\/\s*(\d+)$/.exec(s);
         if (slash) {
-            const num = parseInt(slash[1], 10);
-            const den = parseInt(slash[2], 10);
-            if (num > 0 && num <= 32 && den > 0 && den <= 32) return { num, den };
+            return (
+                parseSteinbergMusicalSignaturePair(slash[1], slash[2]) || {
+                    num: parseInt(slash[1], 10),
+                    den: parseInt(slash[2], 10),
+                }
+            );
         }
         const semi = /^(\d+)\s*;\s*(\d+)$/.exec(s);
         if (semi) {
@@ -117,6 +538,12 @@
             attrs.MusicalSignature || attrs.musical_signature || attrs.musicalSignature,
         );
         const upbeat = Number(String(attrs.MusicalUpbeat || attrs.musical_upbeat || '').trim());
+        const gacAssetLength = Number(
+            String(attrs.GACAssetLength || attrs.gacAssetLength || '').trim(),
+        );
+        const gacAssetStartTime = Number(
+            String(attrs.GACAssetStartTime || attrs.gacAssetStartTime || '').trim(),
+        );
 
         return {
             attrs,
@@ -124,6 +551,12 @@
             signature: signature || { num: 4, den: 4 },
             upbeatSec: Number.isFinite(upbeat) && upbeat >= 0 ? upbeat : null,
             audioRegionList: attrs.AudioRegionList || attrs.audioRegionList || '',
+            audioTempiMarkers: parseAudioTempiListFromDoc(doc),
+            gacAssetLength: Number.isFinite(gacAssetLength) && gacAssetLength > 0 ? gacAssetLength : null,
+            gacAssetStartTime:
+                Number.isFinite(gacAssetStartTime) && gacAssetStartTime >= 0
+                    ? gacAssetStartTime
+                    : null,
             project:
                 ixmlElementPlainText(doc.getElementsByTagName('PROJECT')[0]) ||
                 attrs.Project ||
@@ -160,8 +593,29 @@
         return 0;
     }
 
-    function buildMeterTextFromSteinbergMusicalData(data) {
+    function formatSteinbergMeterEntryToken(entry) {
+        if (!entry || !entry.sig) return '';
+        const bpm =
+            Math.abs(entry.bpm - Math.round(entry.bpm)) < 1e-9
+                ? Math.round(entry.bpm)
+                : entry.bpm;
+        const sig = entry.sig;
+        if (sig.alternates && sig.alternates.length) {
+            const parts = sig.alternates.map((a) => a.num + '/' + a.den);
+            const delim = sig.alternates.length > 1 && sig.alternates[0].repeat ? ':' : '+';
+            return bpm + '-' + parts.join(delim);
+        }
+        return bpm + '-' + sig.num + '/' + sig.den;
+    }
+
+    function buildMeterTextFromSteinbergMusicalData(data, opt) {
         if (!data || !data.tempo) return null;
+        if (Array.isArray(data.audioTempiMarkers) && data.audioTempiMarkers.length) {
+            const entries = buildNuendoProjectMeterEntries(data, opt);
+            if (entries.length) {
+                return entries.map((e) => formatSteinbergMeterEntryToken(e)).join(',');
+            }
+        }
         const bpm = Math.round(data.tempo);
         if (!(bpm > 0 && bpm <= 999)) return null;
         const sig = data.signature || { num: 4, den: 4 };
@@ -283,6 +737,16 @@
             meterText,
         );
         let source = counts && counts.length ? 'ixml-audioRegionList' : null;
+        if (
+            !counts &&
+            data &&
+            Array.isArray(data.audioTempiMarkers) &&
+            data.audioTempiMarkers.length
+        ) {
+            const entries = buildNuendoProjectMeterEntries(data, opt);
+            counts = phraseBarCountsFromSequenceMeterEntries(entries);
+            if (counts && counts.length) source = 'ixml-audioTempiList';
+        }
         if (
             !counts &&
             opt &&
@@ -417,7 +881,7 @@
         if (typeof applyMusicalGridPersistSnapshot !== 'function') return false;
 
         const data = parseSteinbergMusicalDataFromIxmlXml(xmlText);
-        const meterText = buildMeterTextFromSteinbergMusicalData(data);
+        const meterText = buildMeterTextFromSteinbergMusicalData(data, o);
         if (!meterText) return false;
 
         const phrase = resolvePhraseFromIxmlAndMarkers(data, meterText, o);
@@ -470,6 +934,8 @@
                 msg += ', Phrase → ' + phrase.phraseText;
                 if (phrase.source === 'wav-regions') {
                     msg += ' (from WAV cycle regions)';
+                } else if (phrase.source === 'ixml-audioTempiList') {
+                    msg += ' (from iXML tempo map)';
                 }
             } else if (data && data.upbeatSec != null) {
                 msg += ' (Phrase: no region data)';

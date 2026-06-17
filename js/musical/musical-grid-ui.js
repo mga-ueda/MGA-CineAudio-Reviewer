@@ -972,22 +972,30 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
+        const layoutDuration =
+            typeof resolvePhraseLayoutDurationSec === 'function'
+                ? resolvePhraseLayoutDurationSec(
+                      settings.meterSpec,
+                      master,
+                      settings.phraseSpec,
+                  )
+                : master;
         if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
             return collectPhraseGroupRangesFromBarCounts(
                 settings.meterSpec,
-                master,
+                layoutDuration,
                 phraseBoundaryDragCounts,
             );
         }
         const counts = resolvePhraseGroupBarCounts(
             settings.meterSpec,
-            master,
+            layoutDuration,
             settings.phraseSpec,
         );
         if (!counts.length) return [];
         return collectPhraseGroupRangesFromBarCounts(
             settings.meterSpec,
-            master,
+            layoutDuration,
             counts,
         );
     }

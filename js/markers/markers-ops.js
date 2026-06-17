@@ -883,10 +883,143 @@
         return true;
     }
 
+    /** タイムライン区間 [gapStart, gapEnd) 削除に伴い、マーカー／コメント位置をリップル */
+    function ripplePointSecForRemovedTimelineInterval(sec, gapStart, gapEnd, removeDur, eps) {
+        if (!Number.isFinite(sec)) return sec;
+        if (sec >= gapEnd - eps) return sec - removeDur;
+        if (sec >= gapStart - eps) return null;
+        return sec;
+    }
+
+    function rippleMarkersForRemovedTimelineInterval(gapStartSec, gapEndSec, opt) {
+        if (!markerTimelineReady()) return false;
+        const gapStart = Number(gapStartSec);
+        const gapEnd = Number(gapEndSec);
+        if (
+            !Number.isFinite(gapStart) ||
+            !Number.isFinite(gapEnd) ||
+            !(gapEnd > gapStart + 1e-9)
+        ) {
+            return false;
+        }
+        const removeDur = gapEnd - gapStart;
+        const eps = markerOneFrameSec();
+        let changed = false;
+        const kept = [];
+
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (m.type === 'range') {
+                let start = Number(m.startSec);
+                let end = Number(m.endSec);
+                if (!Number.isFinite(start) || !Number.isFinite(end)) {
+                    kept.push(m);
+                    continue;
+                }
+                if (end <= gapStart + eps) {
+                    kept.push(m);
+                    continue;
+                }
+                if (start >= gapEnd - eps) {
+                    start -= removeDur;
+                    end -= removeDur;
+                    m.startSec = clampMarkerSec(start, opt);
+                    m.endSec = clampMarkerSec(end, opt);
+                    collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                    kept.push(m);
+                    changed = true;
+                    continue;
+                }
+                if (start >= gapStart - eps && end <= gapEnd + eps) {
+                    if (activeMarkerId === m.id) activeMarkerId = null;
+                    changed = true;
+                    continue;
+                }
+                if (start < gapStart - eps && end > gapEnd - eps) {
+                    end -= removeDur;
+                    m.endSec = clampMarkerSec(end, opt);
+                    collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                    kept.push(m);
+                    changed = true;
+                    continue;
+                }
+                if (start < gapStart - eps && end <= gapEnd + eps) {
+                    if (activeMarkerId === m.id) activeMarkerId = null;
+                    changed = true;
+                    continue;
+                }
+                if (start >= gapStart - eps && start < gapEnd && end > gapEnd - eps) {
+                    start = gapStart;
+                    end -= removeDur;
+                    m.startSec = clampMarkerSec(start, opt);
+                    m.endSec = clampMarkerSec(end, opt);
+                    collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                    kept.push(m);
+                    changed = true;
+                    continue;
+                }
+                kept.push(m);
+            } else {
+                const shifted = ripplePointSecForRemovedTimelineInterval(
+                    Number(m.timeSec),
+                    gapStart,
+                    gapEnd,
+                    removeDur,
+                    eps,
+                );
+                if (shifted == null) {
+                    if (activeMarkerId === m.id) activeMarkerId = null;
+                    changed = true;
+                    continue;
+                }
+                if (Math.abs(shifted - m.timeSec) > 1e-9) {
+                    m.timeSec = clampMarkerSec(shifted, opt);
+                    changed = true;
+                }
+                kept.push(m);
+            }
+        }
+
+        if (pendingRangeStartSec != null && Number.isFinite(pendingRangeStartSec)) {
+            const shifted = ripplePointSecForRemovedTimelineInterval(
+                pendingRangeStartSec,
+                gapStart,
+                gapEnd,
+                removeDur,
+                eps,
+            );
+            if (shifted == null) {
+                pendingRangeStartSec = null;
+                changed = true;
+            } else if (Math.abs(shifted - pendingRangeStartSec) > 1e-9) {
+                pendingRangeStartSec = clampMarkerSec(shifted, opt);
+                changed = true;
+            }
+        }
+
+        if (!changed) return false;
+        currentMarkers = kept;
+        normalizeAllMarkerRanges({ silent: true });
+        sortMarkersInPlace();
+        saveMarkersToCache();
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (!(opt && opt.skipUiRefresh)) {
+            if (typeof refreshMarkerUi === 'function') refreshMarkerUi();
+            if (typeof updateMarkerCommentOverlay === 'function') {
+                updateMarkerCommentOverlay();
+            }
+            if (typeof renderSeekBarMarkers === 'function') renderSeekBarMarkers();
+        }
+        return true;
+    }
+
     window.captureTrackSegmentRegionBoundsMap = captureTrackSegmentRegionBoundsMap;
     window.relocateRegionVolumePitchMarkersAfterLayout =
         relocateRegionVolumePitchMarkersAfterLayout;
     window.syncSegmentVolumePitchAfterRegionLayout = syncSegmentVolumePitchAfterRegionLayout;
+    window.rippleMarkersForRemovedTimelineInterval = rippleMarkersForRemovedTimelineInterval;
 
     function completePendingRangeAtCurrentTime(opt) {
         if (!markerTimelineReady() || pendingRangeStartSec == null) return;
