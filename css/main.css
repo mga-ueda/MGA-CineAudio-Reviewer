@@ -1017,7 +1017,8 @@
             color: var(--app-accent);
         }
         .marker-panel:not(.marker-panel--ready) .marker-table-wrap,
-        .marker-panel:not(.marker-panel--ready) .marker-list-empty {
+        .marker-panel:not(.marker-panel--ready) .marker-list-empty,
+        .marker-panel:not(.marker-panel--ready) .marker-panel__memo {
             opacity: 0.72;
         }
         .marker-panel__head-actions {
@@ -1429,6 +1430,9 @@
             font-weight: 400;
             letter-spacing: 0.12em;
             text-transform: uppercase;
+            color: #8e96a8;
+        }
+        .marker-panel.marker-panel--ready .marker-panel__memo-label {
             color: var(--app-accent);
         }
         .marker-panel__memo-textarea {
@@ -1477,7 +1481,6 @@
             border-color: rgba(255, 255, 255, 0.28);
         }
         .marker-panel__memo-textarea:disabled {
-            opacity: 0.55;
             cursor: not-allowed;
         }
         .seek-bar-markers {
