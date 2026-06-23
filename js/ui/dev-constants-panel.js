@@ -353,7 +353,7 @@
 
         const logBlock = buildSection(
             '診断ログ（DEBUG_LOG）',
-            '調査用の冗長ログのみ。通常ログ（読み込み・エクスポート・Warning/Error）は常に出力。',
+            '調査用のみ（通常ログは常に表示）。ON 中はログ欄非表示・内部蓄積・行数無制限（コピー/DL で全文）。',
             'dev-constants-panel__list--grid',
         );
         const keys = debugLogKeysInPanelOrder();
@@ -407,7 +407,7 @@
         const hint = document.createElement('p');
         hint.className = 'dev-constants-panel__hint';
         hint.textContent =
-            '設定は localStorage に保存（Import/Export 対象外）。いずれか ON の間はログ行数が無制限（OFF で 500 行上限）。';
+            '設定は localStorage に保存（Import/Export 対象外）。';
 
         headerText.appendChild(title);
         headerText.appendChild(hint);
