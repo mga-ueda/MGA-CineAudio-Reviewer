@@ -58,16 +58,25 @@
      * 結合境界専用の 1 秒ハンドオフより長い／手前からの重なりがある。
      */
     /** 隣接セグメントのタイムライン重なり（結合境界の有無に依存しない） */
-    function hasTimelineOverlapAtBoundary(track, boundaryIndex) {
+    function hasTimelineOverlapAtBoundary(track, boundaryIndex, opt) {
         const segments = getTrackSegments(track);
         if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
+        const usePreview = !(opt && opt.ignoreWaveformDrawPreview);
+        const d0 =
+            usePreview && typeof getSegmentWaveformDrawTimelineDelta === 'function'
+                ? getSegmentWaveformDrawTimelineDelta(track, boundaryIndex)
+                : 0;
+        const d1 =
+            usePreview && typeof getSegmentWaveformDrawTimelineDelta === 'function'
+                ? getSegmentWaveformDrawTimelineDelta(track, boundaryIndex + 1)
+                : 0;
         const oStart = Math.max(
-            getSegmentPlaybackTimelineStart(track, boundaryIndex),
-            getSegmentPlaybackTimelineStart(track, boundaryIndex + 1),
+            getSegmentPlaybackTimelineStart(track, boundaryIndex) + d0,
+            getSegmentPlaybackTimelineStart(track, boundaryIndex + 1) + d1,
         );
         const oEnd = Math.min(
-            getSegmentTimelineEnd(track, boundaryIndex),
-            getSegmentTimelineEnd(track, boundaryIndex + 1),
+            getSegmentTimelineEnd(track, boundaryIndex) + d0,
+            getSegmentTimelineEnd(track, boundaryIndex + 1) + d1,
         );
         return oEnd - oStart >= MIN_CROSSFADE_OVERLAP_SEC;
     }

@@ -98,6 +98,18 @@
                     ev.clientY,
                 );
                 if (resizeHit) {
+                    if (
+                        (resizeHit.kind === 'in' || resizeHit.kind === 'out') &&
+                        typeof isPointerInRegionParallelMoveBodyZone === 'function' &&
+                        isPointerInRegionParallelMoveBodyZone(
+                            track,
+                            resizeHit.segmentIndex,
+                            ev.clientX,
+                            ev.clientY,
+                        )
+                    ) {
+                        return;
+                    }
                     onRegionHandlePointerDown(
                         ev,
                         track,
@@ -251,6 +263,8 @@
         const track = { type: 'extra', slot };
         return getSegmentRegionInPadSec(track, segmentIndex);
     };
+    window.resolveParallelRegionOffsetDragInPadSec =
+        resolveParallelRegionOffsetDragInPadSec;
     window.setSegmentTimelineStartSec = setSegmentTimelineStartSec;
     window.clampRegionGroupMoveDelta = clampRegionGroupMoveDelta;
     window.applyRegionGroupMoveDelta = applyRegionGroupMoveDelta;

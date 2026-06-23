@@ -405,7 +405,7 @@
         return true;
     }
 
-    function computeSegmentFadeLinearAtTransport(track, segmentIndex, transportSec) {
+    function computeSegmentFadeLinearAtTransport(track, segmentIndex, transportSec, opt) {
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return 1;
         const manualFade = computeManualJoinedBoundaryFadeLinear(
@@ -414,8 +414,11 @@
             transportSec,
         );
         if (manualFade != null) return manualFade;
-        const start = getSegmentPlaybackTimelineStart(track, segmentIndex);
-        const end = getSegmentTimelineEnd(track, segmentIndex);
+        const mapDelta =
+            opt && Number.isFinite(opt.mapTimelineDelta) ? opt.mapTimelineDelta : 0;
+        const start =
+            getSegmentPlaybackTimelineStart(track, segmentIndex) + mapDelta;
+        const end = getSegmentTimelineEnd(track, segmentIndex) + mapDelta;
         if (!(end > start + 0.0005)) return 1;
         const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
         const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');

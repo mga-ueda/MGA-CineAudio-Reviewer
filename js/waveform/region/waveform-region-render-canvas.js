@@ -13,6 +13,13 @@
         segments,
     ) {
         if (!trackSegmentsAreContinuousSameClipChain(track)) return false;
+        if (typeof getSegmentWaveformDrawTimelineDelta === 'function') {
+            for (let i = 0; i < segments.length; i++) {
+                if (Math.abs(getSegmentWaveformDrawTimelineDelta(track, i)) > 0.00001) {
+                    return false;
+                }
+            }
+        }
         for (let i = 0; i < segments.length; i++) {
             if (segmentHasViewportPeaksForDraw(vp, i)) return false;
         }
@@ -75,8 +82,15 @@
         const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
         const scrubOverview = !!o.scrubOverview;
         const scrubRedraw = !!o.scrubRedraw;
-        const vpOverlay = scrubOverview ? null : tr ? tr.viewportPeaks : null;
-        const vpSkip = scrubOverview || scrubRedraw ? null : vpOverlay;
+        const offsetDragCrossfadeDraw =
+            typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+            isOffsetDragRegionWaveformPreviewActive() &&
+            typeof trackHasCrossfadeOverlapForWaveformPreview === 'function' &&
+            trackHasCrossfadeOverlapForWaveformPreview(track);
+        const vpOverlay =
+            scrubOverview || offsetDragCrossfadeDraw ? null : tr ? tr.viewportPeaks : null;
+        const vpSkip =
+            scrubOverview || scrubRedraw || offsetDragCrossfadeDraw ? null : vpOverlay;
         const t0 = getTrackTimelineStartSec(track);
         const layoutW = Number.isFinite(o.timelineLayoutW) && o.timelineLayoutW > 0
             ? o.timelineLayoutW
@@ -223,7 +237,10 @@
                     seg.sourceOutSec,
                 );
                 if (!segPeaks || !segPeaks.length) continue;
-                const segT0 = getSegmentTimelineStart(track, i);
+                const segT0 =
+                    typeof getSegmentTimelineStartForWaveformDraw === 'function'
+                        ? getSegmentTimelineStartForWaveformDraw(track, i)
+                        : getSegmentTimelineStart(track, i);
                 const contentDur = seg.sourceOutSec - seg.sourceInSec;
                 if (!(contentDur > 0.0005)) continue;
                 const startX =
@@ -266,7 +283,9 @@
             }
         }
 
-        drawRegionViewportPeaks(ctx, layoutW, hCss, master, vpOverlay, grad, track, o);
+        if (!offsetDragCrossfadeDraw) {
+            drawRegionViewportPeaks(ctx, layoutW, hCss, master, vpOverlay, grad, track, o);
+        }
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
         ctx.lineWidth = 1;

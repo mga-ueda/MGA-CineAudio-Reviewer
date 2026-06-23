@@ -35,21 +35,34 @@
         return hits.length ? hits[0] : null;
     }
 
+    /** 平行移動プレビュー中 — map / ソース秒計算を枠位置に合わせる */
+    function getSegmentMapTimelineDelta(track, segmentIndex) {
+        if (typeof getSegmentWaveformDrawTimelineDelta === 'function') {
+            return getSegmentWaveformDrawTimelineDelta(track, segmentIndex);
+        }
+        return 0;
+    }
+
     function mapAllSegmentsAtTransport(track, transportSec, opt) {
         const segments = getTrackSegments(track);
         if (!segments.length) return [];
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return [];
         const forPlayback = !!(opt && opt.forPlayback);
+        const usePreviewMap = !(
+            opt &&
+            (opt.ignoreWaveformDrawPreview || opt.forAudioScheduling)
+        );
         const hits = [];
         for (let i = 0; i < segments.length; i++) {
             const seg = segments[i];
-            const regionIn = getSegmentRegionTimelineIn(track, i);
-            const playbackStart = getSegmentPlaybackTimelineStart(track, i);
+            const mapDelta = usePreviewMap ? getSegmentMapTimelineDelta(track, i) : 0;
+            const regionIn = getSegmentRegionTimelineIn(track, i) + mapDelta;
+            const playbackStart = getSegmentPlaybackTimelineStart(track, i) + mapDelta;
             const absEnd =
-                forPlayback && typeof getSegmentRegionTimelineOut === 'function'
+                (forPlayback && typeof getSegmentRegionTimelineOut === 'function'
                     ? getSegmentRegionTimelineOut(track, i)
-                    : getSegmentTimelineEnd(track, i);
+                    : getSegmentTimelineEnd(track, i)) + mapDelta;
             const absStart = forPlayback ? playbackStart : regionIn;
 
             const joinedNext =
@@ -59,7 +72,9 @@
             const joinedPrev =
                 forPlayback && i > 0 && isSegmentBoundaryJoined(track, i - 1);
             const boundaryNext = joinedNext ? absEnd : null;
-            const boundaryPrev = joinedPrev ? getSegmentTimelineStart(track, i) : null;
+            const boundaryPrev = joinedPrev
+                ? getSegmentTimelineStart(track, i) + mapDelta
+                : null;
             const manualFadePrev =
                 joinedPrev &&
                 i > 0 &&
@@ -194,7 +209,9 @@
                 isSegmentSourceContinuousAtBoundary(track, i - 1)
             ) {
                 /** 同一クリップ連続: 左セグメントのソース位置をそのまま使う（sourceInSec へクランプすると境界で飛ぶ） */
-                sourceSec = segmentSourceSecFromTransport(track, i - 1, t);
+                sourceSec = segmentSourceSecFromTransport(track, i - 1, t, {
+                    mapTimelineDelta: getSegmentMapTimelineDelta(track, i - 1),
+                });
                 sourceSec = Math.min(seg.sourceOutSec, sourceSec);
             } else if (forPlayback && inHandoffFromPrev && t < playbackStart + 0.00001) {
                 const fadeStart = boundaryPrev - JOINED_BOUNDARY_CROSSFADE_SEC;
@@ -202,7 +219,9 @@
             } else if (t < playbackStart - 0.0005) {
                 sourceSec = seg.sourceInSec;
             } else {
-                sourceSec = segmentSourceSecFromTransport(track, i, t);
+                sourceSec = segmentSourceSecFromTransport(track, i, t, {
+                    mapTimelineDelta: mapDelta,
+                });
             }
             if (forPlayback && inManualCrossfade) {
                 const boundaryIndex = manualFadePrev ? i - 1 : i;
@@ -225,12 +244,12 @@
                     ((isSegmentBoundaryJoined(track, i - 1) &&
                         (hasExtendedCrossfadeOverlapAtBoundary(track, i - 1) ||
                             hasManualSegmentFadeAtJoinedBoundary(track, i - 1))) ||
-                        hasTimelineOverlapAtBoundary(track, i - 1))) ||
+                        hasTimelineOverlapAtBoundary(track, i - 1, opt))) ||
                     (i < segments.length - 1 &&
                         ((isSegmentBoundaryJoined(track, i) &&
                             (hasExtendedCrossfadeOverlapAtBoundary(track, i) ||
                                 hasManualSegmentFadeAtJoinedBoundary(track, i))) ||
-                            hasTimelineOverlapAtBoundary(track, i))));
+                            hasTimelineOverlapAtBoundary(track, i, opt))));
             if (forPlayback && !skipJoinedCrossfadeClamp && joinedPrev && boundaryPrev != null) {
                 timelineStart = Math.min(
                     timelineStart,
@@ -268,13 +287,17 @@
     }
 
     function mapTransportToSegmentForPlayback(track, transportSec) {
-        const hits = mapAllSegmentsAtTransport(track, transportSec, { forPlayback: true });
+        const hits = mapAllSegmentsAtTransport(track, transportSec, {
+            forPlayback: true,
+            ignoreWaveformDrawPreview: true,
+        });
         return hits.length ? hits[0] : null;
     }
 
     function refreshSegmentHitAtTransport(track, hit, transportSec) {
         const fresh = mapAllSegmentsAtTransport(track, transportSec, {
             forPlayback: true,
+            ignoreWaveformDrawPreview: true,
         }).find((h) => h.segmentIndex === hit.segmentIndex);
         return fresh || null;
     }
@@ -299,6 +322,7 @@
             for (let p = 0; p < probes.length; p++) {
                 const hits = mapAllSegmentsAtTransport(track, probes[p], {
                     forPlayback: true,
+                    ignoreWaveformDrawPreview: true,
                 });
                 for (let i = 0; i < hits.length; i++) {
                     const hit = hits[i];
@@ -459,7 +483,18 @@
     function waveformPlaybackGainForHit(track, hit, hits, transportSec) {
         const cfGains = computeWaveformSegmentCrossfadeLinear(track, hits, transportSec);
         const cf = cfGains.get(hit.key) ?? 1;
-        return cf * getSegmentPlaybackGainLinear(track, hit.segmentIndex, transportSec);
+        const mapDelta = getSegmentMapTimelineDelta(track, hit.segmentIndex);
+        const fadeOpt = Math.abs(mapDelta) > 0.00001 ? { mapTimelineDelta: mapDelta } : undefined;
+        return (
+            cf *
+            getSegmentGainLinear(track, hit.segmentIndex) *
+            computeSegmentFadeLinearAtTransport(
+                track,
+                hit.segmentIndex,
+                transportSec,
+                fadeOpt,
+            )
+        );
     }
 
     function computeWaveformMixPeakAtTransport(track, slot, transportSec, opt) {
@@ -824,8 +859,14 @@
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return null;
-        const segT0 = getSegmentTimelineStart(track, segmentIndex);
-        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const segT0 =
+            typeof getSegmentTimelineStartForWaveformDraw === 'function'
+                ? getSegmentTimelineStartForWaveformDraw(track, segmentIndex)
+                : getSegmentTimelineStart(track, segmentIndex);
+        const segEnd =
+            typeof getSegmentTimelineEndForWaveformDraw === 'function'
+                ? getSegmentTimelineEndForWaveformDraw(track, segmentIndex)
+                : getSegmentTimelineEnd(track, segmentIndex);
         // 表示はリージョン In 以降（結合境界のクロスフェード手前は含めない）
         let t0 = Math.max(
             spec.masterStartSec,
@@ -973,7 +1014,10 @@
                     ? s.segmentIndex
                     : i;
             if (idx >= segments.length) return false;
-            const segEnd = getSegmentTimelineEnd(track, idx);
+            const segEnd = Math.max(
+                getSegmentTimelineEnd(track, idx),
+                getSegmentRegionTimelineOut(track, idx),
+            );
             const visibleStart = getSegmentWaveformVisibleTimelineStart(track, idx);
             if (s.masterEndSec > segEnd + 0.02) return false;
             if (s.masterStartSec < visibleStart - crossfadeSlack) return false;
@@ -1130,8 +1174,11 @@
     }
 
     function segmentIntersectsTileSpec(track, segmentIndex, tileSpec) {
-        const segEnd = getSegmentTimelineEnd(track, segmentIndex);
-        const visStart = getSegmentWaveformVisibleTimelineStart(track, segmentIndex);
+        const segEnd =
+            typeof getSegmentTimelineEndForWaveformDraw === 'function'
+                ? getSegmentTimelineEndForWaveformDraw(track, segmentIndex)
+                : getSegmentTimelineEnd(track, segmentIndex);
+        const visStart = getSegmentWaveformHideBeforeTimeline(track, segmentIndex);
         return (
             segEnd > tileSpec.masterStartSec + 1e-9 &&
             visStart < tileSpec.masterEndSec - 1e-9

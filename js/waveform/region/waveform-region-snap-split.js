@@ -1261,13 +1261,22 @@
         }
     }
 
+    /** リージョン移動時、絶対位置の regionTimelineOutSec も同量だけ追従させる */
+    function shiftSegmentRegionTimelineOutByDelta(track, segmentIndex, delta) {
+        if (!Number.isFinite(delta) || Math.abs(delta) < 0.00001) return;
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (raw && Number.isFinite(raw.regionTimelineOutSec)) {
+            raw.regionTimelineOutSec = Math.max(0, raw.regionTimelineOutSec + delta);
+        }
+    }
+
+    /** t0 変更時 — 先頭リージョンの絶対 In/Out のみ追従（他セグメントは timelineStartSec が独立） */
     function shiftTrackAbsoluteRegionInsByDelta(track, delta) {
         if (!Number.isFinite(delta) || Math.abs(delta) < 0.00001) return;
         const state = getPlaybackRegionsState(track);
         if (!state || !state.segments || !state.segments.length) return;
-        for (let i = 0; i < state.segments.length; i++) {
-            shiftSegmentRegionTimelineInByDelta(track, i, delta);
-        }
+        shiftSegmentRegionTimelineInByDelta(track, 0, delta);
+        shiftSegmentRegionTimelineOutByDelta(track, 0, delta);
     }
 
     const REGION_HANDLE_HIT_PAD_PX = 4;
@@ -1384,6 +1393,88 @@
         );
     }
 
+    function regionOffsetDragTimelineInterval(track, segmentIndex) {
+        if (typeof getSegmentRegionOverlayTimelineInterval === 'function') {
+            const iv = getSegmentRegionOverlayTimelineInterval(track, segmentIndex);
+            return { startSec: iv.start, endSec: iv.end };
+        }
+        return {
+            startSec: getSegmentRegionTimelineIn(track, segmentIndex),
+            endSec: getSegmentRegionTimelineOut(track, segmentIndex),
+        };
+    }
+
+    function transportSecInRegionOffsetDragInterval(track, segmentIndex, transportSec) {
+        if (!Number.isFinite(transportSec)) return false;
+        const iv = regionOffsetDragTimelineInterval(track, segmentIndex);
+        return (
+            transportSec >= iv.startSec - 0.0005 && transportSec < iv.endSec - 0.002
+        );
+    }
+
+    function getPlaybackRegionOverlayElForSegment(track, segmentIndex) {
+        const container = getPlaybackRegionsContainerEl(track);
+        if (!container) return null;
+        return container.querySelector(
+            '.audio-waveform-lane__playback-region[data-segment-index="' +
+                segmentIndex +
+                '"]',
+        );
+    }
+
+    /** In/Out リサイズ帯（フェード三角は除外） */
+    function isPointerOnRegionInOutResizeEdge(track, segmentIndex, clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex);
+        if (!regionEl) return false;
+        return isPointerOnRegionResizeHandle(regionEl, clientX, clientY);
+    }
+
+    /**
+     * リージョン本体の平行移動ドラッグ帯 — In/Out 端・フェード以外。
+     * 狭いリージョンでは In/Out 当たりが重なるため、一定幅以下は全体を平行移動優先にする。
+     */
+    function isPointerInRegionParallelMoveBodyZone(track, segmentIndex, clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const transportSec =
+            typeof transportSecFromClientX === 'function'
+                ? transportSecFromClientX(clientX)
+                : NaN;
+        if (!transportSecInRegionOffsetDragInterval(track, segmentIndex, transportSec)) {
+            return false;
+        }
+        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex);
+        if (!regionEl) return false;
+        const regionRect = regionEl.getBoundingClientRect();
+        if (!(regionRect.width > 0)) return false;
+        const narrowParallelMoveMaxPx = 28;
+        if (regionRect.width <= narrowParallelMoveMaxPx) {
+            return true;
+        }
+        return !isPointerOnRegionInOutResizeEdge(track, segmentIndex, clientX, clientY);
+    }
+
+    function isPointerInRegionParallelMoveBodyAtPointer(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const slot =
+            typeof waveformExtraLaneSlotFromClientY === 'function'
+                ? waveformExtraLaneSlotFromClientY(clientY)
+                : typeof extraLaneSlotFromClientY === 'function'
+                  ? extraLaneSlotFromClientY(clientY)
+                  : -1;
+        if (slot < 0) return false;
+        const track = { type: 'extra', slot };
+        const count =
+            typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
+        if (count < 1) return false;
+        for (let i = 0; i < count; i++) {
+            if (isPointerInRegionParallelMoveBodyZone(track, i, clientX, clientY)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
     function resolveRegionResizeHandleAtPointer(track, clientX, clientY) {
         if (!isExtraTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
@@ -1491,3 +1582,8 @@
     window.isPointerInFadeHandleHitZone = isPointerInFadeHandleHitZone;
     window.isPointerOnFadeHandleTriangle = isPointerOnFadeHandleTriangle;
     window.resolveRegionResizeHandleAtPointer = resolveRegionResizeHandleAtPointer;
+    window.isPointerInRegionParallelMoveBodyZone = isPointerInRegionParallelMoveBodyZone;
+    window.isPointerInRegionParallelMoveBodyAtPointer =
+        isPointerInRegionParallelMoveBodyAtPointer;
+    window.transportSecInRegionOffsetDragInterval = transportSecInRegionOffsetDragInterval;
+    window.regionOffsetDragTimelineInterval = regionOffsetDragTimelineInterval;

@@ -34,16 +34,16 @@
             base.regionTimelineInSec = Number.isFinite(seg.regionTimelineInSec)
                 ? seg.regionTimelineInSec
                 : anchor - leadPad;
-            return;
-        }
-        if (Number.isFinite(seg.regionTimelineInSec)) {
-            base.regionTimelineInSec = Math.max(0, seg.regionTimelineInSec);
+        } else {
+            if (Number.isFinite(seg.regionTimelineInSec)) {
+                base.regionTimelineInSec = Math.max(0, seg.regionTimelineInSec);
+            }
+            if (Number.isFinite(seg.regionLeadPadSec) && seg.regionLeadPadSec > 0) {
+                base.regionLeadPadSec = Math.max(0, seg.regionLeadPadSec);
+            }
         }
         if (Number.isFinite(seg.regionTimelineOutSec)) {
             base.regionTimelineOutSec = seg.regionTimelineOutSec;
-        }
-        if (Number.isFinite(seg.regionLeadPadSec) && seg.regionLeadPadSec > 0) {
-            base.regionLeadPadSec = Math.max(0, seg.regionLeadPadSec);
         }
     }
     function normalizeSegmentEntry(seg, track, fullDur) {
@@ -210,10 +210,37 @@
         const segDur = Math.max(0, timelineEnd - anchor);
         return regionIn + (anchor - regionIn + segDur);
     }
+    /** Out ハンドル — source 基準の Out と timelineEnd から regionTimelineOutSec を同期 */
+    function syncSegmentEntryRegionTimelineOutFromHandle(track, segmentIndex, seg, timelineEndSec) {
+        if (!seg) return;
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const sourceIn = Number(seg.sourceInSec) || 0;
+        const sourceOut = Number(seg.sourceOutSec) || 0;
+        const sourceSpan = Math.max(PLAYBACK_REGION_MIN_SEC, sourceOut - sourceIn);
+        const sourceBasedOut = regionIn + (anchor - regionIn + sourceSpan);
+        const end = Number(timelineEndSec);
+        if (Number.isFinite(end) && end > sourceBasedOut + 0.00001) {
+            seg.regionTimelineOutSec = end;
+        } else {
+            delete seg.regionTimelineOutSec;
+        }
+    }
     /** オーバーレイ描画・外周 □ 判定と同じ [In, Out] 区間 */
     function getSegmentRegionOverlayTimelineInterval(track, segmentIndex) {
+        if (typeof getSegmentRegionOffsetDragPreviewInterval === 'function') {
+            const preview = getSegmentRegionOffsetDragPreviewInterval(track, segmentIndex);
+            if (preview) return preview;
+        } else if (typeof window.getSegmentRegionOffsetDragPreviewInterval === 'function') {
+            const preview = window.getSegmentRegionOffsetDragPreviewInterval(
+                track,
+                segmentIndex,
+            );
+            if (preview) return preview;
+        }
         const trackStart = getTrackTimelineStartSec(track);
-        const start = Math.max(trackStart, getSegmentRegionTimelineIn(track, segmentIndex));
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const start = Math.max(trackStart, regionIn);
         const end = getSegmentRegionTimelineOut(track, segmentIndex);
         return { start, end };
     }
@@ -267,6 +294,8 @@
             } else {
                 delete state.regionTimelineInSec;
                 delete state.regionLeadPadSec;
+                delete raw.regionTimelineInSec;
+                delete raw.regionLeadPadSec;
                 state.headPadSec = Math.max(0, desiredAnchor - t0);
             }
             return;
@@ -320,8 +349,29 @@
         }
         const t0 = getTrackTimelineStartSec(track);
         const raw = state.segments[0];
-        const anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+        let anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+        const sourceIn = Math.max(0, Number(raw.sourceInSec) || 0);
         let lead = resolveRawSegmentLeadPadSec(raw, anchor);
+
+        if (lead <= 0.00001 && sourceIn <= 0.00001) {
+            if (
+                Number.isFinite(raw.regionTimelineInSec) &&
+                raw.regionTimelineInSec > anchor + 0.00001
+            ) {
+                anchor = raw.regionTimelineInSec;
+                raw.timelineStartSec = anchor;
+                delete raw.regionTimelineInSec;
+            }
+            if (
+                Number.isFinite(state.regionTimelineInSec) &&
+                state.regionTimelineInSec > anchor + 0.00001
+            ) {
+                anchor = state.regionTimelineInSec;
+                raw.timelineStartSec = anchor;
+                delete state.regionTimelineInSec;
+                delete raw.regionTimelineInSec;
+            }
+        }
 
         if (lead > 0.00001) {
             raw.regionLeadPadSec = lead;
@@ -337,7 +387,10 @@
 
         delete state.regionLeadPadSec;
         delete raw.regionLeadPadSec;
-        if (Number.isFinite(raw.regionTimelineInSec)) {
+        if (
+            Number.isFinite(raw.regionTimelineInSec) &&
+            raw.regionTimelineInSec >= anchor - 0.00001
+        ) {
             const regionIn = Math.max(0, raw.regionTimelineInSec);
             raw.regionTimelineInSec = regionIn;
             state.regionTimelineInSec = regionIn;
@@ -392,7 +445,25 @@
     }
     /** 波形描画のタイムライン左端（リージョン In / 再生開始と同一） */
     function getSegmentWaveformDrawTimelineStart(track, segmentIndex) {
-        return getSegmentWaveformVisibleTimelineStart(track, segmentIndex);
+        let start = getSegmentWaveformVisibleTimelineStart(track, segmentIndex);
+        if (typeof getSegmentWaveformDrawTimelineDelta === 'function') {
+            start += getSegmentWaveformDrawTimelineDelta(track, segmentIndex);
+        }
+        return start;
+    }
+    function getSegmentTimelineStartForWaveformDraw(track, segmentIndex) {
+        let anchor = getSegmentTimelineStart(track, segmentIndex);
+        if (typeof getSegmentWaveformDrawTimelineDelta === 'function') {
+            anchor += getSegmentWaveformDrawTimelineDelta(track, segmentIndex);
+        }
+        return anchor;
+    }
+    function getSegmentTimelineEndForWaveformDraw(track, segmentIndex) {
+        let end = getSegmentTimelineEnd(track, segmentIndex);
+        if (typeof getSegmentWaveformDrawTimelineDelta === 'function') {
+            end += getSegmentWaveformDrawTimelineDelta(track, segmentIndex);
+        }
+        return end;
     }
     /** 波形を表示するタイムライン左端（リージョン In 以降） */
     function getSegmentWaveformVisibleTimelineStart(track, segmentIndex) {
@@ -416,14 +487,17 @@
         return anchor;
     }
     /** タイムライン位置をクリップ内ソース秒へ（実再生開始基準） */
-    function segmentSourceSecFromTransport(track, segmentIndex, transportSec) {
+    function segmentSourceSecFromTransport(track, segmentIndex, transportSec, opt) {
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return 0;
-        const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+        const mapDelta =
+            opt && Number.isFinite(opt.mapTimelineDelta) ? opt.mapTimelineDelta : 0;
+        const playbackStart =
+            getSegmentPlaybackTimelineStart(track, segmentIndex) + mapDelta;
         const t = Number(transportSec);
         const span = Math.max(0, seg.sourceOutSec - seg.sourceInSec);
-        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex) + mapDelta;
         const timelineSpan = Math.max(0, regionOut - playbackStart);
         let local;
         if (timelineSpan > span + 0.00001) {
@@ -948,12 +1022,36 @@
             },
         );
     }
+    /**
+     * 平行移動ドラッグで維持する In パッド。
+     * sourceIn トリム／lead pad のみ。regionIn>anchor の配置ずれは 0 扱い（Out 固定バグ防止）。
+     */
+    function resolveParallelRegionOffsetDragInPadSec(
+        track,
+        segmentIndex,
+        startRegionIn,
+        startAnchor,
+    ) {
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        if (leadPad > 0.00001) {
+            return leadPad;
+        }
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        const sourceIn = raw ? Math.max(0, Number(raw.sourceInSec) || 0) : 0;
+        if (sourceIn > 0.00001) {
+            const ri = Number(startRegionIn) || 0;
+            const ca = Number(startAnchor) || 0;
+            return Math.max(0, ri - ca);
+        }
+        return 0;
+    }
     /** リージョン本体の平行移動ドラッグ（offset drag）— In ハンドル／境界操作と区別 */
     function isParallelRegionOffsetDragOpt(opt) {
         return !!(
             opt &&
-            Number.isFinite(opt.dragStartRegionIn) &&
-            Number.isFinite(opt.dragStartAnchor)
+            (opt.parallelRegionOffsetDrag === true ||
+                (Number.isFinite(opt.dragStartRegionIn) &&
+                    Number.isFinite(opt.dragStartAnchor)))
         );
     }
     function applySegmentRegionInFromTransport(track, segmentIndex, transportSec, opt) {
@@ -1108,7 +1206,35 @@
         }
         state.segments = segments;
         state.active = true;
-        state.headPadSec = Math.max(0, Number(state.headPadSec) || 0);
+        state.headPadSec = 0;
+        delete state.regionTimelineInSec;
+        delete state.regionLeadPadSec;
+        for (let i = 0; i < state.segments.length; i++) {
+            const raw = state.segments[i];
+            if (!raw) continue;
+            delete raw.timelineStartSec;
+            delete raw.regionTimelineInSec;
+            delete raw.regionTimelineOutSec;
+            delete raw.regionLeadPadSec;
+        }
+        if (typeof setExtraTrackTimelineStartSec === 'function') {
+            setExtraTrackTimelineStartSec(track.slot, 0, {
+                skipPersist: !!(opt && opt.skipPersist),
+                skipRedraw: true,
+            });
+        }
+        if (typeof syncTrackRegionHeadStateFromFirstSegment === 'function') {
+            syncTrackRegionHeadStateFromFirstSegment(track);
+        }
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(track.slot);
+        }
+        if (
+            !(opt && opt.skipMusicalRefresh) &&
+            typeof refreshTrackTimelineMusicalSlots === 'function'
+        ) {
+            refreshTrackTimelineMusicalSlots(track, { preserveStored: false });
+        }
         if (!(opt && opt.skipOverlay) && typeof updateTrackRegionOverlays === 'function') {
             updateTrackRegionOverlays(track);
         }

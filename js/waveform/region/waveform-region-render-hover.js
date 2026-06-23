@@ -80,10 +80,13 @@
                         Number.isFinite(transportSec)
                     ) {
                         const track = { type: 'extra', slot };
-                        const interval = getSegmentRegionInteractiveTimelineInterval(
-                            track,
-                            segmentIndex,
-                        );
+                        const interval =
+                            typeof regionOffsetDragTimelineInterval === 'function'
+                                ? regionOffsetDragTimelineInterval(track, segmentIndex)
+                                : getSegmentRegionOverlayTimelineInterval(
+                                      track,
+                                      segmentIndex,
+                                  );
                         if (
                             transportSec >= interval.startSec - 0.0005 &&
                             transportSec < interval.endSec - 0.002
@@ -130,7 +133,10 @@
 
         const segments = getTrackSegments(track);
         for (let i = 0; i < segments.length; i++) {
-            const interval = getSegmentRegionInteractiveTimelineInterval(track, i);
+            const interval =
+                typeof regionOffsetDragTimelineInterval === 'function'
+                    ? regionOffsetDragTimelineInterval(track, i)
+                    : getSegmentRegionOverlayTimelineInterval(track, i);
             if (
                 transportSec < interval.startSec - 0.0005 ||
                 transportSec >= interval.endSec - 0.002

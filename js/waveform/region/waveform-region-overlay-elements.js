@@ -240,15 +240,21 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!master) return;
-        const trackStart =
-            typeof getTrackTimelineStartSec === 'function'
-                ? getTrackTimelineStartSec(track)
-                : 0;
-        const inTransport = Math.max(
-            trackStart,
-            getSegmentRegionTimelineIn(track, segmentIndex),
-        );
-        const outTransport = getSegmentRegionTimelineOut(track, segmentIndex);
+        const overlayInterval =
+            typeof getSegmentRegionOverlayTimelineInterval === 'function'
+                ? getSegmentRegionOverlayTimelineInterval(track, segmentIndex)
+                : null;
+        const inTransport = overlayInterval
+            ? overlayInterval.start
+            : Math.max(
+                  typeof getTrackTimelineStartSec === 'function'
+                      ? getTrackTimelineStartSec(track)
+                      : 0,
+                  getSegmentRegionTimelineIn(track, segmentIndex),
+              );
+        const outTransport = overlayInterval
+            ? overlayInterval.end
+            : getSegmentRegionTimelineOut(track, segmentIndex);
         const leftPct =
             typeof transportSecToTimelineLeftPercent === 'function'
                 ? transportSecToTimelineLeftPercent(inTransport)
@@ -311,16 +317,21 @@
         const segments = getTrackSegments(track);
         if (segments.length < 2) return [];
         const zones = [];
+        const probeInterval =
+            typeof getSegmentCrossfadeProbeInterval === 'function'
+                ? getSegmentCrossfadeProbeInterval
+                : function (t, segmentIndex) {
+                      return {
+                          start: getSegmentPlaybackTimelineStart(t, segmentIndex),
+                          end: getSegmentTimelineEnd(t, segmentIndex),
+                      };
+                  };
         for (let i = 0; i < segments.length; i++) {
             for (let j = i + 1; j < segments.length; j++) {
-                const oStart = Math.max(
-                    getSegmentPlaybackTimelineStart(track, i),
-                    getSegmentPlaybackTimelineStart(track, j),
-                );
-                const oEnd = Math.min(
-                    getSegmentTimelineEnd(track, i),
-                    getSegmentTimelineEnd(track, j),
-                );
+                const ivI = probeInterval(track, i);
+                const ivJ = probeInterval(track, j);
+                const oStart = Math.max(ivI.start, ivJ.start);
+                const oEnd = Math.min(ivI.end, ivJ.end);
                 const minOverlap =
                     typeof window.MIN_CROSSFADE_OVERLAP_SEC === 'number'
                         ? window.MIN_CROSSFADE_OVERLAP_SEC

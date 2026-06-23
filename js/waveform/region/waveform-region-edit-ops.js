@@ -198,7 +198,14 @@
                 if (typeof flashSeekHint === 'function') {
                     flashSeekHint('Ex ' + (track.slot + 1), 'Region reset', 'notice');
                 }
-                redrawAfterRegionChange(track.slot);
+                updateTrackRegionOverlays(track);
+                redrawAfterRegionChange(track.slot, { segmentStructureChanged: true });
+                if (typeof schedulePersistSession === 'function') {
+                    schedulePersistSession();
+                }
+                if (typeof syncExtraAudioToTransport === 'function') {
+                    syncExtraAudioToTransport({ force: true });
+                }
                 return true;
             }
             clearTrackRegion(track, { skipUndo: true });
@@ -347,8 +354,9 @@
         if (!isTrackRegionActive(track)) return false;
 
         const clip = regionSegmentClipboard.segment;
-        const segments = getTrackSegments(track);
-        if (!segments.length) return false;
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments || !state.segments.length) return false;
+        const segmentCount = state.segments.length;
 
         const eps = segmentBoundaryJoinEpsilonSec();
         const pasteDur = Math.max(
@@ -361,19 +369,20 @@
             Number.isFinite(regionSegmentClipboard.segmentIndex)
                 ? regionSegmentClipboard.segmentIndex | 0
                 : -1;
-        if (srcIdx < 0 || srcIdx >= segments.length) {
-            srcIdx = segments.length - 1;
+        if (srcIdx < 0 || srcIdx >= segmentCount) {
+            srcIdx = segmentCount - 1;
         }
 
-        const srcEnd = getSegmentTimelineEnd(track, srcIdx);
+        // コピー元の隣 = リージョン Out 直後（アンカー+ソース長ではない — 平行移動 In オフセット分ずれる）
+        const srcRegionOut = getSegmentRegionTimelineOut(track, srcIdx);
         let availableGap = Infinity;
-        if (srcIdx < segments.length - 1) {
+        if (srcIdx < segmentCount - 1) {
             availableGap =
-                getSegmentTimelineStart(track, srcIdx + 1) - srcEnd;
+                getSegmentTimelineStart(track, srcIdx + 1) - srcRegionOut;
         }
         const pushDelta =
             availableGap >= pasteDur - eps ? 0 : pasteDur - availableGap;
-        const pasteStart = srcEnd;
+        const pasteStart = srcRegionOut;
 
         const clone = {
             id: newRegionId(),
@@ -382,16 +391,16 @@
             sourceOutSec: clip.sourceOutSec,
             timelineStartSec: pasteStart,
         };
-        const regionInDelta = clip.regionInSec - clip.anchorStartSec;
-        if (regionInDelta > SEGMENT_BOUNDARY_JOIN_EPS_SEC) {
-            clone.regionTimelineInSec = pasteStart + regionInDelta;
-        }
-        if (
-            Number.isFinite(clip.regionLeadPadSec) &&
-            clip.regionLeadPadSec > 0 &&
-            regionInDelta <= SEGMENT_BOUNDARY_JOIN_EPS_SEC
-        ) {
-            clone.regionLeadPadSec = clip.regionLeadPadSec;
+        // 隣接ペーストは新規リージョンとして Out 直後に置く — コピー元の平行 In オフセットは引き継がない
+        const srcLeadPad = Number(clip.regionLeadPadSec) || 0;
+        const srcHadLeadPad =
+            srcLeadPad > 0.00001 &&
+            Number.isFinite(clip.regionInSec) &&
+            Number.isFinite(clip.anchorStartSec) &&
+            clip.regionInSec < clip.anchorStartSec - SEGMENT_BOUNDARY_JOIN_EPS_SEC;
+        if (srcHadLeadPad) {
+            clone.regionLeadPadSec = srcLeadPad;
+            clone.regionTimelineInSec = pasteStart - srcLeadPad;
         }
         if (Number.isFinite(clip.gainDb) && Math.abs(clip.gainDb) > 0.0005) {
             clone.gainDb = clip.gainDb;
@@ -409,20 +418,17 @@
         delete norm.fadeInSec;
 
         if (!regionUndoPaused) requestRegionUndoCapture();
-        const working = segments.map((s) => ({ ...s }));
+        // コピー元は raw のまま保持 — 全セグメント再 normalize すると seg0 の head 状態が壊れる
+        const working = state.segments.map((s) => Object.assign({}, s));
         const insertAt = srcIdx + 1;
         if (pushDelta > eps) {
             shiftSegmentEntriesTimelineFromIndex(working, track, insertAt, pushDelta);
         }
-        const normalized = working.map((s) =>
-            normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
-        );
-        const srcSeg = normalized[srcIdx];
-        if (srcSeg && Number.isFinite(srcSeg.fadeOutSec)) {
-            delete srcSeg.fadeOutSec;
+        if (working[srcIdx] && Number.isFinite(working[srcIdx].fadeOutSec)) {
+            delete working[srcIdx].fadeOutSec;
         }
-        normalized.splice(insertAt, 0, norm);
-        applySegmentsToState(track, normalized, {
+        working.splice(insertAt, 0, norm);
+        applySegmentsToState(track, working, {
             silent: true,
             skipUndo: true,
             segmentStructureChanged: true,
@@ -433,7 +439,7 @@
                 ': region pasted after region ' +
                 (srcIdx + 1) +
                 ' (' +
-                normalized.length +
+                working.length +
                 ' total)',
         );
         if (typeof flashSeekHint === 'function') {
@@ -930,11 +936,68 @@
         );
     }
 
+    /**
+     * クロスフェード重なり判定 — 平行移動プレビュー中は枠と同じ preview 区間を使う。
+     * （seg0 geometryOnly は raw 未更新のため、確定位置だけでは検出できない）
+     */
+    function getSegmentCrossfadeProbeInterval(track, segmentIndex) {
+        if (typeof getSegmentRegionOverlayTimelineInterval === 'function') {
+            const iv = getSegmentRegionOverlayTimelineInterval(track, segmentIndex);
+            return { start: iv.start, end: iv.end };
+        }
+        if (typeof getSegmentRegionOffsetDragPreviewInterval === 'function') {
+            const preview = getSegmentRegionOffsetDragPreviewInterval(track, segmentIndex);
+            if (preview) {
+                return { start: preview.start, end: preview.end };
+            }
+        }
+        return {
+            start: getSegmentPlaybackTimelineStart(track, segmentIndex),
+            end: getSegmentTimelineEnd(track, segmentIndex),
+        };
+    }
+
     /** 再生ミックスと同じ基準でセグメント同士のタイムライン重なり（クロスフェード区間） */
     function trackHasCrossfadeOverlapForWaveformPreview(track) {
         if (!track) return false;
-        const zones = collectTrackCrossfadeZones(track);
-        return zones.length > 0;
+        return collectCrossfadeOverlapSegmentIndices(track).length > 0;
+    }
+
+    let offsetDragCrossfadeWaveformDrawnBySlot = null;
+
+    /** 平行移動中 — 重なり開始／終了の瞬間だけ波形を再描画する */
+    function shouldRedrawWaveformDuringOffsetDrag(slot) {
+        if (!(typeof slot === 'number' && slot >= 0)) return false;
+        if (
+            typeof isOffsetDragRegionWaveformPreviewActive !== 'function' ||
+            !isOffsetDragRegionWaveformPreviewActive()
+        ) {
+            return false;
+        }
+        const track = { type: 'extra', slot };
+        const hasOverlap = trackHasCrossfadeOverlapForWaveformPreview(track);
+        if (!offsetDragCrossfadeWaveformDrawnBySlot) {
+            offsetDragCrossfadeWaveformDrawnBySlot = Object.create(null);
+        }
+        const wasDrawn = !!offsetDragCrossfadeWaveformDrawnBySlot[slot];
+        if (hasOverlap) {
+            offsetDragCrossfadeWaveformDrawnBySlot[slot] = true;
+            return true;
+        }
+        if (wasDrawn) {
+            delete offsetDragCrossfadeWaveformDrawnBySlot[slot];
+            return true;
+        }
+        return false;
+    }
+
+    function clearOffsetDragCrossfadeWaveformDrawnState(slot) {
+        if (!offsetDragCrossfadeWaveformDrawnBySlot) return;
+        if (typeof slot === 'number' && slot >= 0) {
+            delete offsetDragCrossfadeWaveformDrawnBySlot[slot];
+        } else {
+            offsetDragCrossfadeWaveformDrawnBySlot = null;
+        }
     }
 
     function isSplitBoundaryRegionDragActive() {
@@ -950,6 +1013,87 @@
             lanes.classList.contains('audio-waveform-composite__lanes--offset-drag')
         );
     }
+
+    function regionOffsetDragMemberKey(slot, segmentIndex) {
+        return (slot | 0) + ':' + (segmentIndex | 0);
+    }
+
+    function setRegionOffsetDragPreviewHeadSec(sec) {
+        waveformOffsetDragPreviewHeadSec = Number(sec) || 0;
+    }
+
+    /** 平行移動ドラッグ中 — ポインタ基準の枠 [In, Out]（t0 未更新でも追従） */
+    function getSegmentRegionOffsetDragPreviewInterval(track, segmentIndex) {
+        if (!isOffsetDragRegionWaveformPreviewActive()) return null;
+        const indices = collectOffsetDragSegmentIndicesForTrack(track);
+        if (!indices || !indices.has(segmentIndex)) return null;
+        if (!Number.isFinite(waveformOffsetDragPreviewHeadSec)) return null;
+
+        const key = regionOffsetDragMemberKey(track.slot, segmentIndex);
+        let span = NaN;
+        if (
+            waveformOffsetDragGroupStartRegionSpanByKey &&
+            Number.isFinite(waveformOffsetDragGroupStartRegionSpanByKey[key])
+        ) {
+            span = waveformOffsetDragGroupStartRegionSpanByKey[key];
+        } else if (Number.isFinite(waveformOffsetDragStartRegionSpanSec)) {
+            span = waveformOffsetDragStartRegionSpanSec;
+        }
+        if (!(span > 0.00001)) {
+            const iv = getSegmentRegionTimelineInterval(track, segmentIndex);
+            span = Math.max(0.001, iv.end - iv.start);
+        }
+
+        let head = waveformOffsetDragPreviewHeadSec;
+        if (
+            typeof waveformOffsetDragGroupMembers !== 'undefined' &&
+            waveformOffsetDragGroupMembers &&
+            waveformOffsetDragGroupMembers.length > 1 &&
+            waveformOffsetDragGroupStartRegionInByKey &&
+            waveformOffsetDragGroupStartTimelineByKey &&
+            typeof waveformOffsetDragSlot === 'number' &&
+            typeof waveformOffsetDragSegmentIndex === 'number' &&
+            waveformOffsetDragSegmentIndex >= 0
+        ) {
+            const primaryKey = regionOffsetDragMemberKey(
+                waveformOffsetDragSlot,
+                waveformOffsetDragSegmentIndex,
+            );
+            const primaryStart = waveformOffsetDragGroupStartTimelineByKey[primaryKey];
+            const memberStart = waveformOffsetDragGroupStartRegionInByKey[key];
+            if (Number.isFinite(primaryStart) && Number.isFinite(memberStart)) {
+                head = memberStart + (waveformOffsetDragPreviewHeadSec - primaryStart);
+            }
+        }
+        return { start: head, end: head + span };
+    }
+
+    /** 平行移動プレビュー中 — 波形描画位置を枠（preview）に合わせる delta（重なり時のみ） */
+    function getSegmentWaveformDrawTimelineDelta(track, segmentIndex) {
+        if (typeof getSegmentRegionOffsetDragPreviewInterval !== 'function') return 0;
+        if (
+            typeof isOffsetDragRegionWaveformPreviewActive !== 'function' ||
+            !isOffsetDragRegionWaveformPreviewActive()
+        ) {
+            return 0;
+        }
+        if (
+            typeof trackHasCrossfadeOverlapForWaveformPreview === 'function' &&
+            !trackHasCrossfadeOverlapForWaveformPreview(track)
+        ) {
+            return 0;
+        }
+        const preview = getSegmentRegionOffsetDragPreviewInterval(track, segmentIndex);
+        if (!preview) return 0;
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        return preview.start - regionIn;
+    }
+
+    window.setRegionOffsetDragPreviewHeadSec = setRegionOffsetDragPreviewHeadSec;
+    window.getSegmentRegionOffsetDragPreviewInterval =
+        getSegmentRegionOffsetDragPreviewInterval;
+    window.getSegmentWaveformDrawTimelineDelta = getSegmentWaveformDrawTimelineDelta;
+    window.getSegmentCrossfadeProbeInterval = getSegmentCrossfadeProbeInterval;
 
     /** 平行移動ドラッグ中の対象セグメント index（当該トラックのみ）。なければ null */
     function collectOffsetDragSegmentIndicesForTrack(track) {
@@ -982,6 +1126,13 @@
             indices.add(waveformOffsetDragSegmentIndex | 0);
         }
         return indices.size ? indices : null;
+    }
+
+    /** 平行移動中の同一グループ内ペア — 外部リージョンとのクロス判定から除外 */
+    function isIntraOffsetDragMemberCrossfadePair(track, segmentIndexA, segmentIndexB) {
+        const dragIndices = collectOffsetDragSegmentIndicesForTrack(track);
+        if (!dragIndices) return false;
+        return dragIndices.has(segmentIndexA) && dragIndices.has(segmentIndexB);
     }
 
     function isSplitBoundaryAdjacentToOffsetDragSegments(boundaryIndex, dragIndices) {
@@ -1036,14 +1187,13 @@
                 : 0.005;
         for (let i = 0; i < segments.length; i++) {
             for (let j = i + 1; j < segments.length; j++) {
-                const oStart = Math.max(
-                    getSegmentPlaybackTimelineStart(track, i),
-                    getSegmentPlaybackTimelineStart(track, j),
-                );
-                const oEnd = Math.min(
-                    getSegmentTimelineEnd(track, i),
-                    getSegmentTimelineEnd(track, j),
-                );
+                if (isIntraOffsetDragMemberCrossfadePair(track, i, j)) {
+                    continue;
+                }
+                const ivI = getSegmentCrossfadeProbeInterval(track, i);
+                const ivJ = getSegmentCrossfadeProbeInterval(track, j);
+                const oStart = Math.max(ivI.start, ivJ.start);
+                const oEnd = Math.min(ivI.end, ivJ.end);
                 if (oEnd - oStart >= minOverlap) {
                     indices.add(i);
                     indices.add(j);
@@ -1072,9 +1222,18 @@
         }
         if (!usedViewport) {
             clearExtraTrackViewportPeaksForSlot(slot);
+            if (typeof invalidateWaveformViewportPeaksForRegionEdit === 'function') {
+                invalidateWaveformViewportPeaksForRegionEdit({
+                    slot,
+                    clearTrackTiles: true,
+                });
+            }
         }
         if (typeof drawExtraTrackWaveform === 'function') {
             drawExtraTrackWaveform(slot);
+        }
+        if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+            scheduleWaveformHiresRedrawAfterZoom({ slots: [slot] });
         }
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
@@ -1091,7 +1250,24 @@
             return;
         }
         if (geometryOnly && waveformPreview) {
-            redrawCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt);
+            if (
+                typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+                isOffsetDragRegionWaveformPreviewActive() &&
+                needsCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt)
+            ) {
+                if (typeof drawExtraTrackWaveform === 'function') {
+                    drawExtraTrackWaveform(slot);
+                }
+                if (typeof applyReviewMixCrossfadeGainsIfNeeded === 'function') {
+                    applyReviewMixCrossfadeGainsIfNeeded();
+                }
+                return;
+            }
+            if (needsCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt)) {
+                redrawCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt);
+            } else if (typeof drawExtraTrackWaveform === 'function') {
+                drawExtraTrackWaveform(slot);
+            }
             return;
         }
 
@@ -1200,3 +1376,8 @@
         needsRegionEdgeWaveformPreviewDuringGeometryDrag;
     window.needsWaveformPreviewDuringRegionGeometryDrag =
         needsWaveformPreviewDuringRegionGeometryDrag;
+    window.trackHasCrossfadeOverlapForWaveformPreview =
+        trackHasCrossfadeOverlapForWaveformPreview;
+    window.shouldRedrawWaveformDuringOffsetDrag = shouldRedrawWaveformDuringOffsetDrag;
+    window.clearOffsetDragCrossfadeWaveformDrawnState =
+        clearOffsetDragCrossfadeWaveformDrawnState;

@@ -808,6 +808,18 @@
             }
         }
         if (!bestHit) return false;
+        if (
+            (bestHit.kind === 'in' || bestHit.kind === 'out') &&
+            typeof isPointerInRegionParallelMoveBodyZone === 'function' &&
+            isPointerInRegionParallelMoveBodyZone(
+                bestHit.track,
+                bestHit.segmentIndex,
+                ev.clientX,
+                ev.clientY,
+            )
+        ) {
+            return false;
+        }
         if (typeof markerPointerDiagLogRegionHandleBegin === 'function') {
             markerPointerDiagLogRegionHandleBegin(ev, bestHit);
         }
@@ -1051,9 +1063,33 @@
                 ),
             );
             if (Math.abs(newOut - seg.sourceOutSec) < 0.00001 && t > timelineStartSeg + dur + 0.01) {
+                syncSegmentEntryRegionTimelineOutFromHandle(
+                    track,
+                    segmentIndex,
+                    seg,
+                    timelineEnd,
+                );
+                applySegmentsToState(
+                    track,
+                    segments.map((s) =>
+                        normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+                    ),
+                    {
+                        silent: true,
+                        skipUndo: true,
+                        geometryOnly: !!(opt && opt.geometryOnly),
+                        skipPersist: !!(opt && opt.geometryOnly),
+                    },
+                );
                 return;
             }
             seg.sourceOutSec = newOut;
+            syncSegmentEntryRegionTimelineOutFromHandle(
+                track,
+                segmentIndex,
+                seg,
+                timelineEnd,
+            );
         } else {
             return;
         }
@@ -1079,14 +1115,20 @@
         const t0 = getTrackTimelineStartSec(track);
         const oldAnchor = getSegmentTimelineStart(track, segmentIndex);
         const oldRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
-        const baseRegionIn =
-            opt && Number.isFinite(opt.dragStartRegionIn)
-                ? opt.dragStartRegionIn
-                : oldRegionIn;
-        const baseAnchor =
-            opt && Number.isFinite(opt.dragStartAnchor)
-                ? opt.dragStartAnchor
-                : oldAnchor;
+        const incrementalParallel =
+            opt &&
+            opt.parallelRegionOffsetDrag === true &&
+            isParallelRegionOffsetDragOpt(opt);
+        const baseRegionIn = incrementalParallel
+            ? oldRegionIn
+            : opt && Number.isFinite(opt.dragStartRegionIn)
+              ? opt.dragStartRegionIn
+              : oldRegionIn;
+        const baseAnchor = incrementalParallel
+            ? oldAnchor
+            : opt && Number.isFinite(opt.dragStartAnchor)
+              ? opt.dragStartAnchor
+              : oldAnchor;
         const seg = state.segments[segmentIndex];
         const segDur = Math.max(
             PLAYBACK_REGION_MIN_SEC,
@@ -1101,9 +1143,29 @@
         let newRegionIn = baseRegionIn + delta;
         const isParallelMove =
             opt &&
-            Number.isFinite(opt.dragStartRegionIn) &&
-            Number.isFinite(opt.dragStartAnchor);
-        if (!isParallelMove) {
+            (opt.parallelRegionOffsetDrag === true ||
+                (Number.isFinite(opt.dragStartRegionIn) &&
+                    Number.isFinite(opt.dragStartAnchor)));
+        if (isParallelMove && opt.parallelRegionOffsetDrag) {
+            const gestureRegionIn = Number.isFinite(opt.gestureStartRegionIn)
+                ? opt.gestureStartRegionIn
+                : Number.isFinite(opt.dragStartRegionIn)
+                  ? opt.dragStartRegionIn
+                  : oldRegionIn;
+            const gestureAnchor = Number.isFinite(opt.gestureStartAnchor)
+                ? opt.gestureStartAnchor
+                : Number.isFinite(opt.dragStartAnchor)
+                  ? opt.dragStartAnchor
+                  : oldAnchor;
+            const parallelInPad = resolveParallelRegionOffsetDragInPadSec(
+                track,
+                segmentIndex,
+                gestureRegionIn,
+                gestureAnchor,
+            );
+            newRegionIn = baseRegionIn + delta;
+            newAnchor = newRegionIn - parallelInPad;
+        } else if (!isParallelMove) {
             const maxRegionIn = newAnchor + segDur - PLAYBACK_REGION_MIN_SEC;
             const minPlayIn = newAnchor + PLAYBACK_REGION_MIN_SEC;
             newRegionIn = Math.max(
@@ -1125,25 +1187,73 @@
         if (leadPad > 0.00001) {
             inPadForApply = leadPad;
         }
+        let applyT0 = t0;
+        const geometryOnly = !!(opt && opt.geometryOnly);
+        const savedHeadPadSec =
+            geometryOnly && segmentIndex === 0 ? state.headPadSec : undefined;
+        if (
+            !geometryOnly &&
+            segmentIndex === 0 &&
+            isParallelMove &&
+            inPadForApply <= 0.00001 &&
+            typeof setExtraTrackTimelineStartSec === 'function'
+        ) {
+            const oldTrackT0 = t0;
+            const newTrackT0 = Math.max(0, newAnchor);
+            if (Math.abs(newTrackT0 - oldTrackT0) > 0.00001) {
+                setExtraTrackTimelineStartSec(track.slot, newTrackT0, {
+                    skipPersist: !!(opt && opt.skipPersist),
+                });
+                if (typeof shiftTrackAbsoluteRegionInsByDelta === 'function') {
+                    shiftTrackAbsoluteRegionInsByDelta(track, newTrackT0 - oldTrackT0);
+                }
+            }
+            applyT0 = newTrackT0;
+            delete state.segments[segmentIndex].timelineStartSec;
+        }
         applySegmentAnchorAndRegionInForDrag(
             track,
             segmentIndex,
             newAnchor,
             newRegionIn,
-            t0,
+            applyT0,
             inPadForApply,
         );
-        if (opt && opt.geometryOnly) {
-            refreshTrackRegionOverlayGeometry(track);
-        } else {
-            updateTrackRegionOverlays(track);
+        if (geometryOnly && segmentIndex === 0) {
+            state.headPadSec = savedHeadPadSec;
         }
-        redrawAfterRegionChange(track.slot, {
-            segmentIndex,
-            geometryOnly: !!(opt && opt.geometryOnly),
-        });
-        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+        if (opt && opt.parallelRegionOffsetDrag) {
+            shiftSegmentRegionTimelineOutByDelta(track, segmentIndex, delta);
+        }
+        if (geometryOnly) {
+            if (typeof bumpRegionPersistEpoch === 'function') {
+                bumpRegionPersistEpoch(track.slot);
+            }
+            refreshTrackRegionOverlayGeometry(track);
+            if (
+                typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
+                shouldRedrawWaveformDuringOffsetDrag(track.slot)
+            ) {
+                redrawAfterRegionChange(track.slot, {
+                    segmentIndex,
+                    geometryOnly: true,
+                    affectedSegmentIndices: [segmentIndex],
+                });
+            }
+        } else {
+            const segmentsAfterMove = state.segments.map((s) =>
+                normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+            );
+            applySegmentsToState(track, segmentsAfterMove, {
+                silent: true,
+                skipUndo: true,
+                skipMusicalRefresh: true,
+                skipPersist: !!(opt && opt.skipPersist),
+                affectedSegmentIndices: [segmentIndex],
+            });
+            if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
         }
         if (opt && opt.geometryOnly) {
             const needsCfAudio =
@@ -1187,6 +1297,7 @@
             moveSegmentClipByTimelineDelta(track, m.segmentIndex, delta, {
                 dragStartRegionIn,
                 dragStartAnchor,
+                parallelRegionOffsetDrag: !!(opt && opt.parallelRegionOffsetDrag),
                 skipPersist: !!(opt && opt.skipPersist),
                 forceAudio: !!(opt && opt.forceAudio),
                 skipUndo: !!(opt && opt.skipUndo),
@@ -1243,6 +1354,136 @@
         );
     }
 
+    /**
+     * 先頭リージョン本体ドラッグの確定 — t0 平行移動（drop 時のみ。drag 中は moveSegmentClipByTimelineDelta）。
+     */
+    function applyParallelRegionOffsetDragViaTrackTimeline(track, segmentIndex, sec, opt) {
+        if (!isExtraTrackRef(track) || segmentIndex !== 0) return false;
+        if (opt && opt.geometryOnly) return false;
+        const slot = track.slot;
+        const state = getPlaybackRegionsState(track);
+        if (!state || !state.segments[0]) return false;
+        if (!(opt && opt.skipUndo) && !regionUndoPaused) {
+            requestRegionUndoCapture();
+        }
+        const headBeforeApply = getSegmentRegionTimelineIn(track, 0);
+        const proposedHeadSec = Number(sec) || 0;
+        const oldT0 = getTrackTimelineStartSec(track);
+        const headPad =
+            opt && Number.isFinite(opt.dragStartHeadPadSec)
+                ? opt.dragStartHeadPadSec
+                : getHeadPadSec(track);
+        let snapDetail = null;
+        let finalRegionIn = Math.max(0, proposedHeadSec);
+
+        if (opt && opt.skipSnap) {
+            const newT0 = Math.max(0, proposedHeadSec - headPad);
+            snapDetail = {
+                proposedHeadSec,
+                pointerSec: proposedHeadSec,
+                frameSec: newT0 + headPad,
+                snappedSec: newT0 + headPad,
+                edge: 'skip',
+                stopSec: null,
+                thresholdSec: null,
+                appliedDeltaSec: newT0 + headPad - headBeforeApply,
+            };
+            if (Math.abs(newT0 - oldT0) > 0.00001) {
+                if (typeof setExtraTrackTimelineStartSec === 'function') {
+                    setExtraTrackTimelineStartSec(slot, newT0, opt);
+                }
+                if (typeof shiftTrackAbsoluteRegionInsByDelta === 'function') {
+                    shiftTrackAbsoluteRegionInsByDelta(track, newT0 - oldT0);
+                }
+            }
+        } else if (typeof applyRegionTrackTimelineStart === 'function') {
+            applyRegionTrackTimelineStart(slot, proposedHeadSec, opt);
+            finalRegionIn = getSegmentRegionTimelineIn(track, 0);
+            snapDetail = {
+                proposedHeadSec,
+                pointerSec: proposedHeadSec,
+                frameSec: finalRegionIn,
+                snappedSec: finalRegionIn,
+                edge: 'track-t0',
+                stopSec: null,
+                thresholdSec: null,
+            };
+        } else {
+            return false;
+        }
+
+        delete state.segments[0].timelineStartSec;
+        delete state.segments[0].regionTimelineInSec;
+        delete state.segments[0].regionLeadPadSec;
+        delete state.regionTimelineInSec;
+        delete state.regionLeadPadSec;
+
+        const finalT0 = getTrackTimelineStartSec(track);
+        if (!(opt && opt.skipSnap)) {
+            finalRegionIn = Math.max(0, finalRegionIn);
+        }
+        state.headPadSec = Math.max(0, finalRegionIn - finalT0);
+        if (state.headPadSec > 0.00001) {
+            state.regionTimelineInSec = finalRegionIn;
+        } else {
+            delete state.regionTimelineInSec;
+        }
+        // sync は regionIn>t0 を raw.timelineStartSec へ昇格させ波形(t0)と枠がずれるため呼ばない
+
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(slot);
+        }
+
+        updateTrackRegionOverlays(track);
+        redrawAfterRegionChange(track.slot, {
+            segmentIndex: 0,
+            affectedSegmentIndices: [0],
+        });
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: !!(opt && opt.forceAudio) });
+        }
+
+        const headAfterApply = getSegmentRegionTimelineIn(track, 0);
+        logRegionMoveSnapCommitIfNeeded(
+            track,
+            0,
+            proposedHeadSec,
+            snapDetail,
+            opt,
+            headBeforeApply,
+            headAfterApply,
+        );
+        return true;
+    }
+
+    window.applyParallelRegionOffsetDragViaTrackTimeline =
+        applyParallelRegionOffsetDragViaTrackTimeline;
+
+    /** 平行移動 geometryOnly — ポインタ位置で枠だけ更新（スナップは drop 時） */
+    function refreshParallelRegionOffsetDragOverlayPreview(track, segmentIndex, previewHeadSec) {
+        const head = Number(previewHeadSec) || 0;
+        if (typeof setRegionOffsetDragPreviewHeadSec === 'function') {
+            setRegionOffsetDragPreviewHeadSec(head);
+        } else {
+            waveformOffsetDragPreviewHeadSec = head;
+        }
+        refreshTrackRegionOverlayGeometry(track);
+        if (
+            typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
+            shouldRedrawWaveformDuringOffsetDrag(track.slot) &&
+            typeof redrawAfterRegionChange === 'function'
+        ) {
+            redrawAfterRegionChange(track.slot, {
+                segmentIndex,
+                geometryOnly: true,
+                affectedSegmentIndices: [segmentIndex],
+            });
+        }
+    }
+
     function setSegmentTimelineStartSec(track, segmentIndex, sec, opt) {
         if (!isExtraTrackRef(track)) return;
         if (!(opt && opt.skipUndo) && !regionUndoPaused) {
@@ -1250,8 +1491,16 @@
         }
         const state = getPlaybackRegionsState(track);
         if (!state || !state.segments[segmentIndex]) return;
-        const headBeforeApply = getSegmentRegionTimelineIn(track, segmentIndex);
         const proposedHeadSec = Number(sec) || 0;
+        if (opt && opt.geometryOnly && isParallelRegionOffsetDragOpt(opt)) {
+            refreshParallelRegionOffsetDragOverlayPreview(
+                track,
+                segmentIndex,
+                proposedHeadSec,
+            );
+            return;
+        }
+        const headBeforeApply = getSegmentRegionTimelineIn(track, segmentIndex);
         const dragStartRegionIn =
             opt && Number.isFinite(opt.dragStartRegionIn)
                 ? opt.dragStartRegionIn
@@ -1312,6 +1561,7 @@
             };
         }
         if (
+            !(opt && opt.parallelRegionOffsetDrag === true) &&
             !isParallelRegionOffsetDragOpt(opt) &&
             segmentIndex > 0 &&
             typeof isSegmentBoundaryJoined === 'function' &&
@@ -1350,11 +1600,12 @@
         let delta = desiredRegionIn - dragStartRegionIn;
         let moveOpt = opt;
         if (isParallelRegionOffsetDragOpt(opt)) {
-            const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
             delta = desiredRegionIn - currentRegionIn;
             moveOpt = Object.assign({}, opt, {
-                dragStartRegionIn: currentRegionIn,
-                dragStartAnchor: currentAnchor,
+                gestureStartRegionIn:
+                    opt.gestureStartRegionIn ?? opt.dragStartRegionIn,
+                gestureStartAnchor:
+                    opt.gestureStartAnchor ?? opt.dragStartAnchor,
             });
         }
         if (
@@ -1365,7 +1616,11 @@
             getSegmentRegionMoveMinTransportSec(track, segmentIndex) - 0.00001
         ) {
             desiredRegionIn = getSegmentRegionMoveMinTransportSec(track, segmentIndex);
-            delta = desiredRegionIn - (moveOpt.dragStartRegionIn ?? dragStartRegionIn);
+            delta =
+                desiredRegionIn -
+                (isParallelRegionOffsetDragOpt(opt)
+                    ? currentRegionIn
+                    : moveOpt.dragStartRegionIn ?? dragStartRegionIn);
         }
         if (snapDetail) {
             snapDetail.snappedSec = desiredRegionIn;
@@ -1401,7 +1656,11 @@
 
         if (
             typeof isPointerInRegionEwCursorHitZoneExcludingSplit === 'function' &&
-            isPointerInRegionEwCursorHitZoneExcludingSplit(clientX, clientY)
+            isPointerInRegionEwCursorHitZoneExcludingSplit(clientX, clientY) &&
+            !(
+                typeof isPointerInRegionParallelMoveBodyAtPointer === 'function' &&
+                isPointerInRegionParallelMoveBodyAtPointer(clientX, clientY)
+            )
         ) {
             return null;
         }
@@ -1525,7 +1784,10 @@
                             ? transportSecFromClientX(clientX)
                             : null;
                     if (!Number.isFinite(transportSec)) return null;
-                    const interval = getSegmentRegionInteractiveTimelineInterval(track, 0);
+                    const interval =
+                        typeof regionOffsetDragTimelineInterval === 'function'
+                            ? regionOffsetDragTimelineInterval(track, 0)
+                            : getSegmentRegionOverlayTimelineInterval(track, 0);
                     if (
                         !(
                             transportSec >= interval.startSec - 0.0005 &&
@@ -1542,7 +1804,10 @@
                         : null;
                 if (!Number.isFinite(transportSec)) return null;
                 for (let i = 0; i < count; i++) {
-                    const interval = getSegmentRegionInteractiveTimelineInterval(track, i);
+                    const interval =
+                        typeof regionOffsetDragTimelineInterval === 'function'
+                            ? regionOffsetDragTimelineInterval(track, i)
+                            : getSegmentRegionOverlayTimelineInterval(track, i);
                     if (
                         transportSec >= interval.startSec - 0.0005 &&
                         transportSec < interval.endSec - 0.002
@@ -1561,7 +1826,10 @@
             segmentIndex >= 0 &&
             Number.isFinite(clickTransportSec)
         ) {
-            const interval = getSegmentRegionInteractiveTimelineInterval(track, segmentIndex);
+            const interval =
+                typeof regionOffsetDragTimelineInterval === 'function'
+                    ? regionOffsetDragTimelineInterval(track, segmentIndex)
+                    : getSegmentRegionOverlayTimelineInterval(track, segmentIndex);
             if (
                 clickTransportSec < interval.startSec - 0.0005 ||
                 clickTransportSec >= interval.endSec - 0.002

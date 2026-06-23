@@ -44,6 +44,7 @@
 
     function endWaveformTrackOffsetDrag(opt) {
         if (!waveformOffsetDragActive && !(opt && opt.force)) return;
+        const endedSlot = waveformOffsetDragSlot;
         detachWaveformOffsetDragDocListeners();
         const releaseId =
             opt && opt.event && opt.event.pointerId != null
@@ -67,6 +68,9 @@
         waveformOffsetDragGroupStartTimelineByKey = null;
         waveformOffsetDragGroupStartAnchorByKey = null;
         waveformOffsetDragGroupStartRegionInByKey = null;
+        waveformOffsetDragGroupStartRegionSpanByKey = null;
+        waveformOffsetDragPreviewHeadSec = NaN;
+        waveformOffsetDragStartRegionSpanSec = NaN;
         waveformOffsetDragGrabTransportOffsetSec = NaN;
         waveformOffsetDragStartScrubW = NaN;
         waveformOffsetDragStartPointerRatio = NaN;
@@ -81,6 +85,12 @@
         if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--offset-drag');
         if (typeof window.commitWaveformOffsetDragIfActive === 'function') {
             window.commitWaveformOffsetDragIfActive = null;
+        }
+        if (
+            typeof clearOffsetDragCrossfadeWaveformDrawnState === 'function' &&
+            endedSlot >= 0
+        ) {
+            clearOffsetDragCrossfadeWaveformDrawnState(endedSlot);
         }
     }
 

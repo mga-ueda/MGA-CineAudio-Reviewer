@@ -146,6 +146,7 @@
     let waveformOffsetDragStartMasterSec = NaN;
     let waveformOffsetDragStartTimelineSec = 0;
     let waveformOffsetDragPreserveInPadSec = 0;
+    let waveformOffsetDragStartHeadPadSec = 0;
     let waveformOffsetDragStartAnchorSec = 0;
     /** 直前フレームのポインタ位置（スナップ方向判定用） */
     let waveformOffsetDragLastProposedSec = NaN;
@@ -158,6 +159,12 @@
     let waveformOffsetDragGroupStartAnchorByKey = null;
     /** @type {Record<string, number> | null} */
     let waveformOffsetDragGroupStartRegionInByKey = null;
+    /** @type {Record<string, number> | null} */
+    let waveformOffsetDragGroupStartRegionSpanByKey = null;
+    /** 平行移動ドラッグ中の枠プレビュー — ポインタ位置（確定 state / t0 とは独立） */
+    let waveformOffsetDragPreviewHeadSec = NaN;
+    /** ドラッグ開始時のリージョン幅（Out − In） */
+    let waveformOffsetDragStartRegionSpanSec = NaN;
     let waveformOffsetDragDocMove = null;
     let waveformOffsetDragDocUp = null;
     let waveformPointerGestureId = null;
