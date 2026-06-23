@@ -44,11 +44,11 @@
         return typeof isTransportPlaying === 'function' && isTransportPlaying();
     }
 
-    /** フレーズモード中・再生中の Ins マーカー確定時のみ 4 分音符（拍）へクオンタイズ */
+    /** Rehearsal モード中・再生中の Ins マーカー確定時のみ 4 分音符（拍）へクオンタイズ */
     function quantizeMarkerInsSecIfNeeded(sec) {
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible() ||
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible() ||
             !isMarkerListPlaybackActive() ||
             typeof snapSecToMusicalGridQuarterNote !== 'function'
         ) {
@@ -123,7 +123,12 @@
             if (markerPanelPointerInside && markerPanelHoverId) {
                 return markerPanelHoverId;
             }
-            if (activeMarkerId && currentMarkers.some((x) => x.id === activeMarkerId)) {
+            if (
+                typeof isMarkerPanelInteractionActive === 'function' &&
+                isMarkerPanelInteractionActive() &&
+                activeMarkerId &&
+                currentMarkers.some((x) => x.id === activeMarkerId)
+            ) {
                 return activeMarkerId;
             }
             if (isWaveformMarkerHighlightEnabled()) {
@@ -156,7 +161,12 @@
         if (markerPanelPointerInside && markerPanelHoverId) {
             return markerPanelHoverId;
         }
-        if (activeMarkerId && currentMarkers.some((x) => x.id === activeMarkerId)) {
+        if (
+            typeof isMarkerPanelInteractionActive === 'function' &&
+            isMarkerPanelInteractionActive() &&
+            activeMarkerId &&
+            currentMarkers.some((x) => x.id === activeMarkerId)
+        ) {
             return activeMarkerId;
         }
         if (transportMarkerHighlightId && isWaveformMarkerHighlightEnabled()) {
@@ -594,7 +604,11 @@
 
     function markerNavIndexForCurrent() {
         if (currentMarkers.length === 0) return -1;
-        if (activeMarkerId) {
+        if (
+            typeof isMarkerPanelInteractionActive === 'function' &&
+            isMarkerPanelInteractionActive() &&
+            activeMarkerId
+        ) {
             const i = currentMarkers.findIndex((m) => m.id === activeMarkerId);
             if (i >= 0) return i;
         }
@@ -867,7 +881,12 @@
         if (!stops || stops.length === 0) return -1;
         const t = Number.isFinite(fromSec) ? fromSec : currentTransportSec();
         const eps = markerNavStopEpsilonSec();
-        if (!Number.isFinite(fromSec) && activeMarkerId) {
+        if (
+            !Number.isFinite(fromSec) &&
+            typeof isMarkerPanelInteractionActive === 'function' &&
+            isMarkerPanelInteractionActive() &&
+            activeMarkerId
+        ) {
             const m = currentMarkers.find((x) => x.id === activeMarkerId);
             if (m) {
                 if (m.type === 'range' && markerHasOutTc(m)) {
@@ -1028,6 +1047,36 @@
     }
 
     let markerDragState = null;
+
+    function isMarkerWaveformDragActive() {
+        return !!(markerDragState && markerDragState.m);
+    }
+
+    /** ドラッグ中に currentMarkers が clone 差し替えされても、常に live モデルを更新する */
+    function markerLiveModelForDrag(stOrId) {
+        const id =
+            stOrId && typeof stOrId === 'object'
+                ? stOrId.markerId || (stOrId.m && stOrId.m.id)
+                : stOrId;
+        if (!id) return null;
+        return currentMarkers.find((x) => x.id === id) || null;
+    }
+
+    /** pointerup 確定時: live モデルを返す（孤立 st.m から live へはコピーしない） */
+    function markerCommitModelForDrag(st) {
+        if (!st) return null;
+        let live = markerLiveModelForDrag(st);
+        if (!live) live = st.m;
+        if (!live) return null;
+        if (st.moved && Number.isFinite(st.lastAppliedSec)) {
+            const cur = markerSecSnapshotForDrag(live, st.edge);
+            if (!Number.isFinite(cur) || Math.abs(cur - st.lastAppliedSec) > 1e-9) {
+                applyMarkerDragSec(live, st.edge, st.lastAppliedSec);
+            }
+        }
+        return live;
+    }
+
     const MARKER_WAVEFORM_DBLCLICK_MS = 450;
     const MARKER_WAVEFORM_DBLCLICK_SLOP_PX = 12;
     let markerWaveformClickState = null;
@@ -1163,7 +1212,8 @@
             if (!markerDragState) return;
             markerDragState.raf = 0;
             renderSeekBarMarkers();
-            syncMarkerListRowFromModel(markerDragState.m);
+            const live = markerLiveModelForDrag(markerDragState) || markerDragState.m;
+            syncMarkerListRowFromModel(live);
             if (typeof updateMarkerCommentOverlay === 'function') {
                 updateMarkerCommentOverlay();
             }
@@ -1178,11 +1228,14 @@
         markerDragState = null;
         setMarkerDragLanesActive(false, { edge: st.edge });
         if (commit) {
-            collapseRangeMarkerToPointIfNarrow(st.m, { silent: true });
+            const m = markerCommitModelForDrag(st);
+            if (!m) return;
+            collapseRangeMarkerToPointIfNarrow(m, { silent: true });
             sortMarkersInPlace();
+            sessionMarkersRestorePayload = null;
             persistMarkersAfterChange({ forceMarkerList: true });
-            writeLog('Marker: drag ' + markerTimeLabel(st.m));
-            flashSeekHint('Marker', markerTimeLabel(st.m));
+            writeLog('Marker: drag ' + markerTimeLabel(m));
+            flashSeekHint('Marker', markerTimeLabel(m));
         }
     }
 
@@ -1213,99 +1266,535 @@
         seekToMarker(m, seekOpt);
     }
 
-    function bindSeekBarMarkerDrag(el, m, edge, opt) {
-        el.addEventListener('pointerdown', (ev) => {
-            if (ev.button !== 0) return;
-            if (opt && opt.pending) return;
-            if (
-                edge === 'move' &&
-                ev.target.closest &&
-                ev.target.closest('.seek-bar-marker__handle')
-            ) {
-                return;
-            }
-            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                syncSnapSuppressionFromPointerEvent(ev);
-            }
-            cancelMarkerWaveformClickSeek();
-            ev.preventDefault();
-            ev.stopPropagation();
-            if (typeof endAudioWaveformScrub === 'function') {
-                endAudioWaveformScrub({ force: true });
-            }
-            if (typeof hideHoverPlayhead === 'function') hideHoverPlayhead();
+    const SEEK_BAR_MARKER_POINTER_HIT_SLOP_PX = 12;
+    const SEEK_BAR_MARKER_HANDLE_HIT_SLOP_PX = 14;
 
-            const bandEl = opt && opt.bandEl ? opt.bandEl : null;
-            endMarkerDrag(false);
-            const pointerSec = transportSecFromWaveformClientX(ev.clientX);
-            const moveAnchor =
-                edge === 'move' && m.type === 'range'
-                    ? clampMarkerSec(snapMarkerDragTransportSec(pointerSec, m))
-                    : NaN;
-            markerDragState = {
-                m: m,
-                edge: edge,
-                bandEl: bandEl,
-                pointerId: ev.pointerId,
-                startX: ev.clientX,
-                moved: false,
-                raf: 0,
-                dragAnchorSec: moveAnchor,
-                dragStartStartSec:
-                    edge === 'move' && m.type === 'range' ? m.startSec : NaN,
-                dragStartEndSec:
-                    edge === 'move' && m.type === 'range' ? m.endSec : NaN,
-                onMove: null,
-                onUp: null,
-            };
-            activeMarkerId = m.id;
-            updateMarkerListRowClasses();
+    function seekBarMarkerBandElForId(markerId) {
+        if (!markerId) return null;
+        const container =
+            typeof audioWaveformMarkers !== 'undefined' ? audioWaveformMarkers : null;
+        if (!container) return null;
+        return container.querySelector(
+            '.seek-bar-marker--range[data-marker-id="' + markerId + '"]',
+        );
+    }
 
-            markerDragState.onMove = (e) => {
-                if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
-                if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                    syncSnapSuppressionFromPointerEvent(e);
+    function isPointerInsideTimelineLanes(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const el =
+            (typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner) ||
+            (typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks);
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+    }
+
+    /** ポインタ clientX → タイムライン内容座標 px（マーカー left と同じ系） */
+    function waveformPointerTimelineContentPx(clientX) {
+        if (!Number.isFinite(clientX)) return null;
+        if (
+            typeof waveformScrubTargetEl !== 'function' ||
+            typeof waveformTimelineMetrics !== 'function'
+        ) {
+            return null;
+        }
+        const lanes = waveformScrubTargetEl();
+        const m = waveformTimelineMetrics(lanes);
+        if (!m || !(m.scrubW > 0)) return null;
+        const xInViewport = clientX - m.contentLeft;
+        return xInViewport + (m.scrollable ? m.scrollLeft : 0);
+    }
+
+    function seekBarMarkerTimelineContentPxForSec(sec) {
+        if (typeof timelineSecToContentPx === 'function') {
+            return timelineSecToContentPx(sec);
+        }
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const contentW =
+            typeof masterTimelineWidthCss === 'function'
+                ? Math.max(1, masterTimelineWidthCss() | 0)
+                : 0;
+        const n = Number(sec);
+        if (!Number.isFinite(n) || !(master > 0) || !contentW) return 0;
+        return Math.max(0, Math.min(contentW, Math.round((n / master) * contentW)));
+    }
+
+    function refineSeekBarMarkerDragEdgeFromDirectTarget(ev, m, edge, bandEl) {
+        if (!ev || !ev.target || !ev.target.closest || !m || m.type !== 'range') {
+            return { m: m, edge: edge, bandEl: bandEl };
+        }
+        let nextEdge = edge;
+        if (ev.target.closest('.seek-bar-marker__handle--in')) {
+            nextEdge = 'in';
+        } else if (ev.target.closest('.seek-bar-marker__handle--out')) {
+            nextEdge = 'out';
+        }
+        return { m: m, edge: nextEdge, bandEl: bandEl };
+    }
+
+    function markerSecSnapshotForDrag(m, edge) {
+        if (!m) return NaN;
+        if (m.type === 'point') return Number(m.timeSec);
+        if (edge === 'out') return Number(m.endSec);
+        return Number(m.startSec);
+    }
+
+    function rejectMarkerDragTarget(ev, reason) {
+        if (typeof markerPointerDiagLogResolve === 'function') {
+            markerPointerDiagLogResolve(ev, null, { reason: reason });
+        }
+        return null;
+    }
+
+    function logMarkerDragTargetResolved(ev, result, hitVia) {
+        if (typeof markerPointerDiagLogResolve === 'function') {
+            markerPointerDiagLogResolve(ev, result, { hitVia: hitVia });
+        }
+        return result;
+    }
+
+    /** リージョン In/Out・Fade 操作帯上では MARKERS ドラッグに譲らない */
+    function isPointerOnRegionResizeHandleForAnyTrack(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        if (
+            typeof isPointerInRegionEwCursorHitZone === 'function' &&
+            isPointerInRegionEwCursorHitZone(clientX, clientY)
+        ) {
+            return true;
+        }
+        if (typeof resolveRegionResizeHandleAtPointer !== 'function') return false;
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            const hit = resolveRegionResizeHandleAtPointer(
+                { type: 'extra', slot },
+                clientX,
+                clientY,
+            );
+            if (hit) return true;
+        }
+        return false;
+    }
+
+    /** Musical トラックが前面でも、描画 px 座標で最寄りマーカーを拾う */
+    function resolveSeekBarMarkerPointerDragTargetFromTime(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !isPointerInsideTimelineLanes(clientX, clientY)) {
+            return null;
+        }
+        const pointerPx = waveformPointerTimelineContentPx(clientX);
+        if (!Number.isFinite(pointerPx)) return null;
+
+        const slopPx = SEEK_BAR_MARKER_POINTER_HIT_SLOP_PX;
+        const handleSlopPx = SEEK_BAR_MARKER_HANDLE_HIT_SLOP_PX;
+        let best = null;
+        let bestDistPx = Infinity;
+
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (m.type === 'point') {
+                const t = Number(m.timeSec);
+                if (!Number.isFinite(t)) continue;
+                const distPx = Math.abs(pointerPx - seekBarMarkerTimelineContentPxForSec(t));
+                if (distPx <= slopPx && distPx < bestDistPx) {
+                    bestDistPx = distPx;
+                    best = { m, edge: 'point', bandEl: null };
                 }
-                if (Math.abs(e.clientX - markerDragState.startX) >= 4) {
-                    if (!markerDragState.moved) {
-                        markerDragState.moved = true;
-                        setMarkerDragLanesActive(true, { edge: markerDragState.edge });
+                continue;
+            }
+            if (m.type !== 'range') continue;
+            const start = Number(m.startSec);
+            if (!Number.isFinite(start)) continue;
+            const startPx = seekBarMarkerTimelineContentPxForSec(start);
+            const bandEl = seekBarMarkerBandElForId(m.id);
+
+            if (!markerHasOutTc(m)) {
+                const distInPx = Math.abs(pointerPx - startPx);
+                if (distInPx <= handleSlopPx && distInPx < bestDistPx) {
+                    bestDistPx = distInPx;
+                    best = { m, edge: 'in', bandEl: bandEl };
+                }
+                continue;
+            }
+
+            const end = Number(m.endSec);
+            if (!Number.isFinite(end) || end <= start) continue;
+            const endPx = seekBarMarkerTimelineContentPxForSec(end);
+            const spanPx = Math.max(1, endPx - startPx);
+            const handleSlop = Math.max(handleSlopPx, spanPx * 0.08);
+
+            const dInPx = Math.abs(pointerPx - startPx);
+            if (dInPx <= handleSlop && dInPx < bestDistPx) {
+                bestDistPx = dInPx;
+                best = { m, edge: 'in', bandEl: bandEl };
+            }
+            const dOutPx = Math.abs(pointerPx - endPx);
+            if (dOutPx <= handleSlop && dOutPx < bestDistPx) {
+                bestDistPx = dOutPx;
+                best = { m, edge: 'out', bandEl: bandEl };
+            }
+            if (pointerPx >= startPx - slopPx && pointerPx <= endPx + slopPx) {
+                let distPx = 0;
+                if (pointerPx < startPx) distPx = startPx - pointerPx;
+                else if (pointerPx > endPx) distPx = pointerPx - endPx;
+                if (distPx <= slopPx && distPx < bestDistPx) {
+                    bestDistPx = distPx;
+                    best = { m, edge: 'move', bandEl: bandEl };
+                } else if (
+                    pointerPx >= startPx + handleSlop &&
+                    pointerPx <= endPx - handleSlop &&
+                    Math.min(dInPx, dOutPx) < bestDistPx
+                ) {
+                    bestDistPx = Math.min(dInPx, dOutPx);
+                    best = { m, edge: 'move', bandEl: bandEl };
+                }
+            }
+        }
+        return best;
+    }
+
+    function resolveSeekBarMarkerPointerDragTarget(ev) {
+        if (!ev || ev.button !== 0) {
+            return rejectMarkerDragTarget(ev, 'not-left-button');
+        }
+        if (markersDisplayHidden || !currentMarkers.length) {
+            return rejectMarkerDragTarget(
+                ev,
+                markersDisplayHidden ? 'markers-display-hidden' : 'no-markers',
+            );
+        }
+        if (isPointerOnRegionResizeHandleForAnyTrack(ev.clientX, ev.clientY)) {
+            return rejectMarkerDragTarget(ev, 'region-handle-zone');
+        }
+        const container =
+            typeof audioWaveformMarkers !== 'undefined' ? audioWaveformMarkers : null;
+        if (!container || container.hidden) {
+            return rejectMarkerDragTarget(ev, 'marker-layer-hidden');
+        }
+        const markerStyle = window.getComputedStyle(container);
+        if (markerStyle.display === 'none' || markerStyle.visibility === 'hidden') {
+            return rejectMarkerDragTarget(ev, 'marker-layer-css-hidden');
+        }
+
+        const direct =
+            ev.target &&
+            ev.target.closest &&
+            ev.target.closest('.seek-bar-marker:not(.seek-bar-marker--range-pending)');
+
+        const fromTime = resolveSeekBarMarkerPointerDragTargetFromTime(
+            ev.clientX,
+            ev.clientY,
+        );
+        if (fromTime) {
+            if (direct && direct.dataset.markerId === fromTime.m.id) {
+                return logMarkerDragTargetResolved(
+                    ev,
+                    refineSeekBarMarkerDragEdgeFromDirectTarget(
+                        ev,
+                        fromTime.m,
+                        fromTime.edge,
+                        fromTime.bandEl,
+                    ),
+                    direct ? 'timePx+direct' : 'timePx',
+                );
+            }
+            return logMarkerDragTargetResolved(ev, fromTime, 'timePx');
+        }
+
+        if (direct && direct.dataset.markerId) {
+            const m = currentMarkers.find((x) => x.id === direct.dataset.markerId);
+            if (!m) return rejectMarkerDragTarget(ev, 'direct-unknown-id');
+            let edge = m.type === 'range' ? 'move' : 'point';
+            let bandEl = m.type === 'range' ? direct : null;
+            if (m.type === 'range') {
+                if (ev.target.closest('.seek-bar-marker__handle--in')) {
+                    edge = 'in';
+                } else if (ev.target.closest('.seek-bar-marker__handle--out')) {
+                    edge = 'out';
+                } else if (!direct.classList.contains('seek-bar-marker--range')) {
+                    bandEl = direct.closest('.seek-bar-marker--range');
+                }
+            }
+            return logMarkerDragTargetResolved(ev, { m, edge, bandEl }, 'direct');
+        }
+
+        const slop = SEEK_BAR_MARKER_POINTER_HIT_SLOP_PX;
+        const cx = ev.clientX;
+        const cy = ev.clientY;
+        const inTimeline = isPointerInsideTimelineLanes(cx, cy);
+        const markers = container.querySelectorAll(
+            '.seek-bar-marker:not(.seek-bar-marker--range-pending)',
+        );
+        let best = null;
+        let bestDist = Infinity;
+        for (let i = 0; i < markers.length; i++) {
+            const el = markers[i];
+            const r = el.getBoundingClientRect();
+            if (!Number.isFinite(r.left)) continue;
+            if (!inTimeline && !(cy >= r.top - 1 && cy <= r.bottom + 1)) continue;
+            const id = el.dataset.markerId;
+            const m = id ? currentMarkers.find((x) => x.id === id) : null;
+            if (!m) continue;
+
+            if (el.classList.contains('seek-bar-marker--point')) {
+                const center = r.left + r.width * 0.5;
+                const dist = Math.abs(cx - center);
+                if (dist <= slop && dist < bestDist) {
+                    bestDist = dist;
+                    best = { m, edge: 'point', bandEl: null };
+                }
+                continue;
+            }
+            if (!el.classList.contains('seek-bar-marker--range')) continue;
+
+            const handleIn = el.querySelector('.seek-bar-marker__handle--in');
+            const handleOut = el.querySelector('.seek-bar-marker__handle--out');
+            if (handleIn) {
+                const hr = handleIn.getBoundingClientRect();
+                if (cx >= hr.left - slop && cx <= hr.right + slop) {
+                    const dist = Math.min(Math.abs(cx - hr.left), Math.abs(cx - hr.right));
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = { m, edge: 'in', bandEl: el };
                     }
                 }
-                if (!markerDragState.moved) return;
-                e.preventDefault();
-                applyMarkerDragSec(m, edge, transportSecFromWaveformClientX(e.clientX));
-                scheduleMarkerDragRedraw();
-            };
+            }
+            if (handleOut) {
+                const hr = handleOut.getBoundingClientRect();
+                if (cx >= hr.left - slop && cx <= hr.right + slop) {
+                    const dist = Math.min(Math.abs(cx - hr.left), Math.abs(cx - hr.right));
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        best = { m, edge: 'out', bandEl: el };
+                    }
+                }
+            }
+            if (cx >= r.left - slop && cx <= r.right + slop) {
+                const dist =
+                    cx < r.left ? r.left - cx : cx > r.right ? cx - r.right : 0;
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = { m, edge: 'move', bandEl: el };
+                }
+            }
+        }
+        return best
+            ? logMarkerDragTargetResolved(ev, best, 'geom')
+            : rejectMarkerDragTarget(ev, 'no-hit');
+    }
+
+    function beginSeekBarMarkerDragFromPointer(ev, dragTarget) {
+        if (!ev || ev.button !== 0 || !dragTarget || !dragTarget.m) return false;
+        const m = dragTarget.m;
+        const edge = dragTarget.edge;
+        const bandEl = dragTarget.bandEl || null;
+        if (
+            edge === 'move' &&
+            ev.target &&
+            ev.target.closest &&
+            ev.target.closest('.seek-bar-marker__handle')
+        ) {
+            if (typeof markerPointerDiagLog === 'function') {
+                markerPointerDiagLog('marker/reject', {
+                    reason: 'move-on-handle-element',
+                    marker: { id: m.id, edge: edge },
+                });
+            }
+            return false;
+        }
+        if (
+            markerDragState &&
+            markerDragState.pointerId === ev.pointerId &&
+            markerDragState.m &&
+            markerDragState.m.id === m.id
+        ) {
+            return true;
+        }
+        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+            syncSnapSuppressionFromPointerEvent(ev);
+        }
+        cancelMarkerWaveformClickSeek();
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (typeof ev.stopImmediatePropagation === 'function') {
+            ev.stopImmediatePropagation();
+        }
+        if (typeof endAudioWaveformScrub === 'function') {
+            endAudioWaveformScrub({ force: true });
+        }
+        if (typeof hideHoverPlayhead === 'function') hideHoverPlayhead();
+
+        const lanes =
+            typeof audioWaveformLanesTracks !== 'undefined' ? audioWaveformLanesTracks : null;
+        if (lanes && ev.pointerId != null && typeof lanes.setPointerCapture === 'function') {
+            try {
+                lanes.setPointerCapture(ev.pointerId);
+            } catch (_) {}
+        }
+
+        endMarkerDrag(false);
+        const pointerSec = transportSecFromWaveformClientX(ev.clientX);
+        const moveAnchor =
+            edge === 'move' && m.type === 'range'
+                ? clampMarkerSec(snapMarkerDragTransportSec(pointerSec, m))
+                : NaN;
+        markerDragState = {
+            m: m,
+            markerId: m.id,
+            edge: edge,
+            bandEl: bandEl,
+            pointerId: ev.pointerId,
+            startX: ev.clientX,
+            moved: false,
+            raf: 0,
+            dragStartLog:
+                typeof markerTimeLabel === 'function' ? markerTimeLabel(m) : String(m.id),
+            dragStartSec: markerSecSnapshotForDrag(m, edge),
+            lastPointerSec: pointerSec,
+            lastAppliedSec: markerSecSnapshotForDrag(m, edge),
+            dragAnchorSec: moveAnchor,
+            dragStartStartSec:
+                edge === 'move' && m.type === 'range' ? m.startSec : NaN,
+            dragStartEndSec:
+                edge === 'move' && m.type === 'range' ? m.endSec : NaN,
+            onMove: null,
+            onUp: null,
+        };
+        activeMarkerId = m.id;
+        updateMarkerListRowClasses();
+        if (typeof markerPointerDiagLogMarkerBegin === 'function') {
+            markerPointerDiagLogMarkerBegin(ev, dragTarget, {
+                dragStartSec: markerDragState.dragStartSec,
+            });
+        }
+
+        markerDragState.onMove = (e) => {
+            if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
+            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
+                syncSnapSuppressionFromPointerEvent(e);
+            }
+            if (Math.abs(e.clientX - markerDragState.startX) >= 4) {
+                if (!markerDragState.moved) {
+                    markerDragState.moved = true;
+                    setMarkerDragLanesActive(true, { edge: markerDragState.edge });
+                }
+            }
+            if (!markerDragState.moved) return;
+            e.preventDefault();
+            const live = markerLiveModelForDrag(markerDragState);
+            if (!live) return;
+            const dragEdge = markerDragState.edge;
+            const pointerSec = transportSecFromWaveformClientX(e.clientX);
+            markerDragState.lastPointerSec = pointerSec;
+            applyMarkerDragSec(live, dragEdge, pointerSec);
+            markerDragState.lastAppliedSec = markerSecSnapshotForDrag(live, dragEdge);
+            if (typeof markerPointerDiagLogMarkerMove === 'function') {
+                markerPointerDiagLogMarkerMove(markerDragState, {
+                    liveDetached: live !== markerDragState.m,
+                });
+            }
+            scheduleMarkerDragRedraw();
+        };
             markerDragState.onUp = (e) => {
                 if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
                 const st = markerDragState;
-                detachMarkerDragDocListeners();
-                if (st.raf) cancelAnimationFrame(st.raf);
-                markerDragState = null;
-                setMarkerDragLanesActive(false, { edge: st.edge });
-                if (!st.moved) {
-                    if (tryMarkerWaveformDoubleClick(m, e.clientX, e.clientY)) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        cancelMarkerWaveformClickSeek();
-                        zoomWaveformToMarker(m);
-                        return;
-                    }
-                    scheduleMarkerWaveformClickSeek(m, edge, e.clientX, bandEl);
+                const m = markerCommitModelForDrag(st);
+                if (!m) {
+                    markerDragState = null;
+                    setMarkerDragLanesActive(false, { edge: st.edge });
                     return;
                 }
-                if (st.edge !== 'move') {
-                    collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+                const lanesUp =
+                    typeof audioWaveformLanesTracks !== 'undefined'
+                        ? audioWaveformLanesTracks
+                        : null;
+                if (
+                    lanesUp &&
+                    typeof lanesUp.releasePointerCapture === 'function' &&
+                    lanesUp.hasPointerCapture &&
+                    lanesUp.hasPointerCapture(st.pointerId)
+                ) {
+                    try {
+                        lanesUp.releasePointerCapture(st.pointerId);
+                    } catch (_) {}
                 }
-                sortMarkersInPlace();
-                persistMarkersAfterChange({ forceMarkerList: true });
-                writeLog('Marker: drag ' + markerTimeLabel(m));
-                flashSeekHint('Marker', markerTimeLabel(m));
-            };
-            document.addEventListener('pointermove', markerDragState.onMove);
-            document.addEventListener('pointerup', markerDragState.onUp);
-            document.addEventListener('pointercancel', markerDragState.onUp);
+                detachMarkerDragDocListeners();
+            if (st.raf) cancelAnimationFrame(st.raf);
+            if (typeof markerPointerDiagLogMarkerUp === 'function') {
+                markerPointerDiagLogMarkerUp(st, {
+                    clickOnly: !st.moved,
+                    liveDetached: !!(m && st.m && m !== st.m),
+                    dragEnd:
+                        m && typeof markerTimeLabel === 'function' ? markerTimeLabel(m) : null,
+                    liveSec:
+                        m && m.type === 'point'
+                            ? m.timeSec
+                            : m && m.type === 'range'
+                              ? st.edge === 'out'
+                                  ? m.endSec
+                                  : m.startSec
+                              : null,
+                    commitSec: Number.isFinite(st.lastAppliedSec) ? st.lastAppliedSec : null,
+                    orphanSec:
+                        st.m && st.m.type === 'point'
+                            ? st.m.timeSec
+                            : st.m && st.m.type === 'range'
+                              ? st.edge === 'out'
+                                  ? st.m.endSec
+                                  : st.m.startSec
+                              : null,
+                });
+            }
+            markerDragState = null;
+            setMarkerDragLanesActive(false, { edge: st.edge });
+            if (!st.moved) {
+                if (tryMarkerWaveformDoubleClick(m, e.clientX, e.clientY)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    cancelMarkerWaveformClickSeek();
+                    zoomWaveformToMarker(m);
+                    return;
+                }
+                scheduleMarkerWaveformClickSeek(m, edge, e.clientX, bandEl);
+                return;
+            }
+            if (st.edge !== 'move') {
+                collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+            }
+            sortMarkersInPlace();
+            sessionMarkersRestorePayload = null;
+            persistMarkersAfterChange({ forceMarkerList: true });
+            const fromLog = st.dragStartLog || '';
+            const toLog =
+                typeof markerTimeLabel === 'function' ? markerTimeLabel(m) : String(m.id);
+            writeLog(
+                'Marker: drag' +
+                    (fromLog && fromLog !== toLog ? ' ' + fromLog + ' → ' + toLog : ' ' + toLog),
+            );
+            flashSeekHint('Marker', markerTimeLabel(m));
+        };
+        document.addEventListener('pointermove', markerDragState.onMove);
+        document.addEventListener('pointerup', markerDragState.onUp);
+        document.addEventListener('pointercancel', markerDragState.onUp);
+        return true;
+    }
+
+    /** lanes capture — Musical トラック等が前面でもマーカー線付近ならシークより先にドラッグ開始 */
+    function handleSeekBarMarkerPointerDownCapture(ev) {
+        const dragTarget = resolveSeekBarMarkerPointerDragTarget(ev);
+        if (!dragTarget) return false;
+        return beginSeekBarMarkerDragFromPointer(ev, dragTarget);
+    }
+
+    function bindSeekBarMarkerDrag(el, m, edge, opt) {
+        el.addEventListener('pointerdown', (ev) => {
+            if (opt && opt.pending) return;
+            beginSeekBarMarkerDragFromPointer(ev, {
+                m: m,
+                edge: edge,
+                bandEl: opt && opt.bandEl ? opt.bandEl : null,
+            });
         });
     }
 
@@ -1489,21 +1978,38 @@
         return jumpToAdjacentRegionStop(dir, navOpt);
     }
 
+    /** Ctrl+←→ — マーカー・Musical Grid・リージョン停止点ナビが有効か */
+    function isAdjacentStopNavigationActive() {
+        if (!markersDisplayHidden && currentMarkers.length > 0) return true;
+        if (typeof hasMusicalGridSnapStops === 'function' && hasMusicalGridSnapStops()) {
+            return true;
+        }
+        if (typeof buildRegionNavStops === 'function') {
+            const stops = buildRegionNavStops();
+            if (stops && stops.length > 0) return true;
+        }
+        return false;
+    }
+
     function handleMarkerStopJumpKeydown(e) {
         if (!markerTimelineReady()) return false;
-        const isPrev = matchUserShortcut(e, 'markerStopJumpPrev', { allowRepeat: true });
-        const isNext = matchUserShortcut(e, 'markerStopJumpNext', { allowRepeat: true });
-        if (!isPrev && !isNext) return false;
+        if (typeof isMarkerStopJumpEvent !== 'function' || !isMarkerStopJumpEvent(e, { allowRepeat: true })) {
+            return false;
+        }
         if (e.altKey || e.shiftKey) return false;
         if (isTypingTarget(e.target)) return false;
-        const dir = isNext ? 1 : -1;
+        if (!isAdjacentStopNavigationActive()) return false;
+        const dir =
+            typeof isMarkerStopJumpNextEvent === 'function' && isMarkerStopJumpNextEvent(e, { allowRepeat: true })
+                ? 1
+                : -1;
         const navOpt = {
             focusComment: false,
             resumeAfterSeek: markerStopNavigationResumeAfterSeek(),
             discreteStopNav: true,
             fromRepeat: e.repeat,
         };
-        if (!runAdjacentStopNavigation(dir, navOpt)) return false;
+        runAdjacentStopNavigation(dir, navOpt);
         e.preventDefault();
         return true;
     }
@@ -2059,35 +2565,60 @@
         }
     }
 
-    function timelineMarkerLayerWidthPx() {
-        return typeof masterTimelineWidthCss === 'function'
-            ? Math.max(1, masterTimelineWidthCss() | 0)
-            : 0;
+    function masterTimelineDurationForMarkerLayout() {
+        if (typeof masterTimelineLayoutDurationSec === 'function') {
+            const master = masterTimelineLayoutDurationSec();
+            if (master > 0) return master;
+        }
+        if (typeof getMasterTransportDurationSec === 'function') {
+            const master = getMasterTransportDurationSec();
+            if (master > 0) return master;
+        }
+        return masterDurForTimelineMarkers();
     }
 
-    function secToTimelineMarkerPx(sec, dur, layerW) {
+    function snapTimelineMarkerLinePx(sec) {
+        if (typeof timelineSecToContentPx === 'function') {
+            return timelineSecToContentPx(sec);
+        }
+        const dur = masterTimelineDurationForMarkerLayout();
+        const layerW =
+            typeof masterTimelineWidthCss === 'function'
+                ? Math.max(1, masterTimelineWidthCss() | 0)
+                : 0;
         if (!dur || dur <= 0 || !layerW) return 0;
         const x = (Number(sec) / dur) * layerW;
-        return Math.max(0, Math.min(layerW, x));
-    }
-
-    /** 1px 縦線をピクセル格子に揃える（Canvas の Math.round(x)+0.5 と同等の見え方） */
-    function snapTimelineMarkerLinePx(sec, dur, layerW) {
-        return Math.round(secToTimelineMarkerPx(sec, dur, layerW));
+        return Math.max(0, Math.min(layerW, Math.round(x)));
     }
 
     function applySeekBarPointMarkerPosition(el, sec, dur, layerW) {
-        if (layerW > 0) {
-            el.style.left = snapTimelineMarkerLinePx(sec, dur, layerW) + 'px';
+        if (typeof timelineSecToContentPx === 'function') {
+            el.style.left = timelineSecToContentPx(sec) + 'px';
+        } else if (layerW > 0) {
+            el.style.left = snapTimelineMarkerLinePx(sec) + 'px';
         } else {
             el.style.left = secToSeekRatio(sec, dur) + '%';
         }
     }
 
     function applySeekBarRangeBandPosition(el, startSec, endSec, dur, layerW, opt) {
+        if (typeof timelineSecToContentPx === 'function') {
+            const leftPx = timelineSecToContentPx(startSec);
+            const rightPx = timelineSecToContentPx(endSec);
+            const contentW =
+                typeof masterTimelineWidthCss === 'function'
+                    ? Math.max(1, masterTimelineWidthCss() | 0)
+                    : layerW;
+            const minW = opt && opt.pending ? Math.max(1, Math.round(contentW * 0.0012)) : 0;
+            const widthPx = Math.max(minW, rightPx - leftPx);
+            if (widthPx <= 0 && !(opt && opt.pending)) return false;
+            el.style.left = leftPx + 'px';
+            el.style.width = widthPx + 'px';
+            return true;
+        }
         if (layerW > 0) {
-            const leftPx = snapTimelineMarkerLinePx(startSec, dur, layerW);
-            const rightPx = snapTimelineMarkerLinePx(endSec, dur, layerW);
+            const leftPx = snapTimelineMarkerLinePx(startSec);
+            const rightPx = snapTimelineMarkerLinePx(endSec);
             const minW = opt && opt.pending ? Math.max(1, Math.round(layerW * 0.0012)) : 0;
             const widthPx = Math.max(minW, rightPx - leftPx);
             if (widthPx <= 0 && !(opt && opt.pending)) return false;
@@ -2158,12 +2689,15 @@
         if (labelLayer) {
             labelLayer.replaceChildren();
         }
-        const dur = masterDurForTimelineMarkers();
+        const dur = masterTimelineDurationForMarkerLayout();
         if (!dur || dur <= 0) {
             containerEl.hidden = true;
             return;
         }
-        const layerW = timelineMarkerLayerWidthPx();
+        const layerW =
+            typeof masterTimelineWidthCss === 'function'
+                ? Math.max(1, masterTimelineWidthCss() | 0)
+                : 0;
 
         const frag = document.createDocumentFragment();
         const feedbackLabelSpans = [];
@@ -2563,3 +3097,8 @@
 
     window.handleMarkerBracketKeydown = handleMarkerBracketKeydown;
     window.handleMarkerStopJumpKeydown = handleMarkerStopJumpKeydown;
+    window.handleSeekBarMarkerPointerDownCapture = handleSeekBarMarkerPointerDownCapture;
+    window.resolveSeekBarMarkerPointerDragTarget = resolveSeekBarMarkerPointerDragTarget;
+    window.waveformPointerTimelineContentPx = waveformPointerTimelineContentPx;
+    window.isMarkerWaveformDragActive = isMarkerWaveformDragActive;
+    window.markerLiveModelForDrag = markerLiveModelForDrag;

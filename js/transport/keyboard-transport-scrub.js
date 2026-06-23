@@ -38,6 +38,22 @@
         discreteStopNavResumeAfter = false;
     }
 
+    /** Ctrl+↑↓ 等の coalesce 中 — 確定前の最新ストップ位置 */
+    function getCoalescedStopNavTransportSec() {
+        if (
+            discreteStopNavActive &&
+            discreteStopNavTargetSec != null &&
+            Number.isFinite(discreteStopNavTargetSec)
+        ) {
+            return discreteStopNavTargetSec;
+        }
+        if (typeof getTransportSec === 'function') return getTransportSec();
+        if (typeof videoMain !== 'undefined' && videoMain) {
+            return videoMain.currentTime || 0;
+        }
+        return 0;
+    }
+
     /** Ctrl+←→ 等: スクラブセッションなしで UI のみ即更新、確定は coalesce */
     function applyDiscreteStopNavStep(sec, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
@@ -67,7 +83,7 @@
                 : 0;
         if (typeof setTransportSec === 'function') setTransportSec(x);
         if (typeof applyTransportScrubPositionImmediate === 'function') {
-            applyTransportScrubPositionImmediate(x);
+            applyTransportScrubPositionImmediate(x, { centerSeekBar: true });
         } else if (typeof currentTimeEl !== 'undefined' && currentTimeEl) {
             currentTimeEl.textContent = formatTimecodeForTransport(x);
         }
@@ -123,6 +139,11 @@
             }
         } else if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
+        }
+        if (typeof syncWaveformTimelineAfterTransportSeek === 'function') {
+            syncWaveformTimelineAfterTransportSeek(target);
+        } else if (typeof centerWaveformTimelineOnMasterSec === 'function') {
+            centerWaveformTimelineOnMasterSec(target, { force: true, seekSync: true });
         }
         const viewportCurrent =
             typeof isWaveformViewportDisplayCurrent === 'function' &&
@@ -180,13 +201,17 @@
         );
     }
 
+    function isMusicalGridBarNavSeek(ev) {
+        if (!ev || ev.altKey || ev.shiftKey || ev.ctrlKey || ev.metaKey) return false;
+        return (
+            typeof isMusicalGridBarNavEvent === 'function' &&
+            isMusicalGridBarNavEvent(ev, { allowRepeat: true })
+        );
+    }
+
     function isMarkerStopJumpSeek(ev) {
         if (!ev || ev.altKey || ev.shiftKey) return false;
-        if (typeof matchUserShortcut !== 'function') return false;
-        return (
-            matchUserShortcut(ev, 'markerStopJumpPrev', { allowRepeat: true }) ||
-            matchUserShortcut(ev, 'markerStopJumpNext', { allowRepeat: true })
-        );
+        return typeof isMarkerStopJumpEvent === 'function' && isMarkerStopJumpEvent(ev, { allowRepeat: true });
     }
 
     function isOneFrameTransportArrowSeek(ev) {
@@ -238,6 +263,9 @@
         cancelKeyboardScrubFlushTimer();
         cancelDiscreteStopNavTimer();
         clearDiscreteStopNavState();
+        if (typeof cancelTransportExplicitSeekTail === 'function') {
+            cancelTransportExplicitSeekTail();
+        }
         if (typeof prioritizeWaveformScrub === 'function') {
             prioritizeWaveformScrub('keyboardScrub');
         }
@@ -248,9 +276,10 @@
         const oneFrame = isOneFrameTransportArrowSeek(ev);
         const pageSeek = isPageTransportSeek(ev);
         const markerStopJump = isMarkerStopJumpSeek(ev);
+        const barNavSeek = isMusicalGridBarNavSeek(ev);
         if (wasActive && oneFrame) {
             keyboardScrubPauseAfter = true;
-        } else if (wasActive && (pageSeek || markerStopJump || !oneFrame)) {
+        } else if (wasActive && (pageSeek || markerStopJump || barNavSeek || !oneFrame)) {
             keyboardScrubResumeAfter = true;
             transportExplicitSeekResumeIntent = true;
             if (typeof pauseTransportBeforeSeek === 'function') {
@@ -453,8 +482,8 @@
 
     function isWaveformLaneSeekShortcut(ev) {
         return (
-            matchUserShortcut(ev, 'waveformLaneSeekHome', { allowRepeat: true }) ||
-            matchUserShortcut(ev, 'waveformLaneSeekEnd', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekHomeStart', { allowRepeat: true }) ||
+            matchUserShortcut(ev, 'transportSeekHomeEnd', { allowRepeat: true }) ||
             matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }) ||
             matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true })
         );
@@ -476,6 +505,7 @@
     window.flushKeyboardTransportScrubIfActive = flushKeyboardTransportScrubIfActive;
     window.cancelKeyboardScrubFlushTimer = cancelKeyboardScrubFlushTimer;
     window.applyDiscreteStopNavStep = applyDiscreteStopNavStep;
+    window.getCoalescedStopNavTransportSec = getCoalescedStopNavTransportSec;
     window.flushDiscreteStopNav = flushDiscreteStopNav;
     window.flushDiscreteStopNavIfActive = flushDiscreteStopNavIfActive;
     window.cancelDiscreteStopNavTimer = cancelDiscreteStopNavTimer;

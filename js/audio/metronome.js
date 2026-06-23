@@ -89,9 +89,9 @@
     }
 
     function getMetronomeMeterKey() {
-        if (typeof getMusicalGridPersistSnapshot === 'function') {
-            const snap = getMusicalGridPersistSnapshot();
-            if (snap && snap.meter != null) return String(snap.meter).trim();
+        if (typeof getMeterSpec === 'function') {
+            const spec = getMeterSpec();
+            if (spec) return JSON.stringify(spec);
         }
         if (typeof musicalGridDrawSettings !== 'function') return '';
         const settings = musicalGridDrawSettings();
@@ -327,7 +327,12 @@
             });
             if (dur > 0) return dur;
         }
-        return beatDurationSec(entry.sig, entry.bpm);
+        return beatDurationSec(
+            entry.sig && entry.sig.num > 0 && entry.sig.den > 0
+                ? entry.sig
+                : { num: 4, den: 4 },
+            entry.bpm,
+        );
     }
 
     function resolveMetronomeScheduleFromSec(meterSpec, meterKey, transportSec, maxSec) {
@@ -597,7 +602,18 @@
             const barDur =
                 typeof window.meterBarDurationSec === 'function'
                     ? window.meterBarDurationSec(entry)
-                    : entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
+                    : (function fallbackBarDur(e) {
+                          if (!e || !e.sig) return 0;
+                          if (typeof window.forEachMeterBarBeat === 'function') {
+                              let endSec = 0;
+                              window.forEachMeterBarBeat(0, e, (beat) => {
+                                  endSec = beat.sec + beat.beatDur;
+                              });
+                              if (endSec > 0) return endSec;
+                          }
+                          if (!(e.sig.num > 0 && e.sig.den > 0)) return 0;
+                          return e.sig.num * beatDurationSec(e.sig, e.bpm);
+                      })(entry);
             const barEndSec = metronomeScan.barStartSec + barDur;
             if (targetSec < barEndSec - 1e-9 || barEndSec >= maxSec - 1e-9) {
                 return { entry, barEndSec };
@@ -636,6 +652,14 @@
                 ? window.meterBarDurationSec
                 : function fallbackBarDur(entry) {
                       if (!entry || !entry.sig) return 0;
+                      if (typeof window.forEachMeterBarBeat === 'function') {
+                          let endSec = 0;
+                          window.forEachMeterBarBeat(0, entry, (beat) => {
+                              endSec = beat.sec + beat.beatDur;
+                          });
+                          if (endSec > 0) return endSec;
+                      }
+                      if (!(entry.sig.num > 0 && entry.sig.den > 0)) return 0;
                       return entry.sig.num * beatDurationSec(entry.sig, entry.bpm);
                   };
         const eachBarBeat =
@@ -643,6 +667,11 @@
                 ? window.forEachMeterBarBeat
                 : function fallbackEachBeat(barStartSec, entry, fn) {
                       if (!entry || !entry.sig || typeof fn !== 'function') return;
+                      if (typeof window.forEachMeterBarBeat === 'function') {
+                          window.forEachMeterBarBeat(barStartSec, entry, fn);
+                          return;
+                      }
+                      if (!(entry.sig.num > 0 && entry.sig.den > 0)) return;
                       const beatDur = beatDurationSec(entry.sig, entry.bpm);
                       for (let beat = 0; beat < entry.sig.num; beat++) {
                           fn({

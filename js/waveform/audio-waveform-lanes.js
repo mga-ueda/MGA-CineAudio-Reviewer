@@ -367,7 +367,11 @@
      * 固定 CSS（Ex1=1, Ex2=2…）のまま途中スロットを閉じると行数とずれて波形が画面外になる。
      */
     function syncVisibleWaveformLaneGridRows() {
-        if (!audioWaveformComposite) return;
+        const composite =
+            typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite
+                ? audioWaveformComposite
+                : document.getElementById('audioWaveformComposite');
+        if (!composite) return;
         let row = 1;
         const assignRow = (meta, lane, show) => {
             const rowStr = show ? String(row) : '';
@@ -375,6 +379,28 @@
             if (lane) lane.style.gridRow = rowStr;
             if (show) row += 1;
         };
+        const showMusical =
+            typeof getMusicalGridVisible === 'function' && getMusicalGridVisible();
+        assignRow(
+            document.getElementById('musicalRehearsalMeta'),
+            document.getElementById('musicalRehearsalLane'),
+            showMusical,
+        );
+        assignRow(
+            document.getElementById('musicalTempoMeta'),
+            document.getElementById('musicalTempoLane'),
+            showMusical,
+        );
+        assignRow(
+            document.getElementById('musicalSignatureMeta'),
+            document.getElementById('musicalSignatureLane'),
+            showMusical,
+        );
+        assignRow(
+            document.getElementById('musicalMeasureMeta'),
+            document.getElementById('musicalMeasureLane'),
+            showMusical,
+        );
         assignRow(
             audioWaveformPanel,
             audioWaveformLaneVideo,
@@ -393,22 +419,31 @@
         }
     }
 
-    /** マーカー・プレイヘッド等を全レーン上に重ねる（レーンのみ grid-row 指定時の押し出し防止） */
+    /** タイムラインオーバーレイの grid-row（Musical 行は fullSpan、コメントラベル等は波形行のみ） */
     function syncTimelineOverlayGridPlacement(laneCount) {
+        const musicalCount =
+            typeof getMusicalTrackLaneCount === 'function' ? getMusicalTrackLaneCount() : 3;
         const n = Math.max(1, laneCount | 0);
-        const span = '1 / ' + (n + 1);
-        const overlays = [
+        const endRow = musicalCount + n + 1;
+        const fullSpan = '1 / ' + endRow;
+        const waveSpan = musicalCount + 1 + ' / ' + endRow;
+        const waveOverlays = [audioWaveformMarkerLabels, audioWaveformRangeLoop];
+        const fullOverlays = [
             audioWaveformMarkers,
-            audioWaveformMarkerLabels,
-            audioWaveformRangeLoop,
             audioWaveformSeekTrail,
             audioWaveformPlayheadWrap,
             audioWaveformHoverPlayhead,
         ];
-        for (let i = 0; i < overlays.length; i++) {
-            const el = overlays[i];
+        for (let i = 0; i < waveOverlays.length; i++) {
+            const el = waveOverlays[i];
             if (!el) continue;
-            el.style.gridRow = span;
+            el.style.gridRow = waveSpan;
+            el.style.gridColumn = '1';
+        }
+        for (let i = 0; i < fullOverlays.length; i++) {
+            const el = fullOverlays[i];
+            if (!el) continue;
+            el.style.gridRow = fullSpan;
             el.style.gridColumn = '1';
         }
     }
@@ -525,7 +560,11 @@
 
     /** 表示中のレーン数に合わせてグリッド高さとコメントラベル帯位置を更新 */
     function refreshWaveformCompositeLaneLayout(opt) {
-        if (!audioWaveformComposite) return;
+        const composite =
+            typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite
+                ? audioWaveformComposite
+                : document.getElementById('audioWaveformComposite');
+        if (!composite) return;
         const o = opt && typeof opt === 'object' ? opt : {};
         applyWaveformLaneHeightScaleToDom();
         if (typeof syncWaveformLanesViewportWidthCss === 'function') {
@@ -542,19 +581,24 @@
         }
         const laneCount = Math.max(1, count);
         lastWaveformCompositeLaneCount = laneCount;
-        audioWaveformComposite.style.setProperty('--wave-lane-count', String(laneCount));
+        composite.style.setProperty('--wave-lane-count', String(laneCount));
+        composite.style.setProperty(
+            '--musical-lane-count',
+            String(typeof getMusicalTrackLaneCount === 'function' ? getMusicalTrackLaneCount() : 3),
+        );
         syncVisibleWaveformLaneGridRows();
         syncTimelineOverlayGridPlacement(laneCount);
 
         requestAnimationFrame(() => {
             const laneH = getWaveformLaneHeightCss();
+            const audioLaneH = laneCount * laneH;
             const laneIds = ['audioWaveformLaneVideo'];
             for (let i = 0; i < extraTrackSlotCount(); i++) {
                 laneIds.push('extraAudioLane' + i);
             }
             if (audioWaveformMarkerLabels) {
                 audioWaveformMarkerLabels.style.top = '0px';
-                audioWaveformMarkerLabels.style.height = laneCount * laneH + 'px';
+                audioWaveformMarkerLabels.style.height = audioLaneH + 'px';
             }
             const refreshLaneOverlays = () => {
                 if (typeof refreshAllRegionMusicalMetaPresentation === 'function') {
@@ -573,6 +617,7 @@
             requestAnimationFrame(refreshLaneOverlays);
             if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
             if (typeof scheduleMusicalGridRedraw === 'function') scheduleMusicalGridRedraw();
+            if (typeof refreshMusicalGridTracks === 'function') refreshMusicalGridTracks();
             if (typeof drawAudioWaveformCanvas === 'function') drawAudioWaveformCanvas();
             if (typeof redrawAllExtraTrackWaveforms === 'function') {
                 redrawAllExtraTrackWaveforms();

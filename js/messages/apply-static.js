@@ -38,6 +38,9 @@
         setText('markerPasteOk', 'dialog.common.ok');
         setTitle('markerPasteOk', 'dialog.markersPaste.okTitle');
 
+        setText('regionBarJumpOverlayTitle', 'dialog.regionBarJump.title');
+        setAriaLabel('regionBarJumpInput', 'dialog.regionBarJump.inputLabel');
+
         setText('appConfirmCancel', 'dialog.common.cancel');
         setTitle('appConfirmCancel', 'dialog.common.cancelTitle');
         setText('appConfirmOk', 'dialog.common.ok');
@@ -47,8 +50,6 @@
         setAriaLabel('appVersionBadge', 'tooltip.versionBadge');
         setTitle('panelMain', 'tooltip.fileDrop');
         setTitle('audioWaveformComposite', 'tooltip.fileDrop');
-        setTitle('transportGuideLink', 'tooltip.guideLink');
-        setTitle('transportShortcutsLink', 'tooltip.shortcutsLink');
         setTitle('musicalGridPlayheadPos', 'tooltip.musicalGridPlayheadPos');
         setTitle('spectrumFloorDbSelect', 'tooltip.spectrumFloorDb');
         setTitle('meterFloorDbSelect', 'tooltip.meterFloorDb');

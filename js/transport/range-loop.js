@@ -204,13 +204,36 @@
         cancelRangeLoopShiftHold();
     }
 
+    function isRangeLoopShiftHomeEndKeydown(e) {
+        if (!e || !e.shiftKey || e.altKey) return false;
+        if (!(e.ctrlKey || e.metaKey)) return false;
+        if (typeof matchUserShortcut !== 'function') return false;
+        return (
+            matchUserShortcut(e, 'musicalGridBarNavPrev', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'musicalGridBarNavNext', { allowRepeat: true })
+        );
+    }
+
     function isRangeLoopShiftArrowKeydown(e) {
         if (!e || !e.shiftKey || e.altKey) return false;
         if (typeof matchUserShortcut !== 'function') return false;
-        return (
+        if (
             matchUserShortcut(e, 'transportSeekArrowLeft', { allowRepeat: true }) ||
             matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true })
-        );
+        ) {
+            return true;
+        }
+        return isRangeLoopShiftHomeEndKeydown(e);
+    }
+
+    function rangeLoopShiftKeyboardDirection(e) {
+        if (
+            matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ||
+            matchUserShortcut(e, 'musicalGridBarNavNext', { allowRepeat: true })
+        ) {
+            return 1;
+        }
+        return -1;
     }
 
     function isRangeLoopShiftPageKeydown(e) {
@@ -305,9 +328,17 @@
         return true;
     }
 
-    function extendRangeLoopViaKeyboard(dir, stepSec, useStopMode, fromRepeat) {
+    function extendRangeLoopViaKeyboard(dir, stepSec, useStopMode, fromRepeat, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const step = Number(stepSec);
         if (!Number.isFinite(step) || step <= 0) return false;
+        const resolveStopSec = o.barOnlyStopNav
+            ? typeof resolveAdjacentMusicalGridBarStopSec === 'function'
+                ? resolveAdjacentMusicalGridBarStopSec
+                : null
+            : typeof resolveAdjacentStopNavigationTargetSec === 'function'
+              ? resolveAdjacentStopNavigationTargetSec
+              : null;
         const cur = getTransportSecForRangeLoop();
         let inSec;
         let outSec;
@@ -315,13 +346,13 @@
             inSec = loopRangeInSec;
             outSec = loopRangeOutSec;
             if (useStopMode) {
-                if (typeof resolveAdjacentStopNavigationTargetSec !== 'function') return false;
+                if (typeof resolveStopSec !== 'function') return false;
                 if (dir > 0) {
-                    const next = resolveAdjacentStopNavigationTargetSec(1, outSec);
+                    const next = resolveStopSec(1, outSec);
                     if (!Number.isFinite(next)) return false;
                     outSec = next;
                 } else {
-                    const prev = resolveAdjacentStopNavigationTargetSec(-1, inSec);
+                    const prev = resolveStopSec(-1, inSec);
                     if (!Number.isFinite(prev)) return false;
                     inSec = prev;
                 }
@@ -336,8 +367,8 @@
             });
         }
         if (useStopMode) {
-            if (typeof resolveAdjacentStopNavigationTargetSec !== 'function') return false;
-            const stopSec = resolveAdjacentStopNavigationTargetSec(dir, cur);
+            if (typeof resolveStopSec !== 'function') return false;
+            const stopSec = resolveStopSec(dir, cur);
             if (!Number.isFinite(stopSec)) return false;
             if (dir > 0) {
                 inSec = cur;
@@ -356,8 +387,8 @@
         return setRangeLoopBounds(inSec, outSec, { fromRepeat: fromRepeat });
     }
 
-    function extendRangeLoopViaShiftArrow(dir, useStopMode, fromRepeat) {
-        return extendRangeLoopViaKeyboard(dir, 1, useStopMode, fromRepeat);
+    function extendRangeLoopViaShiftArrow(dir, useStopMode, fromRepeat, opt) {
+        return extendRangeLoopViaKeyboard(dir, 1, useStopMode, fromRepeat, opt);
     }
 
     function handleRangeLoopShiftArrowKeydown(e) {
@@ -372,12 +403,13 @@
         if (loopRangeShiftHoldActive) {
             cancelRangeLoopShiftHold();
         }
-        const dir = matchUserShortcut(e, 'transportSeekArrowRight', { allowRepeat: true }) ? 1 : -1;
+        const dir = rangeLoopShiftKeyboardDirection(e);
         const useStopMode = !!(e.ctrlKey || e.metaKey);
+        const barOnlyStopNav = isRangeLoopShiftHomeEndKeydown(e);
         if (useStopMode && typeof markerTimelineReady === 'function' && !markerTimelineReady()) {
             return;
         }
-        if (!extendRangeLoopViaShiftArrow(dir, useStopMode, e.repeat)) return;
+        if (!extendRangeLoopViaShiftArrow(dir, useStopMode, e.repeat, { barOnlyStopNav })) return;
         e.preventDefault();
         e.stopPropagation();
     }

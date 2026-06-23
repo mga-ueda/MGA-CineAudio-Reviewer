@@ -198,6 +198,12 @@
     }
 
     function adoptMarkersForAudioOnlySession() {
+        if (
+            typeof isMarkerWaveformDragActive === 'function' &&
+            isMarkerWaveformDragActive()
+        ) {
+            return;
+        }
         if (!currentMarkers.length) {
             const cached = markersByVideoKey.get(MARKER_SESSION_AUDIO_ONLY_KEY);
             if (cached && cached.length > 0) {
@@ -272,6 +278,12 @@
     }
 
     function setMarkersFromSnapshot(arr) {
+        if (
+            typeof isMarkerWaveformDragActive === 'function' &&
+            isMarkerWaveformDragActive()
+        ) {
+            return;
+        }
         if (!Array.isArray(arr)) {
             currentMarkers = [];
         } else {
@@ -342,6 +354,12 @@
     window.prepareMarkersForVideoSwitch = prepareMarkersForVideoSwitch;
 
     function applyMarkersSnapshotToMemory(arr, cacheKey) {
+        if (
+            typeof isMarkerWaveformDragActive === 'function' &&
+            isMarkerWaveformDragActive()
+        ) {
+            return;
+        }
         if (!Array.isArray(arr)) {
             currentMarkers = [];
             return;
@@ -580,6 +598,16 @@
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }
+        if (
+            !o.skipRehearsalSync &&
+            typeof syncRehearsalMarksFromLoadedMarkers === 'function'
+        ) {
+            syncRehearsalMarksFromLoadedMarkers({
+                markers: getMarkersSnapshot(),
+                fileDurationSec: o.fileDurationSec,
+                logLabel: o.logLabel,
+            });
+        }
         return mapped.length;
     }
 
@@ -594,6 +622,9 @@
     }
 
     function currentTransportSec() {
+        if (typeof getCoalescedStopNavTransportSec === 'function') {
+            return getCoalescedStopNavTransportSec();
+        }
         if (typeof getTransportSec === 'function') return getTransportSec();
         if (typeof videoReady === 'function' && videoReady()) {
             return videoMain.currentTime || 0;

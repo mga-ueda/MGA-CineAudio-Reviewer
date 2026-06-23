@@ -89,11 +89,26 @@
         return true;
     }
 
+    function resolveRegionSelectAtSeekbarEnterAdditive(e) {
+        if (!e || e.repeat) return null;
+        if (e.ctrlKey || e.metaKey || e.altKey) return null;
+        if (e.key !== 'Enter') return null;
+        return true;
+    }
+
     function handlePlaybackRegionSelectAtSeekbarKeydown(e) {
-        if (!matchUserShortcut(e, 'regionSelectAtSeekbar')) return false;
+        const additive = resolveRegionSelectAtSeekbarEnterAdditive(e);
+        if (additive == null) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
-        if (!selectPlaybackRegionsAtActiveTrackEnter()) return false;
+        if (
+            !selectPlaybackRegionsAtActiveTrackEnter({
+                additive: !!additive,
+            })
+        ) {
+            return false;
+        }
         e.preventDefault();
+        e.stopImmediatePropagation();
         return true;
     }
 
@@ -199,7 +214,7 @@
         if (!isRegionEdgeKeyboardNudgeEnabled()) {
             notifyRegionEdgeNudgeMiss(
                 kind,
-                'Phrase tint must be OFF',
+                'Rehearsal tint must be OFF',
             );
             return false;
         }
@@ -313,9 +328,17 @@
     function handlePlaybackRegionGroupKeydown(e) {
         if (!guardRegionShortcutKeydown(e)) return false;
         if (!matchUserShortcut(e, 'regionGroup')) return false;
-        if (!toggleRegionGroupFromSelection()) return false;
-        e.preventDefault();
-        return true;
+        if (toggleRegionGroupFromSelection()) {
+            e.preventDefault();
+            return true;
+        }
+        if (
+            typeof window.handleRegionBarJumpDialogKeydown === 'function' &&
+            window.handleRegionBarJumpDialogKeydown(e)
+        ) {
+            return true;
+        }
+        return false;
     }
 
     function handlePlaybackRegionSwapKeydown(e) {
@@ -323,8 +346,8 @@
         if (e.repeat) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
             return false;
         }

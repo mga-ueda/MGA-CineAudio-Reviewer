@@ -218,7 +218,7 @@
     window.toggleRegionSelection = toggleRegionSelection;
     window.toggleSilentGapSelection = toggleSilentGapSelection;
     window.deleteSilentGapAt = deleteSilentGapAt;
-    window.tryDeleteSilentGapAtPhraseEditPointer = tryDeleteSilentGapAtPhraseEditPointer;
+    window.tryDeleteSilentGapAtRehearsalEditPointer = tryDeleteSilentGapAtRehearsalEditPointer;
     window.hasSilentGapRegionSelection = hasSilentGapRegionSelection;
     window.silentGapDeleteDiagLog = silentGapDeleteDiagLog;
     window.silentGapDeleteDiagSnapshotTrack = silentGapDeleteDiagSnapshotTrack;

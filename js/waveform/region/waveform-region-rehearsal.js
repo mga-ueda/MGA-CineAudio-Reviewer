@@ -1,18 +1,18 @@
 /**
- * waveform-region-phrase.js — Phrase スロット解決・無音 gap・Phrase 欄レイアウト
+ * waveform-region-rehearsal.js — Rehearsal スロット解決・無音 gap・Rehearsal 欄レイアウト
  */
     /** セッション復元完了時 — SwapUnit baseline（[MusicalSlot] dump/session-restore） */
-    function logSessionRestoreRegionPhraseSnapshot() {
+    function logSessionRestoreRegionRehearsalSnapshot() {
         if (typeof window.logSessionRestoreMusicalSlotSnapshot === 'function') {
             window.logSessionRestoreMusicalSlotSnapshot();
         } else if (typeof writeLog === 'function') {
             regionSwapDiagLog('session/restore', {
-                text: regionSwapDiagPhraseText() || '',
+                text: regionSwapDiagRehearsalText() || '',
                 fill: !!(
-                    typeof getMusicalGridPhraseFillVisible === 'function' &&
-                    getMusicalGridPhraseFillVisible()
+                    typeof getMusicalGridRehearsalFillVisible === 'function' &&
+                    getMusicalGridRehearsalFillVisible()
                 ),
-                specSlots: phraseSpecCycleSlotCount(),
+                specSlots: rehearsalSpecCycleSlotCount(),
             });
             const n = getExtraTrackCount();
             let dumped = 0;
@@ -47,25 +47,25 @@
             });
         }
     }
-    function phraseSlotRangesSnapshot() {
-        if (typeof getPhraseGroupRangesSnapshot !== 'function') return [];
-        return getPhraseGroupRangesSnapshot();
+    function rehearsalSlotRangesSnapshot() {
+        if (typeof getRehearsalGroupRangesSnapshot !== 'function') return [];
+        return getRehearsalGroupRangesSnapshot();
     }
 
-    /** リハーサル名／Phrase ナビ — 実リージョン In があればそちらを優先（Tempo ストレッチ後の grid 差を吸収） */
-    function resolveSegmentIndexForPhraseSlot(track, phraseSlotIndex) {
-        if (!track || phraseSlotIndex == null || phraseSlotIndex < 0) return -1;
+    /** リハーサル名／Rehearsal ナビ — 実リージョン In があればそちらを優先（Tempo ストレッチ後の grid 差を吸収） */
+    function resolveSegmentIndexForRehearsalSlot(track, rehearsalSlotIndex) {
+        if (!track || rehearsalSlotIndex == null || rehearsalSlotIndex < 0) return -1;
         const segments =
             typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
         if (!segments.length) return -1;
-        const slot = phraseSlotIndex | 0;
+        const slot = rehearsalSlotIndex | 0;
 
         if (typeof getTrackTimelineSlots === 'function') {
             const units = getTrackTimelineSlots(track, { writeCache: false });
             for (let ui = 0; ui < units.length; ui++) {
                 const unit = units[ui];
                 const mus = unit && unit.musical;
-                if (!mus || (mus.phraseSlotIndex | 0) !== slot) continue;
+                if (!mus || (mus.rehearsalSlotIndex | 0) !== slot) continue;
                 if (unit.segmentRefs && unit.segmentRefs.length) {
                     return unit.segmentRefs[0].segmentIndex | 0;
                 }
@@ -76,8 +76,8 @@
         return -1;
     }
 
-    function phraseNavStartSecForSlot(track, phraseSlotIndex, gridStartSec) {
-        const si = resolveSegmentIndexForPhraseSlot(track, phraseSlotIndex);
+    function rehearsalNavStartSecForSlot(track, rehearsalSlotIndex, gridStartSec) {
+        const si = resolveSegmentIndexForRehearsalSlot(track, rehearsalSlotIndex);
         if (
             si >= 0 &&
             typeof getSegmentRegionTimelineIn === 'function'
@@ -88,50 +88,50 @@
         return gridStartSec;
     }
 
-    /** Phrase 欄 1 サイクル分のスロット数。長尺マスター展開 index とは別。 */
-    function phraseSpecCycleSlotCount() {
+    /** Rehearsal 欄 1 サイクル分のスロット数。長尺マスター展開 index とは別。 */
+    function rehearsalSpecCycleSlotCount() {
         if (typeof musicalGridDrawSettings === 'function') {
             const settings = musicalGridDrawSettings();
-            if (settings && settings.phraseSpec && settings.phraseSpec.sizes) {
-                return settings.phraseSpec.sizes.length;
+            if (settings && settings.rehearsalSpec && settings.rehearsalSpec.sizes) {
+                return settings.rehearsalSpec.sizes.length;
             }
         }
-        if (typeof parsePhraseGroupingSpec === 'function') {
-            const spec = parsePhraseGroupingSpec(regionSwapDiagPhraseText());
+        if (typeof parseRehearsalGroupingSpec === 'function') {
+            const spec = parseRehearsalGroupingSpec(regionSwapDiagRehearsalText());
             if (spec && spec.sizes && spec.sizes.length) return spec.sizes.length;
         }
         return 0;
     }
 
-    /** 入れ替え対象は Phrase 定義 1 サイクル内（index 0..n-1）のみ */
-    function phraseSpecCycleSlotIndex(rawIndex) {
+    /** 入れ替え対象は Rehearsal 定義 1 サイクル内（index 0..n-1）のみ */
+    function rehearsalSpecCycleSlotIndex(rawIndex) {
         if (rawIndex == null || rawIndex < 0) return null;
         const idx = rawIndex | 0;
-        const cycle = phraseSpecCycleSlotCount();
+        const cycle = rehearsalSpecCycleSlotCount();
         if (cycle > 0 && idx >= cycle) return null;
         return idx;
     }
 
     /** 入れ替え E 用 — spec 1 サイクル内スロットのみ（Region In 基準） */
-    function phraseSpecCycleSlotForSegment(track, segmentIndex) {
+    function rehearsalSpecCycleSlotForSegment(track, segmentIndex) {
         if (!(segmentIndex >= 0)) return null;
-        return phraseSpecCycleSlotIndex(
-            phraseSlotIndexAtRegionInSec(getSegmentRegionTimelineIn(track, segmentIndex)),
+        return rehearsalSpecCycleSlotIndex(
+            rehearsalSlotIndexAtRegionInSec(getSegmentRegionTimelineIn(track, segmentIndex)),
         );
     }
 
 
     /** ユーザー向け「頭から N 個目」（1 始まり） */
-    function phraseSpecCycleSlotLabel(slotIndex) {
+    function rehearsalSpecCycleSlotLabel(slotIndex) {
         if (slotIndex == null || slotIndex < 0) return '?';
         return String((slotIndex | 0) + 1);
     }
 
     /** タイムライン着色ラベル（0 始まり: A, B … Z, AA …） */
-    function phraseSpecCycleSlotGridLabel(slotIndex) {
+    function rehearsalSpecCycleSlotGridLabel(slotIndex) {
         if (slotIndex == null || slotIndex < 0) return '?';
-        if (typeof phraseGroupLabelForIndex === 'function') {
-            return phraseGroupLabelForIndex(slotIndex);
+        if (typeof rehearsalGroupLabelForIndex === 'function') {
+            return rehearsalGroupLabelForIndex(slotIndex);
         }
         return String(slotIndex);
     }
@@ -142,53 +142,76 @@
         if (!state) return;
         const t0 = getTrackTimelineStartSec(track);
         const seg0 = segments[0];
-        if (!seg0 || !Number.isFinite(seg0.timelineStartSec)) return;
-        state.headPadSec = Math.max(0, seg0.timelineStartSec - t0);
+        if (!seg0) return;
+        const anchor = Number.isFinite(seg0.timelineStartSec) ? seg0.timelineStartSec : t0;
+        let lead = Math.max(0, Number(seg0.regionLeadPadSec) || 0);
+        if (lead <= 0.00001) {
+            const regionIn = Number(seg0.regionTimelineInSec);
+            if (Number.isFinite(regionIn) && regionIn < anchor - 0.00001) {
+                lead = anchor - regionIn;
+            }
+        }
+        if (lead > 0.00001) {
+            seg0.regionLeadPadSec = lead;
+            const regionIn = Number.isFinite(seg0.regionTimelineInSec)
+                ? seg0.regionTimelineInSec
+                : anchor - lead;
+            seg0.regionTimelineInSec = regionIn;
+            state.regionLeadPadSec = lead;
+            state.regionTimelineInSec = regionIn;
+            state.headPadSec = Math.max(0, regionIn - t0);
+            return;
+        }
+        delete state.regionLeadPadSec;
+        if (Number.isFinite(seg0.regionLeadPadSec)) delete seg0.regionLeadPadSec;
+        if (Number.isFinite(seg0.timelineStartSec)) {
+            state.headPadSec = Math.max(0, seg0.timelineStartSec - t0);
+        } else {
+            state.headPadSec = 0;
+        }
         if (Number.isFinite(seg0.regionTimelineInSec)) {
-            state.regionTimelineInSec = Math.max(0, seg0.regionTimelineInSec);
+            const regionIn = Math.max(0, seg0.regionTimelineInSec);
+            seg0.regionTimelineInSec = regionIn;
+            state.regionTimelineInSec = regionIn;
         } else {
             delete state.regionTimelineInSec;
-        }
-        if (Number.isFinite(seg0.regionLeadPadSec) && seg0.regionLeadPadSec > 0.00001) {
-            state.regionLeadPadSec = seg0.regionLeadPadSec;
-        } else {
-            delete state.regionLeadPadSec;
+            delete seg0.regionTimelineInSec;
         }
     }
 
-    /** transport 秒が属する Phrase スロット index */
-    function phraseSlotIndexAtTransportSec(transportSec) {
+    /** transport 秒が属する Rehearsal スロット index */
+    function rehearsalSlotIndexAtTransportSec(transportSec) {
         if (!Number.isFinite(transportSec)) return null;
-        if (typeof resolvePhraseGroupIndexAtTransportSec !== 'function') return null;
-        const idx = resolvePhraseGroupIndexAtTransportSec(transportSec);
+        if (typeof resolveRehearsalGroupIndexAtTransportSec !== 'function') return null;
+        const idx = resolveRehearsalGroupIndexAtTransportSec(transportSec);
         if (idx == null || idx < 0) return null;
         return idx;
     }
 
     /**
-     * Region In 用 — フレーズ境界上は「その秒から始まるスロット」に属する（半開区間 [start, end)）。
+     * Region In 用 — Rehearsal 区間境界上は「その秒から始まるスロット」に属する（半開区間 [start, end)）。
      */
-    function phraseSlotIndexAtRegionInSec(transportSec) {
+    function rehearsalSlotIndexAtRegionInSec(transportSec) {
         if (!Number.isFinite(transportSec)) return null;
-        const ranges = phraseSlotRangesSnapshot();
-        if (!ranges.length) return phraseSlotIndexAtTransportSec(transportSec);
+        const ranges = rehearsalSlotRangesSnapshot();
+        if (!ranges.length) return rehearsalSlotIndexAtTransportSec(transportSec);
         const eps = segmentBoundaryJoinEpsilonSec();
         const s = Number(transportSec);
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
             if (s >= r.startSec - eps && s < r.endSec - eps) return i;
         }
-        return phraseSlotIndexAtTransportSec(transportSec);
+        return rehearsalSlotIndexAtTransportSec(transportSec);
     }
 
-    function phraseSlotStartSec(slotIndex) {
-        const ranges = phraseSlotRangesSnapshot();
+    function rehearsalSlotStartSec(slotIndex) {
+        const ranges = rehearsalSlotRangesSnapshot();
         const r = ranges[slotIndex | 0];
         return r && Number.isFinite(r.startSec) ? r.startSec : null;
     }
 
-    function isPhraseRangeUncoveredByTrack(track, phraseIndex, ranges) {
-        const r = ranges[phraseIndex];
+    function isRehearsalRangeUncoveredByTrack(track, rehearsalIndex, ranges) {
+        const r = ranges[rehearsalIndex];
         if (!r || !track) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segments = getTrackSegments(track);
@@ -200,9 +223,9 @@
         return true;
     }
 
-    /** この Phrase スロット内に Region In を持つセグメントが無い（無音スロット選択用） */
-    function isPhraseSlotWithoutAnchoredRegion(track, phraseIndex, ranges) {
-        const r = ranges[phraseIndex];
+    /** この Rehearsal スロット内に Region In を持つセグメントが無い（無音スロット選択用） */
+    function isRehearsalSlotWithoutAnchoredRegion(track, rehearsalIndex, ranges) {
+        const r = ranges[rehearsalIndex];
         if (!r || !track) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segments = getTrackSegments(track);
@@ -213,18 +236,18 @@
         return true;
     }
 
-    /** 無音ギャップ区間が重なる Phrase スロット（gap.phraseIndex を優先） */
-    function phraseSlotIndexForSilentGap(gap, track) {
+    /** 無音ギャップ区間が重なる Rehearsal スロット（gap.rehearsalIndex を優先） */
+    function rehearsalSlotIndexForSilentGap(gap, track) {
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
             return null;
         }
-        if (gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
-            return gap.phraseIndex | 0;
+        if (gap && Number.isFinite(gap.rehearsalIndex) && gap.rehearsalIndex >= 0) {
+            return gap.rehearsalIndex | 0;
         }
-        const ranges = phraseSlotRangesSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!gap || !ranges.length) return null;
         const eps = segmentBoundaryJoinEpsilonSec();
         let bestUncovered = null;
@@ -243,7 +266,7 @@
             }
             if (
                 track &&
-                isPhraseRangeUncoveredByTrack(track, i, ranges) &&
+                isRehearsalRangeUncoveredByTrack(track, i, ranges) &&
                 overlap > bestUncoveredOverlap
             ) {
                 bestUncoveredOverlap = overlap;
@@ -252,13 +275,13 @@
         }
         if (bestUncovered != null) return bestUncovered;
         if (bestAny != null) return bestAny;
-        return phraseSlotIndexAtTransportSec((gap.startSec + gap.endSec) * 0.5);
+        return rehearsalSlotIndexAtTransportSec((gap.startSec + gap.endSec) * 0.5);
     }
 
-    /** タイムライン区間が最も多く重なる Phrase スロット（境界 ε 付近の誤判定を避ける） */
-    function phraseDominantSlotForInterval(regionIn, regionOut) {
+    /** タイムライン区間が最も多く重なる Rehearsal スロット（境界 ε 付近の誤判定を避ける） */
+    function rehearsalDominantSlotForInterval(regionIn, regionOut) {
         if (!Number.isFinite(regionIn) || !Number.isFinite(regionOut)) return null;
-        const ranges = phraseSlotRangesSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!ranges.length) return null;
         let bestIdx = null;
         let bestOverlap = -1;
@@ -276,43 +299,43 @@
         return bestIdx;
     }
 
-    /** リージョン In が属する Phrase スロット */
-    function phraseSlotIndexForSegment(track, segmentIndex) {
+    /** リージョン In が属する Rehearsal スロット */
+    function rehearsalSlotIndexForSegment(track, segmentIndex) {
         if (!(segmentIndex >= 0)) return null;
-        return phraseSlotIndexAtRegionInSec(getSegmentRegionTimelineIn(track, segmentIndex));
+        return rehearsalSlotIndexAtRegionInSec(getSegmentRegionTimelineIn(track, segmentIndex));
     }
 
     /**
-     * 無音↔リージョン入れ替え — 複数 Phrase に跨るリージョンは重なり最大のスロットを採用。
-     * Region In が 1 小節スロット内でも本体は次スロット（例: r2 @ 0.1s → phrase 2）。
+     * 無音↔リージョン入れ替え — 複数 Rehearsal に跨るリージョンは重なり最大のスロットを採用。
+     * Region In が 1 小節スロット内でも本体は次スロット（例: r2 @ 0.1s → rehearsal 2）。
      */
-    function phraseExpandedSlotForSilentGapSegment(track, segmentIndex) {
+    function rehearsalExpandedSlotForSilentGapSegment(track, segmentIndex) {
         if (!(segmentIndex >= 0)) return null;
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
-        const dominant = phraseDominantSlotForInterval(regionIn, regionOut);
+        const dominant = rehearsalDominantSlotForInterval(regionIn, regionOut);
         if (dominant != null && dominant >= 0) return dominant;
-        return phraseSlotIndexForSegment(track, segmentIndex);
+        return rehearsalSlotIndexForSegment(track, segmentIndex);
     }
 
-    /** フレーズスロット先頭 + ε（境界上配置を避け次スロット誤判定を防ぐ） */
-    function phraseSlotPlacementSec(slotIndex) {
-        const start = phraseSlotStartSec(slotIndex);
+    /** Rehearsal スロット先頭 + ε（境界上配置を避け次スロット誤判定を防ぐ） */
+    function rehearsalSlotPlacementSec(slotIndex) {
+        const start = rehearsalSlotStartSec(slotIndex);
         if (start == null) return null;
         const eps = segmentBoundaryJoinEpsilonSec();
         return start + eps * 2;
     }
 
-    function phraseSlotOverlapsGap(slotIndex, gap) {
-        const ranges = phraseSlotRangesSnapshot();
+    function rehearsalSlotOverlapsGap(slotIndex, gap) {
+        const ranges = rehearsalSlotRangesSnapshot();
         const r = ranges[slotIndex | 0];
         if (!gap || !r) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         return gap.endSec > r.startSec + eps && gap.startSec < r.endSec - eps;
     }
 
-    function segmentRegionInWithinPhraseSlot(track, segmentIndex, slotIndex) {
-        const ranges = phraseSlotRangesSnapshot();
+    function segmentRegionInWithinRehearsalSlot(track, segmentIndex, slotIndex) {
+        const ranges = rehearsalSlotRangesSnapshot();
         const r = ranges[slotIndex | 0];
         if (!r || !(segmentIndex >= 0)) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
@@ -321,17 +344,17 @@
     }
 
     /**
-     * 同一 Phrase スロット内の部分無音↔リージョン。
+     * 同一 Rehearsal スロット内の部分無音↔リージョン。
      * 部分無音区間とリージョン In が重ならない（または gap.partial）場合に true。
      */
-    function isSamePhraseSlotPartialSilentGapPlacement(track, gap, leaderIndex, opt) {
+    function isSameRehearsalSlotPartialSilentGapPlacement(track, gap, leaderIndex, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const gapSlotRaw =
-            gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0
-                ? gap.phraseIndex | 0
-                : phraseSlotIndexForSilentGap(gap, track);
-        const gapSlot = phraseSpecCycleSlotIndex(gapSlotRaw);
-        const segSlot = phraseSpecCycleSlotForSegment(track, leaderIndex);
+            gap && Number.isFinite(gap.rehearsalIndex) && gap.rehearsalIndex >= 0
+                ? gap.rehearsalIndex | 0
+                : rehearsalSlotIndexForSilentGap(gap, track);
+        const gapSlot = rehearsalSpecCycleSlotIndex(gapSlotRaw);
+        const segSlot = rehearsalSpecCycleSlotForSegment(track, leaderIndex);
         if (gapSlot == null || segSlot == null || gapSlot !== segSlot) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segIn =
@@ -356,13 +379,13 @@
         return !!(gap && (gap.partial || !inGapInterval));
     }
 
-    /** 無音 gap 区間がカバーする Phrase 小節数（複数スロット跨ぎ・部分 gap 対応） */
+    /** 無音 gap 区間がカバーする Rehearsal 小節数（複数スロット跨ぎ・部分 gap 対応） */
     function estimateSilentGapBarSpan(gap) {
         if (!gap || !Number.isFinite(gap.startSec) || !Number.isFinite(gap.endSec)) return 0;
         const dur = gap.endSec - gap.startSec;
         if (!(dur > 0.00001)) return 0;
-        const counts = expandedPhraseGroupBarCountsSnapshot();
-        const ranges = phraseSlotRangesSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!counts.length || !ranges.length) return 0;
 
         const eps = segmentBoundaryJoinEpsilonSec();
@@ -387,7 +410,7 @@
         }
         if (sum > 0) return sum;
 
-        const idx = phraseSlotIndexAtRegionInSec(gap.startSec);
+        const idx = rehearsalSlotIndexAtRegionInSec(gap.startSec);
         if (idx == null || idx < 0 || idx >= counts.length) return 0;
         const r = ranges[idx];
         const slotBars = counts[idx] | 0;
@@ -400,13 +423,13 @@
 
     /** 無音↔リージョン — 展開スロット／音源小節数から入れ替えモードを決定 */
     function resolveSilentGapExpandedSwapModes(track, gap, leaderIndex, gapExpanded, segExpanded) {
-        const counts = expandedPhraseGroupBarCountsSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
         const contentBars = estimateRegionContentBarCountForSegment(track, leaderIndex);
         const result = {
             expandedEqualBarTimelineOnly: false,
             expandedSameSlotTimelineOnly: false,
             expandedUnequalBarTimelineOnly: false,
-            expandedPhraseSwap: false,
+            expandedRehearsalSwap: false,
             needsPartialSlotShrink: false,
             contentBars: contentBars | 0,
             gapBars: 0,
@@ -465,24 +488,24 @@
             } else if (segSlotBars > 0 && segSlotBars === gapBars) {
                 result.expandedEqualBarTimelineOnly = true;
             } else if (segSlotBars > 0 && gapBars > 0) {
-                // 8↔16 等 — 展開 counts を入れ替えてから配置（Phrase 1,16,8…）
-                result.expandedPhraseSwap = true;
+                // 8↔16 等 — 展開 counts を入れ替えてから配置（Rehearsal 1,16,8…）
+                result.expandedRehearsalSwap = true;
             }
         }
         return result;
     }
 
-    /** 無音↔リージョン入れ替えの Phrase スロット解決（spec 1 サイクル index） */
-    function resolveSilentGapPhraseSwapSlots(track, gap, leaderIndex) {
+    /** 無音↔リージョン入れ替えの Rehearsal スロット解決（spec 1 サイクル index） */
+    function resolveSilentGapRehearsalSwapSlots(track, gap, leaderIndex) {
         const gapSlotRaw =
-            gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0
-                ? gap.phraseIndex | 0
-                : phraseSlotIndexForSilentGap(gap, track);
-        const gapSlot = phraseSpecCycleSlotIndex(gapSlotRaw);
-        const segExpandedRaw = phraseExpandedSlotForSilentGapSegment(track, leaderIndex);
+            gap && Number.isFinite(gap.rehearsalIndex) && gap.rehearsalIndex >= 0
+                ? gap.rehearsalIndex | 0
+                : rehearsalSlotIndexForSilentGap(gap, track);
+        const gapSlot = rehearsalSpecCycleSlotIndex(gapSlotRaw);
+        const segExpandedRaw = rehearsalExpandedSlotForSilentGapSegment(track, leaderIndex);
         const segExpanded =
             segExpandedRaw != null && segExpandedRaw >= 0 ? segExpandedRaw | 0 : null;
-        const segSlot = phraseSpecCycleSlotIndex(segExpanded);
+        const segSlot = rehearsalSpecCycleSlotIndex(segExpanded);
         const notes = [];
         const regionIn =
             leaderIndex >= 0 ? getSegmentRegionTimelineIn(track, leaderIndex) : null;
@@ -505,7 +528,7 @@
             gapSlot != null &&
             segSlot != null &&
             gapSlot === segSlot &&
-            isSamePhraseSlotPartialSilentGapPlacement(track, gap, leaderIndex, {
+            isSameRehearsalSlotPartialSilentGapPlacement(track, gap, leaderIndex, {
                 delta:
                     gap && leaderIndex >= 0
                         ? gap.startSec +
@@ -527,7 +550,7 @@
         const expandedEqualBarTimelineOnly = expandedModes.expandedEqualBarTimelineOnly;
         const expandedSameSlotTimelineOnly = expandedModes.expandedSameSlotTimelineOnly;
         const expandedUnequalBarTimelineOnly = expandedModes.expandedUnequalBarTimelineOnly;
-        const expandedPhraseSwap = expandedModes.expandedPhraseSwap;
+        const expandedRehearsalSwap = expandedModes.expandedRehearsalSwap;
         if (gapSlot != null && segSlot != null && gapSlot === segSlot) {
             notes.push(
                 sameSlotPartialShrink
@@ -542,7 +565,7 @@
             gapSlot != null &&
             gapSlot >= 0 &&
             gap &&
-            !phraseSlotOverlapsGap(gapSlot, gap)
+            !rehearsalSlotOverlapsGap(gapSlot, gap)
         ) {
             notes.push('warn: gap interval vs gapSlot range mismatch');
         }
@@ -550,31 +573,31 @@
             segSlot != null &&
             segSlot >= 0 &&
             leaderIndex >= 0 &&
-            !segmentRegionInWithinPhraseSlot(track, leaderIndex, segSlot)
+            !segmentRegionInWithinRehearsalSlot(track, leaderIndex, segSlot)
         ) {
             notes.push(
                 'warn: regionIn ' +
                     regionSwapDiagFmtSec(regionIn) +
-                    ' outside segSlot phrase ' +
-                    phraseSpecCycleSlotLabel(segSlot),
+                    ' outside segSlot rehearsal ' +
+                    rehearsalSpecCycleSlotLabel(segSlot),
             );
         }
 
-        regionSwapDiagLog('phrase/slots', {
-            gapSlot: gapSlot != null ? phraseSpecCycleSlotLabel(gapSlot) : null,
-            gapGridLabel: gapSlot != null ? phraseSpecCycleSlotGridLabel(gapSlot) : null,
+        regionSwapDiagLog('rehearsal/slots', {
+            gapSlot: gapSlot != null ? rehearsalSpecCycleSlotLabel(gapSlot) : null,
+            gapGridLabel: gapSlot != null ? rehearsalSpecCycleSlotGridLabel(gapSlot) : null,
             gapExpanded: gapExpanded != null ? gapExpanded + 1 : null,
-            segSlot: segSlot != null ? phraseSpecCycleSlotLabel(segSlot) : null,
-            segGridLabel: segSlot != null ? phraseSpecCycleSlotGridLabel(segSlot) : null,
+            segSlot: segSlot != null ? rehearsalSpecCycleSlotLabel(segSlot) : null,
+            segGridLabel: segSlot != null ? rehearsalSpecCycleSlotGridLabel(segSlot) : null,
             segExpanded: segExpanded != null ? segExpanded + 1 : null,
             contentBars: expandedModes.contentBars || null,
             gapBars: expandedModes.gapBars || null,
-            phraseSpecSwap: gapSlot != null && segSlot != null && gapSlot !== segSlot,
+            rehearsalSpecSwap: gapSlot != null && segSlot != null && gapSlot !== segSlot,
             sameSlotPartialShrink,
             expandedEqualBarTimelineOnly,
             expandedSameSlotTimelineOnly,
             expandedUnequalBarTimelineOnly,
-            expandedPhraseSwap,
+            expandedRehearsalSwap,
             notes,
             region: leaderIndex >= 0 ? leaderIndex + 1 : null,
             regionIn: regionSwapDiagFmtSec(regionIn),
@@ -586,9 +609,9 @@
                     ? 'expanded equal-bar silent ↔ region → timeline placement only'
                     : expandedUnequalBarTimelineOnly
                       ? 'expanded unequal-bar silent ↔ region → timeline placement only'
-                      : expandedPhraseSwap
-                        ? 'expanded phrase bar-count swap + timeline placement'
-                        : 'phrase bar-count swap + timeline placement',
+                      : expandedRehearsalSwap
+                        ? 'expanded rehearsal bar-count swap + timeline placement'
+                        : 'rehearsal bar-count swap + timeline placement',
         });
 
         return {
@@ -599,33 +622,33 @@
             expandedEqualBarTimelineOnly,
             expandedSameSlotTimelineOnly,
             expandedUnequalBarTimelineOnly,
-            expandedPhraseSwap,
+            expandedRehearsalSwap,
             sameSlotPartialShrink,
             gapBars: expandedModes.gapBars || 0,
-            phraseSwap: gapSlot != null && segSlot != null && gapSlot !== segSlot,
+            rehearsalSwap: gapSlot != null && segSlot != null && gapSlot !== segSlot,
             notes,
         };
     }
 
-    function phraseJoinSlotIndexForSegment(track, segmentIndex) {
-        return phraseSpecCycleSlotForSegment(track, segmentIndex);
+    function rehearsalJoinSlotIndexForSegment(track, segmentIndex) {
+        return rehearsalSpecCycleSlotForSegment(track, segmentIndex);
     }
 
-    /** 同一 Phrase スロット内で境界結合された連続セグメント（セパレートされていない列） */
-    function collectPhraseSlotJoinedSegmentIndices(track, segmentIndex) {
+    /** 同一 Rehearsal スロット内で境界結合された連続セグメント（セパレートされていない列） */
+    function collectRehearsalSlotJoinedSegmentIndices(track, segmentIndex) {
         if (!(segmentIndex >= 0)) return [];
         const segments = getTrackSegments(track);
         if (!segments.length) return [];
-        const slot = phraseJoinSlotIndexForSegment(track, segmentIndex);
+        const slot = rehearsalJoinSlotIndexForSegment(track, segmentIndex);
         let lo = segmentIndex;
         let hi = segmentIndex;
         while (lo > 0 && isSegmentBoundaryJoined(track, lo - 1)) {
-            const leftSlot = phraseJoinSlotIndexForSegment(track, lo - 1);
+            const leftSlot = rehearsalJoinSlotIndexForSegment(track, lo - 1);
             if (slot == null || leftSlot !== slot) break;
             lo--;
         }
         while (hi < segments.length - 1 && isSegmentBoundaryJoined(track, hi)) {
-            const rightSlot = phraseJoinSlotIndexForSegment(track, hi + 1);
+            const rightSlot = rehearsalJoinSlotIndexForSegment(track, hi + 1);
             if (slot == null || rightSlot !== slot) break;
             hi++;
         }
@@ -634,7 +657,7 @@
         return out;
     }
 
-    /** 無音↔リージョン入れ替え対象 — 明示選択 1 件（regionGroupId のみ広げる。phrase 境界結合は広げない） */
+    /** 無音↔リージョン入れ替え対象 — 明示選択 1 件（regionGroupId のみ広げる。rehearsal 境界結合は広げない） */
     function resolveSilentGapSwapSegmentIndices(track, segEntries) {
         if (!segEntries || segEntries.length !== 1) return [];
         const idx = segEntries[0].segmentIndex | 0;
@@ -649,7 +672,7 @@
         return [idx];
     }
 
-    function phraseLayoutExpandedRangesSnapshot() {
+    function rehearsalLayoutExpandedRangesSnapshot() {
         if (typeof window.musicalGridDrawSettings !== 'function') return [];
         const settings = window.musicalGridDrawSettings();
         if (!settings || !settings.meterSpec) return [];
@@ -659,17 +682,17 @@
                 : 0;
         if (!(master > 0)) return [];
         const layoutDuration =
-            typeof window.resolvePhraseLayoutDurationSec === 'function'
-                ? window.resolvePhraseLayoutDurationSec(
+            typeof window.resolveRehearsalLayoutDurationSec === 'function'
+                ? window.resolveRehearsalLayoutDurationSec(
                       settings.meterSpec,
                       master,
-                      settings.phraseSpec,
+                      settings.rehearsalSpec,
                   )
                 : master;
-        const counts = expandedPhraseGroupBarCountsSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
         if (!counts.length) return [];
-        if (typeof window.collectPhraseGroupRangesFromBarCounts === 'function') {
-            return window.collectPhraseGroupRangesFromBarCounts(
+        if (typeof window.collectRehearsalGroupRangesFromBarCounts === 'function') {
+            return window.collectRehearsalGroupRangesFromBarCounts(
                 settings.meterSpec,
                 layoutDuration,
                 counts,
@@ -678,7 +701,7 @@
         return [];
     }
 
-    function collectTrackSourceStreamForPhraseLayout(track) {
+    function collectTrackSourceStreamForRehearsalLayout(track) {
         const defaultClip = getPrimaryClipIdForTrack(track);
         const fullDur = getTrackSourceDurationSec(track);
         if (!(fullDur > PLAYBACK_REGION_MIN_SEC)) return [];
@@ -749,25 +772,25 @@
         };
     }
 
-    function phraseLayoutPlacementSecForRange(range) {
+    function rehearsalLayoutPlacementSecForRange(range) {
         if (!range || !Number.isFinite(range.startSec)) return null;
         const eps = segmentBoundaryJoinEpsilonSec();
         return range.startSec + eps * 2;
     }
 
-    function phraseCompositionLayoutReady(opt) {
+    function rehearsalCompositionLayoutReady(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (
             !o.forceLayout &&
-            typeof window.getMusicalGridPhraseFillVisible === 'function' &&
-            !window.getMusicalGridPhraseFillVisible()
+            typeof window.getMusicalGridRehearsalFillVisible === 'function' &&
+            !window.getMusicalGridRehearsalFillVisible()
         ) {
             return false;
         }
         if (typeof window.musicalGridDrawSettings !== 'function') return false;
         const settings = window.musicalGridDrawSettings();
         if (!settings || !settings.meterSpec) return false;
-        if (!settings.phraseSpec || !settings.phraseSpec.sizes.length) return false;
+        if (!settings.rehearsalSpec || !settings.rehearsalSpec.sizes.length) return false;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
@@ -775,7 +798,7 @@
         return master > 0;
     }
 
-    function commitPhraseLayoutSegments(track, nextSegments, opt) {
+    function commitRehearsalLayoutSegments(track, nextSegments, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const segOpt = {
             silent: true,
@@ -826,12 +849,12 @@
         return true;
     }
 
-    /** Phrase 欄確定 — 展開スロットごとに 1 リージョンへ再配置 */
-    function applyPhraseCompositionToTrackRegions(track, opt) {
+    /** Rehearsal 欄確定 — 展開スロットごとに 1 リージョンへ再配置 */
+    function applyRehearsalCompositionToTrackRegions(track, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!isExtraTrackRef(track)) return false;
-        if (!phraseCompositionLayoutReady(o)) return false;
-        const ranges = phraseLayoutExpandedRangesSnapshot();
+        if (!rehearsalCompositionLayoutReady(o)) return false;
+        const ranges = rehearsalLayoutExpandedRangesSnapshot();
         if (!ranges.length) return false;
         if (!isTrackRegionActive(track)) {
             if (typeof ensureDefaultTrackRegion === 'function') {
@@ -863,7 +886,7 @@
             };
         }
 
-        const stream = collectTrackSourceStreamForPhraseLayout(track);
+        const stream = collectTrackSourceStreamForRehearsalLayout(track);
         const defaultClip = getPrimaryClipIdForTrack(track);
         let cursor = { partIndex: 0, offsetSec: 0 };
         const nextSegments = [];
@@ -883,11 +906,14 @@
             })();
 
         const fileGridOriginSec = mapSourceFromBarRanges
-            ? gridLeadPadSec > 0.00001
-                ? gridLeadPadSec
-                : sourceTimeOffsetSec > 0.00001
-                  ? sourceTimeOffsetSec
-                  : 0
+            ? (() => {
+                  const lead = gridLeadPadSec > 0.00001 ? gridLeadPadSec : 0;
+                  const sync = sourceTimeOffsetSec > 0.00001 ? sourceTimeOffsetSec : 0;
+                  if (lead > 0 && sync > 0) return lead - sync;
+                  if (lead > 0) return lead;
+                  if (sync > 0) return sync;
+                  return 0;
+              })()
             : 0;
 
         for (let i = 0; i < ranges.length; i++) {
@@ -897,7 +923,7 @@
             if (!(slotDur > eps)) continue;
             const placementSec = mapSourceFromBarRanges
                 ? r.startSec
-                : phraseLayoutPlacementSecForRange(r);
+                : rehearsalLayoutPlacementSecForRange(r);
             if (placementSec == null) continue;
 
             const leadPad =
@@ -916,7 +942,10 @@
                 let fileOut = r.endSec - fileGridOriginSec;
                 if (i === 0) {
                     fileIn = 0;
+                    const preRollGridOnly =
+                        leadPad > 0.00001 && Math.abs(slotDur - leadPad) <= eps;
                     if (
+                        !preRollGridOnly &&
                         leadPad > 0.00001 &&
                         sourceTimeOffsetSec > 0.00001 &&
                         gridLeadPadSec > 0.00001
@@ -925,7 +954,7 @@
                         fileOut = sourceTimeOffsetSec;
                         timelineAnchor = placementSec + leadPad;
                     } else if (leadPad > 0.00001) {
-                        // GAC 先頭 Phrase（例: 8 小節 @ 140）— グリッドのみ、ファイルは消費しない
+                        // GAC 先頭 Rehearsal（例: 8 小節 @ 140）— グリッドのみ、ファイルは消費しない
                         fileOut = 0;
                         timelineAnchor = placementSec + leadPad;
                     } else if (sourceTimeOffsetSec > 0.00001) {
@@ -1009,7 +1038,7 @@
             }
         }
 
-        if (!commitPhraseLayoutSegments(track, nextSegments, o)) {
+        if (!commitRehearsalLayoutSegments(track, nextSegments, o)) {
             return false;
         }
         if (
@@ -1037,7 +1066,7 @@
             writeLog(
                 'Ex ' +
                     (track.slot + 1) +
-                    ': regions laid out to Phrase (' +
+                    ': regions laid out to Rehearsal (' +
                     nextSegments.length +
                     ' region(s))',
             );
@@ -1045,15 +1074,15 @@
         return true;
     }
 
-    function applyPhraseCompositionToAllExtraTrackRegions(opt) {
+    function applyRehearsalCompositionToAllExtraTrackRegions(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (
-            !o.preservePhraseBarCountsOverride &&
-            typeof window.clearPhraseGroupBarCountsOverride === 'function'
+            !o.preserveRehearsalBarCountsOverride &&
+            typeof window.clearRehearsalGroupBarCountsOverride === 'function'
         ) {
-            window.clearPhraseGroupBarCountsOverride();
+            window.clearRehearsalGroupBarCountsOverride();
         }
-        if (!phraseCompositionLayoutReady(o)) return 0;
+        if (!rehearsalCompositionLayoutReady(o)) return 0;
         if (!o.skipUndo && !regionUndoPaused) {
             requestRegionUndoCapture();
         }
@@ -1074,7 +1103,7 @@
                 continue;
             }
             if (
-                applyPhraseCompositionToTrackRegions(track, {
+                applyRehearsalCompositionToTrackRegions(track, {
                     silent: true,
                     skipUndo: true,
                     forceLayout: !!o.forceLayout,
@@ -1097,27 +1126,27 @@
                 refreshAllRegionRehearsalMarkLabels();
             }
             if (!o.silent && typeof flashSeekHint === 'function') {
-                flashSeekHint('Phrase', rebuilt + ' Ex track(s) realigned', 'notice');
+                flashSeekHint('Rehearsal', rebuilt + ' Ex track(s) realigned', 'notice');
             }
         }
         return rebuilt;
     }
     /** musical-grid 実装を core 読込時に固定（global 関数名衝突で再帰しないよう） */
-    const _musicalGridExpandedPhraseGroupBarCountsFn =
-        typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
-            ? window.getExpandedPhraseGroupBarCountsSnapshot
+    const _musicalGridExpandedRehearsalGroupBarCountsFn =
+        typeof window.getExpandedRehearsalGroupBarCountsSnapshot === 'function'
+            ? window.getExpandedRehearsalGroupBarCountsSnapshot
             : null;
 
-    /** 展開済み Phrase グループ小節数列 */
-    function expandedPhraseGroupBarCountsSnapshot() {
-        if (!_musicalGridExpandedPhraseGroupBarCountsFn) {
-            regionSwapDiagLog('phrase/counts', { error: 'API missing' });
+    /** 展開済み Rehearsal グループ小節数列 */
+    function expandedRehearsalGroupBarCountsSnapshot() {
+        if (!_musicalGridExpandedRehearsalGroupBarCountsFn) {
+            regionSwapDiagLog('rehearsal/counts', { error: 'API missing' });
             return [];
         }
         try {
-            return _musicalGridExpandedPhraseGroupBarCountsFn();
+            return _musicalGridExpandedRehearsalGroupBarCountsFn();
         } catch (err) {
-            regionSwapDiagLog('phrase/counts', {
+            regionSwapDiagLog('rehearsal/counts', {
                 error: 'snapshot threw',
                 message: err && err.message ? err.message : String(err),
             });
@@ -1145,18 +1174,77 @@
     }
 
     /**
-     * フレーズスロット先頭配置 — 長さが slot 終端や次リージョンと重なるときは手前へ寄せる（クロスフェード防止）。
+     * Rehearsal スロット先頭配置 — 長さが slot 終端や次リージョンと重なるときは手前へ寄せる（クロスフェード防止）。
      */
-    function phraseSlotRegionInTargetSec(track, slotIndex, segmentIndex, segmentsOpt) {
-        const slotStart = phraseSlotPlacementSec(slotIndex);
+    /**
+     * 先頭 head pad 付き 1 小節リージョン（R1）— 非対称 swap の ripple/snap 対象外。
+     * Rehearsal 0・segment 0 で、ソース In がトランスポート先頭より大きく離れている。
+     */
+    function isHeadPadAnchoredSwapSlot(track, slot, segmentsOpt) {
+        if (!slot || slot.kind === 'silent' || !slot.segmentRefs || !slot.segmentRefs.length) {
+            return false;
+        }
+        const musical = slot.musical;
+        if (!musical || (musical.rehearsalSlotIndex | 0) !== 0) return false;
+        const leader = slot.segmentRefs[0].segmentIndex | 0;
+        if (leader !== 0) return false;
+        const segments =
+            segmentsOpt ||
+            (typeof getTrackSegments === 'function' ? getTrackSegments(track) : null);
+        const seg = segments && segments[leader];
+        if (!seg) return false;
+        const eps = segmentBoundaryJoinEpsilonSec();
+        const leadPad = Math.max(0, Number(seg.regionLeadPadSec) || 0);
+        if (leadPad > eps * 4) return true;
+        const state =
+            typeof getPlaybackRegionsState === 'function'
+                ? getPlaybackRegionsState(track)
+                : null;
+        const headPad = state && Number.isFinite(state.headPadSec) ? state.headPadSec : 0;
+        if (headPad > eps * 4) return true;
+        const t0 =
+            typeof getTrackTimelineStartSec === 'function'
+                ? getTrackTimelineStartSec(track)
+                : 0;
+        const regionIn =
+            typeof segmentCopyRegionIn === 'function'
+                ? segmentCopyRegionIn(seg)
+                : typeof getSegmentRegionTimelineIn === 'function'
+                  ? getSegmentRegionTimelineIn(track, leader)
+                  : 0;
+        return regionIn > t0 + eps * 4;
+    }
+
+    function rehearsalSlotRegionInTargetSec(track, slotIndex, segmentIndex, segmentsOpt) {
+        const segments =
+            segmentsOpt ||
+            (typeof getTrackSegments === 'function' ? getTrackSegments(track) : null);
+        const headPadSlot = {
+            kind: 'audio-single',
+            segmentRefs: [{ segmentIndex: segmentIndex | 0 }],
+            musical: { rehearsalSlotIndex: slotIndex | 0 },
+        };
+        if (
+            typeof isHeadPadAnchoredSwapSlot === 'function' &&
+            isHeadPadAnchoredSwapSlot(track, headPadSlot, segments)
+        ) {
+            const seg = segments && segments[segmentIndex | 0];
+            if (seg) {
+                return typeof segmentCopyRegionIn === 'function'
+                    ? segmentCopyRegionIn(seg)
+                    : typeof getSegmentRegionTimelineIn === 'function'
+                      ? getSegmentRegionTimelineIn(track, segmentIndex | 0)
+                      : rehearsalSlotPlacementSec(slotIndex);
+            }
+        }
+        const slotStart = rehearsalSlotPlacementSec(slotIndex);
         if (slotStart == null) return null;
-        const segments = segmentsOpt || getTrackSegments(track);
-        const seg = segments[segmentIndex];
+        const seg = segments && segments[segmentIndex];
         if (!seg) return slotStart;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segDur = segmentCopySourceDurSec(seg);
         let maxIn = Infinity;
-        const ranges = phraseSlotRangesSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         const slotRange = ranges[slotIndex | 0];
         if (slotRange && Number.isFinite(slotRange.endSec)) {
             maxIn = Math.min(maxIn, slotRange.endSec - eps - segDur);
@@ -1179,7 +1267,7 @@
 
     /**
      * 無音↔リージョン入れ替え計画。
-     * ① Phrase 小節数を gapSlot↔segSlot で交換した後は afterPhraseSwap で range 再取得。
+     * ① Rehearsal 小節数を gapSlot↔segSlot で交換した後は afterRehearsalSwap で range 再取得。
      */
     function silentGapSegmentSwapPlan(track, gap, segmentIndices, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
@@ -1194,46 +1282,46 @@
             leaderIndex >= 0 ? getSegmentRegionTimelineIn(track, leaderIndex) : 0;
         const slots =
             gap && leaderIndex >= 0
-                ? resolveSilentGapPhraseSwapSlots(track, gap, leaderIndex)
-                : { gapSlot: null, segSlot: null, phraseSwap: false };
+                ? resolveSilentGapRehearsalSwapSlots(track, gap, leaderIndex)
+                : { gapSlot: null, segSlot: null, rehearsalSwap: false };
         const eps = segmentBoundaryJoinEpsilonSec();
         const gapSlotIdx =
-            gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0
-                ? gap.phraseIndex | 0
+            gap && Number.isFinite(gap.rehearsalIndex) && gap.rehearsalIndex >= 0
+                ? gap.rehearsalIndex | 0
                 : slots.gapSlot;
         let targetSec = null;
         const timelineOnlyTarget =
             !!slots.expandedEqualBarTimelineOnly ||
             !!slots.expandedSameSlotTimelineOnly ||
             !!slots.expandedUnequalBarTimelineOnly;
-        if (o.afterPhraseSwap && gapSlotIdx != null && gapSlotIdx >= 0 && leaderIndex >= 0) {
-            targetSec = phraseSlotRegionInTargetSec(track, gapSlotIdx, leaderIndex);
-        } else if (o.afterPhraseSwap && gapSlotIdx != null && gapSlotIdx >= 0) {
-            targetSec = phraseSlotPlacementSec(gapSlotIdx);
+        if (o.afterRehearsalSwap && gapSlotIdx != null && gapSlotIdx >= 0 && leaderIndex >= 0) {
+            targetSec = rehearsalSlotRegionInTargetSec(track, gapSlotIdx, leaderIndex);
+        } else if (o.afterRehearsalSwap && gapSlotIdx != null && gapSlotIdx >= 0) {
+            targetSec = rehearsalSlotPlacementSec(gapSlotIdx);
         } else if (timelineOnlyTarget && gap && Number.isFinite(gap.startSec)) {
             targetSec = gap.startSec + eps;
         } else if (gap && Number.isFinite(gap.startSec)) {
             targetSec = gap.startSec + eps;
         }
         if (targetSec == null && gapSlotIdx != null && gapSlotIdx >= 0) {
-            targetSec = phraseSlotPlacementSec(gapSlotIdx);
+            targetSec = rehearsalSlotPlacementSec(gapSlotIdx);
         }
         if (targetSec == null) targetSec = silentGapMoveTargetSec(gap, track);
         return {
             segRegionIn,
             targetSec,
             delta: targetSec - segRegionIn,
-            phraseGap: slots.gapSlot,
-            phraseSeg: slots.segSlot,
+            rehearsalGap: slots.gapSlot,
+            rehearsalSeg: slots.segSlot,
             gapExpanded: slots.gapExpanded,
             segExpanded: slots.segExpanded,
             expandedEqualBarTimelineOnly: !!slots.expandedEqualBarTimelineOnly,
             expandedSameSlotTimelineOnly: !!slots.expandedSameSlotTimelineOnly,
             expandedUnequalBarTimelineOnly: !!slots.expandedUnequalBarTimelineOnly,
-            expandedPhraseSwap: !!slots.expandedPhraseSwap,
+            expandedRehearsalSwap: !!slots.expandedRehearsalSwap,
             sameSlotPartialShrink: !!slots.sameSlotPartialShrink,
             gapBars: slots.gapBars || 0,
-            phraseSwapNeeded: !!(
+            rehearsalSwapNeeded: !!(
                 slots.gapSlot != null && slots.segSlot != null && slots.gapSlot !== slots.segSlot
             ),
             leaderIndex,
@@ -1241,18 +1329,18 @@
         };
     }
 
-    /** Region Out 直前が属する Phrase スロット */
-    function phraseSlotIndexAtRegionOutSec(transportSec) {
+    /** Region Out 直前が属する Rehearsal スロット */
+    function rehearsalSlotIndexAtRegionOutSec(transportSec) {
         if (!Number.isFinite(transportSec)) return null;
-        const ranges = phraseSlotRangesSnapshot();
-        if (!ranges.length) return phraseSlotIndexAtTransportSec(transportSec);
+        const ranges = rehearsalSlotRangesSnapshot();
+        if (!ranges.length) return rehearsalSlotIndexAtTransportSec(transportSec);
         const eps = segmentBoundaryJoinEpsilonSec();
         const s = Number(transportSec) - eps;
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
             if (s >= r.startSec - eps && s < r.endSec - eps) return i;
         }
-        return phraseSlotIndexAtTransportSec(s);
+        return rehearsalSlotIndexAtTransportSec(s);
     }
 
     function sourceDurationSecForSegmentCopy(seg) {
@@ -1265,10 +1353,10 @@
 
     /** リージョン In 付近の 1 小節秒数からソース長を小節数換算 */
     function estimateContentBarCountAtRegionIn(regionInSec, sourceDurSec) {
-        const counts = expandedPhraseGroupBarCountsSnapshot();
-        const ranges = phraseSlotRangesSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!counts.length || !ranges.length || !(sourceDurSec > 0)) return 1;
-        const idx = phraseSlotIndexAtRegionInSec(regionInSec);
+        const idx = rehearsalSlotIndexAtRegionInSec(regionInSec);
         if (idx == null || idx < 0 || idx >= counts.length) return 1;
         const r = ranges[idx];
         const bars = counts[idx] | 0;
@@ -1281,7 +1369,7 @@
         // 1 小節スロット等 — slot 内 barDur が極端に短く contentBars が膨らむのを防ぐ
         if (bars === 1 && sourceDurSec > slotDur + eps) {
             const regionOut = regionInSec + sourceDurSec;
-            const outIdx = phraseSlotIndexAtRegionOutSec(regionOut);
+            const outIdx = rehearsalSlotIndexAtRegionOutSec(regionOut);
             if (outIdx != null && outIdx >= idx && outIdx < counts.length) {
                 let spanSum = 0;
                 for (let i = idx; i <= outIdx; i++) spanSum += counts[i] | 0;
@@ -1305,17 +1393,18 @@
         );
     }
 
-    window.logSessionRestoreRegionPhraseSnapshot = logSessionRestoreRegionPhraseSnapshot;
-    window.applyPhraseCompositionToTrackRegions = applyPhraseCompositionToTrackRegions;
-    window.applyPhraseCompositionToAllExtraTrackRegions =
-        applyPhraseCompositionToAllExtraTrackRegions;
-    window.phraseSlotIndexAtRegionInSec = phraseSlotIndexAtRegionInSec;
-    window.resolveSegmentIndexForPhraseSlot = resolveSegmentIndexForPhraseSlot;
-    window.phraseNavStartSecForSlot = phraseNavStartSecForSlot;
-    window.phraseSlotIndexForSilentGap = phraseSlotIndexForSilentGap;
-    window.phraseSlotStartSec = phraseSlotStartSec;
-    window.collectPhraseSlotJoinedSegmentIndices = collectPhraseSlotJoinedSegmentIndices;
+    window.logSessionRestoreRegionRehearsalSnapshot = logSessionRestoreRegionRehearsalSnapshot;
+    window.applyRehearsalCompositionToTrackRegions = applyRehearsalCompositionToTrackRegions;
+    window.applyRehearsalCompositionToAllExtraTrackRegions =
+        applyRehearsalCompositionToAllExtraTrackRegions;
+    window.rehearsalSlotIndexAtRegionInSec = rehearsalSlotIndexAtRegionInSec;
+    window.resolveSegmentIndexForRehearsalSlot = resolveSegmentIndexForRehearsalSlot;
+    window.rehearsalNavStartSecForSlot = rehearsalNavStartSecForSlot;
+    window.rehearsalSlotIndexForSilentGap = rehearsalSlotIndexForSilentGap;
+    window.rehearsalSlotStartSec = rehearsalSlotStartSec;
+    window.collectRehearsalSlotJoinedSegmentIndices = collectRehearsalSlotJoinedSegmentIndices;
+    window.isHeadPadAnchoredSwapSlot = isHeadPadAnchoredSwapSlot;
     window.silentGapSegmentSwapPlan = silentGapSegmentSwapPlan;
     window.resolveSilentGapSwapSegmentIndices = resolveSilentGapSwapSegmentIndices;
     window.estimateRegionContentBarCountForSegment = estimateRegionContentBarCountForSegment;
-    window.isSamePhraseSlotPartialSilentGapPlacement = isSamePhraseSlotPartialSilentGapPlacement;
+    window.isSameRehearsalSlotPartialSilentGapPlacement = isSameRehearsalSlotPartialSilentGapPlacement;

@@ -22,7 +22,7 @@
     var lastMarkerListHighlightScrollId = null;
     var markerActiveTcEdge = 'in';
     var markerIdSeq = 0;
-    var markersDisplayHidden = false;
+    var markersDisplayHidden = true;
     var suppressMarkerRowHoverSeekUntil = 0;
     var MARKER_COMMENT_POINT_HOLD_SEC = 1;
     var MARKER_INSERT_RANGE_HOLD_MS = 200;

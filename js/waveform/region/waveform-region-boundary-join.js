@@ -224,21 +224,21 @@
         );
     }
 
-    /** Phrase オフ時のみ — スプリット境界ドラッグのタイムライン／ソースずれ許容 */
-    const PHRASE_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC = 0.1;
+    /** Rehearsal オフ時のみ — スプリット境界ドラッグのタイムライン／ソースずれ許容 */
+    const REHEARSAL_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC = 0.1;
 
-    function isPhraseOffMovableSplitBoundaryEnabled() {
+    function isRehearsalOffMovableSplitBoundaryEnabled() {
         if (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
         ) {
             return false;
         }
         return true;
     }
 
-    function phraseOffMovableSplitBoundaryToleranceSec() {
-        return PHRASE_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC;
+    function rehearsalOffMovableSplitBoundaryToleranceSec() {
+        return REHEARSAL_OFF_MOVABLE_SPLIT_BOUNDARY_TOLERANCE_SEC;
     }
 
     /** 同一クリップでソース上の分割点が共有されている（タイムライン結合は未要求） */
@@ -253,6 +253,9 @@
         const rightClip =
             right.clipId || getSegmentClipId(track, boundaryIndex + 1);
         if (leftClip !== rightClip) return false;
+        const leftSpan =
+            (Number(left.sourceOutSec) || 0) - (Number(left.sourceInSec) || 0);
+        if (leftSpan <= segmentBoundaryJoinEpsilonSec()) return false;
         return (
             Math.abs(
                 (Number(left.sourceOutSec) || 0) - (Number(right.sourceInSec) || 0),
@@ -266,7 +269,7 @@
      * タイムラインが離れていればハンドルは出さない（平行移動後の隙間中央の縦線を防ぐ）。
      */
     function isSegmentMovableSplitBoundary(track, boundaryIndex) {
-        if (!isPhraseOffMovableSplitBoundaryEnabled()) return false;
+        if (!isRehearsalOffMovableSplitBoundaryEnabled()) return false;
         const segments = getTrackSegments(track);
         if (boundaryIndex < 0 || boundaryIndex >= segments.length - 1) return false;
         const left = segments[boundaryIndex];
@@ -277,7 +280,7 @@
         const rightClip =
             right.clipId || getSegmentClipId(track, boundaryIndex + 1);
         if (leftClip !== rightClip) return false;
-        const tol = phraseOffMovableSplitBoundaryToleranceSec();
+        const tol = rehearsalOffMovableSplitBoundaryToleranceSec();
         const leftEnd = getSegmentTimelineEnd(track, boundaryIndex);
         const rightStart = getSegmentTimelineStart(track, boundaryIndex + 1);
         return Math.abs(leftEnd - rightStart) <= tol;

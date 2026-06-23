@@ -92,12 +92,12 @@
         );
     }
 
-    /** グループ平行移動: いずれかが TC0 手前に出ないよう delta を共有クランプ */
+    /** グループ平行移動: 各メンバーが移動下限（lead pad 時は再生開始≧0）を下回らないよう delta をクランプ */
     function clampRegionGroupMoveDelta(members, deltaRaw, startRegionInByKey, opt) {
         if (!Number.isFinite(deltaRaw)) return 0;
         if (!members || !members.length) return deltaRaw;
         const useCurrent = !!(opt && opt.useCurrentRegionInBase);
-        let minStart = Infinity;
+        let limitDelta = Infinity;
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
             const track = { type: 'extra', slot: m.slot };
@@ -107,10 +107,15 @@
                 : startRegionInByKey && Number.isFinite(startRegionInByKey[key])
                   ? startRegionInByKey[key]
                   : getSegmentRegionTimelineIn(track, m.segmentIndex);
-            if (Number.isFinite(rin)) minStart = Math.min(minStart, rin);
+            if (!Number.isFinite(rin)) continue;
+            const floor =
+                typeof getSegmentRegionMoveMinTransportSec === 'function'
+                    ? getSegmentRegionMoveMinTransportSec(track, m.segmentIndex)
+                    : 0;
+            limitDelta = Math.min(limitDelta, floor - rin);
         }
-        if (!Number.isFinite(minStart) || minStart === Infinity) return deltaRaw;
-        return Math.max(deltaRaw, -minStart);
+        if (!Number.isFinite(limitDelta) || limitDelta === Infinity) return deltaRaw;
+        return Math.max(deltaRaw, limitDelta);
     }
 
     function isRegionEntrySelected(slot, segmentIndex) {
@@ -269,8 +274,8 @@
         logSilentGapSelectionDiag(selected ? 'deselected' : 'selected', {
             ex: slot + 1,
             gapIndex,
-            phraseSlot:
-                gap && Number.isFinite(gap.phraseIndex) ? (gap.phraseIndex | 0) + 1 : null,
+            rehearsalSlot:
+                gap && Number.isFinite(gap.rehearsalIndex) ? (gap.rehearsalIndex | 0) + 1 : null,
             partial: !!(gap && gap.partial),
             start: gap ? regionSwapDiagFmtSec(gap.startSec) : null,
             end: gap ? regionSwapDiagFmtSec(gap.endSec) : null,
@@ -571,8 +576,9 @@
 
     /** 選択区間がリージョン内に占める割合（0〜1）。点選択時は境界からの内側深さで算出 */
     function regionSelectedFraction(track, segmentIndex, inSec, outSec) {
-        const start = getSegmentRegionTimelineIn(track, segmentIndex);
-        const end = getSegmentTimelineEnd(track, segmentIndex);
+        const interval = getSegmentRegionInteractiveTimelineInterval(track, segmentIndex);
+        const start = interval.startSec;
+        const end = interval.endSec;
         if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
         const dur = end - start;
         const eps = regionSelectTransportEpsilonSec();
@@ -618,8 +624,9 @@
     }
 
     function regionIntervalOverlapsTransportRange(track, segmentIndex, inSec, outSec) {
-        const start = getSegmentRegionTimelineIn(track, segmentIndex);
-        const end = getSegmentTimelineEnd(track, segmentIndex);
+        const interval = getSegmentRegionInteractiveTimelineInterval(track, segmentIndex);
+        const start = interval.startSec;
+        const end = interval.endSec;
         if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
         const eps = regionSelectTransportEpsilonSec();
         return start < outSec - eps && end > inSec + eps;
@@ -665,6 +672,29 @@
         return true;
     }
 
+    function addRegionSelectionEntriesForIndex(slot, segmentIndex) {
+        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
+        const track = { type: 'extra', slot };
+        const gid = getSegmentRegionGroupId(track, segmentIndex);
+        if (gid) {
+            const members = collectRegionGroupMembers(track, segmentIndex);
+            for (let i = 0; i < members.length; i++) {
+                addRegionSelectionEntry(members[i].slot, members[i].segmentIndex);
+            }
+            return;
+        }
+        addRegionSelectionEntry(slot, segmentIndex);
+    }
+
+    function addRegionSelectionOnTrack(slot, segmentIndices) {
+        if (!(slot >= 0) || !segmentIndices || !segmentIndices.length) return false;
+        for (let i = 0; i < segmentIndices.length; i++) {
+            addRegionSelectionEntriesForIndex(slot, segmentIndices[i]);
+        }
+        syncRegionSelectionClasses();
+        return true;
+    }
+
     function resolveRegionSegmentIndexAtSeekbar(track) {
         const seekSec =
             typeof transportSecFromSeekbar === 'function'
@@ -676,12 +706,17 @@
         return hits.length ? hits[0] : -1;
     }
 
-    /** Enter — アクティブ Audio Track でシークバー直下、または範囲ループ区間のリージョンを選択 */
-    function selectPlaybackRegionsAtActiveTrackEnter() {
+    /** Enter — アクティブ Audio Track でシークバー直下、または範囲ループ区間のリージョンを追加選択 */
+    function selectPlaybackRegionsAtActiveTrackEnter(opt) {
+        opt = opt || {};
         const slot = resolveActiveExtraSlotForRegionEnter();
         if (slot < 0) return false;
         const track = { type: 'extra', slot };
         if (!isTrackRegionActive(track)) return false;
+
+        const applySelection = opt.additive
+            ? addRegionSelectionOnTrack
+            : setRegionSelectionOnTrack;
 
         const rangeActive =
             typeof isRangeLoopPlaybackActive === 'function' &&
@@ -708,7 +743,7 @@
                     inSec,
                     outSec,
                 );
-                return setRegionSelectionOnTrack(slot, between);
+                return applySelection(slot, between);
             }
 
             const overlapping = collectRegionIndicesOverlappingTransportRange(
@@ -716,12 +751,12 @@
                 inSec,
                 outSec,
             );
-            return setRegionSelectionOnTrack(slot, overlapping);
+            return applySelection(slot, overlapping);
         }
 
         const segmentIndex = resolveRegionSegmentIndexAtSeekbar(track);
         if (segmentIndex < 0) return false;
-        return setRegionSelectionOnTrack(slot, [segmentIndex]);
+        return applySelection(slot, [segmentIndex]);
     }
 
 

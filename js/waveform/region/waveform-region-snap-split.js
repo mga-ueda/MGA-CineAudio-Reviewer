@@ -115,17 +115,11 @@
     function isPlaybackRegionSplitForbiddenAtTransport(track, transportSec) {
         return !resolvePlaybackRegionSplitPlacement(track, transportSec);
     }
-    /** Tempo/Sig または Phrase 着色 ON 時 — リージョン本体（平行移動）ドラッグを禁止 */
+    /** Rehearsal 着色 ON 時 — リージョン本体（平行移動）ドラッグを禁止 */
     function isPlaybackRegionOffsetDragForbidden() {
         if (
-            typeof getMusicalGridVisible === 'function' &&
-            getMusicalGridVisible()
-        ) {
-            return true;
-        }
-        if (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
         ) {
             return true;
         }
@@ -381,8 +375,8 @@
             return false;
         }
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
             return false;
         }
@@ -459,17 +453,31 @@
         return raw.clipId || 'main';
     }
 
+    function regionMoveTimelineMinSec(track, segmentIndex) {
+        return typeof getSegmentRegionMoveMinTransportSec === 'function'
+            ? getSegmentRegionMoveMinTransportSec(track, segmentIndex)
+            : 0;
+    }
+
+    function regionMoveSnapOpt(track, segmentIndex, opt) {
+        return Object.assign({}, opt || {}, {
+            minTimelineSec: regionMoveTimelineMinSec(track, segmentIndex),
+        });
+    }
+
     function snapTimelineSec(sec, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n)) return 0;
+        const minSec =
+            opt && Number.isFinite(opt.minTimelineSec) ? opt.minTimelineSec : 0;
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
-            return Math.max(0, n);
+            return Math.max(minSec, n);
         }
         const step =
             typeof masterFrameSec === 'number' && masterFrameSec > 0
                 ? masterFrameSec
                 : 1 / 24;
-        return Math.max(0, Math.round(n / step) * step);
+        return Math.max(minSec, Math.round(n / step) * step);
     }
 
     function regionSnapDenseGapSec() {
@@ -649,6 +657,93 @@
         return stops;
     }
 
+    /** 他 Ex トラックのリージョン In/Out（ドラッグ中トラックは除外） */
+    function collectOtherTracksRegionSnapStops(exclude) {
+        const stops = [];
+        const excludeSlot =
+            exclude && typeof exclude.slot === 'number' ? exclude.slot : -1;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            if (slot === excludeSlot) continue;
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            const segs = getTrackSegments(track);
+            for (let i = 0; i < segs.length; i++) {
+                stops.push(getSegmentRegionTimelineIn(track, i));
+                stops.push(getSegmentTimelineEnd(track, i));
+            }
+        }
+        return stops;
+    }
+
+    function isRegionMoveTempoGridLocked() {
+        return (
+            typeof getMusicalGridVisible === 'function' && getMusicalGridVisible()
+        );
+    }
+
+    function regionMoveSnapWithinThreshold(distPx, thresholdPx, tempoGridLock) {
+        if (tempoGridLock) return true;
+        return regionSnapWithinThresholdPx(distPx, thresholdPx);
+    }
+
+    function dedupeRegionMoveSnapStops(raw) {
+        const step =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0
+                ? masterFrameSec
+                : 1 / 24;
+        const eps = step * 0.5;
+        const unique = [];
+        for (let i = 0; i < raw.length; i++) {
+            const s = raw[i];
+            if (!Number.isFinite(s)) continue;
+            let dup = false;
+            for (let j = 0; j < unique.length; j++) {
+                if (Math.abs(unique[j] - s) <= eps) {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup) unique.push(s);
+        }
+        return unique;
+    }
+
+    /** 平行移動: T ON → 小節・拍（表示時）・マーカーのみ / T OFF → 他トラック In/Out + マーカー */
+    function collectRegionMoveSnapStops(exclude) {
+        const raw = [];
+        const tempoGridLock = isRegionMoveTempoGridLocked();
+        const markersVisible =
+            typeof hasVisibleMarkersOnTimeline === 'function' &&
+            hasVisibleMarkersOnTimeline();
+
+        if (tempoGridLock) {
+            if (typeof collectMusicalGridRegionMoveSnapStops === 'function') {
+                const gridStops = collectMusicalGridRegionMoveSnapStops();
+                for (let i = 0; i < gridStops.length; i++) {
+                    raw.push(gridStops[i]);
+                }
+            } else if (typeof window.collectMusicalGridBarSnapStops === 'function') {
+                const barStops = window.collectMusicalGridBarSnapStops();
+                for (let i = 0; i < barStops.length; i++) {
+                    raw.push(barStops[i]);
+                }
+            }
+        } else {
+            const regionStops = collectOtherTracksRegionSnapStops(exclude);
+            for (let i = 0; i < regionStops.length; i++) {
+                raw.push(regionStops[i]);
+            }
+        }
+        if (markersVisible && typeof collectMarkerVideoEndSnapStops === 'function') {
+            const markerStops = collectMarkerVideoEndSnapStops();
+            for (let i = 0; i < markerStops.length; i++) {
+                raw.push(markerStops[i]);
+            }
+        }
+        return dedupeRegionMoveSnapStops(raw);
+    }
+
     function resolveTimelineSnapPriorityMode() {
         const markerActive =
             typeof hasVisibleMarkersOnTimeline === 'function' &&
@@ -700,6 +795,9 @@
     function snapRegionHandleTransportSec(sec, opt) {
         let n = snapTimelineSec(sec, opt);
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
+            return Math.max(0, n);
+        }
+        if (opt && opt.skipStopSnap) {
             return Math.max(0, n);
         }
         const threshold = regionSnapThresholdSec();
@@ -774,42 +872,6 @@
         if (!ref || !(w > 0) || !Number.isFinite(clientX)) return 0;
         const left = ref.getBoundingClientRect().left;
         return (Number(clientX) - left) / w;
-    }
-
-    /** 平行移動: 全 Ex のリージョン In/Out を常に候補にし、マーカー／グリッドも併用（ハンドル操作と同じ） */
-    function collectRegionMoveSnapStops(exclude) {
-        const raw = collectRegionSnapStops(exclude, -1);
-        const priority = resolveTimelineSnapPriorityMode();
-        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
-            const markerStops = collectMarkerVideoEndSnapStops();
-            for (let i = 0; i < markerStops.length; i++) {
-                raw.push(markerStops[i]);
-            }
-        } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
-            const gridStops = collectMusicalGridSnapStops();
-            for (let i = 0; i < gridStops.length; i++) {
-                raw.push(gridStops[i]);
-            }
-        }
-        const step =
-            typeof masterFrameSec === 'number' && masterFrameSec > 0
-                ? masterFrameSec
-                : 1 / 24;
-        const eps = step * 0.5;
-        const unique = [];
-        for (let i = 0; i < raw.length; i++) {
-            const s = raw[i];
-            if (!Number.isFinite(s)) continue;
-            let dup = false;
-            for (let j = 0; j < unique.length; j++) {
-                if (Math.abs(unique[j] - s) <= eps) {
-                    dup = true;
-                    break;
-                }
-            }
-            if (!dup) unique.push(s);
-        }
-        return unique;
     }
 
     function regionMoveDragDeltaEpsilonSec() {
@@ -902,15 +964,16 @@
             stopSec: null,
             thresholdSec: null,
         };
+        const moveSnapOpt = regionMoveSnapOpt(track, segmentIndex, opt);
         if (typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt(opt)) {
             detail.edge = 'alt';
-            detail.snappedSec = Math.max(REGION_IN_MIN_TRANSPORT_SEC, raw);
+            detail.snappedSec = Math.max(moveSnapOpt.minTimelineSec, raw);
             return {
                 sec: detail.snappedSec,
                 detail,
             };
         }
-        const proposedHead = snapTimelineSec(raw, opt);
+        const proposedHead = snapTimelineSec(raw, moveSnapOpt);
         detail.proposedHeadSec = raw;
         detail.frameSec = proposedHead;
         detail.pointerSec = raw;
@@ -978,10 +1041,11 @@
         detail.directionDeltaSec = directionDelta;
 
         const stops = collectRegionMoveSnapStops(exclude);
+        const tempoGridLock = isRegionMoveTempoGridLocked();
         const diagCandidates = regionSnapDiagEnabled() ? [] : null;
 
         let bestRegionIn = proposedHead;
-        let bestDistPx = snapPx + 1;
+        let bestDistPx = tempoGridLock ? Infinity : snapPx + 1;
         let bestEdge = 'none';
         let bestStop = null;
         let nearestStop = null;
@@ -990,20 +1054,35 @@
         let nearestEdge = null;
         const snapHead = raw;
         const snapTail = proposedTail;
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        const snapPlaybackStart =
+            leadPad > regionMoveDragDeltaEpsilonSec() ? raw + leadPad : null;
         for (let i = 0; i < stops.length; i++) {
             const stop = stops[i];
             if (!Number.isFinite(stop)) continue;
             const dHead = Math.abs(stop - snapHead);
             const dTail = Math.abs(stop - snapTail);
+            const dPlay =
+                snapPlaybackStart != null ? Math.abs(stop - snapPlaybackStart) : Infinity;
             const dHeadPx = regionSecGapToPx(dHead, layout.master, layout.scrubW);
             const dTailPx = regionSecGapToPx(dTail, layout.master, layout.scrubW);
-            const minD = Math.min(dHead, dTail);
-            const minDPx = Math.min(dHeadPx, dTailPx);
+            const dPlayPx =
+                snapPlaybackStart != null
+                    ? regionSecGapToPx(dPlay, layout.master, layout.scrubW)
+                    : Infinity;
+            const minD = Math.min(dHead, dTail, dPlay);
+            const minDPx = Math.min(dHeadPx, dTailPx, dPlayPx);
             if (minDPx < nearestDistPx) {
                 nearestDistPx = minDPx;
                 nearestDist = minD;
                 nearestStop = stop;
-                nearestEdge = dHeadPx <= dTailPx ? 'in' : 'out';
+                if (dHeadPx <= dTailPx && dHeadPx <= dPlayPx) {
+                    nearestEdge = 'in';
+                } else if (dTailPx <= dPlayPx) {
+                    nearestEdge = 'out';
+                } else {
+                    nearestEdge = 'play';
+                }
             }
             const headThPx = regionSnapEffectiveThresholdPx(
                 stop,
@@ -1013,8 +1092,10 @@
                 layout.scrubW,
             );
             const tailThPx = headThPx;
+            const playThPx = headThPx;
             const headTh = regionSnapEffectiveThresholdSec(stop, stops, threshold);
             const tailTh = headTh;
+            const playTh = headTh;
             const rejectReasons = regionMoveCommitSnapRejectReasons(
                 stop,
                 snapHead,
@@ -1024,17 +1105,35 @@
             );
             const headReject = rejectReasons.headReject;
             const tailReject = rejectReasons.tailReject;
+            const playReject =
+                snapPlaybackStart != null
+                    ? regionMoveCommitSnapRejectReasons(
+                          stop,
+                          snapPlaybackStart,
+                          snapPlaybackStart,
+                          baseRegionIn + leadPad,
+                          baseRegionIn + leadPad,
+                      ).headReject
+                    : null;
             if (
                 diagCandidates &&
                 (regionSnapWithinThresholdPx(dHeadPx, headThPx) ||
-                    regionSnapWithinThresholdPx(dTailPx, tailThPx))
+                    regionSnapWithinThresholdPx(dTailPx, tailThPx) ||
+                    (snapPlaybackStart != null &&
+                        regionSnapWithinThresholdPx(dPlayPx, playThPx)))
             ) {
                 diagCandidates.push({
                     stopSec: Math.round(stop * 10000) / 10000,
                     dHeadSec: Math.round(dHead * 10000) / 10000,
                     dTailSec: Math.round(dTail * 10000) / 10000,
+                    dPlaySec:
+                        snapPlaybackStart != null
+                            ? Math.round(dPlay * 10000) / 10000
+                            : null,
                     dHeadPx: Math.round(dHeadPx * 100) / 100,
                     dTailPx: Math.round(dTailPx * 100) / 100,
+                    dPlayPx:
+                        snapPlaybackStart != null ? Math.round(dPlayPx * 100) / 100 : null,
                     headThSec: Math.round(headTh * 10000) / 10000,
                     tailThSec: Math.round(tailTh * 10000) / 10000,
                     headThPx: Math.round(headThPx * 100) / 100,
@@ -1042,11 +1141,12 @@
                         Math.round(regionSnapAdjacentGapSec(stop, stops) * 10000) / 10000,
                     headReject: headReject,
                     tailReject: tailReject,
+                    playReject: playReject,
                 });
             }
             if (
                 !headReject &&
-                regionSnapWithinThresholdPx(dHeadPx, headThPx) &&
+                regionMoveSnapWithinThreshold(dHeadPx, headThPx, tempoGridLock) &&
                 dHeadPx < bestDistPx
             ) {
                 bestDistPx = dHeadPx;
@@ -1056,7 +1156,7 @@
             }
             if (
                 !tailReject &&
-                regionSnapWithinThresholdPx(dTailPx, tailThPx) &&
+                regionMoveSnapWithinThreshold(dTailPx, tailThPx, tempoGridLock) &&
                 dTailPx < bestDistPx
             ) {
                 bestDistPx = dTailPx;
@@ -1064,11 +1164,30 @@
                 bestEdge = 'out';
                 bestStop = stop;
             }
+            if (
+                snapPlaybackStart != null &&
+                !playReject &&
+                regionMoveSnapWithinThreshold(dPlayPx, playThPx, tempoGridLock) &&
+                dPlayPx < bestDistPx
+            ) {
+                bestDistPx = dPlayPx;
+                bestRegionIn = stop - leadPad;
+                bestEdge = 'play';
+                bestStop = stop;
+            }
         }
         if (diagCandidates) {
             diagCandidates.sort((a, b) => {
-                const da = Math.min(a.dHeadSec, a.dTailSec);
-                const db = Math.min(b.dHeadSec, b.dTailSec);
+                const da = Math.min(
+                    a.dHeadSec,
+                    a.dTailSec,
+                    Number.isFinite(a.dPlaySec) ? a.dPlaySec : Infinity,
+                );
+                const db = Math.min(
+                    b.dHeadSec,
+                    b.dTailSec,
+                    Number.isFinite(b.dPlaySec) ? b.dPlaySec : Infinity,
+                );
                 return da - db;
             });
             detail.candidates = diagCandidates.slice(0, 16);
@@ -1082,10 +1201,7 @@
         }
         detail.edge = bestEdge;
         detail.stopSec = bestStop;
-        detail.snappedSec = Math.max(
-            REGION_IN_MIN_TRANSPORT_SEC,
-            snapTimelineSec(bestRegionIn, opt),
-        );
+        detail.snappedSec = snapTimelineSec(bestRegionIn, moveSnapOpt);
         return {
             sec: detail.snappedSec,
             detail,

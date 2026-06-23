@@ -150,18 +150,18 @@
     function musicalGridVisibilityPrefsForExport(prefs) {
         const p = prefs && typeof prefs === 'object' ? prefs : {};
         let musicalGridVisible = false;
-        let musicalGridPhraseFillVisible = false;
+        let musicalGridRehearsalFillVisible = false;
         if (typeof getMusicalGridVisible === 'function') {
             musicalGridVisible = getMusicalGridVisible();
         } else if (typeof p.musicalGridVisible === 'boolean') {
             musicalGridVisible = p.musicalGridVisible;
         }
-        if (typeof getMusicalGridPhraseFillVisible === 'function') {
-            musicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible();
-        } else if (typeof p.musicalGridPhraseFillVisible === 'boolean') {
-            musicalGridPhraseFillVisible = p.musicalGridPhraseFillVisible;
+        if (typeof getMusicalGridRehearsalFillVisible === 'function') {
+            musicalGridRehearsalFillVisible = getMusicalGridRehearsalFillVisible();
+        } else if (typeof p.musicalGridRehearsalFillVisible === 'boolean') {
+            musicalGridRehearsalFillVisible = p.musicalGridRehearsalFillVisible;
         }
-        return { musicalGridVisible, musicalGridPhraseFillVisible };
+        return { musicalGridVisible, musicalGridRehearsalFillVisible };
     }
 
     function describeMusicalGridVisibilityPrefs(p) {
@@ -172,13 +172,13 @@
                     ? 'ON'
                     : 'OFF'
                 : '?';
-        const phrase =
-            typeof pref.musicalGridPhraseFillVisible === 'boolean'
-                ? pref.musicalGridPhraseFillVisible
+        const rehearsal =
+            typeof pref.musicalGridRehearsalFillVisible === 'boolean'
+                ? pref.musicalGridRehearsalFillVisible
                     ? 'ON'
                     : 'OFF'
                 : '?';
-        return 'Tempo/Sig ' + tempo + ', Phrase ' + phrase;
+        return 'Tempo/Sig ' + tempo + ', Rehearsal ' + rehearsal;
     }
 
     function applyMusicalGridVisibilityPrefs(p) {
@@ -188,10 +188,10 @@
             setMusicalGridVisible(pref.musicalGridVisible, importOpt);
         }
         if (
-            typeof pref.musicalGridPhraseFillVisible === 'boolean' &&
-            typeof setMusicalGridPhraseFillVisible === 'function'
+            typeof pref.musicalGridRehearsalFillVisible === 'boolean' &&
+            typeof setMusicalGridRehearsalFillVisible === 'function'
         ) {
-            setMusicalGridPhraseFillVisible(pref.musicalGridPhraseFillVisible, importOpt);
+            setMusicalGridRehearsalFillVisible(pref.musicalGridRehearsalFillVisible, importOpt);
         }
     }
 
@@ -637,6 +637,9 @@
         if (Number.isFinite(entry.regionTimelineInSec)) {
             detail += ', region in ' + formatTcForLog(entry.regionTimelineInSec);
         }
+        if (Number.isFinite(entry.regionLeadPadSec) && entry.regionLeadPadSec > 0) {
+            detail += ', lead pad ' + formatTcForLog(entry.regionLeadPadSec);
+        }
         if (Number.isFinite(entry.regionHeadPadSec) && entry.regionHeadPadSec > 0) {
             detail += ', head pad ' + formatTcForLog(entry.regionHeadPadSec);
         }
@@ -657,15 +660,6 @@
             playbackRegion: row.playbackRegion,
             mix: row.mix,
             extraTracks: [],
-            rehearsalMark:
-                row.rehearsalMark && typeof row.rehearsalMark === 'object'
-                    ? { offset: !!row.rehearsalMark.offset }
-                    : {
-                          offset:
-                              typeof getRehearsalMarkOffsetEnabled === 'function'
-                                  ? getRehearsalMarkOffsetEnabled()
-                                  : false,
-                      },
         };
         if (Array.isArray(row.extraTracks)) {
             for (const entry of row.extraTracks) {
@@ -762,7 +756,7 @@
                           ? getMusicalGridPersistSnapshot()
                           : prefs.musicalGrid,
                 musicalGridVisible: gridVisibility.musicalGridVisible,
-                musicalGridPhraseFillVisible: gridVisibility.musicalGridPhraseFillVisible,
+                musicalGridRehearsalFillVisible: gridVisibility.musicalGridRehearsalFillVisible,
             },
             monitorPrefs: reviewMonitorPrefsForExport(),
             timecodeOverlay:
@@ -855,10 +849,6 @@
             playbackRegion: sess.playbackRegion,
             mix: sess.mix,
             extraTracks: [],
-            rehearsalMark:
-                sess.rehearsalMark && typeof sess.rehearsalMark === 'object'
-                    ? { offset: !!sess.rehearsalMark.offset }
-                    : { offset: false },
         };
         if (sess.videoBlobKey && blobs[sess.videoBlobKey]) {
             row.mBlob = new Blob([blobs[sess.videoBlobKey]]);
@@ -976,17 +966,10 @@
         applyMusicalGridVisibilityPrefs(p);
         if (typeof drawMusicalGridOverlay === 'function') {
             drawMusicalGridOverlay();
-        } else if (typeof updatePhraseBoundaryOverlay === 'function') {
-            updatePhraseBoundaryOverlay();
+        } else if (typeof updateRehearsalBoundaryOverlay === 'function') {
+            updateRehearsalBoundaryOverlay();
         }
         if (typeof writePrefs === 'function') writePrefs();
-        const rm =
-            manifest.session && typeof manifest.session.rehearsalMark === 'object'
-                ? manifest.session.rehearsalMark
-                : null;
-        if (typeof applyRehearsalMarkImportSnapshot === 'function') {
-            applyRehearsalMarkImportSnapshot(rm || { offset: false });
-        }
     }
 
     /** YYYYMMDDHHmmss (no separators) */
@@ -1175,7 +1158,6 @@
                 updateAllWaveformPlayheads();
             }
         }
-        if (typeof schedulePersistSession === 'function') schedulePersistSession();
     }
 
     function refreshTransportControlsAfterImport() {
@@ -1292,9 +1274,6 @@
                 try {
                     await whenSessionRestoreIdle();
                 } catch (_) {}
-            }
-            if (typeof resetMarkersDisplayHidden === 'function') {
-                resetMarkersDisplayHidden();
             }
             if (typeof resetWaveformTimelineZoom === 'function') {
                 resetWaveformTimelineZoom();

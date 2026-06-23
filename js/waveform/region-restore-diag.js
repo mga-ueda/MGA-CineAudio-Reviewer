@@ -40,12 +40,27 @@
         return '?';
     }
 
-    function runStep(label, fn, detail) {
+    let stepDepth = 0;
+
+    function runStepShouldLog(detail, opt) {
+        const options = opt && typeof opt === 'object' ? opt : {};
+        if (options.silent) return false;
+        if (options.forceLog) return true;
+        return stepDepth === 0;
+    }
+
+    function runStep(label, fn, detail, opt) {
         if (!enabled()) return fn();
-        log('step/start', Object.assign({ step: label }, detail || null));
+        const shouldLog = runStepShouldLog(detail, opt);
+        stepDepth += 1;
+        if (shouldLog) {
+            log('step/start', Object.assign({ step: label }, detail || null));
+        }
         try {
             const result = fn();
-            log('step/ok', Object.assign({ step: label }, detail || null));
+            if (shouldLog) {
+                log('step/ok', Object.assign({ step: label }, detail || null));
+            }
             return result;
         } catch (err) {
             log('step/error', {
@@ -54,15 +69,24 @@
                 detail: detail || null,
             });
             throw err;
+        } finally {
+            stepDepth -= 1;
+            if (stepDepth < 0) stepDepth = 0;
         }
     }
 
-    async function runStepAsync(label, fn, detail) {
+    async function runStepAsync(label, fn, detail, opt) {
         if (!enabled()) return await fn();
-        log('step/start', Object.assign({ step: label }, detail || null));
+        const shouldLog = runStepShouldLog(detail, opt);
+        stepDepth += 1;
+        if (shouldLog) {
+            log('step/start', Object.assign({ step: label }, detail || null));
+        }
         try {
             const result = await fn();
-            log('step/ok', Object.assign({ step: label }, detail || null));
+            if (shouldLog) {
+                log('step/ok', Object.assign({ step: label }, detail || null));
+            }
             return result;
         } catch (err) {
             log('step/error', {
@@ -71,6 +95,9 @@
                 detail: detail || null,
             });
             throw err;
+        } finally {
+            stepDepth -= 1;
+            if (stepDepth < 0) stepDepth = 0;
         }
     }
 
@@ -98,6 +125,7 @@
             timelineSlots: slots,
             usableTimelineSlots: usable,
             regionTimelineInSec: state.regionTimelineInSec,
+            regionLeadPadSec: state.regionLeadPadSec,
             headPadSec: state.headPadSec,
         };
     }

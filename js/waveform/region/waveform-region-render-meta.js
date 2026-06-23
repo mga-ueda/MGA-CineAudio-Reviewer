@@ -4,27 +4,19 @@
     /** メタ表示の narrow 判定（リージョン幅 px） */
     const REGION_OVERLAY_NARROW_PX = 22;
 
-    /** リージョンリハーサル名（0→A, 1→B … 26→AA）— phraseGroupLabelForIndex へ委譲 */
+    /** リージョンリハーサル名（0→A, 1→B … 26→AA）— rehearsalGroupLabelForIndex へ委譲 */
     function formatRegionRehearsalMarkLabel(markIndex) {
-        if (typeof phraseGroupLabelForIndex === 'function') {
-            return phraseGroupLabelForIndex(markIndex | 0);
+        if (typeof rehearsalGroupLabelForIndex === 'function') {
+            return rehearsalGroupLabelForIndex(markIndex | 0);
         }
         return 'A';
     }
 
-    function formatRehearsalMarkForPhraseSlot(phraseSlotIndex) {
-        if (typeof rehearsalMarkLabelForPhraseSlotIndex === 'function') {
-            return rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex);
+    function formatRehearsalMarkForRehearsalSlot(rehearsalSlotIndex) {
+        if (typeof rehearsalMarkLabelForRehearsalSlotIndex === 'function') {
+            return rehearsalMarkLabelForRehearsalSlotIndex(rehearsalSlotIndex);
         }
-        const phraseSlot = phraseSlotIndex | 0;
-        if (phraseSlot < 0) return '_';
-        const offset =
-            typeof getRehearsalMarkOffsetEnabled === 'function'
-                ? getRehearsalMarkOffsetEnabled()
-                : false;
-        const markIndex = phraseSlot - (offset ? 1 : 0);
-        if (markIndex < 0) return '_';
-        return formatRegionRehearsalMarkLabel(markIndex);
+        return formatRegionRehearsalMarkLabel(rehearsalSlotIndex | 0);
     }
 
     const REHEARSAL_MARKS_OVERLAY_ID = 'extraAudioRehearsalMarksOverlay';
@@ -39,6 +31,9 @@
     }
 
     function visibleWaveformLaneCount() {
+        if (typeof getTotalTimelineLaneCount === 'function') {
+            return getTotalTimelineLaneCount();
+        }
         let count = 0;
         const videoMeta =
             typeof audioWaveformPanel !== 'undefined' ? audioWaveformPanel : null;
@@ -48,7 +43,7 @@
             const meta = document.getElementById('extraAudioMeta' + slot);
             if (meta && !meta.hidden) count += 1;
         }
-        return Math.max(1, count);
+        return Math.max(1, count) + 3;
     }
 
     function purgeLegacyRehearsalMarkContainers() {
@@ -126,7 +121,7 @@
             trackStart,
             getSegmentRegionTimelineIn(track, segmentIndex),
         );
-        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        const outTransport = getSegmentRegionTimelineOut(track, segmentIndex);
         const leftPct =
             typeof transportSecToTimelineLeftPercent === 'function'
                 ? transportSecToTimelineLeftPercent(inTransport)
@@ -217,9 +212,9 @@
         const overlay = getRegionMetaOverlayEl();
         if (!overlay) return;
 
-        const phraseFillOn = isMusicalGridPhraseFillVisibleSafe();
+        const rehearsalFillOn = isMusicalGridRehearsalFillVisibleSafe();
         overlay.replaceChildren();
-        if (!phraseFillOn) {
+        if (!rehearsalFillOn) {
             overlay.hidden = true;
             return;
         }
@@ -299,152 +294,43 @@
         );
     }
 
-    function isMusicalGridPhraseFillVisibleSafe() {
+    function isMusicalGridRehearsalFillVisibleSafe() {
         return (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
         );
     }
 
-    function shouldShowMusicalMetaOnSegment(track, segmentIndex) {
-        if (!isMusicalGridPhraseFillVisibleSafe()) return false;
-        if (typeof resolveRegionSwapUnitSegmentIndices === 'function') {
-            const unit = resolveRegionSwapUnitSegmentIndices(track, segmentIndex);
-            if (!unit || !unit.length) return true;
-            return (unit[0] | 0) === (segmentIndex | 0);
-        }
-        return true;
-    }
-
-    function appendPhraseMusicalMetaLabelEl(parentEl, metaText) {
-        if (!parentEl || !metaText || !isMusicalGridPhraseFillVisibleSafe()) return null;
-        const metaEl = document.createElement('span');
-        metaEl.className = 'audio-waveform-lane__phrase-meta__label';
-        metaEl.textContent = metaText;
-        metaEl.title = metaText;
-        metaEl.setAttribute('aria-hidden', 'true');
-        parentEl.appendChild(metaEl);
-        return metaEl;
-    }
-
-    function appendSwapUnitMusicalMetaToEl(track, el, ref, slotsOpt) {
-        if (!isMusicalGridPhraseFillVisibleSafe()) return;
-        if (typeof formatSwapUnitStoredMusicalMetaText === 'function') {
-            const metaText = formatSwapUnitStoredMusicalMetaText(track, ref, { slots: slotsOpt });
-            appendPhraseMusicalMetaLabelEl(el, metaText);
-        }
-        appendChainNextRehearsalMarkLabelToEl(track, el, ref);
-    }
-
-    function resolveContentPhraseSlotIndexForSwapUnitRef(track, ref, phraseSlotFallback) {
-        if (ref && Number.isFinite(ref.segmentIndex) && ref.segmentIndex >= 0) {
-            return ref.segmentIndex | 0;
-        }
-        if (
-            ref &&
-            Number.isFinite(ref.silentGapIndex) &&
-            typeof collectTrackSilentGaps === 'function'
-        ) {
-            const gaps = collectTrackSilentGaps(track);
-            const gap = gaps && gaps[ref.silentGapIndex | 0];
-            if (gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
-                return gap.phraseIndex | 0;
-            }
-        }
-        if (phraseSlotFallback != null && phraseSlotFallback >= 0) {
-            return phraseSlotFallback | 0;
-        }
-        return null;
-    }
-
-    function appendChainNextRehearsalMarkLabelToEl(track, el, ref) {
-        if (!el || !isMusicalGridPhraseFillVisibleSafe()) return;
-        const ranges =
-            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
-                ? getPhraseGroupRangesForRegionRehearsalMarks()
-                : [];
-        if (!ranges.length) return;
-
-        let phraseSlotFallback = null;
-        if (ref && Number.isFinite(ref.segmentIndex) && ref.segmentIndex >= 0) {
-            const si = ref.segmentIndex | 0;
-            if (
-                typeof phraseSlotIndexAtRegionInSec === 'function' &&
-                typeof getSegmentRegionTimelineIn === 'function'
-            ) {
-                phraseSlotFallback = phraseSlotIndexAtRegionInSec(
-                    getSegmentRegionTimelineIn(track, si),
-                );
-            }
-        } else if (
-            ref &&
-            Number.isFinite(ref.silentGapIndex) &&
-            typeof collectTrackSilentGaps === 'function'
-        ) {
-            const gap = collectTrackSilentGaps(track)[ref.silentGapIndex | 0];
-            if (gap && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
-                phraseSlotFallback = gap.phraseIndex | 0;
-            }
-        }
-
-        const contentPhraseIdx = resolveContentPhraseSlotIndexForSwapUnitRef(
-            track,
-            ref,
-            phraseSlotFallback,
-        );
-        if (contentPhraseIdx == null) return;
-
-        const nextMark = chainSuccessorRehearsalMarkDisplay(contentPhraseIdx, ranges.length);
-        if (!nextMark) return;
-
-        const nextEl = document.createElement('span');
-        nextEl.className =
-            'audio-waveform-lane__phrase-meta__label audio-waveform-lane__phrase-meta__label--chain-next';
-        nextEl.textContent = nextMark === 'End' ? 'End' : 'next ' + nextMark;
-        nextEl.title =
-            nextMark === 'End'
-                ? '大元の順序ではここが終端（End）'
-                : '大元の順序ではこのリージョンの次に ' + nextMark + ' に繋がる';
-        nextEl.setAttribute('aria-hidden', 'true');
-        el.appendChild(nextEl);
-    }
-
-    /** 大元チェーン上、このコンテンツの直後に繋がるリハーサル名（末尾は End） */
-    function chainSuccessorRehearsalMarkDisplay(contentPhraseSlotIndex, phraseSlotCount) {
-        const nextIdx = (contentPhraseSlotIndex | 0) + 1;
-        if (nextIdx < 0 || nextIdx >= (phraseSlotCount | 0)) return 'End';
-        const markInternal = formatRehearsalMarkForPhraseSlot(nextIdx);
-        if (typeof rehearsalMarkDisplayLabel === 'function') {
-            return rehearsalMarkDisplayLabel(markInternal);
-        }
-        return markInternal === '_' ? '' : markInternal;
-    }
-
-    function appendPhraseRehearsalMarkEls(rowEl, ranges, master) {
+    function appendRehearsalRehearsalMarkEls(rowEl, ranges, master) {
         for (let i = 0; i < ranges.length; i++) {
             const r = ranges[i];
             if (!r || !Number.isFinite(r.startSec) || !Number.isFinite(r.endSec)) continue;
+            if (r.fromRehearsalEvent !== true) continue;
             const slotEl = document.createElement('div');
             slotEl.className = 'audio-waveform-lane__rehearsal-mark';
-            slotEl.dataset.phraseSlotIndex = String(i);
-            const markInternal = formatRehearsalMarkForPhraseSlot(i);
-            slotEl.dataset.rehearsalMark = markInternal;
+            slotEl.dataset.rehearsalSlotIndex = String(i);
+            const rawLabel = r.label != null ? String(r.label).trim() : '';
+            const normalizedLabel =
+                rawLabel && typeof normalizeRehearsalMarkLabel === 'function'
+                    ? normalizeRehearsalMarkLabel(r.label)
+                    : rawLabel;
+            if (!normalizedLabel) continue;
+            const unlabeled =
+                typeof REHEARSAL_MARK_UNLABELED !== 'undefined' ? REHEARSAL_MARK_UNLABELED : '_';
+            if (normalizedLabel === unlabeled) continue;
+            slotEl.dataset.rehearsalMark = normalizedLabel;
             const markDisplay =
                 typeof rehearsalMarkDisplayLabel === 'function'
-                    ? rehearsalMarkDisplayLabel(markInternal)
-                    : markInternal === '_'
-                      ? ''
-                      : markInternal;
-            if (markDisplay) {
-                const labelEl = document.createElement('span');
-                labelEl.className = 'audio-waveform-lane__rehearsal-mark__label';
-                labelEl.textContent = markDisplay;
-                labelEl.title =
-                    'リハーサル名 ' + markDisplay + '（Shift+' + markDisplay + ' で先頭へジャンプ）';
-                labelEl.setAttribute('aria-hidden', 'true');
-                slotEl.appendChild(labelEl);
-            }
-            if (!slotEl.childElementCount) continue;
+                    ? rehearsalMarkDisplayLabel(normalizedLabel)
+                    : normalizedLabel;
+            if (!markDisplay) continue;
+            const labelEl = document.createElement('span');
+            labelEl.className = 'audio-waveform-lane__rehearsal-mark__label';
+            labelEl.textContent = markDisplay;
+            labelEl.title =
+                'リハーサル名 ' + markDisplay + '（Shift+' + markDisplay + ' で先頭へジャンプ）';
+            labelEl.setAttribute('aria-hidden', 'true');
+            slotEl.appendChild(labelEl);
             positionRehearsalMarkEl(slotEl, r.startSec, r.endSec, master);
             rowEl.appendChild(slotEl);
         }
@@ -456,11 +342,11 @@
         rowEl.dataset.extraSlot = String(track.slot);
         rowEl.style.top = rehearsalMarksRowTopPx(lane) + 'px';
         rowEl.style.height = rehearsalMarksRowHeightPx(lane) + 'px';
-        appendPhraseRehearsalMarkEls(rowEl, ranges, master);
+        appendRehearsalRehearsalMarkEls(rowEl, ranges, master);
         return rowEl.childElementCount ? rowEl : null;
     }
 
-    function syncTrackPhraseRehearsalMarks(_track) {
+    function syncTrackRehearsalRehearsalMarks(_track) {
         refreshAllRegionRehearsalMarkLabels();
         refreshAllRegionPitchGainOverlay();
     }
@@ -471,17 +357,15 @@
         if (!overlay) return;
 
         const ranges =
-            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
-                ? getPhraseGroupRangesForRegionRehearsalMarks()
+            typeof getRehearsalGroupRangesForRegionRehearsalMarks === 'function'
+                ? getRehearsalGroupRangesForRegionRehearsalMarks()
                 : [];
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
-        const phraseFillOn = isMusicalGridPhraseFillVisibleSafe();
-
         overlay.replaceChildren();
-        if (!phraseFillOn || !(master > 0) || !ranges.length) {
+        if (!(master > 0) || !ranges.length) {
             overlay.hidden = true;
             return;
         }
@@ -518,7 +402,7 @@
         }
     }
 
-    window.formatRehearsalMarkForPhraseSlot = formatRehearsalMarkForPhraseSlot;
+    window.formatRehearsalMarkForRehearsalSlot = formatRehearsalMarkForRehearsalSlot;
     window.formatRegionRehearsalMarkLabel = formatRegionRehearsalMarkLabel;
     window.refreshAllRegionRehearsalMarkLabels = refreshAllRegionRehearsalMarkLabels;
     window.refreshAllRegionPitchGainOverlay = refreshAllRegionPitchGainOverlay;
@@ -596,7 +480,7 @@
                 : 0,
             getSegmentRegionTimelineIn(track, segmentIndex),
         );
-        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        const outTransport = getSegmentRegionTimelineOut(track, segmentIndex);
         const regionDur = Math.max(0.001, outTransport - inTransport);
         const pres = resolveSegmentFadeTrianglePresentation(
             track,
@@ -611,7 +495,7 @@
         if (fadeInHandle) {
             fadeInHandle.style.left = pres.fadeInAxisRatio * 100 + '%';
             fadeInHandle.style.right = 'auto';
-            fadeInHandle.hidden = false;
+            fadeInHandle.hidden = !pres.showIn;
         }
         const fadeOutHandle = regionEl.querySelector(
             '.audio-waveform-lane__playback-region__handle--fade-out',
@@ -619,9 +503,14 @@
         if (fadeOutHandle) {
             fadeOutHandle.style.left = pres.fadeOutAxisRatio * 100 + '%';
             fadeOutHandle.style.right = 'auto';
-            fadeOutHandle.hidden = false;
+            fadeOutHandle.hidden = !pres.showOut;
         }
-        applySegmentFadeMarkerLinesToRegionEl(regionEl, pres);
+        applySegmentFadeMarkerLinesToRegionEl(regionEl, {
+            fadeInAxisRatio: pres.fadeInAxisRatio,
+            fadeOutAxisRatio: pres.fadeOutAxisRatio,
+            fadeInSec: pres.showIn ? pres.fadeInSec : 0,
+            fadeOutSec: pres.showOut ? pres.fadeOutSec : 0,
+        });
     }
 
     function refreshTrackFadeTriangleVisibility(track, container) {

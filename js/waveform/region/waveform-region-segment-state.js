@@ -83,8 +83,9 @@
 
     function setTrackSegments(track, segments, opt) {
         if (!isExtraTrackRef(track)) return false;
+        const collapsed = Array.isArray(segments) ? segments : [];
         const normalized = [];
-        for (const seg of segments) {
+        for (const seg of collapsed) {
             let fullDur = getSegmentSourceDurationSec(track, seg);
             if (!fullDur) {
                 const inS = Number(seg && seg.sourceInSec) || 0;

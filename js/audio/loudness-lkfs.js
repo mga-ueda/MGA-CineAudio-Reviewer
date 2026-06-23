@@ -22,8 +22,8 @@
             return true;
         }
         if (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
         ) {
             return true;
         }

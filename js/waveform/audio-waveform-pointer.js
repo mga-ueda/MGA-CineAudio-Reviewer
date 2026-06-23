@@ -298,7 +298,7 @@
         return waveformOffsetDragStartTimelineSec + delta;
     }
 
-    /** F10 診断: ポインタ秒の複数経路を照合 */
+    /** REGION_SNAP 診断（F10）— ポインタ秒の複数経路を照合 */
     function regionSnapDiagCollectDragPointerContext(clientX) {
         if (!Number.isFinite(clientX)) return null;
         const round = (v) => (Number.isFinite(v) ? Math.round(v * 10000) / 10000 : v);
@@ -508,7 +508,18 @@
         return sec;
     }
 
+    function isPointerOverWaveformAudioLane(clientY) {
+        if (!Number.isFinite(clientY)) return false;
+        if (isPointerOverVideoAudioLane(clientY)) return true;
+        return waveformExtraLaneSlotFromClientY(clientY) >= 0;
+    }
+
+    window.isPointerOverWaveformAudioLane = isPointerOverWaveformAudioLane;
+
     function noteWaveformLanesPointerDownForDoubleClick(clientX, clientY) {
+        if (!isPointerOverWaveformAudioLane(clientY)) {
+            return false;
+        }
         const now = performance.now();
         const prev = waveformLanesClickState;
         const isDouble =
@@ -586,8 +597,12 @@
         if (clickIsInPreTrackTimelineGap(ev.clientX, ev.clientY)) return false;
         const t = ev.target;
         if (!t || !t.closest) return true;
+        if (t.closest('.musical-track-lane__add-input-wrap')) return true;
+        if (t.closest('.musical-track-lane__segment-input')) return true;
+        /* Tempo/Sig/リハーサル — 値ラベルのみ編集/ドラッグ優先。セグメント空白はシーク */
+        if (t.closest('.musical-track-lane__segment-value')) return true;
         if (t.closest('.seek-bar-marker')) return true;
-        if (t.closest('.audio-waveform-composite__phrase-boundary-handle')) return true;
+        if (t.closest('.audio-waveform-composite__rehearsal-boundary-handle')) return true;
         if (t.closest('.audio-waveform-composite__seek-input')) return true;
         if (t.closest('.audio-waveform-lane__playback-silent-gap')) return true;
         if (
@@ -669,11 +684,25 @@
             (typeof hasAnyExtraTrackLoaded === 'function' && hasAnyExtraTrackLoaded());
         if (!ready) return;
 
-        // Fade/In/Out — Phrase 境界・リージョン選択より先（capture 幾何ヒット）
+        // リージョン In/Out・Fade — MARKERS より先（操作帯デバッグの in/fade-in/out と同じ当たり）
         if (
             typeof tryBeginRegionHandleDragFromPointer === 'function' &&
             tryBeginRegionHandleDragFromPointer(ev)
         ) {
+            if (typeof markerPointerDiagLogCaptureWinner === 'function') {
+                markerPointerDiagLogCaptureWinner(ev, 'region-handle');
+            }
+            cancelWaveformPointerGesture();
+            return;
+        }
+
+        if (
+            typeof handleSeekBarMarkerPointerDownCapture === 'function' &&
+            handleSeekBarMarkerPointerDownCapture(ev)
+        ) {
+            if (typeof markerPointerDiagLogCaptureWinner === 'function') {
+                markerPointerDiagLogCaptureWinner(ev, 'marker');
+            }
             cancelWaveformPointerGesture();
             return;
         }
@@ -714,7 +743,12 @@
             clearRegionSelection();
         }
 
-        if (shouldSkipWaveformPointerGesture(ev)) return;
+        if (shouldSkipWaveformPointerGesture(ev)) {
+            if (typeof markerPointerDiagLogCaptureWinner === 'function') {
+                markerPointerDiagLogCaptureWinner(ev, 'skip', 'shouldSkipWaveformPointerGesture');
+            }
+            return;
+        }
 
         if (noteWaveformLanesPointerDownForDoubleClick(ev.clientX, ev.clientY)) {
             ev.preventDefault();
@@ -756,6 +790,9 @@
         if (!waveformPointerGestureRegionHit) {
             beginWaveformPointerScrubTransport();
             seekFromWaveformPointer(ev.clientX, { scrubbing: true });
+            if (typeof markerPointerDiagLogCaptureWinner === 'function') {
+                markerPointerDiagLogCaptureWinner(ev, 'scrub');
+            }
             if (currentTimeEl && typeof formatTimecodeForTransport === 'function') {
                 const t =
                     typeof getTransportSec === 'function'

@@ -851,14 +851,19 @@
             typeof isWaveformTimelineAtFitZoom === 'function' &&
             !isWaveformTimelineAtFitZoom();
         if (wantScrollFollow) {
-            const scrollToSec =
-                typeof syncWaveformTimelineScrollToMasterSec === 'function'
-                    ? syncWaveformTimelineScrollToMasterSec
-                    : typeof centerWaveformTimelineOnMasterSec === 'function'
-                      ? centerWaveformTimelineOnMasterSec
-                      : null;
-            if (scrollToSec) {
-                scrollToSec(x, { deferVisualRefresh: true });
+            const scrollOpt = { deferVisualRefresh: true };
+            if (o.centerSeekBar && typeof centerWaveformTimelineOnMasterSec === 'function') {
+                centerWaveformTimelineOnMasterSec(x, scrollOpt);
+            } else {
+                const scrollToSec =
+                    typeof syncWaveformTimelineScrollToMasterSec === 'function'
+                        ? syncWaveformTimelineScrollToMasterSec
+                        : typeof centerWaveformTimelineOnMasterSec === 'function'
+                          ? centerWaveformTimelineOnMasterSec
+                          : null;
+                if (scrollToSec) {
+                    scrollToSec(x, scrollOpt);
+                }
             }
         }
         if (o.redrawWaveform && typeof scheduleWaveformScrubOverviewDraw === 'function') {
@@ -993,6 +998,11 @@
 
     function notifyMasterTransportDurationChanged() {
         if (typeof syncSeekMax === 'function') syncSeekMax();
+        if (typeof scheduleMusicalGridRedraw === 'function') {
+            scheduleMusicalGridRedraw();
+        } else if (typeof refreshRehearsalMarkTrackEventsAfterMasterDurationReady === 'function') {
+            refreshRehearsalMarkTrackEventsAfterMasterDurationReady();
+        }
         if (typeof applyWaveformTimelineZoomLayout === 'function') {
             applyWaveformTimelineZoomLayout();
         }
@@ -1012,9 +1022,12 @@
         if (typeof flushPendingSessionMarkersRestore === 'function') {
             flushPendingSessionMarkersRestore();
         }
-        if (typeof syncAudioOnlyMarkersUi === 'function') {
+        const markerDragActive =
+            typeof isMarkerWaveformDragActive === 'function' &&
+            isMarkerWaveformDragActive();
+        if (!markerDragActive && typeof syncAudioOnlyMarkersUi === 'function') {
             syncAudioOnlyMarkersUi();
-        } else if (typeof refreshMarkerUi === 'function') {
+        } else if (!markerDragActive && typeof refreshMarkerUi === 'function') {
             refreshMarkerUi();
         } else if (typeof renderAudioWaveformMarkers === 'function') {
             renderAudioWaveformMarkers();
@@ -1184,7 +1197,7 @@
             el.textContent = resolveMusicalGridPlayheadPositionText(sec);
             return;
         }
-        el.textContent = '---:--:--';
+        el.textContent = '--- --- ---:--';
     }
     window.updateMusicalGridPlayheadDisplay = updateMusicalGridPlayheadDisplay;
 

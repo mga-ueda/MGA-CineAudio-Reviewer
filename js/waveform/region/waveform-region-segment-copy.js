@@ -21,6 +21,9 @@
 
     function segmentCopyRegionOut(seg) {
         if (!seg) return 0;
+        if (Number.isFinite(seg.regionTimelineOutSec)) {
+            return seg.regionTimelineOutSec;
+        }
         const anchor = Number.isFinite(seg.timelineStartSec) ? seg.timelineStartSec : 0;
         const regionIn = segmentCopyRegionIn(seg);
         return regionIn + (anchor - regionIn + segmentCopySourceDurSec(seg));

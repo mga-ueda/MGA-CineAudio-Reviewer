@@ -909,14 +909,32 @@
                 sourceInSec: seg.sourceInSec,
                 sourceOutSec: seg.sourceOutSec,
             };
-            if (raw && Number.isFinite(raw.timelineStartSec)) {
-                out.timelineStartSec = raw.timelineStartSec;
+            const timelineStart =
+                raw && Number.isFinite(raw.timelineStartSec)
+                    ? raw.timelineStartSec
+                    : typeof getSegmentTimelineStart === 'function'
+                      ? getSegmentTimelineStart(track, segIndex)
+                      : undefined;
+            if (Number.isFinite(timelineStart)) {
+                out.timelineStartSec = timelineStart;
             }
-            if (raw && Number.isFinite(raw.regionTimelineInSec)) {
-                out.regionTimelineInSec = raw.regionTimelineInSec;
+            const regionIn =
+                raw && Number.isFinite(raw.regionTimelineInSec)
+                    ? raw.regionTimelineInSec
+                    : typeof getSegmentRegionTimelineIn === 'function'
+                      ? getSegmentRegionTimelineIn(track, segIndex)
+                      : undefined;
+            if (Number.isFinite(regionIn)) {
+                out.regionTimelineInSec = regionIn;
             }
-            if (raw && Number.isFinite(raw.regionLeadPadSec)) {
-                out.regionLeadPadSec = raw.regionLeadPadSec;
+            const leadPad =
+                typeof getSegmentRegionLeadPadSec === 'function'
+                    ? getSegmentRegionLeadPadSec(track, segIndex)
+                    : raw && Number.isFinite(raw.regionLeadPadSec)
+                      ? raw.regionLeadPadSec
+                      : 0;
+            if (leadPad > 0.00001) {
+                out.regionLeadPadSec = leadPad;
             }
             if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
                 out.gainDb = raw.gainDb;
@@ -940,13 +958,25 @@
         } else {
             delete entry.regionHeadPadSec;
         }
-        if (Number.isFinite(state.regionTimelineInSec)) {
-            entry.regionTimelineInSec = state.regionTimelineInSec;
+        const trackRegionIn =
+            Number.isFinite(state.regionTimelineInSec)
+                ? state.regionTimelineInSec
+                : typeof getSegmentRegionTimelineIn === 'function'
+                  ? getSegmentRegionTimelineIn(track, 0)
+                  : undefined;
+        if (Number.isFinite(trackRegionIn)) {
+            entry.regionTimelineInSec = trackRegionIn;
         } else {
             delete entry.regionTimelineInSec;
         }
-        if (Number.isFinite(state.regionLeadPadSec) && state.regionLeadPadSec > 0) {
-            entry.regionLeadPadSec = state.regionLeadPadSec;
+        const trackLeadPad =
+            typeof getSegmentRegionLeadPadSec === 'function'
+                ? getSegmentRegionLeadPadSec(track, 0)
+                : state && Number.isFinite(state.regionLeadPadSec)
+                  ? state.regionLeadPadSec
+                  : 0;
+        if (trackLeadPad > 0.00001) {
+            entry.regionLeadPadSec = trackLeadPad;
         } else {
             delete entry.regionLeadPadSec;
         }

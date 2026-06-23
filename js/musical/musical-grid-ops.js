@@ -1,17 +1,17 @@
 /**
- * musical-grid-ops.js — Phrase 結合・分割・入れ替え・公開 API
+ * musical-grid-ops.js — Rehearsal 結合・分割・入れ替え・公開 API
  */
-    function swapPhraseSpecCycleSizesAtIndices(lo, hi, opt) {
+    function swapRehearsalSpecCycleSizesAtIndices(lo, hi, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         function reject(reason, extra) {
-            phraseSwapDiagLog('spec-swap/rejected', { reason, ...(extra || {}) });
+            rehearsalSwapDiagLog('spec-swap/rejected', { reason, ...(extra || {}) });
             return false;
         }
-        if (!getMusicalGridPhraseFillVisible()) return reject('phrase fill off');
+        if (!getMusicalGridRehearsalFillVisible()) return reject('rehearsal fill off');
         readMusicalGridFromInputs();
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec || !settings.phraseSpec.sizes) {
-            return reject('no phrase spec');
+        if (!settings || !settings.rehearsalSpec || !settings.rehearsalSpec.sizes) {
+            return reject('no rehearsal spec');
         }
         const master =
             typeof getMasterTransportDurationSec === 'function'
@@ -23,7 +23,7 @@
         if (loIdx < 0 || hiIdx < 0 || loIdx === hiIdx) {
             return reject('invalid indices', { lo: loIdx, hi: hiIdx });
         }
-        const sizes = settings.phraseSpec.sizes.slice();
+        const sizes = settings.rehearsalSpec.sizes.slice();
         if (loIdx >= sizes.length || hiIdx >= sizes.length) {
             return reject('index outside spec cycle', {
                 lo: loIdx + 1,
@@ -33,47 +33,47 @@
         }
         const barsLo = sizes[loIdx];
         const barsHi = sizes[hiIdx];
-        if (!o.skipUndo) requestPhraseUndoCapture();
+        if (!o.skipUndo) requestRehearsalUndoCapture();
         const nextSizes = sizes.slice();
         const tmp = nextSizes[loIdx];
         nextSizes[loIdx] = nextSizes[hiIdx];
         nextSizes[hiIdx] = tmp;
-        const phraseBefore = musicalGridPhraseText;
+        const rehearsalBefore = musicalGridRehearsalText;
         const spec = { sizes: nextSizes };
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
             spec,
         );
-        applyExplicitPhraseGroupBarCounts(counts, { skipUndo: true });
-        persistPhraseWaveformEditAndRedraw({ relayoutSilent: true });
+        applyExplicitRehearsalGroupBarCounts(counts, { skipUndo: true });
+        persistRehearsalWaveformEditAndRedraw({ relayoutSilent: true });
         if (typeof writeLog === 'function') {
-            phraseSwapDiagLog('spec-swap/applied', {
+            rehearsalSwapDiagLog('spec-swap/applied', {
                 lo: loIdx + 1,
                 hi: hiIdx + 1,
                 barsLo,
                 barsHi,
-                before: phraseBefore,
-                after: musicalGridPhraseText,
-                textUnchanged: phraseBefore === musicalGridPhraseText,
+                before: rehearsalBefore,
+                after: musicalGridRehearsalText,
+                textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
         }
         return true;
     }
     /**
-     * 展開済み Phrase グループの連続ブロックを入れ替える（例: 16↔8+8）。
+     * 展開済み Rehearsal グループの連続ブロックを入れ替える（例: 16↔8+8）。
      * ブロック小節数合計が一致すること。
      */
-    function swapPhraseExpandedGroupBlocksAtIndices(startA, countA, startB, countB, opt) {
+    function swapRehearsalExpandedGroupBlocksAtIndices(startA, countA, startB, countB, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         function reject(reason, extra) {
-            phraseSwapDiagLog('block-swap/rejected', { reason, ...(extra || {}) });
+            rehearsalSwapDiagLog('block-swap/rejected', { reason, ...(extra || {}) });
             return false;
         }
-        if (!getMusicalGridPhraseFillVisible()) return reject('phrase fill off');
+        if (!getMusicalGridRehearsalFillVisible()) return reject('rehearsal fill off');
         readMusicalGridFromInputs();
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return reject('no phrase spec');
+        if (!settings || !settings.rehearsalSpec) return reject('no rehearsal spec');
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
@@ -92,10 +92,10 @@
         if (a0 < bEnd && b0 < aEnd) {
             return reject('overlapping blocks', { a0, aN, b0, bN });
         }
-        const counts = resolvePhraseGroupBarCounts(
+        const counts = resolveRehearsalGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (
             !counts.length ||
@@ -119,7 +119,7 @@
         if (sumA !== sumB) {
             return reject('block bar sum mismatch', { sumA, sumB, blockA, blockB });
         }
-        if (!o.skipUndo) requestPhraseUndoCapture();
+        if (!o.skipUndo) requestRehearsalUndoCapture();
         const loIdx = Math.min(a0, b0);
         const hiIdx = Math.max(a0 + aN, b0 + bN);
         const beforeA = counts.slice(0, loIdx);
@@ -132,37 +132,37 @@
             loIdx === a0
                 ? beforeA.concat(blockB, mid, blockA, afterB)
                 : beforeA.concat(blockA, mid, blockB, afterB);
-        const phraseBefore = musicalGridPhraseText;
-        applyExplicitPhraseGroupBarCounts(next, {
+        const rehearsalBefore = musicalGridRehearsalText;
+        applyExplicitRehearsalGroupBarCounts(next, {
             skipUndo: true,
-            preservePhraseText: o.preservePhraseText !== false,
+            preserveRehearsalText: o.preserveRehearsalText !== false,
         });
-        persistPhraseWaveformEditAndRedraw({ relayoutSilent: true });
+        persistRehearsalWaveformEditAndRedraw({ relayoutSilent: true });
         if (typeof writeLog === 'function') {
-            phraseSwapDiagLog('block-swap/applied', {
+            rehearsalSwapDiagLog('block-swap/applied', {
                 a0: a0 + 1,
                 aN,
                 b0: b0 + 1,
                 bN,
                 sumBars: sumA,
-                before: phraseBefore,
-                after: musicalGridPhraseText,
-                textUnchanged: phraseBefore === musicalGridPhraseText,
+                before: rehearsalBefore,
+                after: musicalGridRehearsalText,
+                textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
         }
         return true;
     }
-    /** 展開済み Phrase グループ lo / hi の小節数定義を入れ替える（リージョン入れ替え E 用）。 */
-    function swapPhraseGroupsAtIndices(lo, hi, opt) {
+    /** 展開済み Rehearsal グループ lo / hi の小節数定義を入れ替える（リージョン入れ替え E 用）。 */
+    function swapRehearsalGroupsAtIndices(lo, hi, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         function reject(reason, extra) {
-            phraseSwapDiagLog('swap/rejected', { reason, ...(extra || {}) });
+            rehearsalSwapDiagLog('swap/rejected', { reason, ...(extra || {}) });
             return false;
         }
-        if (!getMusicalGridPhraseFillVisible()) return reject('phrase fill off');
+        if (!getMusicalGridRehearsalFillVisible()) return reject('rehearsal fill off');
         readMusicalGridFromInputs();
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return reject('no phrase spec');
+        if (!settings || !settings.rehearsalSpec) return reject('no rehearsal spec');
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
@@ -173,10 +173,10 @@
         if (loIdx < 0 || hiIdx < 0 || loIdx === hiIdx) {
             return reject('invalid indices', { lo: loIdx, hi: hiIdx });
         }
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (!counts.length || loIdx >= counts.length || hiIdx >= counts.length) {
             return reject('index out of expanded counts range', {
@@ -188,29 +188,29 @@
         }
         const barsLo = counts[loIdx];
         const barsHi = counts[hiIdx];
-        if (!o.skipUndo) requestPhraseUndoCapture();
+        if (!o.skipUndo) requestRehearsalUndoCapture();
         const next = counts.slice();
         const tmp = next[loIdx];
         next[loIdx] = next[hiIdx];
         next[hiIdx] = tmp;
-        const phraseBefore = musicalGridPhraseText;
-        applyExplicitPhraseGroupBarCounts(next, { skipUndo: true });
-        persistPhraseWaveformEditAndRedraw({ relayoutSilent: true });
+        const rehearsalBefore = musicalGridRehearsalText;
+        applyExplicitRehearsalGroupBarCounts(next, { skipUndo: true });
+        persistRehearsalWaveformEditAndRedraw({ relayoutSilent: true });
         if (typeof writeLog === 'function') {
-            phraseSwapDiagLog('swap/applied', {
+            rehearsalSwapDiagLog('swap/applied', {
                 lo: loIdx + 1,
                 hi: hiIdx + 1,
                 barsLo,
                 barsHi,
-                before: phraseBefore,
-                after: musicalGridPhraseText,
-                textUnchanged: phraseBefore === musicalGridPhraseText,
+                before: rehearsalBefore,
+                after: musicalGridRehearsalText,
+                textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
         }
         return true;
     }
-    /** Phrase グループ g を隣接グループへ吸収して削除。2 グループ未満は null。 */
-    function deletePhraseGroupAtIndex(counts, groupIndex) {
+    /** Rehearsal グループ g を隣接グループへ吸収して削除。2 グループ未満は null。 */
+    function deleteRehearsalGroupAtIndex(counts, groupIndex) {
         const g = groupIndex | 0;
         if (!counts || counts.length < 2 || g < 0 || g >= counts.length) return null;
         const next = counts.slice();
@@ -223,8 +223,8 @@
         }
         return next;
     }
-    /** 無音 Phrase スロット削除 — グループ g を隣接へマージせず除去。1 件残る場合は null。 */
-    function splicePhraseGroupAtIndex(counts, groupIndex) {
+    /** 無音 Rehearsal スロット削除 — グループ g を隣接へマージせず除去。1 件残る場合は null。 */
+    function spliceRehearsalGroupAtIndex(counts, groupIndex) {
         const g = groupIndex | 0;
         if (!counts || counts.length < 2 || g < 0 || g >= counts.length) return null;
         const next = counts.slice();
@@ -236,44 +236,44 @@
             window.silentGapDeleteDiagLog('grid/' + stage, payload);
         }
     }
-    function deletePhraseAtWaveformPointer() {
-        silentGapDeleteDiagFromGrid('phrase-delete/begin', {
+    function deleteRehearsalAtWaveformPointer() {
+        silentGapDeleteDiagFromGrid('rehearsal-delete/begin', {
             gridVisible: getMusicalGridVisible(),
-            phraseFillVisible: getMusicalGridPhraseFillVisible(),
-            boundaryDrag: !!phraseBoundaryDragActive,
+            rehearsalFillVisible: getMusicalGridRehearsalFillVisible(),
+            boundaryDrag: !!rehearsalBoundaryDragActive,
             silentGapSelected:
                 typeof window.hasSilentGapRegionSelection === 'function' &&
                 window.hasSilentGapRegionSelection(),
         });
         if (!getMusicalGridVisible()) {
-            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'grid-off' });
+            silentGapDeleteDiagFromGrid('rehearsal-delete/reject', { reason: 'grid-off' });
             return false;
         }
-        if (phraseBoundaryDragActive) {
-            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'boundary-drag' });
+        if (rehearsalBoundaryDragActive) {
+            silentGapDeleteDiagFromGrid('rehearsal-delete/reject', { reason: 'boundary-drag' });
             return false;
         }
         if (
             typeof window.hasSilentGapRegionSelection === 'function' &&
             window.hasSilentGapRegionSelection()
         ) {
-            silentGapDeleteDiagFromGrid('phrase-delete/defer', {
+            silentGapDeleteDiagFromGrid('rehearsal-delete/defer', {
                 reason: 'silent-gap-selected',
                 to: 'region-delete',
             });
             return false;
         }
-        const target = resolvePhraseEditTransportSec();
+        const target = resolveRehearsalEditTransportSec();
         if (!target) {
-            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'transport-unresolved' });
+            silentGapDeleteDiagFromGrid('rehearsal-delete/reject', { reason: 'transport-unresolved' });
             return false;
         }
         const { transportSec, useSeekbar } = target;
         if (
-            typeof window.tryDeleteSilentGapAtPhraseEditPointer === 'function' &&
-            window.tryDeleteSilentGapAtPhraseEditPointer(transportSec)
+            typeof window.tryDeleteSilentGapAtRehearsalEditPointer === 'function' &&
+            window.tryDeleteSilentGapAtRehearsalEditPointer(transportSec)
         ) {
-            silentGapDeleteDiagFromGrid('phrase-delete/path', {
+            silentGapDeleteDiagFromGrid('rehearsal-delete/path', {
                 path: 'silent-gap-pointer',
                 useSeekbar,
                 transportSec,
@@ -288,8 +288,8 @@
             return true;
         }
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) {
-            silentGapDeleteDiagFromGrid('phrase-delete/reject', { reason: 'phrase-spec-missing' });
+        if (!settings || !settings.rehearsalSpec) {
+            silentGapDeleteDiagFromGrid('rehearsal-delete/reject', { reason: 'rehearsal-spec-missing' });
             return false;
         }
         const master =
@@ -297,76 +297,76 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return false;
-        const groupIndex = resolvePhraseGroupIndexAtTransportSec(transportSec);
+        const groupIndex = resolveRehearsalGroupIndexAtTransportSec(transportSec);
         if (groupIndex == null) return false;
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (counts.length < 2) {
             if (typeof writeLog === 'function') {
                 writeLog(
-                    'Phrase: cannot delete the only phrase' + (useSeekbar ? ' (seekbar)' : ''),
+                    'Rehearsal: cannot delete the only rehearsal' + (useSeekbar ? ' (seekbar)' : ''),
                 );
             }
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Phrase', "Can't delete here", 'error');
+                flashSeekHint('Rehearsal', "Can't delete here", 'error');
             }
             return true;
         }
-        const nextCounts = deletePhraseGroupAtIndex(counts, groupIndex);
+        const nextCounts = deleteRehearsalGroupAtIndex(counts, groupIndex);
         if (!nextCounts) {
-            silentGapDeleteDiagFromGrid('phrase-delete/reject', {
+            silentGapDeleteDiagFromGrid('rehearsal-delete/reject', {
                 reason: 'delete-group-failed',
                 groupIndex,
             });
             return false;
         }
-        const label = phraseGroupLabelForIndex(groupIndex);
-        silentGapDeleteDiagFromGrid('phrase-delete/path', {
-            path: 'phrase-grid-relayout',
+        const label = rehearsalGroupLabelForIndex(groupIndex);
+        silentGapDeleteDiagFromGrid('rehearsal-delete/path', {
+            path: 'rehearsal-grid-relayout',
             useSeekbar,
             transportSec,
             groupIndex,
             countsBefore: counts.slice(0, 12),
             countsAfter: nextCounts.slice(0, 12),
-            phraseBefore: musicalGridPhraseText,
+            rehearsalBefore: musicalGridRehearsalText,
         });
-        applyExplicitPhraseGroupBarCounts(nextCounts);
-        persistPhraseWaveformEditAndRedraw({ skipUndo: true });
-        silentGapDeleteDiagFromGrid('phrase-delete/done', {
-            path: 'phrase-grid-relayout',
-            phraseAfter: musicalGridPhraseText,
+        applyExplicitRehearsalGroupBarCounts(nextCounts);
+        persistRehearsalWaveformEditAndRedraw({ skipUndo: true });
+        silentGapDeleteDiagFromGrid('rehearsal-delete/done', {
+            path: 'rehearsal-grid-relayout',
+            rehearsalAfter: musicalGridRehearsalText,
         });
-        if (typeof logPhraseAction === 'function') {
-            logPhraseAction(
+        if (typeof logRehearsalAction === 'function') {
+            logRehearsalAction(
                 label +
                     ' deleted' +
                     (useSeekbar ? ' (seekbar)' : '') +
                     ': ' +
-                    musicalGridPhraseText,
+                    musicalGridRehearsalText,
             );
         } else if (typeof writeLog === 'function') {
             writeLog(
-                'Phrase ' +
+                'Rehearsal ' +
                     label +
                     ' deleted' +
                     (useSeekbar ? ' (seekbar)' : '') +
                     ': ' +
-                    musicalGridPhraseText,
+                    musicalGridRehearsalText,
             );
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(
-                'Phrase',
+                'Rehearsal',
                 'Deleted ' + label + (useSeekbar ? ' (seekbar)' : ''),
                 'notice',
             );
         }
         return true;
     }
-    function handleMusicalGridPhraseDeleteKeydown(e) {
+    function handleMusicalGridRehearsalDeleteKeydown(e) {
         if (!matchUserShortcut(e, 'regionDelete')) return false;
         if (e.shiftKey) return false;
         if (e.repeat) return false;
@@ -374,7 +374,7 @@
             return false;
         }
         silentGapDeleteDiagFromGrid('keydown/begin', { handler: 'musical-grid' });
-        if (!deletePhraseAtWaveformPointer()) {
+        if (!deleteRehearsalAtWaveformPointer()) {
             silentGapDeleteDiagFromGrid('keydown/miss', {
                 handler: 'musical-grid',
                 fallthrough: 'region-delete',
@@ -385,8 +385,8 @@
         e.preventDefault();
         return true;
     }
-    /** 境界 index b の右隣フレーズを b に連結。 */
-    function mergePhraseGroupsAtBoundaryIndex(counts, boundaryIndex) {
+    /** 境界 index b の右隣Rehearsal 区間を b に連結。 */
+    function mergeRehearsalGroupsAtBoundaryIndex(counts, boundaryIndex) {
         const b = boundaryIndex | 0;
         if (!counts || counts.length < 2 || b < 0 || b >= counts.length - 1) return null;
         const next = counts.slice(0, b);
@@ -397,29 +397,29 @@
         return next;
     }
     /**
-     * リージョン結合境界が Phrase スロット境界とどう対応するかを返す。
+     * リージョン結合境界が Rehearsal スロット境界とどう対応するかを返す。
      * @returns {{ boundaryIndex: number, counts: number[]|null, relayoutOnly?: boolean }|null}
      */
-    function resolvePhraseBoundaryJoinAtRegionBoundary(track, boundaryIndex) {
-        if (!getMusicalGridPhraseFillVisible()) return null;
-        if (!canCommitPhraseCompositionLayout()) return null;
+    function resolveRehearsalBoundaryJoinAtRegionBoundary(track, boundaryIndex) {
+        if (!getMusicalGridRehearsalFillVisible()) return null;
+        if (!canCommitRehearsalCompositionLayout()) return null;
         const b = boundaryIndex | 0;
         if (b < 0) return null;
 
-        const counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        const counts = resolveCurrentExpandedRehearsalGroupBarCounts();
         if (!counts || counts.length < 2) return null;
 
         if (
             typeof window.getSegmentRegionTimelineIn === 'function' &&
-            typeof window.phraseSlotIndexAtRegionInSec === 'function'
+            typeof window.rehearsalSlotIndexAtRegionInSec === 'function'
         ) {
             const leftIn = window.getSegmentRegionTimelineIn(track, b);
             const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
-            const leftSlot = window.phraseSlotIndexAtRegionInSec(leftIn);
-            const rightSlot = window.phraseSlotIndexAtRegionInSec(rightIn);
+            const leftSlot = window.rehearsalSlotIndexAtRegionInSec(leftIn);
+            const rightSlot = window.rehearsalSlotIndexAtRegionInSec(rightIn);
             if (leftSlot != null && rightSlot != null) {
                 if (rightSlot === leftSlot + 1) {
-                    const next = mergePhraseGroupsAtBoundaryIndex(counts, leftSlot);
+                    const next = mergeRehearsalGroupsAtBoundaryIndex(counts, leftSlot);
                     if (next) {
                         return {
                             boundaryIndex: leftSlot,
@@ -444,7 +444,7 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return null;
-        const ranges = collectPhraseGroupRangesFromBarCounts(
+        const ranges = collectRehearsalGroupRangesFromBarCounts(
             settings.meterSpec,
             master,
             counts,
@@ -467,7 +467,7 @@
             const sec = ranges[i].endSec;
             if (!Number.isFinite(sec)) continue;
             if (Math.abs(sec - boundarySec) <= eps) {
-                const next = mergePhraseGroupsAtBoundaryIndex(counts, i);
+                const next = mergeRehearsalGroupsAtBoundaryIndex(counts, i);
                 if (next) {
                     return {
                         boundaryIndex: i,
@@ -479,30 +479,30 @@
         return null;
     }
     /**
-     * Phrase 着色 ON — リージョン結合境界が隣接フレーズグループ境界のとき、
-     * フレーズ境界ハンドルドラッグと同じ bar スナップ／counts 更新用コンテキストを返す。
+     * Rehearsal 着色 ON — リージョン結合境界が隣接Rehearsal 区間グループ境界のとき、
+     * Rehearsal 区間境界ハンドルドラッグと同じ bar スナップ／counts 更新用コンテキストを返す。
      */
-    function resolvePhraseBoundaryDragAtRegionBoundary(track, boundaryIndex) {
-        if (!getMusicalGridPhraseFillVisible()) return null;
-        if (!canCommitPhraseCompositionLayout()) return null;
+    function resolveRehearsalBoundaryDragAtRegionBoundary(track, boundaryIndex) {
+        if (!getMusicalGridRehearsalFillVisible()) return null;
+        if (!canCommitRehearsalCompositionLayout()) return null;
         const b = boundaryIndex | 0;
         if (b < 0) return null;
 
-        const counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        const counts = resolveCurrentExpandedRehearsalGroupBarCounts();
         if (!counts || counts.length < 2) return null;
 
-        let phraseBoundaryIndex = -1;
+        let rehearsalBoundaryIndex = -1;
         if (
             typeof window.getSegmentRegionTimelineIn === 'function' &&
-            typeof window.phraseSlotIndexAtRegionInSec === 'function'
+            typeof window.rehearsalSlotIndexAtRegionInSec === 'function'
         ) {
             const leftIn = window.getSegmentRegionTimelineIn(track, b);
             const rightIn = window.getSegmentRegionTimelineIn(track, b + 1);
-            const leftSlot = window.phraseSlotIndexAtRegionInSec(leftIn);
-            const rightSlot = window.phraseSlotIndexAtRegionInSec(rightIn);
+            const leftSlot = window.rehearsalSlotIndexAtRegionInSec(leftIn);
+            const rightSlot = window.rehearsalSlotIndexAtRegionInSec(rightIn);
             if (leftSlot != null && rightSlot != null) {
                 if (rightSlot === leftSlot + 1) {
-                    phraseBoundaryIndex = leftSlot;
+                    rehearsalBoundaryIndex = leftSlot;
                 } else if (leftSlot === rightSlot) {
                     return null;
                 }
@@ -517,8 +517,8 @@
                 : 0;
         if (!(master > 0)) return null;
 
-        if (phraseBoundaryIndex < 0) {
-            const ranges = collectPhraseGroupRangesFromBarCounts(
+        if (rehearsalBoundaryIndex < 0) {
+            const ranges = collectRehearsalGroupRangesFromBarCounts(
                 settings.meterSpec,
                 master,
                 counts,
@@ -541,13 +541,13 @@
                 const sec = ranges[i].endSec;
                 if (!Number.isFinite(sec)) continue;
                 if (Math.abs(sec - boundarySec) <= eps) {
-                    phraseBoundaryIndex = i;
+                    rehearsalBoundaryIndex = i;
                     break;
                 }
             }
         }
 
-        if (phraseBoundaryIndex < 0 || phraseBoundaryIndex >= counts.length - 1) {
+        if (rehearsalBoundaryIndex < 0 || rehearsalBoundaryIndex >= counts.length - 1) {
             return null;
         }
 
@@ -556,23 +556,23 @@
                 ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
                 : collectBarBoundarySecs(settings.meterSpec, master);
         const startBarK =
-            sumGroupBarCounts(counts, phraseBoundaryIndex) + counts[phraseBoundaryIndex];
+            sumGroupBarCounts(counts, rehearsalBoundaryIndex) + counts[rehearsalBoundaryIndex];
         return {
-            phraseBoundaryIndex,
+            rehearsalBoundaryIndex,
             startCounts: counts.slice(),
             barBoundaries,
             startBarK,
         };
     }
-    function previewPhraseBoundaryDragFromRegionPointer(ctx, clientX, startClientX) {
+    function previewRehearsalBoundaryDragFromRegionPointer(ctx, clientX, startClientX) {
         if (!ctx || !ctx.startCounts || !ctx.startCounts.length) return null;
         const startCounts = ctx.startCounts;
-        const phraseB = ctx.phraseBoundaryIndex | 0;
-        if (phraseB < 0 || phraseB >= startCounts.length - 1) return null;
-        const sumBefore = sumGroupBarCounts(startCounts, phraseB);
+        const rehearsalB = ctx.rehearsalBoundaryIndex | 0;
+        if (rehearsalB < 0 || rehearsalB >= startCounts.length - 1) return null;
+        const sumBefore = sumGroupBarCounts(startCounts, rehearsalB);
         const minK = sumBefore;
-        const maxK = sumBefore + startCounts[phraseB] + startCounts[phraseB + 1];
-        const targetK = targetBarKForPhraseBoundaryDrag(
+        const maxK = sumBefore + startCounts[rehearsalB] + startCounts[rehearsalB + 1];
+        const targetK = targetBarKForRehearsalBoundaryDrag(
             ctx.startBarK,
             startClientX,
             clientX,
@@ -580,53 +580,53 @@
             minK,
             maxK,
         );
-        const newCounts = countsForPhraseBoundaryAtBarIndex(startCounts, phraseB, targetK);
-        applyPhraseBoundaryDragPreview(newCounts);
+        const newCounts = countsForRehearsalBoundaryAtBarIndex(startCounts, rehearsalB, targetK);
+        applyRehearsalBoundaryDragPreview(newCounts);
         return newCounts;
     }
-    function commitPhraseBoundaryDragFromRegion(startCounts, finalCounts, phraseBoundaryIndex, opt) {
+    function commitRehearsalBoundaryDragFromRegion(startCounts, finalCounts, rehearsalBoundaryIndex, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!finalCounts || !finalCounts.length) return false;
-        if (phraseGroupCountsEqual(startCounts, finalCounts)) return false;
+        if (rehearsalGroupCountsEqual(startCounts, finalCounts)) return false;
         if (!o.skipUndo) {
             if (typeof window.requestRegionUndoCapture === 'function') {
-                window.requestRegionUndoCapture({ includePhrase: true });
+                window.requestRegionUndoCapture({ includeRehearsal: true });
             } else {
-                requestPhraseUndoCapture();
+                requestRehearsalUndoCapture();
             }
         }
-        applyExplicitPhraseGroupBarCounts(finalCounts, { skipUndo: true });
-        persistPhraseWaveformEditAndRedraw({
+        applyExplicitRehearsalGroupBarCounts(finalCounts, { skipUndo: true });
+        persistRehearsalWaveformEditAndRedraw({
             skipUndo: true,
             relayoutSilent: o.relayoutSilent !== false,
         });
-        if (!phraseBoundaryDragActive) {
-            phraseBoundaryDragCounts = null;
+        if (!rehearsalBoundaryDragActive) {
+            rehearsalBoundaryDragCounts = null;
             drawMusicalGridOverlay();
-            updatePhraseBoundaryOverlay();
+            updateRehearsalBoundaryOverlay();
         }
         return true;
     }
-    function cancelPhraseBoundaryDragPreview() {
-        if (phraseBoundaryDragActive) return;
-        if (!phraseBoundaryDragCounts) return;
-        phraseBoundaryDragCounts = null;
+    function cancelRehearsalBoundaryDragPreview() {
+        if (rehearsalBoundaryDragActive) return;
+        if (!rehearsalBoundaryDragCounts) return;
+        rehearsalBoundaryDragCounts = null;
         drawMusicalGridOverlay();
-        updatePhraseBoundaryOverlay();
+        updateRehearsalBoundaryOverlay();
     }
     /**
-     * 連続セグメント lo..hi をまとめて結合 — Phrase 境界を右から左へ counts 更新後、1 回 relayout。
-     * 同一 Phrase スロット内の分割のみ（relayoutOnly のみ）のときは false を返し、呼び出し側で segment 結合へ。
+     * 連続セグメント lo..hi をまとめて結合 — Rehearsal 境界を右から左へ counts 更新後、1 回 relayout。
+     * 同一 Rehearsal スロット内の分割のみ（relayoutOnly のみ）のときは false を返し、呼び出し側で segment 結合へ。
      */
-    function joinPhraseAtRegionSpan(track, lo, hi, opt) {
+    function joinRehearsalAtRegionSpan(track, lo, hi, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const first = lo | 0;
         const last = hi | 0;
         if (last <= first) return false;
-        if (!getMusicalGridPhraseFillVisible()) return false;
-        if (!canCommitPhraseCompositionLayout()) return false;
+        if (!getMusicalGridRehearsalFillVisible()) return false;
+        if (!canCommitRehearsalCompositionLayout()) return false;
 
-        const phraseBoundaryIndices = [];
+        const rehearsalBoundaryIndices = [];
         let hasRelayoutOnly = false;
         for (let b = first; b < last; b++) {
             if (
@@ -635,18 +635,18 @@
             ) {
                 return false;
             }
-            const hit = resolvePhraseBoundaryJoinAtRegionBoundary(track, b);
+            const hit = resolveRehearsalBoundaryJoinAtRegionBoundary(track, b);
             if (!hit) return false;
             if (hit.relayoutOnly) {
                 hasRelayoutOnly = true;
             } else if (hit.counts) {
-                phraseBoundaryIndices.push(hit.boundaryIndex);
+                rehearsalBoundaryIndices.push(hit.boundaryIndex);
             }
         }
-        if (!phraseBoundaryIndices.length) return false;
+        if (!rehearsalBoundaryIndices.length) return false;
 
         if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
-            window.requestRegionUndoCapture({ includePhrase: true });
+            window.requestRegionUndoCapture({ includeRehearsal: true });
         }
 
         if (
@@ -655,63 +655,63 @@
             !window.mergeSegmentSpanAt(track, first, last, {
                 silent: true,
                 skipUndo: true,
-                skipPhraseRelayout: true,
+                skipRehearsalRelayout: true,
             })
         ) {
             return false;
         }
 
-        let counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        let counts = resolveCurrentExpandedRehearsalGroupBarCounts();
         if (!counts) return false;
-        phraseBoundaryIndices.sort((a, b) => b - a);
-        for (let i = 0; i < phraseBoundaryIndices.length; i++) {
-            counts = mergePhraseGroupsAtBoundaryIndex(counts, phraseBoundaryIndices[i]);
+        rehearsalBoundaryIndices.sort((a, b) => b - a);
+        for (let i = 0; i < rehearsalBoundaryIndices.length; i++) {
+            counts = mergeRehearsalGroupsAtBoundaryIndex(counts, rehearsalBoundaryIndices[i]);
             if (!counts) return false;
         }
 
-        const phraseBefore = musicalGridPhraseText;
-        applyExplicitPhraseGroupBarCounts(counts, { skipUndo: true });
-        persistPhraseWaveformEditAndRedraw({
+        const rehearsalBefore = musicalGridRehearsalText;
+        applyExplicitRehearsalGroupBarCounts(counts, { skipUndo: true });
+        persistRehearsalWaveformEditAndRedraw({
             skipUndo: true,
             relayoutSilent: o.relayoutSilent !== false,
         });
 
-        phraseSwapDiagLog('region-bond/span-applied', {
+        rehearsalSwapDiagLog('region-bond/span-applied', {
             ex: (track.slot | 0) + 1,
             regionLo: first + 1,
             regionHi: last + 1,
-            phraseBoundaries: phraseBoundaryIndices.map((i) => i + 1),
-            before: phraseBefore,
-            after: musicalGridPhraseText,
+            rehearsalBoundaries: rehearsalBoundaryIndices.map((i) => i + 1),
+            before: rehearsalBefore,
+            after: musicalGridRehearsalText,
         });
         return true;
     }
-    /** Phrase 着色 ON — リージョン境界ボンドで counts 更新＋構成どおりに切り直し */
-    function joinPhraseAtRegionBoundary(track, boundaryIndex, opt) {
+    /** Rehearsal 着色 ON — リージョン境界ボンドで counts 更新＋構成どおりに切り直し */
+    function joinRehearsalAtRegionBoundary(track, boundaryIndex, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const hit = resolvePhraseBoundaryJoinAtRegionBoundary(track, boundaryIndex);
+        const hit = resolveRehearsalBoundaryJoinAtRegionBoundary(track, boundaryIndex);
         if (!hit) return false;
 
         if (!o.skipUndo && typeof window.requestRegionUndoCapture === 'function') {
-            window.requestRegionUndoCapture({ includePhrase: true });
+            window.requestRegionUndoCapture({ includeRehearsal: true });
         }
 
-        const phraseBefore = musicalGridPhraseText;
+        const rehearsalBefore = musicalGridRehearsalText;
         if (hit.counts) {
-            applyExplicitPhraseGroupBarCounts(hit.counts, { skipUndo: true });
+            applyExplicitRehearsalGroupBarCounts(hit.counts, { skipUndo: true });
         }
-        persistPhraseWaveformEditAndRedraw({
+        persistRehearsalWaveformEditAndRedraw({
             skipUndo: true,
             relayoutSilent: o.relayoutSilent !== false,
         });
 
-        phraseSwapDiagLog('region-bond/applied', {
+        rehearsalSwapDiagLog('region-bond/applied', {
             ex: (track.slot | 0) + 1,
             regionBoundary: (boundaryIndex | 0) + 1,
-            phraseBoundary: hit.boundaryIndex + 1,
+            rehearsalBoundary: hit.boundaryIndex + 1,
             relayoutOnly: !!hit.relayoutOnly,
-            before: phraseBefore,
-            after: musicalGridPhraseText,
+            before: rehearsalBefore,
+            after: musicalGridRehearsalText,
         });
 
         if (!(o.silent)) {
@@ -720,7 +720,7 @@
                     formatExTrack(track.slot) +
                     ' regions joined at boundary ' +
                     ((boundaryIndex | 0) + 1) +
-                    ' (phrase relayout)';
+                    ' (rehearsal relayout)';
                 if (typeof logRegionAction === 'function') {
                     logRegionAction(relayoutMsg);
                 } else if (typeof writeLog === 'function') {
@@ -729,22 +729,22 @@
                             ((track.slot | 0) + 1) +
                             ': regions joined at boundary ' +
                             ((boundaryIndex | 0) + 1) +
-                            ' (phrase relayout)',
+                            ' (rehearsal relayout)',
                     );
                 }
             } else {
-                const left = phraseGroupLabelForIndex(hit.boundaryIndex);
-                const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
+                const left = rehearsalGroupLabelForIndex(hit.boundaryIndex);
+                const right = rehearsalGroupLabelForIndex(hit.boundaryIndex + 1);
                 const joinMsg =
                     left +
                     '/' +
                     right +
                     ' joined at region boundary: ' +
-                    musicalGridPhraseText;
-                if (typeof logPhraseAction === 'function') {
-                    logPhraseAction(joinMsg);
+                    musicalGridRehearsalText;
+                if (typeof logRehearsalAction === 'function') {
+                    logRehearsalAction(joinMsg);
                 } else if (typeof writeLog === 'function') {
-                    writeLog('Phrase ' + joinMsg);
+                    writeLog('Rehearsal ' + joinMsg);
                 }
             }
         }
@@ -756,33 +756,33 @@
                     'notice',
                 );
             } else {
-                const left = phraseGroupLabelForIndex(hit.boundaryIndex);
-                const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
-                flashSeekHint('Phrase', 'Joined ' + left + '/' + right, 'notice');
+                const left = rehearsalGroupLabelForIndex(hit.boundaryIndex);
+                const right = rehearsalGroupLabelForIndex(hit.boundaryIndex + 1);
+                flashSeekHint('Rehearsal', 'Joined ' + left + '/' + right, 'notice');
             }
         }
         return true;
     }
     /**
-     * transport 秒がフレーズ境界に近いとき、その境界で連結候補を返す。
+     * transport 秒がRehearsal 区間境界に近いとき、その境界で連結候補を返す。
      * 連結は常にスナップ閾値内の境界のみ。
      */
-    function resolvePhraseBoundaryJoinAtTransportSec(transportSec) {
+    function resolveRehearsalBoundaryJoinAtTransportSec(transportSec) {
         if (!getMusicalGridVisible()) return null;
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return null;
+        if (!settings || !settings.rehearsalSpec) return null;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return null;
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (counts.length < 2) return null;
-        const ranges = collectPhraseGroupRangesFromBarCounts(
+        const ranges = collectRehearsalGroupRangesFromBarCounts(
             settings.meterSpec,
             master,
             counts,
@@ -803,7 +803,7 @@
             }
         }
         if (bestB < 0 || bestDist > threshold) return null;
-        const nextCounts = mergePhraseGroupsAtBoundaryIndex(counts, bestB);
+        const nextCounts = mergeRehearsalGroupsAtBoundaryIndex(counts, bestB);
         if (!nextCounts) return null;
         return {
             boundaryIndex: bestB,
@@ -811,59 +811,59 @@
             counts: nextCounts,
         };
     }
-    function joinPhraseAtTarget() {
+    function joinRehearsalAtTarget() {
         if (!getMusicalGridVisible()) return false;
-        if (phraseBoundaryDragActive) return false;
-        const target = resolvePhraseJoinTargetSec();
+        if (rehearsalBoundaryDragActive) return false;
+        const target = resolveRehearsalJoinTargetSec();
         if (!target) return false;
         let { transportSec, useSeekbar } = target;
         const threshold = musicalGridBarLineSnapThresholdSec();
         if (useSeekbar) {
-            transportSec = snapSecToPhraseBoundaryStops(transportSec, threshold);
+            transportSec = snapSecToRehearsalBoundaryStops(transportSec, threshold);
         }
-        const hit = resolvePhraseBoundaryJoinAtTransportSec(transportSec);
+        const hit = resolveRehearsalBoundaryJoinAtTransportSec(transportSec);
         if (!hit) return false;
-        const left = phraseGroupLabelForIndex(hit.boundaryIndex);
-        const right = phraseGroupLabelForIndex(hit.boundaryIndex + 1);
-        applyExplicitPhraseGroupBarCounts(hit.counts);
-        persistPhraseWaveformEditAndRedraw({ skipUndo: true });
-        if (typeof logPhraseAction === 'function') {
-            logPhraseAction(
+        const left = rehearsalGroupLabelForIndex(hit.boundaryIndex);
+        const right = rehearsalGroupLabelForIndex(hit.boundaryIndex + 1);
+        applyExplicitRehearsalGroupBarCounts(hit.counts);
+        persistRehearsalWaveformEditAndRedraw({ skipUndo: true });
+        if (typeof logRehearsalAction === 'function') {
+            logRehearsalAction(
                 left +
                     '/' +
                     right +
                     ' joined' +
                     (useSeekbar ? ' (seekbar)' : '') +
                     ': ' +
-                    musicalGridPhraseText,
+                    musicalGridRehearsalText,
             );
         } else if (typeof writeLog === 'function') {
             writeLog(
-                'Phrase ' +
+                'Rehearsal ' +
                     left +
                     '/' +
                     right +
                     ' joined' +
                     (useSeekbar ? ' (seekbar)' : '') +
                     ': ' +
-                    musicalGridPhraseText,
+                    musicalGridRehearsalText,
             );
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(
-                'Phrase',
+                'Rehearsal',
                 'Joined ' + left + '/' + right + (useSeekbar ? ' (seekbar)' : ''),
                 'notice',
             );
         }
         return true;
     }
-    function handleMusicalGridPhraseJoinKeydown(e) {
+    function handleMusicalGridRehearsalJoinKeydown(e) {
         if (!matchUserShortcut(e, 'regionJoin')) return false;
         if (e.repeat) return false;
         if (!getMusicalGridVisible()) return false;
         if (
-            getMusicalGridPhraseFillVisible() &&
+            getMusicalGridRehearsalFillVisible() &&
             typeof window.joinPlaybackRegionAtPointer === 'function' &&
             window.joinPlaybackRegionAtPointer()
         ) {
@@ -871,12 +871,12 @@
             e.stopPropagation();
             return true;
         }
-        const phraseJoined = joinPhraseAtTarget();
+        const rehearsalJoined = joinRehearsalAtTarget();
         e.preventDefault();
-        if (phraseJoined) e.stopPropagation();
+        if (rehearsalJoined) e.stopPropagation();
         return true;
     }
-    function wasLeftPhraseAbsorbedIntoRight(startCounts, finalCounts, boundaryIndex) {
+    function wasLeftRehearsalAbsorbedIntoRight(startCounts, finalCounts, boundaryIndex) {
         const b = boundaryIndex | 0;
         if (!startCounts || !finalCounts || finalCounts.length !== startCounts.length - 1) {
             return false;
@@ -891,8 +891,8 @@
         }
         return true;
     }
-    /** 展開済みグループ小節数列から Phrase 着色範囲を求める（境界ドラッグ中のスナップショット用）。 */
-    function collectPhraseGroupRangesFromBarCounts(meterSpec, durationSec, counts) {
+    /** 展開済みグループ小節数列から Rehearsal 着色範囲を求める（境界ドラッグ中のスナップショット用）。 */
+    function collectRehearsalGroupRangesFromBarCounts(meterSpec, durationSec, counts) {
         const ranges = [];
         if (!(durationSec > 0) || !meterSpec || !counts || !counts.length) return ranges;
         const barBoundaries =
@@ -916,7 +916,7 @@
             const startSec = barBoundaries[barIndex];
             const endBarIndex = barIndex + effectiveBars;
             const isLastGroup = gi === lastGi || endBarIndex >= totalBars;
-            // 最終グループは duration まで伸ばす（テンポストレッチ後の端数小節を別 Phrase にしない）
+            // 最終グループは duration まで伸ばす（テンポストレッチ後の端数小節を別 Rehearsal にしない）
             const endSec = isLastGroup ? durationSec : barBoundaries[endBarIndex];
             if (endSec > startSec + 1e-9) {
                 ranges.push({
@@ -968,7 +968,7 @@
         }
         return stops;
     }
-    /** Ctrl+←→ ナビ用: 小節線 + Phrase 境界のみ（拍線は含めない） */
+    /** Ctrl+←→ ナビ用: 小節線 + Rehearsal 境界のみ（拍線は含めない） */
     function collectMusicalGridBarSnapStopsForNav() {
         if (!getMusicalGridVisible()) return [];
         const settings = musicalGridDrawSettings();
@@ -989,9 +989,9 @@
         }
         return stops;
     }
-    function collectPhraseGroupSnapStops() {
-        if (!getMusicalGridPhraseFillVisible()) return [];
-        const ranges = getPhraseGroupRangesSnapshot();
+    function collectRehearsalGroupSnapStops() {
+        if (!getMusicalGridRehearsalFillVisible()) return [];
+        const ranges = getRehearsalGroupRangesSnapshot();
         if (!ranges.length) return [];
         const stops = [];
         for (let i = 0; i < ranges.length; i++) {
@@ -1002,8 +1002,12 @@
     }
     function collectMusicalGridSnapStops() {
         return dedupeSortedMusicalGridStops(
-            collectMusicalGridBarSnapStops().concat(collectPhraseGroupSnapStops()),
+            collectMusicalGridBarSnapStops().concat(collectRehearsalGroupSnapStops()),
         );
+    }
+    /** リージョン平行移動 T ON — 小節線 + 拡大時の拍線のみ（Rehearsal 境界は含めない） */
+    function collectMusicalGridRegionMoveSnapStops() {
+        return dedupeSortedMusicalGridStops(collectMusicalGridBarSnapStops());
     }
     function collectMusicalGridNavStops() {
         const key = musicalGridNavStopsCacheKeyNow();
@@ -1011,7 +1015,7 @@
             return musicalGridNavStopsCache;
         }
         const stops = dedupeSortedMusicalGridStops(
-            collectMusicalGridBarSnapStopsForNav().concat(collectPhraseGroupSnapStops()),
+            collectMusicalGridBarSnapStopsForNav().concat(collectRehearsalGroupSnapStops()),
         );
         musicalGridNavStopsCache = stops;
         musicalGridNavStopsCacheKey = key;
@@ -1048,9 +1052,35 @@
         return best;
     }
 
-    /** 境界の後ろ側（右／先）に属する Phrase 範囲 */
-    function phraseRangeAfterGridBoundarySec(sec) {
-        const ranges = resolvePhraseGroupRanges({ requireFillVisible: false });
+    /** 境界判定・小節ラベル用 — Rehearsal Mark トラック優先（Shift+字母ジャンプと同じ） */
+    function rehearsalGroupRangesForGridBoundarySec() {
+        if (typeof getRehearsalMarkNavRanges === 'function') {
+            const fromTrack = getRehearsalMarkNavRanges();
+            if (fromTrack && fromTrack.length) return fromTrack;
+        }
+        return resolveRehearsalGroupRanges({ requireFillVisible: false });
+    }
+
+    function rehearsalRehearsalMarkFromRange(range) {
+        if (!range || range.fromRehearsalEvent !== true) return '';
+        const raw = range.label != null ? String(range.label).trim() : '';
+        if (!raw) return '';
+        const unlabeled =
+            typeof REHEARSAL_MARK_UNLABELED !== 'undefined' ? REHEARSAL_MARK_UNLABELED : '_';
+        const internal =
+            typeof normalizeRehearsalMarkLabel === 'function'
+                ? normalizeRehearsalMarkLabel(raw)
+                : raw;
+        if (!internal || internal === unlabeled) return '';
+        if (typeof rehearsalMarkDisplayLabel === 'function') {
+            return rehearsalMarkDisplayLabel(internal) || '';
+        }
+        return internal;
+    }
+
+    /** 境界の後ろ側（右／先）に属する Rehearsal 範囲 */
+    function rehearsalRangeAfterGridBoundarySec(sec) {
+        const ranges = rehearsalGroupRangesForGridBoundarySec();
         if (!ranges.length) return null;
         const eps = musicalGridNavStopEpsilonSec();
         const s = Number(sec);
@@ -1076,19 +1106,19 @@
         return null;
     }
 
-    /** 境界の後ろ側（右／先）に属するリハーサル名（A/B/…）。R. Offset 時のリハーサル名なしは空文字 */
-    function phraseRehearsalMarkAfterGridBoundarySec(sec) {
-        const range = phraseRangeAfterGridBoundarySec(sec);
-        return range ? phraseRehearsalDisplayMarkForSlot(range.paletteIndex) : '';
+    /** 境界の後ろ側（右／先）に属するリハーサル名（A/B/…）。リハーサル名なし区間は空文字 */
+    function rehearsalRehearsalMarkAfterGridBoundarySec(sec) {
+        return rehearsalRehearsalMarkFromRange(rehearsalRangeAfterGridBoundarySec(sec));
     }
 
-    function localBarNumberForPhraseAtSec(phraseStartSec, sec, barBoundaries) {
-        const phraseStartIdx = barIndexForBoundarySec(phraseStartSec, barBoundaries);
+    function localBarNumberForRehearsalAtSec(rehearsalStartSec, sec, barBoundaries) {
+        const rehearsalStartIdx = barIndexForBoundarySec(rehearsalStartSec, barBoundaries);
         const barIdx = barIndexForBoundarySec(sec, barBoundaries);
-        const localBar = barIdx - phraseStartIdx + 1;
+        const localBar = barIdx - rehearsalStartIdx + 1;
         return localBar >= 1 ? localBar : null;
     }
 
+    /** Measure トラックと同じタイムライン全体の小節番号（1 始まり） */
     function barNumberAfterGridBoundarySec(sec) {
         if (!getMusicalGridVisible()) return null;
         const settings = musicalGridDrawSettings();
@@ -1098,44 +1128,29 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return null;
-        const phraseRange = phraseRangeAfterGridBoundarySec(sec);
-        if (phraseRange) {
-            const barBoundaries =
-            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
-                ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
-                : collectBarBoundarySecs(settings.meterSpec, master);
-            if (barBoundaries.length) {
-                const localBar = localBarNumberForPhraseAtSec(
-                    phraseRange.startSec,
-                    sec,
-                    barBoundaries,
-                );
-                if (localBar != null && localBar >= 1) return localBar;
-            }
-        }
         const pos = getMusicalGridBarBySec(settings.meterSpec, sec, master);
         if (!pos) return null;
         return (pos.barIndex | 0) + 1;
     }
 
     function musicalGridSeekToastPrimary(sec) {
-        const phraseOn = getMusicalGridPhraseFillVisible();
+        const rehearsalOn = getMusicalGridRehearsalFillVisible();
         const tempoOn = getMusicalGridVisible();
-        const mark = phraseOn ? phraseRehearsalMarkAfterGridBoundarySec(sec) : '';
+        const mark = rehearsalOn ? rehearsalRehearsalMarkAfterGridBoundarySec(sec) : '';
         const parts = [];
         if (mark) {
             parts.push(mark);
-        } else if (phraseOn) {
-            parts.push('Phrase');
+        } else if (rehearsalOn) {
+            parts.push('Rehearsal');
         }
         if (tempoOn) {
-            const barNum = barNumberAfterGridBoundarySec(sec);
-            if (barNum != null && barNum > 0) {
-                parts.push('Bar ' + barNum);
+            const measureNum = barNumberAfterGridBoundarySec(sec);
+            if (measureNum != null && measureNum > 0) {
+                parts.push('Measure ' + measureNum);
             }
         }
         if (parts.length) return parts.join(' ');
-        return phraseOn ? 'Phrase' : 'Bar';
+        return rehearsalOn ? 'Rehearsal' : 'Measure';
     }
 
     function flashMusicalGridSeekHint(targetSec, hintTc) {
@@ -1163,13 +1178,13 @@
                 resumeAfterSeek: resumeAfter,
                 fromRepeat: o.fromRepeat,
             });
-            if (!o.fromRepeat) {
+            {
                 const hintTc =
                     typeof formatTimecodeForTransport === 'function'
                         ? formatTimecodeForTransport(target)
                         : String(target);
                 const hintTitle = musicalGridSeekToastPrimary(target);
-                if (typeof writeLog === 'function') {
+                if (!o.fromRepeat && typeof writeLog === 'function') {
                     writeLog('Grid: seek to ' + hintTitle + ' @ ' + hintTc);
                 }
                 flashMusicalGridSeekHint(target, hintTc);
@@ -1228,18 +1243,24 @@
         flashMusicalGridSeekHint(target, hintTc);
         return true;
     }
+    function coalescedStopNavTransportSec(fallbackSec) {
+        if (Number.isFinite(fallbackSec)) return fallbackSec;
+        if (typeof getCoalescedStopNavTransportSec === 'function') {
+            return getCoalescedStopNavTransportSec();
+        }
+        if (typeof getTransportSec === 'function') return getTransportSec();
+        if (typeof videoMain !== 'undefined' && videoMain) {
+            return videoMain.currentTime || 0;
+        }
+        return 0;
+    }
+
     function resolveAdjacentMusicalGridStopSec(dir, fromSec) {
         const stops = collectMusicalGridNavStops();
         const n = stops.length;
         if (!n) return null;
-        const idx = musicalGridNavStopIndexForCurrent(stops, fromSec);
-        const t = Number.isFinite(fromSec)
-            ? fromSec
-            : typeof getTransportSec === 'function'
-              ? getTransportSec()
-              : typeof videoMain !== 'undefined' && videoMain
-                ? videoMain.currentTime || 0
-                : 0;
+        const t = coalescedStopNavTransportSec(fromSec);
+        const idx = musicalGridNavStopIndexForCurrent(stops, t);
         const eps = musicalGridNavStopEpsilonSec();
         let next;
         if (idx < 0) {
@@ -1262,6 +1283,82 @@
         if (targetSec == null) return false;
         return seekToMusicalGridNavStop(targetSec, opt);
     }
+
+    function collectMusicalGridBarNavStops() {
+        return collectMusicalGridBarSnapStopsForNav();
+    }
+
+    function hasMusicalGridBarNavStops() {
+        return collectMusicalGridBarNavStops().length > 0;
+    }
+
+    function resolveAdjacentMusicalGridBarStopSec(dir, fromSec) {
+        const stops = collectMusicalGridBarNavStops();
+        const n = stops.length;
+        if (!n) return null;
+        const t = coalescedStopNavTransportSec(fromSec);
+        const idx = musicalGridNavStopIndexForCurrent(stops, t);
+        const eps = musicalGridNavStopEpsilonSec();
+        let next;
+        if (idx < 0) {
+            if (dir <= 0) return null;
+            next = 0;
+        } else if (dir < 0 && t > stops[idx] + eps) {
+            next = idx;
+        } else if (dir > 0 && t < stops[idx] - eps) {
+            next = idx;
+        } else {
+            next = idx + dir;
+            if (next < 0 || next >= n) return null;
+        }
+        const sec = stops[next];
+        return Number.isFinite(sec) ? sec : null;
+    }
+
+    function jumpToAdjacentMusicalGridBarStop(dir, opt) {
+        const targetSec = resolveAdjacentMusicalGridBarStopSec(dir);
+        if (targetSec == null) return false;
+        return seekToMusicalGridNavStop(targetSec, opt);
+    }
+
+    function musicalGridBarNavResumeAfterSeek() {
+        return typeof isTransportUiClockActive === 'function'
+            ? isTransportUiClockActive()
+            : typeof isTransportPlaying === 'function'
+              ? isTransportPlaying()
+              : typeof videoMain !== 'undefined' && videoMain
+                ? !videoMain.paused
+                : false;
+    }
+
+    /** Tempo/Sig ON 時 — 修飾キーなし Home/End で小節線のみ前後へ */
+    function handleMusicalGridBarNavKeydown(e) {
+        if (!getMusicalGridVisible()) return false;
+        if (typeof transportControlsReady !== 'function' || !transportControlsReady()) {
+            return false;
+        }
+        if (
+            typeof isMusicalGridBarNavEvent !== 'function' ||
+            !isMusicalGridBarNavEvent(e, { allowRepeat: true })
+        ) {
+            return false;
+        }
+        if (e.altKey || e.shiftKey || e.ctrlKey || e.metaKey) return false;
+        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
+        const dir =
+            typeof isMusicalGridBarNavNextEvent === 'function' &&
+            isMusicalGridBarNavNextEvent(e, { allowRepeat: true })
+                ? 1
+                : -1;
+        const navOpt = {
+            resumeAfterSeek: musicalGridBarNavResumeAfterSeek(),
+            discreteStopNav: true,
+            fromRepeat: e.repeat,
+        };
+        jumpToAdjacentMusicalGridBarStop(dir, navOpt);
+        e.preventDefault();
+        return true;
+    }
     function snapSecToMusicalGridStops(sec, opt) {
         const n = Number(sec);
         if (!Number.isFinite(n)) return 0;
@@ -1281,46 +1378,45 @@
         }
         return Math.max(0, n);
     }
-    function repositionPhraseBoundaryHandlesFromSnapshot() {
-        if (!phraseBoundaryRoot || phraseBoundaryRoot.hidden) return;
-        const ranges = getPhraseGroupRangesSnapshot();
+    function repositionRehearsalBoundaryHandlesFromSnapshot() {
+        if (!rehearsalBoundaryRoot || rehearsalBoundaryRoot.hidden) return;
+        const ranges = getRehearsalGroupRangesSnapshot();
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0) || ranges.length < 2) return;
-        const handles = phraseBoundaryRoot.querySelectorAll(
-            '.audio-waveform-composite__phrase-boundary-handle',
+        const handles = rehearsalBoundaryRoot.querySelectorAll(
+            '.audio-waveform-composite__rehearsal-boundary-handle',
         );
         for (let i = 0; i < handles.length && i < ranges.length - 1; i++) {
             handles[i].style.left =
                 transportSecToOverlayLeftPercent(ranges[i].endSec, master) + '%';
         }
     }
-    const phraseBoundaryRoot =
+    const rehearsalBoundaryRoot =
         typeof audioWaveformLanesInner !== 'undefined' && audioWaveformLanesInner
             ? (() => {
                   const root = document.createElement('div');
-                  root.className = 'audio-waveform-composite__phrase-boundaries';
+                  root.className = 'audio-waveform-composite__rehearsal-boundaries';
                   root.hidden = true;
                   root.setAttribute('aria-hidden', 'true');
                   audioWaveformLanesInner.appendChild(root);
                   return root;
               })()
             : null;
-    let phraseBoundaryDragActive = false;
-    let meterCommitInFlight = false;
-    let phraseBoundaryDragPointerId = null;
-    let phraseBoundaryDragBoundaryIndex = -1;
-    let phraseBoundaryDragBarBoundaries = null;
-    let phraseBoundaryDragCounts = null;
-    let phraseBoundaryDragStartCounts = null;
-    let phraseBoundaryDragStartBoundaryIndex = -1;
-    let phraseBoundaryDragStartBarK = -1;
-    let phraseBoundaryDragStartClientX = 0;
-    let phraseBoundaryDragDocMove = null;
-    let phraseBoundaryDragDocUp = null;
-    function getWaveformLanesElForPhraseDrag() {
+    let rehearsalBoundaryDragActive = false;
+    let rehearsalBoundaryDragPointerId = null;
+    let rehearsalBoundaryDragBoundaryIndex = -1;
+    let rehearsalBoundaryDragBarBoundaries = null;
+    let rehearsalBoundaryDragCounts = null;
+    let rehearsalBoundaryDragStartCounts = null;
+    let rehearsalBoundaryDragStartBoundaryIndex = -1;
+    let rehearsalBoundaryDragStartBarK = -1;
+    let rehearsalBoundaryDragStartClientX = 0;
+    let rehearsalBoundaryDragDocMove = null;
+    let rehearsalBoundaryDragDocUp = null;
+    function getWaveformLanesElForRehearsalDrag() {
         return typeof audioWaveformLanesTracks !== 'undefined' && audioWaveformLanesTracks
             ? audioWaveformLanesTracks
             : typeof waveformScrubTargetEl === 'function'
@@ -1334,43 +1430,43 @@
         if (!(master > 0)) return 0;
         return (sec / master) * 100;
     }
-    function detachPhraseBoundaryDragDocListeners() {
-        if (phraseBoundaryDragDocMove) {
-            document.removeEventListener('pointermove', phraseBoundaryDragDocMove);
-            phraseBoundaryDragDocMove = null;
+    function detachRehearsalBoundaryDragDocListeners() {
+        if (rehearsalBoundaryDragDocMove) {
+            document.removeEventListener('pointermove', rehearsalBoundaryDragDocMove);
+            rehearsalBoundaryDragDocMove = null;
         }
-        if (phraseBoundaryDragDocUp) {
-            document.removeEventListener('pointerup', phraseBoundaryDragDocUp);
-            document.removeEventListener('pointercancel', phraseBoundaryDragDocUp);
-            phraseBoundaryDragDocUp = null;
+        if (rehearsalBoundaryDragDocUp) {
+            document.removeEventListener('pointerup', rehearsalBoundaryDragDocUp);
+            document.removeEventListener('pointercancel', rehearsalBoundaryDragDocUp);
+            rehearsalBoundaryDragDocUp = null;
         }
     }
 
-    function endPhraseBoundaryDrag() {
-        phraseBoundaryDragActive = false;
-        phraseBoundaryDragPointerId = null;
-        phraseBoundaryDragBoundaryIndex = -1;
-        phraseBoundaryDragBarBoundaries = null;
-        phraseBoundaryDragCounts = null;
-        phraseBoundaryDragStartCounts = null;
-        phraseBoundaryDragStartBoundaryIndex = -1;
-        phraseBoundaryDragStartBarK = -1;
-        phraseBoundaryDragStartClientX = 0;
-        detachPhraseBoundaryDragDocListeners();
-        const lanes = getWaveformLanesElForPhraseDrag();
-        if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--phrase-boundary-drag');
+    function endRehearsalBoundaryDrag() {
+        rehearsalBoundaryDragActive = false;
+        rehearsalBoundaryDragPointerId = null;
+        rehearsalBoundaryDragBoundaryIndex = -1;
+        rehearsalBoundaryDragBarBoundaries = null;
+        rehearsalBoundaryDragCounts = null;
+        rehearsalBoundaryDragStartCounts = null;
+        rehearsalBoundaryDragStartBoundaryIndex = -1;
+        rehearsalBoundaryDragStartBarK = -1;
+        rehearsalBoundaryDragStartClientX = 0;
+        detachRehearsalBoundaryDragDocListeners();
+        const lanes = getWaveformLanesElForRehearsalDrag();
+        if (lanes) lanes.classList.remove('audio-waveform-composite__lanes--rehearsal-boundary-drag');
     }
 
-    function syncPhraseBoundaryDeferToRegionHandles(defer) {
-        if (!phraseBoundaryRoot || phraseBoundaryRoot.hidden) return;
-        if (phraseBoundaryDragActive) defer = false;
-        phraseBoundaryRoot.classList.toggle(
-            'audio-waveform-composite__phrase-boundaries--defer-regions',
+    function syncRehearsalBoundaryDeferToRegionHandles(defer) {
+        if (!rehearsalBoundaryRoot || rehearsalBoundaryRoot.hidden) return;
+        if (rehearsalBoundaryDragActive) defer = false;
+        rehearsalBoundaryRoot.classList.toggle(
+            'audio-waveform-composite__rehearsal-boundaries--defer-regions',
             !!defer,
         );
     }
 
-    function onPhraseBoundaryHandlePointerDown(ev, boundaryIndex) {
+    function onRehearsalBoundaryHandlePointerDown(ev, boundaryIndex) {
         if (
             typeof tryBeginRegionHandleDragFromPointer === 'function' &&
             tryBeginRegionHandleDragFromPointer(ev)
@@ -1383,19 +1479,19 @@
         ) {
             return;
         }
-        if (!getMusicalGridPhraseFillVisible()) return;
+        if (!getMusicalGridRehearsalFillVisible()) return;
         if (ev.button !== 0) return;
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return;
+        if (!settings || !settings.rehearsalSpec) return;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return;
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (counts.length < 2) return;
         const b = boundaryIndex | 0;
@@ -1411,63 +1507,63 @@
             typeof collectPlaybackAlignedBarBoundarySecs === 'function'
                 ? collectPlaybackAlignedBarBoundarySecs(settings.meterSpec, master)
                 : collectBarBoundarySecs(settings.meterSpec, master);
-        phraseBoundaryDragActive = true;
-        phraseBoundaryDragPointerId = ev.pointerId;
-        phraseBoundaryDragBoundaryIndex = b;
-        phraseBoundaryDragBarBoundaries = barBoundaries;
-        phraseBoundaryDragCounts = counts.slice();
-        phraseBoundaryDragStartCounts = counts.slice();
-        phraseBoundaryDragStartBoundaryIndex = b;
-        phraseBoundaryDragStartBarK = sumGroupBarCounts(counts, b) + counts[b];
-        phraseBoundaryDragStartClientX = ev.clientX;
+        rehearsalBoundaryDragActive = true;
+        rehearsalBoundaryDragPointerId = ev.pointerId;
+        rehearsalBoundaryDragBoundaryIndex = b;
+        rehearsalBoundaryDragBarBoundaries = barBoundaries;
+        rehearsalBoundaryDragCounts = counts.slice();
+        rehearsalBoundaryDragStartCounts = counts.slice();
+        rehearsalBoundaryDragStartBoundaryIndex = b;
+        rehearsalBoundaryDragStartBarK = sumGroupBarCounts(counts, b) + counts[b];
+        rehearsalBoundaryDragStartClientX = ev.clientX;
 
-        const lanes = getWaveformLanesElForPhraseDrag();
-        if (lanes) lanes.classList.add('audio-waveform-composite__lanes--phrase-boundary-drag');
+        const lanes = getWaveformLanesElForRehearsalDrag();
+        if (lanes) lanes.classList.add('audio-waveform-composite__lanes--rehearsal-boundary-drag');
 
-        phraseBoundaryDragDocMove = (e) => {
-            if (!phraseBoundaryDragActive || e.pointerId !== phraseBoundaryDragPointerId) {
+        rehearsalBoundaryDragDocMove = (e) => {
+            if (!rehearsalBoundaryDragActive || e.pointerId !== rehearsalBoundaryDragPointerId) {
                 return;
             }
             e.preventDefault();
-            const startCounts = phraseBoundaryDragStartCounts;
-            const b = phraseBoundaryDragStartBoundaryIndex;
+            const startCounts = rehearsalBoundaryDragStartCounts;
+            const b = rehearsalBoundaryDragStartBoundaryIndex;
             if (!startCounts || b < 0 || b >= startCounts.length - 1) return;
             const sumBefore = sumGroupBarCounts(startCounts, b);
             const minK = sumBefore;
             const maxK = sumBefore + startCounts[b] + startCounts[b + 1];
-            const targetK = targetBarKForPhraseBoundaryDrag(
-                phraseBoundaryDragStartBarK,
-                phraseBoundaryDragStartClientX,
+            const targetK = targetBarKForRehearsalBoundaryDrag(
+                rehearsalBoundaryDragStartBarK,
+                rehearsalBoundaryDragStartClientX,
                 e.clientX,
-                phraseBoundaryDragBarBoundaries,
+                rehearsalBoundaryDragBarBoundaries,
                 minK,
                 maxK,
             );
-            applyPhraseBoundaryDragPreview(
-                countsForPhraseBoundaryAtBarIndex(startCounts, b, targetK),
+            applyRehearsalBoundaryDragPreview(
+                countsForRehearsalBoundaryAtBarIndex(startCounts, b, targetK),
             );
         };
 
-        phraseBoundaryDragDocUp = (e) => {
-            if (!phraseBoundaryDragActive || e.pointerId !== phraseBoundaryDragPointerId) {
+        rehearsalBoundaryDragDocUp = (e) => {
+            if (!rehearsalBoundaryDragActive || e.pointerId !== rehearsalBoundaryDragPointerId) {
                 return;
             }
             e.preventDefault();
-            const finalCounts = phraseBoundaryDragCounts;
-            const startCounts = phraseBoundaryDragStartCounts;
-            const boundaryIdx = phraseBoundaryDragStartBoundaryIndex;
+            const finalCounts = rehearsalBoundaryDragCounts;
+            const startCounts = rehearsalBoundaryDragStartCounts;
+            const boundaryIdx = rehearsalBoundaryDragStartBoundaryIndex;
             if (finalCounts && finalCounts.length) {
-                if (!phraseGroupCountsEqual(startCounts, finalCounts)) {
+                if (!rehearsalGroupCountsEqual(startCounts, finalCounts)) {
                     if (typeof window.requestRegionUndoCapture === 'function') {
-                        window.requestRegionUndoCapture({ includePhrase: true });
+                        window.requestRegionUndoCapture({ includeRehearsal: true });
                     } else {
-                        requestPhraseUndoCapture();
+                        requestRehearsalUndoCapture();
                     }
                 }
-                applyExplicitPhraseGroupBarCounts(finalCounts, { skipUndo: true });
-                persistPhraseWaveformEditAndRedraw({ skipUndo: true });
+                applyExplicitRehearsalGroupBarCounts(finalCounts, { skipUndo: true });
+                persistRehearsalWaveformEditAndRedraw({ skipUndo: true });
             }
-            endPhraseBoundaryDrag();
+            endRehearsalBoundaryDrag();
             if (finalCounts && finalCounts.length) {
                 if (typeof writeLog === 'function') {
                     const mergedCount =
@@ -1476,61 +1572,56 @@
                             : 0;
                     if (
                         mergedCount > 0 &&
-                        wasLeftPhraseAbsorbedIntoRight(startCounts, finalCounts, boundaryIdx)
+                        wasLeftRehearsalAbsorbedIntoRight(startCounts, finalCounts, boundaryIdx)
                     ) {
-                        const left = phraseGroupLabelForIndex(boundaryIdx);
-                        const right = phraseGroupLabelForIndex(boundaryIdx + 1);
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
+                        const right = rehearsalGroupLabelForIndex(boundaryIdx + 1);
                         writeLog(
-                            'Phrase ' +
+                            'Rehearsal ' +
                                 left +
                                 ' absorbed into ' +
                                 right +
                                 ': ' +
-                                musicalGridPhraseText,
+                                musicalGridRehearsalText,
                         );
                     } else if (mergedCount > 0) {
-                        const left = phraseGroupLabelForIndex(boundaryIdx);
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
                         writeLog(
-                            'Phrase ' +
+                            'Rehearsal ' +
                                 left +
                                 ' merged ' +
                                 mergedCount +
-                                ' phrase(s): ' +
-                                musicalGridPhraseText,
+                                ' rehearsal(s): ' +
+                                musicalGridRehearsalText,
                         );
                     } else {
-                        const left = phraseGroupLabelForIndex(boundaryIdx);
-                        const right = phraseGroupLabelForIndex(boundaryIdx + 1);
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
+                        const right = rehearsalGroupLabelForIndex(boundaryIdx + 1);
                         writeLog(
-                            'Phrase boundary ' +
+                            'Rehearsal boundary ' +
                                 left +
                                 '/' +
                                 right +
                                 ': ' +
-                                musicalGridPhraseText,
+                                musicalGridRehearsalText,
                         );
                     }
                 }
             }
         };
 
-        document.addEventListener('pointermove', phraseBoundaryDragDocMove);
-        document.addEventListener('pointerup', phraseBoundaryDragDocUp);
-        document.addEventListener('pointercancel', phraseBoundaryDragDocUp);
+        document.addEventListener('pointermove', rehearsalBoundaryDragDocMove);
+        document.addEventListener('pointerup', rehearsalBoundaryDragDocUp);
+        document.addEventListener('pointercancel', rehearsalBoundaryDragDocUp);
     }
 
-    function updatePhraseBoundaryOverlay() {
-        if (!phraseBoundaryRoot) return;
-        while (phraseBoundaryRoot.firstChild) {
-            phraseBoundaryRoot.removeChild(phraseBoundaryRoot.firstChild);
+    function updateRehearsalBoundaryOverlay() {
+        if (!rehearsalBoundaryRoot) return;
+        while (rehearsalBoundaryRoot.firstChild) {
+            rehearsalBoundaryRoot.removeChild(rehearsalBoundaryRoot.firstChild);
         }
-        if (!getMusicalGridPhraseFillVisible()) {
-            phraseBoundaryRoot.hidden = true;
-            return;
-        }
-        const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) {
-            phraseBoundaryRoot.hidden = true;
+        if (!getMusicalGridRehearsalFillVisible()) {
+            rehearsalBoundaryRoot.hidden = true;
             return;
         }
         const master =
@@ -1538,319 +1629,111 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) {
-            phraseBoundaryRoot.hidden = true;
+            rehearsalBoundaryRoot.hidden = true;
             return;
         }
-        const ranges = phraseBoundaryDragActive
-            ? getPhraseGroupRangesSnapshot()
-            : collectPhraseGroupRanges(
-                  settings.meterSpec,
-                  master,
-                  settings.phraseSpec,
-              );
+        let ranges = [];
+        if (
+            rehearsalBoundaryDragActive &&
+            rehearsalBoundaryDragCounts &&
+            rehearsalBoundaryDragCounts.length
+        ) {
+            const settings = musicalGridDrawSettings();
+            if (settings && settings.meterSpec) {
+                ranges = collectRehearsalGroupRangesFromBarCounts(
+                    settings.meterSpec,
+                    master,
+                    rehearsalBoundaryDragCounts,
+                );
+            }
+        } else if (typeof getRehearsalGroupRangesSnapshot === 'function') {
+            ranges = getRehearsalGroupRangesSnapshot();
+        }
+        /* 境界ハンドル — 通常時はリハーサルマーク区間のみ（Rehearsal 欄小節数は使わない） */
         if (ranges.length < 2) {
-            phraseBoundaryRoot.hidden = true;
+            rehearsalBoundaryRoot.hidden = true;
             return;
         }
-        phraseBoundaryRoot.hidden = false;
+        rehearsalBoundaryRoot.hidden = false;
         for (let i = 0; i < ranges.length - 1; i++) {
             const boundarySec = ranges[i].endSec;
             const leftPct = transportSecToOverlayLeftPercent(boundarySec, master);
             const handle = document.createElement('div');
-            handle.className = 'audio-waveform-composite__phrase-boundary-handle';
+            handle.className = 'audio-waveform-composite__rehearsal-boundary-handle';
             handle.style.left = leftPct + '%';
             handle.dataset.boundaryIndex = String(i);
-            const leftLabel = phraseGroupLabelForIndex(ranges[i].paletteIndex);
-            const rightLabel = phraseGroupLabelForIndex(ranges[i + 1].paletteIndex);
+            const leftLabel =
+                ranges[i].label != null && String(ranges[i].label).trim()
+                    ? String(ranges[i].label).trim()
+                    : rehearsalGroupLabelForIndex(ranges[i].paletteIndex);
+            const rightLabel =
+                ranges[i + 1].label != null && String(ranges[i + 1].label).trim()
+                    ? String(ranges[i + 1].label).trim()
+                    : rehearsalGroupLabelForIndex(ranges[i + 1].paletteIndex);
             handle.title =
-                'Phrase ' +
+                'Rehearsal ' +
                 leftLabel +
                 ' / ' +
                 rightLabel +
                 ' 境界（ドラッグで小節数調整・左端で右と結合・右へ結合）';
             handle.addEventListener('pointerdown', (ev) => {
-                onPhraseBoundaryHandlePointerDown(ev, i);
+                onRehearsalBoundaryHandlePointerDown(ev, i);
             });
-            phraseBoundaryRoot.appendChild(handle);
+            rehearsalBoundaryRoot.appendChild(handle);
         }
         if (typeof window.scheduleWaveformRegionOverlayRefresh === 'function') {
             window.scheduleWaveformRegionOverlayRefresh();
         }
     }
 
-    function focusMusicalGridMeterEditor() {
-        if (!musicalGridMeterInput) return false;
-        musicalGridMeterInput.focus();
-        musicalGridMeterInput.select();
-        return true;
-    }
-
-    function focusMusicalGridPhraseEditor() {
-        if (!musicalGridPhraseInput) return false;
-        musicalGridPhraseInput.focus();
-        musicalGridPhraseInput.select();
-        return true;
-    }
-
-    function switchMusicalGridEditorFocus(next) {
-        readMusicalGridFromInputs();
-        clearMusicalGridPositionCache();
-        if (next === 'phrase') return focusMusicalGridPhraseEditor();
-        return focusMusicalGridMeterEditor();
-    }
-
-    function handleMusicalGridEditorTabKeydown(e, from) {
-        if (e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return false;
-        e.preventDefault();
-        switchMusicalGridEditorFocus(from === 'meter' ? 'phrase' : 'meter');
-        scheduleMusicalGridAutosave();
-        return true;
-    }
-
-    function commitMusicalGridMeterEditor() {
-        if (meterCommitInFlight) return;
-        const stretchPrevSpec =
-            typeof parseMeterSpec === 'function'
-                ? parseMeterSpec(
-                      typeof getMusicalGridMeterLayoutBaseline === 'function'
-                          ? getMusicalGridMeterLayoutBaseline()
-                          : getCommittedMusicalGridMeterText(),
-                  )
-                : null;
-        const stretchNextSpec =
-            typeof parseMeterSpec === 'function'
-                ? parseMeterSpec(
-                      musicalGridMeterInput
-                          ? musicalGridMeterInput.value
-                          : getCommittedMusicalGridMeterText(),
-                  )
-                : null;
-        const stretchDeltaOnlyPending =
-            typeof meterStretchDeltaOnlyChanged === 'function' &&
-            meterStretchDeltaOnlyChanged(stretchPrevSpec, stretchNextSpec);
-        const stretchWillChange =
-            stretchPrevSpec &&
-            stretchNextSpec &&
-            typeof computeTempoStretchRateFromSpec === 'function' &&
-            typeof isTempoStretchActiveForSpec === 'function' &&
-            (Math.abs(
-                computeTempoStretchRateFromSpec(stretchPrevSpec) -
-                    computeTempoStretchRateFromSpec(stretchNextSpec),
-            ) > 0.00001 ||
-                isTempoStretchActiveForSpec(stretchPrevSpec) !==
-                    isTempoStretchActiveForSpec(stretchNextSpec));
-        meterCommitInFlight = true;
-        const run = async () => {
-            try {
-                persistMusicalGridAndRedraw({
-                    relayoutSlotsFromMeter: false,
-                    strictMeterCommit: true,
-                    skipTimelineSlotRebuild: stretchDeltaOnlyPending,
-                });
-                if (typeof applyTempoStretchForCurrentMeter === 'function') {
-                    await applyTempoStretchForCurrentMeter({ prevSpec: stretchPrevSpec });
-                }
-                if (
-                    stretchWillChange &&
-                    typeof setTempoStretchPendingRelayout === 'function'
-                ) {
-                    setTempoStretchPendingRelayout(true);
-                }
-                const committedSpec =
-                    typeof parseMeterSpec === 'function'
-                        ? parseMeterSpec(getCommittedMusicalGridMeterText())
-                        : null;
-                const stretchDeltaOnly =
-                    typeof meterStretchDeltaOnlyChanged === 'function' &&
-                    meterStretchDeltaOnlyChanged(stretchPrevSpec, committedSpec);
-                persistMusicalGridAndRedraw({
-                    skipMeterCommit: true,
-                    relayoutSlotsFromMeter: true,
-                    forceRelayoutFromMeter: true,
-                    preservePhraseTextOnMeterRelayout: stretchDeltaOnly,
-                    stretchPrevSpec: stretchPrevSpec,
-                    stretchNextSpec: committedSpec,
-                    strictMeterCommit: true,
-                });
-                if (musicalGridMeterInput) musicalGridMeterInput.blur();
-                if (typeof scheduleWaveformFocusRestore === 'function') {
-                    scheduleWaveformFocusRestore();
-                }
-            } finally {
-                meterCommitInFlight = false;
-                if (typeof clearTempoStretchPendingRelayout === 'function') {
-                    clearTempoStretchPendingRelayout();
-                }
-                if (
-                    stretchWillChange &&
-                    typeof window.pruneRegionUndoStackIncompatibleWithCurrentTransport ===
-                        'function'
-                ) {
-                    window.pruneRegionUndoStackIncompatibleWithCurrentTransport();
-                }
-            }
-        };
-        void run();
-    }
-
-    function cancelMusicalGridMeterEditor() {
-        const restore = getMusicalGridMeterLayoutBaseline();
-        musicalGridMeterText = restore;
-        if (musicalGridMeterInput) musicalGridMeterInput.value = restore;
-        clearMusicalGridPositionCache();
-        scheduleMusicalGridRedraw();
-        if (musicalGridMeterInput) musicalGridMeterInput.blur();
-        if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
-    }
-
-    async function commitMusicalGridPhraseEditor() {
-        commitPhraseInputUndoIfChanged();
-        phraseInputCommitViaEnter = true;
-        const savePromise = persistMusicalGridAndRedraw({
-            relayoutRegions: true,
-            relayoutSilent: false,
-            skipUndo: true,
-            compressPhrase: true,
-        });
-        if (savePromise && typeof savePromise.then === 'function') {
-            await savePromise;
-        }
-        if (musicalGridPhraseInput) musicalGridPhraseInput.blur();
-        if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
-    }
-
     function initMusicalGridUi() {
         try {
             const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
-            if (prefs.musicalGrid) applyMusicalGridPersistSnapshot(prefs.musicalGrid);
+            if (prefs.musicalGrid) {
+                if (typeof musicalTrackPersistDiagLog === 'function') {
+                    const rm = prefs.musicalGrid.rehearsalMarkTrackEvents;
+                    musicalTrackPersistDiagLog('prefs/apply/begin', {
+                        rehearsalMarkTrackEvents:
+                            typeof musicalTrackPersistDiagSummarizeRehearsalEvents === 'function'
+                                ? musicalTrackPersistDiagSummarizeRehearsalEvents(rm)
+                                : {
+                                      count: Array.isArray(rm) ? rm.length : 0,
+                                      missing: !Array.isArray(rm),
+                                  },
+                    });
+                }
+                applyMusicalGridPersistSnapshot(prefs.musicalGrid);
+                if (typeof musicalTrackPersistDiagLog === 'function') {
+                    musicalTrackPersistDiagLog('prefs/apply/done', {
+                        after:
+                            typeof musicalTrackPersistDiagLiveState === 'function'
+                                ? musicalTrackPersistDiagLiveState()
+                                : null,
+                    });
+                }
+            }
             if (typeof prefs.musicalGridVisible === 'boolean') {
                 musicalGridVisible = prefs.musicalGridVisible;
             }
-            if (typeof prefs.musicalGridPhraseFillVisible === 'boolean') {
-                musicalGridPhraseFillVisible = prefs.musicalGridPhraseFillVisible;
+            if (typeof prefs.musicalGridRehearsalFillVisible === 'boolean') {
+                musicalGridRehearsalFillVisible = prefs.musicalGridRehearsalFillVisible;
+                if (
+                    musicalGridRehearsalFillVisible &&
+                    typeof window.ensureDefaultRehearsalMarkForRehearsalTint === 'function'
+                ) {
+                    window.ensureDefaultRehearsalMarkForRehearsalTint({ silent: true });
+                }
             }
         } catch (_) {}
 
         syncMusicalGridVisibilityUi();
         if (typeof drawMusicalGridOverlay === 'function') drawMusicalGridOverlay();
-        else if (typeof updatePhraseBoundaryOverlay === 'function') updatePhraseBoundaryOverlay();
+        else if (typeof updateRehearsalBoundaryOverlay === 'function') updateRehearsalBoundaryOverlay();
+        if (typeof refreshMusicalGridTracks === 'function') refreshMusicalGridTracks();
 
         if (musicalGridVisibleCheckbox) {
             musicalGridVisibleCheckbox.addEventListener('change', () => {
                 setMusicalGridVisible(musicalGridVisibleCheckbox.checked);
-            });
-        }
-        if (musicalGridPhraseFillCheckbox) {
-            musicalGridPhraseFillCheckbox.addEventListener('change', () => {
-                setMusicalGridPhraseFillVisible(musicalGridPhraseFillCheckbox.checked);
-            });
-        }
-
-        const onInput = () => {
-            scheduleMusicalGridRedraw();
-            scheduleMusicalGridAutosave();
-        };
-        if (musicalGridMeterInput) {
-            musicalGridMeterInput.addEventListener('focus', () => {
-                syncMusicalGridMeterLayoutBaseline(getCommittedMusicalGridMeterText());
-            });
-            musicalGridMeterInput.addEventListener('input', onInput);
-            musicalGridMeterInput.addEventListener('change', () => {
-                commitMusicalGridMeterEditor();
-            });
-            musicalGridMeterInput.addEventListener('keydown', (e) => {
-                if (handleMusicalGridEditorTabKeydown(e, 'meter')) return;
-                if (
-                    (e.key === '+' || e.key === '-') &&
-                    !e.altKey &&
-                    !e.ctrlKey &&
-                    !e.metaKey
-                ) {
-                    const raw = musicalGridMeterInput
-                        ? normalizeMusicalGridMeterText(musicalGridMeterInput.value)
-                        : '';
-                    const caret = musicalGridMeterInput
-                        ? musicalGridMeterInput.selectionStart
-                        : 0;
-                    if (
-                        typeof caretInTempoStretchPrefix === 'function' &&
-                        caretInTempoStretchPrefix(raw, caret) &&
-                        typeof bumpMeterStretchDeltaBy === 'function'
-                    ) {
-                        e.preventDefault();
-                        bumpMeterStretchDeltaBy(e.key === '+' ? 1 : -1);
-                        return;
-                    }
-                    if (
-                        typeof insertMeterStretchSignAtEditorStart === 'function' &&
-                        insertMeterStretchSignAtEditorStart(e.key)
-                    ) {
-                        e.preventDefault();
-                        return;
-                    }
-                }
-                if (
-                    matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
-                    matchUserShortcut(e, 'musicalGridInputArrowDown', { allowRepeat: true })
-                ) {
-                    e.preventDefault();
-                    const dir = matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ? 1 : -1;
-                    const bpmStep = (e.shiftKey ? 10 : 1) * dir;
-                    const sigStep = (e.shiftKey ? 10 : 1) * dir;
-                    bumpMeterFieldBy(bpmStep, sigStep);
-                    return;
-                }
-                if (matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
-                    e.preventDefault();
-                    cancelMusicalGridMeterEditor();
-                    return;
-                }
-                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true })) {
-                    e.preventDefault();
-                    commitMusicalGridMeterEditor();
-                    return;
-                }
-            });
-        }
-        if (musicalGridPhraseInput) {
-            musicalGridPhraseInput.addEventListener('focus', () => {
-                readMusicalGridFromInputs();
-                phraseInputFocusSnapshot = capturePhraseUndoSnapshot();
-            });
-            musicalGridPhraseInput.addEventListener('input', onInput);
-            musicalGridPhraseInput.addEventListener('change', () => {
-                if (phraseInputCommitViaEnter) {
-                    phraseInputCommitViaEnter = false;
-                    return;
-                }
-                clearPhraseGroupBarCountsOverride();
-                commitPhraseInputUndoIfChanged();
-                persistMusicalGridAndRedraw({
-                    skipUndo: true,
-                    compressPhrase: true,
-                });
-            });
-            musicalGridPhraseInput.addEventListener('keydown', async (e) => {
-                if (handleMusicalGridEditorTabKeydown(e, 'phrase')) return;
-                if (
-                    matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true }) ||
-                    matchUserShortcut(e, 'musicalGridInputArrowDown', { allowRepeat: true })
-                ) {
-                    e.preventDefault();
-                    const step = e.shiftKey ? 10 : 1;
-                    bumpPhraseSizeBy(
-                        matchUserShortcut(e, 'musicalGridInputArrowUp', { allowRepeat: true })
-                            ? step
-                            : -step,
-                    );
-                    return;
-                }
-                if (matchUserShortcut(e, 'submitEditing', { allowRepeat: true }) ||
-                    matchUserShortcut(e, 'cancelEditing', { allowRepeat: true })) {
-                    e.preventDefault();
-                    await commitMusicalGridPhraseEditor();
-                    return;
-                }
             });
         }
 
@@ -1867,14 +1750,15 @@
     window.getMusicalGridVisible = getMusicalGridVisible;
     window.setMusicalGridVisible = setMusicalGridVisible;
     window.toggleMusicalGridVisible = toggleMusicalGridVisible;
-    window.getMusicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible;
-    window.setMusicalGridPhraseFillVisible = setMusicalGridPhraseFillVisible;
-    window.toggleMusicalGridPhraseFillVisible = toggleMusicalGridPhraseFillVisible;
-    window.focusMusicalGridMeterEditor = focusMusicalGridMeterEditor;
-    window.focusMusicalGridPhraseEditor = focusMusicalGridPhraseEditor;
+    window.getMusicalGridRehearsalFillVisible = getMusicalGridRehearsalFillVisible;
+    window.setMusicalGridRehearsalFillVisible = setMusicalGridRehearsalFillVisible;
+    window.toggleMusicalGridRehearsalFillVisible = toggleMusicalGridRehearsalFillVisible;
     window.applyMusicalGridPersistSnapshot = applyMusicalGridPersistSnapshot;
     window.resetMusicalGridToDefaults = resetMusicalGridToDefaults;
     window.drawMusicalGridOverlay = drawMusicalGridOverlay;
+    window.drawRehearsalFillOverlay = drawRehearsalFillOverlay;
+    window.drawBarLinesOverlay = drawBarLinesOverlay;
+    window.clearRegionSwapWaveformGridOverlays = clearRegionSwapWaveformGridOverlays;
     window.scheduleMusicalGridRedraw = scheduleMusicalGridRedraw;
     window.parseMeterSpec = parseMeterSpec;
     window.parseTempoStretchPrefix = parseTempoStretchPrefix;
@@ -1891,51 +1775,65 @@
     window.currentTempoStretchPlaybackRate = currentTempoStretchPlaybackRate;
     window.collectPlaybackAlignedBarBoundarySecs =
         collectPlaybackAlignedBarBoundarySecs;
-    window.resolvePhraseLayoutDurationSec = resolvePhraseLayoutDurationSec;
+    window.setTimelineMusicalSampleRate = setTimelineMusicalSampleRate;
+    window.resolveTimelineMusicalSampleRate = resolveTimelineMusicalSampleRate;
+    window.resolveRehearsalLayoutDurationSec = resolveRehearsalLayoutDurationSec;
     window.forEachMeterBarBeat = forEachMeterBarBeat;
     window.getMeterSigSegments = getMeterSigSegments;
     window.parseTimeSignatureSpec = parseTimeSignatureSpec;
     window.parseMusicalGridTempoBpm = parseMusicalGridTempoBpm;
-    window.parsePhraseGroupingSpec = parsePhraseGroupingSpec;
-    window.getPhraseGroupRangesSnapshot = getPhraseGroupRangesSnapshot;
-    window.getPhraseGroupRangesForRegionRehearsalMarks =
-        getPhraseGroupRangesForRegionRehearsalMarks;
-    window.phraseGroupLabelForIndex = phraseGroupLabelForIndex;
-    window.resolvePhraseGroupAtTransportSec = resolvePhraseGroupAtTransportSec;
+    window.parseRehearsalGroupingSpec = parseRehearsalGroupingSpec;
+    window.getRehearsalGroupRangesSnapshot = getRehearsalGroupRangesSnapshot;
+    window.getRehearsalGroupRangesForRegionRehearsalMarks =
+        getRehearsalGroupRangesForRegionRehearsalMarks;
+    window.getRehearsalMarkNavRanges = getRehearsalMarkNavRanges;
+    window.rehearsalRehearsalDisplayMarkForSlot = rehearsalRehearsalDisplayMarkForSlot;
+    window.rehearsalGroupLabelForIndex = rehearsalGroupLabelForIndex;
+    window.resolveRehearsalGroupAtTransportSec = resolveRehearsalGroupAtTransportSec;
     window.hasMusicalGridSnapStops = hasMusicalGridSnapStops;
     window.collectMusicalGridSnapStops = collectMusicalGridSnapStops;
+    window.collectMusicalGridRegionMoveSnapStops = collectMusicalGridRegionMoveSnapStops;
     window.snapSecToMusicalGridStops = snapSecToMusicalGridStops;
     window.jumpToAdjacentMusicalGridStop = jumpToAdjacentMusicalGridStop;
+    window.collectMusicalGridBarNavStops = collectMusicalGridBarNavStops;
+    window.hasMusicalGridBarNavStops = hasMusicalGridBarNavStops;
+    window.resolveAdjacentMusicalGridBarStopSec = resolveAdjacentMusicalGridBarStopSec;
+    window.jumpToAdjacentMusicalGridBarStop = jumpToAdjacentMusicalGridBarStop;
+    window.handleMusicalGridBarNavKeydown = handleMusicalGridBarNavKeydown;
     window.resolveAdjacentMusicalGridStopSec = resolveAdjacentMusicalGridStopSec;
-    window.jumpToAdjacentPhrase = jumpToAdjacentPhrase;
     window.resolveMusicalGridPlayheadPositionText = resolveMusicalGridPlayheadPositionText;
+    window.resolveMusicalGridPlayheadDisplay = resolveMusicalGridPlayheadDisplay;
     window.meterBeatDurationSecAtTransport = meterBeatDurationSecAtTransport;
     window.snapSecToMusicalGridQuarterNote = snapSecToMusicalGridQuarterNote;
-    window.syncPhraseBoundaryDeferToRegionHandles = syncPhraseBoundaryDeferToRegionHandles;
-    window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
+    window.snapSecToMusicalGridBar = snapSecToMusicalGridBar;
+    window.getMusicalGridBarSnapThresholdSec = getMusicalGridBarSnapThresholdSec;
+    window.getMusicalGridSnapThresholdSec = getMusicalGridBarSnapThresholdSec;
+    window.syncRehearsalBoundaryDeferToRegionHandles = syncRehearsalBoundaryDeferToRegionHandles;
+    window.handleRegionBarJumpDialogKeydown = handleRegionBarJumpDialogKeydown;
+    window.openRegionBarJumpDialog = openRegionBarJumpDialog;
     window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;
     window.resolvePlaybackRegionSpanAtSeekbar = resolvePlaybackRegionSpanAtSeekbar;
-    window.handleMusicalGridPhraseSplitKeydown = handleMusicalGridPhraseSplitKeydown;
-    window.handleMusicalGridPhraseDeleteKeydown = handleMusicalGridPhraseDeleteKeydown;
-    window.handleMusicalGridPhraseJoinKeydown = handleMusicalGridPhraseJoinKeydown;
-    window.joinPhraseAtTarget = joinPhraseAtTarget;
-    window.joinPhraseAtRegionBoundary = joinPhraseAtRegionBoundary;
-    window.resolvePhraseBoundaryDragAtRegionBoundary = resolvePhraseBoundaryDragAtRegionBoundary;
-    window.previewPhraseBoundaryDragFromRegionPointer = previewPhraseBoundaryDragFromRegionPointer;
-    window.commitPhraseBoundaryDragFromRegion = commitPhraseBoundaryDragFromRegion;
-    window.cancelPhraseBoundaryDragPreview = cancelPhraseBoundaryDragPreview;
-    window.joinPhraseAtRegionSpan = joinPhraseAtRegionSpan;
-    window.handleMusicalGridPhraseUndoKeydown = handleMusicalGridPhraseUndoKeydown;
-    window.handleMusicalGridPhraseRedoKeydown = handleMusicalGridPhraseRedoKeydown;
-    window.undoPhraseDefinition = undoPhraseDefinition;
-    window.redoPhraseDefinition = redoPhraseDefinition;
-    window.splitPhraseAtWaveformPointer = splitPhraseAtWaveformPointer;
-    window.deletePhraseAtWaveformPointer = deletePhraseAtWaveformPointer;
-    window.splicePhraseGroupAtIndex = splicePhraseGroupAtIndex;
-    window.swapPhraseGroupsAtIndices = swapPhraseGroupsAtIndices;
-    window.swapPhraseSpecCycleSizesAtIndices = swapPhraseSpecCycleSizesAtIndices;
-    window.swapPhraseExpandedGroupBlocksAtIndices = swapPhraseExpandedGroupBlocksAtIndices;
-    window.getExpandedPhraseGroupBarCountsSnapshot = function getExpandedPhraseGroupBarCountsSnapshot() {
+    window.handleMusicalGridRehearsalSplitKeydown = handleMusicalGridRehearsalSplitKeydown;
+    window.handleMusicalGridRehearsalDeleteKeydown = handleMusicalGridRehearsalDeleteKeydown;
+    window.handleMusicalGridRehearsalJoinKeydown = handleMusicalGridRehearsalJoinKeydown;
+    window.joinRehearsalAtTarget = joinRehearsalAtTarget;
+    window.joinRehearsalAtRegionBoundary = joinRehearsalAtRegionBoundary;
+    window.resolveRehearsalBoundaryDragAtRegionBoundary = resolveRehearsalBoundaryDragAtRegionBoundary;
+    window.previewRehearsalBoundaryDragFromRegionPointer = previewRehearsalBoundaryDragFromRegionPointer;
+    window.commitRehearsalBoundaryDragFromRegion = commitRehearsalBoundaryDragFromRegion;
+    window.cancelRehearsalBoundaryDragPreview = cancelRehearsalBoundaryDragPreview;
+    window.joinRehearsalAtRegionSpan = joinRehearsalAtRegionSpan;
+    window.handleMusicalGridRehearsalUndoKeydown = handleMusicalGridRehearsalUndoKeydown;
+    window.handleMusicalGridRehearsalRedoKeydown = handleMusicalGridRehearsalRedoKeydown;
+    window.undoRehearsalDefinition = undoRehearsalDefinition;
+    window.redoRehearsalDefinition = redoRehearsalDefinition;
+    window.splitRehearsalAtWaveformPointer = splitRehearsalAtWaveformPointer;
+    window.deleteRehearsalAtWaveformPointer = deleteRehearsalAtWaveformPointer;
+    window.spliceRehearsalGroupAtIndex = spliceRehearsalGroupAtIndex;
+    window.swapRehearsalGroupsAtIndices = swapRehearsalGroupsAtIndices;
+    window.swapRehearsalSpecCycleSizesAtIndices = swapRehearsalSpecCycleSizesAtIndices;
+    window.swapRehearsalExpandedGroupBlocksAtIndices = swapRehearsalExpandedGroupBlocksAtIndices;
+    window.getExpandedRehearsalGroupBarCountsSnapshot = function getExpandedRehearsalGroupBarCountsSnapshot() {
         readMusicalGridFromInputs();
         const settings = musicalGridDrawSettings();
         if (!settings || !settings.meterSpec) return [];
@@ -1945,34 +1843,34 @@
                 : 0;
         if (!(master > 0)) return [];
         const layoutDuration =
-            typeof resolvePhraseLayoutDurationSec === 'function'
-                ? resolvePhraseLayoutDurationSec(
+            typeof resolveRehearsalLayoutDurationSec === 'function'
+                ? resolveRehearsalLayoutDurationSec(
                       settings.meterSpec,
                       master,
-                      settings.phraseSpec,
+                      settings.rehearsalSpec,
                   )
                 : master;
-        return resolvePhraseGroupBarCounts(
+        return resolveRehearsalGroupBarCounts(
             settings.meterSpec,
             layoutDuration,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
     };
     window.clearMusicalGridPositionCache = clearMusicalGridPositionCache;
-    window.clearPhraseGroupBarCountsOverride = clearPhraseGroupBarCountsOverride;
-    window.setPhraseGroupBarCountsOverride = setPhraseGroupBarCountsOverride;
-    window.compressPhraseDefinitionFromExpandedCounts =
-        compressPhraseDefinitionFromExpandedCounts;
-    window.repairPhraseSpecToSizes = repairPhraseSpecToSizes;
-    /** RegionSwap — 展開 counts から Phrase 欄テキストを再構成して反映 */
-    window.applyPhraseGroupBarCountsForRegionSwap = function applyPhraseGroupBarCountsForRegionSwap(
+    window.clearRehearsalGroupBarCountsOverride = clearRehearsalGroupBarCountsOverride;
+    window.setRehearsalGroupBarCountsOverride = setRehearsalGroupBarCountsOverride;
+    window.compressRehearsalDefinitionFromExpandedCounts =
+        compressRehearsalDefinitionFromExpandedCounts;
+    window.repairRehearsalSpecToSizes = repairRehearsalSpecToSizes;
+    /** RegionSwap — 展開 counts から Rehearsal 欄テキストを再構成して反映 */
+    window.applyRehearsalGroupBarCountsForRegionSwap = function applyRehearsalGroupBarCountsForRegionSwap(
         counts,
         opt,
     ) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        applyExplicitPhraseGroupBarCounts(counts, {
+        applyExplicitRehearsalGroupBarCounts(counts, {
             skipUndo: !!o.skipUndo,
-            preservePhraseText: false,
+            preserveRehearsalText: false,
             optimize: o.optimize !== false,
         });
         if (o.relayoutRegions === false) {
@@ -1983,13 +1881,13 @@
             }
             return;
         }
-        persistPhraseWaveformEditAndRedraw({
+        persistRehearsalWaveformEditAndRedraw({
             skipUndo: !!o.skipUndo,
             relayoutSilent: o.relayoutSilent !== false,
         });
     };
     /** 展開 counts から slot 先頭秒をプレビュー（RegionSwap 移動先計算用） */
-    window.previewPhraseSlotStartSecFromCounts = function previewPhraseSlotStartSecFromCounts(
+    window.previewRehearsalSlotStartSecFromCounts = function previewRehearsalSlotStartSecFromCounts(
         counts,
         slotIndex,
     ) {
@@ -2002,14 +1900,14 @@
                 : 0;
         if (!(master > 0)) return null;
         const layoutDuration =
-            typeof resolvePhraseLayoutDurationSec === 'function'
-                ? resolvePhraseLayoutDurationSec(
+            typeof resolveRehearsalLayoutDurationSec === 'function'
+                ? resolveRehearsalLayoutDurationSec(
                       settings.meterSpec,
                       master,
-                      settings.phraseSpec,
+                      settings.rehearsalSpec,
                   )
                 : master;
-        const ranges = collectPhraseGroupRangesFromBarCounts(
+        const ranges = collectRehearsalGroupRangesFromBarCounts(
             settings.meterSpec,
             layoutDuration,
             counts,
@@ -2017,17 +1915,17 @@
         const r = ranges[slotIndex | 0];
         return r && Number.isFinite(r.startSec) ? r.startSec : null;
     };
-    window.resolvePhraseGroupIndexAtTransportSec = resolvePhraseGroupIndexAtTransportSec;
-    window.formatPhraseSlotMusicalMetaText = formatPhraseSlotMusicalMetaText;
+    window.resolveRehearsalGroupIndexAtTransportSec = resolveRehearsalGroupIndexAtTransportSec;
+    window.formatRehearsalSlotMusicalMetaText = formatRehearsalSlotMusicalMetaText;
     window.formatMeterTextForBarRange = formatMeterTextForBarRange;
-    window.spliceMusicalGridMeterForRemovedPhraseGroup =
-        spliceMusicalGridMeterForRemovedPhraseGroup;
+    window.spliceMusicalGridMeterForRemovedRehearsalGroup =
+        spliceMusicalGridMeterForRemovedRehearsalGroup;
     window.getMusicalGridMeterDisplayText = getMusicalGridMeterDisplayText;
     window.musicalGridDrawSettings = musicalGridDrawSettings;
     window.getMusicalGridBarBySec = getMusicalGridBarBySec;
-    window.collectPhraseGroupRangesFromBarCounts = collectPhraseGroupRangesFromBarCounts;
-    window.formatPhraseTextFromGroupBarCounts = formatPhraseTextFromGroupBarCounts;
-    window.capturePhraseUndoSnapshot = capturePhraseUndoSnapshot;
-    window.restorePhraseUndoSnapshot = restorePhraseUndoSnapshot;
+    window.collectRehearsalGroupRangesFromBarCounts = collectRehearsalGroupRangesFromBarCounts;
+    window.formatRehearsalTextFromGroupBarCounts = formatRehearsalTextFromGroupBarCounts;
+    window.captureRehearsalUndoSnapshot = captureRehearsalUndoSnapshot;
+    window.restoreRehearsalUndoSnapshot = restoreRehearsalUndoSnapshot;
 
     initMusicalGridUi();

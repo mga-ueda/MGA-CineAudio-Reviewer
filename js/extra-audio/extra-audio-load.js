@@ -325,7 +325,7 @@
                 }
             }
             let pendingIxmlXmlText = null;
-            let pendingWavMarkersForPhrase = null;
+            let pendingWavMarkersForRehearsal = null;
             let pendingWavMarkerImport = false;
             if (!(opt && opt.fromSessionRestore) && fileArrayBuffer) {
                 const trackRef = { type: 'extra', slot };
@@ -342,7 +342,7 @@
                     try {
                         const wavParsedEarly = parseMarkersFromWavBytes(fileArrayBuffer);
                         if (wavParsedEarly && wavParsedEarly.markers && wavParsedEarly.markers.length) {
-                            pendingWavMarkersForPhrase = wavParsedEarly.markers;
+                            pendingWavMarkersForRehearsal = wavParsedEarly.markers;
                         }
                     } catch (_) {}
                 }
@@ -367,6 +367,9 @@
             }
             const ch = buffer.numberOfChannels;
             const rate = buffer.sampleRate | 0;
+            if (typeof setTimelineMusicalSampleRate === 'function' && rate > 0) {
+                setTimelineMusicalSampleRate(rate);
+            }
             setExtraTrackStatus(
                 slot,
                 ch +
@@ -396,7 +399,7 @@
                         slot: slot,
                         sampleRate: rate,
                         clipDurationSec: buffer.duration,
-                        waveMarkersForPhrase: pendingWavMarkersForPhrase,
+                        waveMarkersForRehearsal: pendingWavMarkersForRehearsal,
                     });
                     if (!restoreLoad && typeof refreshExtraTrackUi === 'function') {
                         refreshExtraTrackUi(slot, { skipRegionOverlay: false });
@@ -446,6 +449,12 @@
                         fileDurationSec: buffer.duration,
                         logLabel: 'Extra audio ' + (slot + 1),
                     });
+                    if (typeof logGridAlignAfterMarkerImport === 'function') {
+                        logGridAlignAfterMarkerImport({
+                            slot,
+                            sampleRate: rate,
+                        });
+                    }
                 }
             }
             if (restoreLoad) {

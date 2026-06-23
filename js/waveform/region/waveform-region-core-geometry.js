@@ -1,6 +1,51 @@
 /**
  * waveform-region-core-geometry.js — セグメント幾何・正規化・境界操作
  */
+    function isGridOnlySourceSegmentEntry(seg, epsOpt) {
+        if (!seg) return false;
+        const eps =
+            Number.isFinite(epsOpt) && epsOpt > 0
+                ? epsOpt
+                : segmentBoundaryJoinEpsilonSec();
+        const inS = Number(seg.sourceInSec) || 0;
+        const outS = Number(seg.sourceOutSec) || 0;
+        return outS - inS <= eps;
+    }
+
+    function resolveSegmentAnchorForLeadPad(seg, track) {
+        if (seg && Number.isFinite(seg.timelineStartSec)) {
+            return seg.timelineStartSec;
+        }
+        if (track && typeof getTrackTimelineStartSec === 'function') {
+            return getTrackTimelineStartSec(track);
+        }
+        return 0;
+    }
+    function resolveRawSegmentLeadPadSec(raw, anchor) {
+        void anchor;
+        return Math.max(0, Number(raw && raw.regionLeadPadSec) || 0);
+    }
+    function applyRawSegmentLeadPadFields(base, seg, track) {
+        if (!base || !seg) return;
+        const anchor = resolveSegmentAnchorForLeadPad(seg, track);
+        const leadPad = resolveRawSegmentLeadPadSec(seg, anchor);
+        if (leadPad > 0.00001) {
+            base.regionLeadPadSec = leadPad;
+            base.regionTimelineInSec = Number.isFinite(seg.regionTimelineInSec)
+                ? seg.regionTimelineInSec
+                : anchor - leadPad;
+            return;
+        }
+        if (Number.isFinite(seg.regionTimelineInSec)) {
+            base.regionTimelineInSec = Math.max(0, seg.regionTimelineInSec);
+        }
+        if (Number.isFinite(seg.regionTimelineOutSec)) {
+            base.regionTimelineOutSec = seg.regionTimelineOutSec;
+        }
+        if (Number.isFinite(seg.regionLeadPadSec) && seg.regionLeadPadSec > 0) {
+            base.regionLeadPadSec = Math.max(0, seg.regionLeadPadSec);
+        }
+    }
     function normalizeSegmentEntry(seg, track, fullDur) {
         const base = normalizeSegment(seg.sourceInSec, seg.sourceOutSec, fullDur);
         base.id = seg && seg.id ? seg.id : newRegionId();
@@ -14,12 +59,7 @@
         if (seg && Number.isFinite(seg.timelineStartSec)) {
             base.timelineStartSec = seg.timelineStartSec;
         }
-        if (seg && Number.isFinite(seg.regionTimelineInSec)) {
-            base.regionTimelineInSec = Math.max(0, seg.regionTimelineInSec);
-        }
-        if (seg && Number.isFinite(seg.regionLeadPadSec)) {
-            base.regionLeadPadSec = Math.max(0, seg.regionLeadPadSec);
-        }
+        applyRawSegmentLeadPadFields(base, seg, track);
         if (seg && Number.isFinite(seg.gainDb)) {
             const db = Math.max(
                 REGION_GAIN_DB_MIN,
@@ -120,17 +160,41 @@
         if (segmentIndex === 0) {
             const state = getPlaybackRegionsState(track);
             if (state && Number.isFinite(state.regionTimelineInSec)) {
-                stored = Math.max(0, state.regionTimelineInSec);
+                const rawIn = state.regionTimelineInSec;
+                stored =
+                    readRawRegionLeadPadSec(track, segmentIndex) > 0.00001
+                        ? rawIn
+                        : Math.max(0, rawIn);
+            } else {
+                const raw = getRawSegmentEntry(track, segmentIndex);
+                if (raw && Number.isFinite(raw.regionTimelineInSec)) {
+                    const rawIn = raw.regionTimelineInSec;
+                    stored =
+                        readRawRegionLeadPadSec(track, segmentIndex) > 0.00001
+                            ? rawIn
+                            : Math.max(0, rawIn);
+                }
             }
         } else {
             const raw = getRawSegmentEntry(track, segmentIndex);
             if (raw && Number.isFinite(raw.regionTimelineInSec)) {
-                stored = Math.max(0, raw.regionTimelineInSec);
+                const rawIn = raw.regionTimelineInSec;
+                stored =
+                    readRawRegionLeadPadSec(track, segmentIndex) > 0.00001
+                        ? rawIn
+                        : Math.max(0, rawIn);
             }
         }
         if (stored == null) return anchor;
         if (readRawRegionLeadPadSec(track, segmentIndex) > 0.00001) return stored;
         return stored < anchor - 0.00001 ? anchor : stored;
+    }
+    function getRawRegionTimelineOutSec(track, segmentIndex) {
+        const raw = getRawSegmentEntry(track, segmentIndex);
+        if (raw && Number.isFinite(raw.regionTimelineOutSec)) {
+            return raw.regionTimelineOutSec;
+        }
+        return null;
     }
     /**
      * リージョン右端（Out ハンドル）。
@@ -138,6 +202,8 @@
      * regionIn + (anchor - regionIn + segDur) で In オフセットを反映する。
      */
     function getSegmentRegionTimelineOut(track, segmentIndex) {
+        const storedOut = getRawRegionTimelineOutSec(track, segmentIndex);
+        if (storedOut != null) return storedOut;
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         const anchor = getSegmentTimelineStart(track, segmentIndex);
         const timelineEnd = getSegmentTimelineEnd(track, segmentIndex);
@@ -186,10 +252,18 @@
     ) {
         const state = getPlaybackRegionsState(track);
         if (!state || !state.segments[segmentIndex]) return;
-        state.segments[segmentIndex].timelineStartSec = desiredAnchor;
+        const raw = state.segments[segmentIndex];
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        const preserveLeadPad = leadPad > 0.00001;
+        const effectiveInPad = preserveLeadPad ? leadPad : inPad;
+        raw.timelineStartSec = desiredAnchor;
         if (segmentIndex === 0) {
-            if (inPad > 0.00001) {
+            if (effectiveInPad > 0.00001) {
                 state.regionTimelineInSec = desiredRegionIn;
+                if (preserveLeadPad) {
+                    state.regionLeadPadSec = leadPad;
+                }
+                state.headPadSec = Math.max(0, desiredRegionIn - t0);
             } else {
                 delete state.regionTimelineInSec;
                 delete state.regionLeadPadSec;
@@ -197,9 +271,11 @@
             }
             return;
         }
-        const raw = state.segments[segmentIndex];
-        if (inPad > 0.00001) {
+        if (effectiveInPad > 0.00001) {
             raw.regionTimelineInSec = desiredRegionIn;
+            if (preserveLeadPad) {
+                raw.regionLeadPadSec = leadPad;
+            }
         } else {
             delete raw.regionTimelineInSec;
             delete raw.regionLeadPadSec;
@@ -222,6 +298,17 @@
         }
         return lead;
     }
+    /** 平行移動の左端 — lead pad 時は再生開始が TC0 未満にならない範囲で region In を負にもできる */
+    function getSegmentRegionMoveMinTransportSec(track, segmentIndex) {
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        if (leadPad > 0.00001) {
+            return -leadPad;
+        }
+        if (segmentIndex === 0) {
+            return getTrackTimelineStartSec(track);
+        }
+        return 0;
+    }
     /**
      * 先頭セグメント変更後 — state 上の region In / lead pad を segment[0] と同期。
      * 無音リージョン削除後に regionLeadPadSec が残り、次リージョンが 0s から跨がるのを防ぐ。
@@ -233,32 +320,38 @@
         }
         const t0 = getTrackTimelineStartSec(track);
         const raw = state.segments[0];
-        const lead = Math.max(0, Number(raw.regionLeadPadSec) || 0);
         const anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+        let lead = resolveRawSegmentLeadPadSec(raw, anchor);
 
         if (lead > 0.00001) {
-            state.regionLeadPadSec = lead;
+            raw.regionLeadPadSec = lead;
             const regionIn = Number.isFinite(raw.regionTimelineInSec)
-                ? Math.max(0, raw.regionTimelineInSec)
-                : Math.max(0, anchor - lead);
+                ? raw.regionTimelineInSec
+                : anchor - lead;
+            raw.regionTimelineInSec = regionIn;
+            state.regionLeadPadSec = lead;
             state.regionTimelineInSec = regionIn;
             state.headPadSec = Math.max(0, regionIn - t0);
             return;
         }
 
         delete state.regionLeadPadSec;
+        delete raw.regionLeadPadSec;
         if (Number.isFinite(raw.regionTimelineInSec)) {
-            state.regionTimelineInSec = Math.max(0, raw.regionTimelineInSec);
+            const regionIn = Math.max(0, raw.regionTimelineInSec);
+            raw.regionTimelineInSec = regionIn;
+            state.regionTimelineInSec = regionIn;
         } else {
             delete state.regionTimelineInSec;
+            delete raw.regionTimelineInSec;
         }
         const regionIn = Number.isFinite(state.regionTimelineInSec)
             ? state.regionTimelineInSec
             : anchor;
         state.headPadSec = Math.max(0, regionIn - t0);
     }
-    /** Phrase 無音判定 — スロット内をリージョンが占有するタイムライン区間 */
-    function getSegmentPhraseCoverageInterval(track, segmentIndex) {
+    /** Rehearsal 無音判定 — スロット内をリージョンが占有するタイムライン区間 */
+    function getSegmentRehearsalCoverageInterval(track, segmentIndex) {
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
         const segments = getTrackSegments(track);
@@ -271,7 +364,31 @@
             return { startSec: regionIn, endSec: regionOut };
         }
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
-        return { startSec: playbackStart, endSec: regionOut };
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        const coverageStart = leadPad > eps ? regionIn : playbackStart;
+        return { startSec: coverageStart, endSec: regionOut };
+    }
+    /** 選択・ポインタヒット — lead pad を除く実音源区間 */
+    function getSegmentRegionInteractiveTimelineInterval(track, segmentIndex) {
+        return {
+            startSec: getSegmentPlaybackTimelineStart(track, segmentIndex),
+            endSec: getSegmentRegionTimelineOut(track, segmentIndex),
+        };
+    }
+    /** ソース未消費の無音グリッド区間（GAC PreRoll 等） */
+    function isSegmentSilentGridRegion(track, segmentIndex) {
+        const segments = getTrackSegments(track);
+        const seg = segments[segmentIndex];
+        if (!seg) return false;
+        const eps = segmentBoundaryJoinEpsilonSec();
+        const sourceSpan = Math.max(
+            0,
+            (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0),
+        );
+        if (sourceSpan > eps) return false;
+        const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+        return regionOut - regionIn > eps;
     }
     /** 波形描画のタイムライン左端（リージョン In / 再生開始と同一） */
     function getSegmentWaveformDrawTimelineStart(track, segmentIndex) {
@@ -306,7 +423,15 @@
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const t = Number(transportSec);
         const span = Math.max(0, seg.sourceOutSec - seg.sourceInSec);
-        const local = Math.max(0, Math.min(span, t - playbackStart));
+        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+        const timelineSpan = Math.max(0, regionOut - playbackStart);
+        let local;
+        if (timelineSpan > span + 0.00001) {
+            const progress = Math.max(0, Math.min(1, (t - playbackStart) / timelineSpan));
+            local = progress * span;
+        } else {
+            local = Math.max(0, Math.min(span, t - playbackStart));
+        }
         return seg.sourceInSec + local;
     }
     function setSegmentRegionLeadPadSec(track, segmentIndex, sec) {
@@ -369,8 +494,8 @@
     }
     function isRegionEdgeKeyboardNudgeEnabled() {
         return (
-            typeof isPhraseOffMovableSplitBoundaryEnabled === 'function' &&
-            isPhraseOffMovableSplitBoundaryEnabled()
+            typeof isRehearsalOffMovableSplitBoundaryEnabled === 'function' &&
+            isRehearsalOffMovableSplitBoundaryEnabled()
         );
     }
     /** Shift+I — 左/In 側の境界で波形内容が連続していないときのみ */
@@ -402,7 +527,7 @@
         }
         return getSegmentTimelineEnd(track, segmentIndex);
     }
-    /** Phrase OFF — リージョン端 nudge 量（参照位置の Tempo/Sig における 1 拍） */
+    /** Rehearsal OFF — リージョン端 nudge 量（参照位置の Tempo/Sig における 1 拍） */
     function regionEdgeKeyboardNudgeSecForSegment(track, segmentIndex, kind) {
         const refSec = regionEdgeKeyboardNudgeRefTransport(track, segmentIndex, kind);
         if (
@@ -490,7 +615,7 @@
             finalizeRegionEdgeKeyboardNudge(track, segmentIndex);
         }
     }
-    /** Phrase OFF — In を 1 拍分手前へ（In ハンドルドラッグと同じ経路） */
+    /** Rehearsal OFF — In を 1 拍分手前へ（In ハンドルドラッグと同じ経路） */
     function nudgeSegmentRegionInEarlierContentFixed(track, segmentIndex, deltaSec, opt) {
         const delta = Number(deltaSec);
         if (!Number.isFinite(delta) || delta <= 0.00001) return false;
@@ -523,36 +648,18 @@
             finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
             return true;
         }
-        if (isSeparatedSegment(track, segmentIndex)) {
-            expandSeparatedSegmentRegionInLeft(
-                track,
-                segmentIndex,
-                newRegionIn,
-                audioEnd,
-                t0,
-                opt,
-            );
-            finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
-            return true;
-        }
-
-        if (newRegionIn >= anchor - 0.00001) {
-            if (newRegionIn <= anchor + 0.00001) {
-                setSegmentRegionTimelineIn(track, segmentIndex, anchor);
-                setSegmentRegionLeadPadSec(track, segmentIndex, 0);
-            } else {
-                setSegmentRegionTimelineIn(track, segmentIndex, newRegionIn);
-                setSegmentRegionLeadPadSec(track, segmentIndex, 0);
-            }
-        } else {
-            setSegmentRegionTimelineIn(track, segmentIndex, newRegionIn);
-            setSegmentRegionLeadPadSec(track, segmentIndex, anchor - newRegionIn);
-        }
-
+        expandSegmentRegionInLeft(
+            track,
+            segmentIndex,
+            newRegionIn,
+            audioEnd,
+            t0,
+            opt,
+        );
         finishRegionEdgeKeyboardNudge(track, segmentIndex, opt);
         return true;
     }
-    /** Phrase OFF — Out を 1 拍分後方へ（Out ハンドルドラッグと同じ経路） */
+    /** Rehearsal OFF — Out を 1 拍分後方へ（Out ハンドルドラッグと同じ経路） */
     function nudgeSegmentRegionOutLaterContentFixed(track, segmentIndex, deltaSec, opt) {
         const delta = Number(deltaSec);
         if (!Number.isFinite(delta) || delta <= 0.00001) return false;
@@ -633,34 +740,151 @@
             },
         );
     }
-    /**
-     * セパレート列: リージョン In を手前へ広げつつ Out を固定（sourceIn を伸ばす）。
-     * 手前のセグメントと重なってもよい。
-     */
-    function expandSeparatedSegmentRegionInLeft(track, segmentIndex, regionIn, audioEnd, t0, opt) {
-        const anchor = getSegmentTimelineStart(track, segmentIndex);
-        if (regionIn < anchor - 0.00001) {
-            extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
+    function writeSegmentRegionInAfterContentEdit(
+        track,
+        segmentIndex,
+        regionIn,
+        anchor,
+        state,
+        seg,
+    ) {
+        if (regionIn <= anchor + 0.00001) {
+            if (segmentIndex === 0) {
+                delete state.regionTimelineInSec;
+                delete state.regionLeadPadSec;
+            } else {
+                delete seg.regionTimelineInSec;
+                delete seg.regionLeadPadSec;
+            }
             return;
         }
-        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
-        const delta = prevRegionIn - regionIn;
-        if (delta <= 0.00001) return;
-
-        const segments = getTrackSegments(track).map((s) => ({ ...s }));
-        const seg = segments[segmentIndex];
-        if (!seg) return;
-
-        seg.timelineStartSec = anchor - delta;
-        seg.sourceInSec = Math.max(0, seg.sourceInSec - delta);
-        if (regionIn <= anchor + 0.00001) {
-            delete seg.regionTimelineInSec;
-            delete seg.regionLeadPadSec;
+        if (segmentIndex === 0) {
+            state.regionTimelineInSec = regionIn;
+            delete state.regionLeadPadSec;
         } else {
             seg.regionTimelineInSec = regionIn;
             delete seg.regionLeadPadSec;
         }
+    }
+    /** In/Out ドラッグ — 開始時の regionIn / sourceIn 基準で絶対位置を適用 */
+    function applySegmentRegionInFromDragAbsolute(track, segmentIndex, targetRegionIn, opt) {
+        const t0 = getTrackTimelineStartSec(track);
+        let regionIn = targetRegionIn;
+        if (segmentIndex === 0) {
+            regionIn = Math.max(t0, regionIn);
+        }
+        regionIn = clampSegmentTimelineStart(track, segmentIndex, regionIn);
 
+        const anchor = Number.isFinite(regionHandleDragStartAnchorSec)
+            ? regionHandleDragStartAnchorSec
+            : getSegmentTimelineStart(track, segmentIndex);
+        const startRegionIn = Number.isFinite(regionHandleDragStartRegionIn)
+            ? regionHandleDragStartRegionIn
+            : getSegmentRegionTimelineIn(track, segmentIndex);
+        const startSourceIn = Number.isFinite(regionHandleDragStartSourceInSec)
+            ? regionHandleDragStartSourceInSec
+            : 0;
+        const startSourceOut = Number.isFinite(regionHandleDragStartSourceOutSec)
+            ? regionHandleDragStartSourceOutSec
+            : startSourceIn + PLAYBACK_REGION_MIN_SEC;
+        const audioEnd = anchor + Math.max(0, startSourceOut - startSourceIn);
+
+        if (regionIn < anchor - 0.00001) {
+            if (
+                segmentIndex > 0 &&
+                typeof isSegmentBoundaryJoined === 'function' &&
+                isSegmentBoundaryJoined(track, segmentIndex - 1)
+            ) {
+                setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
+                return;
+            }
+            extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
+            return;
+        }
+
+        const delta = regionIn - startRegionIn;
+        if (Math.abs(delta) < 0.00001) return;
+
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const seg = segments[segmentIndex];
+        const state = getPlaybackRegionsState(track);
+        if (!seg || !state) return;
+
+        let newSourceIn;
+        let effectiveRegionIn;
+        if (delta > 0) {
+            const maxTrim = Math.max(
+                0,
+                startSourceOut - startSourceIn - PLAYBACK_REGION_MIN_SEC,
+            );
+            const appliedDelta = Math.min(delta, maxTrim);
+            if (appliedDelta <= 0.00001) return;
+            newSourceIn = Math.min(
+                startSourceOut - PLAYBACK_REGION_MIN_SEC,
+                startSourceIn + appliedDelta,
+            );
+            effectiveRegionIn = startRegionIn + appliedDelta;
+        } else {
+            const appliedDelta = Math.min(-delta, startSourceIn);
+            if (appliedDelta <= 0.00001) return;
+            newSourceIn = startSourceIn - appliedDelta;
+            effectiveRegionIn = startRegionIn - appliedDelta;
+        }
+
+        seg.sourceInSec = newSourceIn;
+        writeSegmentRegionInAfterContentEdit(
+            track,
+            segmentIndex,
+            effectiveRegionIn,
+            anchor,
+            state,
+            seg,
+        );
+        applySegmentsToState(
+            track,
+            segments.map((s) =>
+                normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+            ),
+            {
+                silent: true,
+                skipUndo: true,
+                geometryOnly: !!(opt && opt.geometryOnly),
+                skipPersist: !!(opt && opt.geometryOnly),
+            },
+        );
+    }
+    /** リージョン In を後方へ狭げ Out 固定 — sourceIn を進め、アンカーは動かさない */
+    function contractSegmentRegionInRight(track, segmentIndex, regionIn, opt) {
+        const anchor = getSegmentTimelineStart(track, segmentIndex);
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const delta = regionIn - prevRegionIn;
+        if (delta <= 0.00001) return;
+
+        const segments = getTrackSegments(track).map((s) => ({ ...s }));
+        const seg = segments[segmentIndex];
+        const state = getPlaybackRegionsState(track);
+        if (!seg || !state) return;
+
+        const maxTrim = Math.max(
+            0,
+            seg.sourceOutSec - seg.sourceInSec - PLAYBACK_REGION_MIN_SEC,
+        );
+        const appliedDelta = Math.min(delta, maxTrim);
+        if (appliedDelta <= 0.00001) return;
+
+        const effectiveRegionIn = prevRegionIn + appliedDelta;
+        seg.sourceInSec = Math.min(
+            seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC,
+            seg.sourceInSec + appliedDelta,
+        );
+        writeSegmentRegionInAfterContentEdit(
+            track,
+            segmentIndex,
+            effectiveRegionIn,
+            anchor,
+            state,
+            seg,
+        );
         applySegmentsToState(
             track,
             segments.map((s) =>
@@ -675,40 +899,42 @@
         );
     }
     /**
-     * セパレート列: リージョン In を後方へ狭げつつ Out を固定（sourceIn を戻す）。
-     * 手前のセグメントと重なってもよい。
+     * リージョン In を手前へ広げ Out 固定 — sourceIn を戻す。
+     * アンカーより手前へ伸ばすときだけ extendSegmentAnchorLeft。
      */
-    function contractSeparatedSegmentRegionInRight(track, segmentIndex, regionIn, audioEnd, t0, opt) {
+    function expandSegmentRegionInLeft(track, segmentIndex, regionIn, audioEnd, t0, opt) {
         const anchor = getSegmentTimelineStart(track, segmentIndex);
+        if (regionIn < anchor - 0.00001) {
+            if (
+                !isParallelRegionOffsetDragOpt(opt) &&
+                segmentIndex > 0 &&
+                typeof isSegmentBoundaryJoined === 'function' &&
+                isSegmentBoundaryJoined(track, segmentIndex - 1)
+            ) {
+                setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
+                return;
+            }
+            extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
+            return;
+        }
         const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
-        const delta = regionIn - prevRegionIn;
+        const delta = prevRegionIn - regionIn;
         if (delta <= 0.00001) return;
 
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         const seg = segments[segmentIndex];
-        if (!seg) return;
+        const state = getPlaybackRegionsState(track);
+        if (!seg || !state) return;
 
-        const maxTrim = Math.max(
-            0,
-            seg.sourceOutSec - seg.sourceInSec - PLAYBACK_REGION_MIN_SEC,
+        seg.sourceInSec = Math.max(0, seg.sourceInSec - delta);
+        writeSegmentRegionInAfterContentEdit(
+            track,
+            segmentIndex,
+            regionIn,
+            anchor,
+            state,
+            seg,
         );
-        const appliedDelta = Math.min(delta, maxTrim);
-        if (appliedDelta <= 0.00001) return;
-
-        const effectiveRegionIn = prevRegionIn + appliedDelta;
-        seg.timelineStartSec = anchor + appliedDelta;
-        seg.sourceInSec = Math.min(
-            seg.sourceOutSec - PLAYBACK_REGION_MIN_SEC,
-            seg.sourceInSec + appliedDelta,
-        );
-        if (effectiveRegionIn <= anchor + 0.00001) {
-            delete seg.regionTimelineInSec;
-            delete seg.regionLeadPadSec;
-        } else {
-            seg.regionTimelineInSec = effectiveRegionIn;
-            delete seg.regionLeadPadSec;
-        }
-
         applySegmentsToState(
             track,
             segments.map((s) =>
@@ -743,6 +969,30 @@
             regionIn = Math.max(t0, regionIn);
         }
         regionIn = clampSegmentTimelineStart(track, segmentIndex, regionIn);
+        if (
+            !isParallelRegionOffsetDragOpt(opt) &&
+            opt &&
+            opt.geometryOnly &&
+            regionHandleDragActive &&
+            (regionHandleDragKind === 'in' || regionHandleDragKind === 'out') &&
+            Number.isFinite(regionHandleDragStartRegionIn)
+        ) {
+            if (
+                segmentIndex > 0 &&
+                typeof isSegmentMovableSplitBoundary === 'function' &&
+                isSegmentMovableSplitBoundary(track, segmentIndex - 1)
+            ) {
+                setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
+                return;
+            }
+            applySegmentRegionInFromDragAbsolute(
+                track,
+                segmentIndex,
+                regionIn,
+                opt,
+            );
+            return;
+        }
         if (!isParallelRegionOffsetDragOpt(opt)) {
             if (
                 segmentIndex > 0 &&
@@ -752,25 +1002,12 @@
                 setSplitBoundaryFromTransport(track, segmentIndex - 1, regionIn, opt);
                 return;
             }
-            if (
-                isSeparatedSegment(track, segmentIndex) &&
-                regionIn < prevRegionIn - 0.00001
-            ) {
-                expandSeparatedSegmentRegionInLeft(
-                    track,
-                    segmentIndex,
-                    regionIn,
-                    audioEnd,
-                    t0,
-                    opt,
-                );
+            if (regionIn > prevRegionIn + 0.00001) {
+                contractSegmentRegionInRight(track, segmentIndex, regionIn, opt);
                 return;
             }
-            if (
-                isSeparatedSegment(track, segmentIndex) &&
-                regionIn > prevRegionIn + 0.00001
-            ) {
-                contractSeparatedSegmentRegionInRight(
+            if (regionIn < prevRegionIn - 0.00001) {
+                expandSegmentRegionInLeft(
                     track,
                     segmentIndex,
                     regionIn,
@@ -781,7 +1018,7 @@
                 return;
             }
         }
-        const maxPadIn = audioEnd - PLAYBACK_REGION_MIN_SEC;
+        if (Math.abs(regionIn - prevRegionIn) < 0.00001) return;
         if (regionIn < anchor - 0.00001) {
             if (
                 !isParallelRegionOffsetDragOpt(opt) &&
@@ -793,37 +1030,7 @@
                 return;
             }
             extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
-            return;
         }
-        if (regionIn <= anchor + 0.00001) {
-            setSegmentRegionTimelineIn(track, segmentIndex, anchor);
-            setSegmentRegionLeadPadSec(track, segmentIndex, 0);
-            if (opt && opt.geometryOnly) {
-                refreshTrackRegionOverlayGeometry(track);
-            } else {
-                updateTrackRegionOverlays(track);
-            }
-            redrawAfterRegionChange(track.slot, {
-                segmentIndex,
-                geometryOnly: !!(opt && opt.geometryOnly),
-            });
-            return;
-        }
-        if (regionIn <= maxPadIn + 0.00001) {
-            setSegmentRegionTimelineIn(track, segmentIndex, regionIn);
-            setSegmentRegionLeadPadSec(track, segmentIndex, 0);
-            if (opt && opt.geometryOnly) {
-                refreshTrackRegionOverlayGeometry(track);
-            } else {
-                updateTrackRegionOverlays(track);
-            }
-            redrawAfterRegionChange(track.slot, {
-                segmentIndex,
-                geometryOnly: !!(opt && opt.geometryOnly),
-            });
-            return;
-        }
-        extendSegmentAnchorLeft(track, segmentIndex, regionIn, audioEnd, t0, opt);
     }
     function getTrackSourceDurationSec(track) {
         if (!isExtraTrackRef(track)) return 0;

@@ -1254,6 +1254,12 @@
         for (let i = 0; i < extraTrackSlotCount(); i++) {
             laneIds.push('extraAudioLane' + i);
         }
+        const musicalTrackIds = [
+            'musicalRehearsalTrack',
+            'musicalTempoTrack',
+            'musicalSignatureTrack',
+            'musicalMeasureTrack',
+        ];
         for (let i = 0; i < laneIds.length; i++) {
             const lane = document.getElementById(laneIds[i]);
             if (!lane) continue;
@@ -1262,6 +1268,15 @@
             hit.className = 'audio-waveform-lane__scrub-hit';
             hit.setAttribute('aria-hidden', 'true');
             lane.insertBefore(hit, lane.firstChild);
+        }
+        for (let i = 0; i < musicalTrackIds.length; i++) {
+            const track = document.getElementById(musicalTrackIds[i]);
+            if (!track) continue;
+            if (track.querySelector(':scope > .audio-waveform-lane__scrub-hit')) continue;
+            const hit = document.createElement('div');
+            hit.className = 'audio-waveform-lane__scrub-hit';
+            hit.setAttribute('aria-hidden', 'true');
+            track.insertBefore(hit, track.firstChild);
         }
     }
 
@@ -1433,8 +1448,8 @@
 
         lanes.addEventListener('keydown', (ev) => {
             if (
-                (typeof handleMusicalGridPhraseSplitKeydown === 'function' &&
-                    handleMusicalGridPhraseSplitKeydown(ev)) ||
+                (typeof handleMusicalGridRehearsalSplitKeydown === 'function' &&
+                    handleMusicalGridRehearsalSplitKeydown(ev)) ||
                 (typeof handlePlaybackRegionSplitKeydown === 'function' &&
                     handlePlaybackRegionSplitKeydown(ev)) ||
                 (typeof handlePlaybackRegionSlashKeydown === 'function' &&
@@ -1443,10 +1458,16 @@
                 return;
             }
             if (
-                (typeof handleMusicalGridPhraseJoinKeydown === 'function' &&
-                    handleMusicalGridPhraseJoinKeydown(ev)) ||
+                (typeof handleMusicalGridRehearsalJoinKeydown === 'function' &&
+                    handleMusicalGridRehearsalJoinKeydown(ev)) ||
                 (typeof handlePlaybackRegionJoinKeydown === 'function' &&
                     handlePlaybackRegionJoinKeydown(ev))
+            ) {
+                return;
+            }
+            if (
+                typeof handleMusicalGridBarNavKeydown === 'function' &&
+                handleMusicalGridBarNavKeydown(ev)
             ) {
                 return;
             }
@@ -1460,8 +1481,8 @@
             let ratio = transportRatioFromMasterSec(
                 typeof getTransportSec === 'function' ? getTransportSec() : 0,
             );
-            if (matchUserShortcut(ev, 'waveformLaneSeekHome', { allowRepeat: true })) ratio = 0;
-            else if (matchUserShortcut(ev, 'waveformLaneSeekEnd', { allowRepeat: true })) ratio = 1;
+            if (matchUserShortcut(ev, 'transportSeekHomeStart', { allowRepeat: true })) ratio = 0;
+            else if (matchUserShortcut(ev, 'transportSeekHomeEnd', { allowRepeat: true })) ratio = 1;
             else if (matchUserShortcut(ev, 'waveformLaneSeekPrev', { allowRepeat: true }))
                 ratio = Math.max(0, ratio - masterFrameSec / master);
             else if (matchUserShortcut(ev, 'waveformLaneSeekNext', { allowRepeat: true }))

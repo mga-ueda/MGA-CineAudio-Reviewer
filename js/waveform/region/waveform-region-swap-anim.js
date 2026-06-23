@@ -29,8 +29,26 @@
         } else if (typeof scheduleRegionBoundaryPresentationRefresh === 'function') {
             scheduleRegionBoundaryPresentationRefresh({ sync: true });
         }
+        if (typeof stopExtraTrackAllSources === 'function') {
+            stopExtraTrackAllSources(slot);
+        } else if (typeof stopAllExtraTrackSources === 'function') {
+            stopAllExtraTrackSources();
+        }
+        if (
+            typeof getTrackSegments === 'function' &&
+            typeof invalidatePitchSliceCacheForSegment === 'function'
+        ) {
+            const segs = getTrackSegments(track);
+            for (let i = 0; i < segs.length; i++) {
+                invalidatePitchSliceCacheForSegment(track, i);
+            }
+        }
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
+        }
+        refreshRegionRehearsalMarksAfterSwap();
+        if (typeof window.refreshRehearsalTrack === 'function') {
+            window.refreshRehearsalTrack();
         }
     }
 
@@ -176,10 +194,22 @@
         const leftPx = resolveSegmentOverlayPxFromLive(track, lo, metrics, master, oldOverlayIntervals);
         const rightPx = resolveSegmentOverlayPxFromLive(track, hi, metrics, master, oldOverlayIntervals);
         if (!leftPx || !rightPx) return [];
-        return [
-            { from: leftPx, to: rightPx, zIndex: 1, kind: 'content-cross' },
-            { from: rightPx, to: leftPx, zIndex: 2, kind: 'content-cross' },
-        ];
+        return buildEndpointRegionSwapMoves(leftPx, rightPx, rightPx, leftPx);
+    }
+
+    /** 端点2つ — timeline 先が live と同じなら相手側へクロス（中身入れ替えの視覚フィードバック） */
+    function buildEndpointRegionSwapMoves(leftPx, rightPx, loToPx, hiToPx) {
+        const loMove = { from: leftPx, to: loToPx, zIndex: 1, kind: 'region' };
+        const hiMove = { from: rightPx, to: hiToPx, zIndex: 2, kind: 'region' };
+        if (!swapMoveHasVisibleDisplacement(loMove)) {
+            loMove.to = rightPx;
+            loMove.kind = 'content-cross';
+        }
+        if (!swapMoveHasVisibleDisplacement(hiMove)) {
+            hiMove.to = leftPx;
+            hiMove.kind = 'content-cross';
+        }
+        return [loMove, hiMove];
     }
 
     function resolveSwapEndpointSegmentIndices(swapLo, swapHi, opt) {
@@ -288,25 +318,24 @@
             }
         }
 
-        /** 選択2つ: 旧位置 → 入れ替え先（timeline 時は preview 先頭） */
-        const moves = [
-            { from: leftPx, to: loToPx, zIndex: 1, kind: 'region' },
-            { from: rightPx, to: hiToPx, zIndex: 2, kind: 'region' },
-        ];
+        /** 選択2つ: timeline 先 → 変位なし端点は相手側へクロス */
+        const moves = buildEndpointRegionSwapMoves(leftPx, rightPx, loToPx, hiToPx);
 
-        /** 間に挟まれたリージョンなど、位置だけずれるものはスライド */
-        moves.push.apply(
-            moves,
-            collectSwapUnitSlideMoves(
-                track,
-                previewSegments,
-                metrics,
-                master,
-                lo,
-                hi,
-                oldOverlayIntervals,
-            ),
-        );
+        /** 非対称 recompose 時のみ — 間リージョンのスライド（対称 swap は選択2つのクロスだけ） */
+        if (o.includeSlideMoves) {
+            moves.push.apply(
+                moves,
+                collectSwapUnitSlideMoves(
+                    track,
+                    previewSegments,
+                    metrics,
+                    master,
+                    lo,
+                    hi,
+                    oldOverlayIntervals,
+                ),
+            );
+        }
         return moves;
     }
 
@@ -387,12 +416,12 @@
         return off;
     }
 
-    function isMusicalGridPhraseFillVisibleSafe() {
-        if (typeof getMusicalGridPhraseFillVisible === 'function') {
-            return getMusicalGridPhraseFillVisible();
+    function isMusicalGridRehearsalFillVisibleSafe() {
+        if (typeof getMusicalGridRehearsalFillVisible === 'function') {
+            return getMusicalGridRehearsalFillVisible();
         }
-        if (typeof window.getMusicalGridPhraseFillVisible === 'function') {
-            return window.getMusicalGridPhraseFillVisible();
+        if (typeof window.getMusicalGridRehearsalFillVisible === 'function') {
+            return window.getMusicalGridRehearsalFillVisible();
         }
         return false;
     }
@@ -404,6 +433,13 @@
         return document.getElementById('audioWaveformMusicalGrid');
     }
 
+    function resolveRehearsalFillCanvasEl() {
+        if (typeof audioWaveformRehearsalFill !== 'undefined' && audioWaveformRehearsalFill) {
+            return audioWaveformRehearsalFill;
+        }
+        return document.getElementById('audioWaveformRehearsalFill');
+    }
+
     function trackTopInLanesInnerCss(trackEl) {
         const inner =
             typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
@@ -413,22 +449,201 @@
         return trackRect.top - innerRect.top;
     }
 
-    /** 波形ストリップ + Phrase 着色（musical grid）を合成キャプチャ */
+    function isMusicalGridVisibleSafe() {
+        if (typeof getMusicalGridVisible === 'function') {
+            return getMusicalGridVisible();
+        }
+        if (typeof window.getMusicalGridVisible === 'function') {
+            return window.getMusicalGridVisible();
+        }
+        return false;
+    }
+
+    /** Rehearsal / Tempo / Signature / Measure — transport-swap アニメ用 */
+    function getMusicalSwapTrackSpecs() {
+        const ids = [
+            ['musicalRehearsalTrack', 'musicalRehearsalGridCanvas'],
+            ['musicalTempoTrack', 'musicalTempoGridCanvas'],
+            ['musicalSignatureTrack', 'musicalSignatureGridCanvas'],
+            ['musicalMeasureTrack', 'musicalMeasureGridCanvas'],
+        ];
+        const out = [];
+        for (let i = 0; i < ids.length; i++) {
+            const trackEl = document.getElementById(ids[i][0]);
+            if (!trackEl) return null;
+            out.push({
+                trackEl,
+                gridCanvas: document.getElementById(ids[i][1]),
+            });
+        }
+        return out;
+    }
+
+    function musicalSwapTracksTotalHeightCss(specs) {
+        let h = 0;
+        for (let i = 0; i < specs.length; i++) {
+            h += Math.max(1, specs[i].trackEl.clientHeight | 0);
+        }
+        return Math.max(1, h);
+    }
+
+    function musicalTrackStripBackgroundCss(trackEl) {
+        const bgEl = trackEl && trackEl.querySelector('.audio-waveform-lane__track-bg');
+        if (!bgEl || typeof window.getComputedStyle !== 'function') return '#161820';
+        const style = window.getComputedStyle(bgEl);
+        const c = style.backgroundColor;
+        return c && c !== 'rgba(0, 0, 0, 0)' ? c : '#161820';
+    }
+
+    function paintMusicalTrackSegmentsOnStrip(ctx, trackEl, leftCss, widthCss, hCss, scaleX, scaleY) {
+        if (!ctx || !trackEl) return;
+        const trackRect = trackEl.getBoundingClientRect();
+        const stripRight = leftCss + widthCss;
+        const segments = trackEl.querySelectorAll('.musical-track-lane__segment');
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const r = seg.getBoundingClientRect();
+            const segLeft = r.left - trackRect.left;
+            const segRight = segLeft + r.width;
+            if (segRight <= leftCss + 0.5 || segLeft >= stripRight - 0.5) continue;
+            const valueEl = seg.querySelector('.musical-track-lane__segment-value');
+            const textEl = valueEl || seg;
+            const text = (textEl.textContent || '').trim();
+            if (!text) continue;
+            const style = window.getComputedStyle(textEl);
+            const fontSize = parseFloat(style.fontSize) || 10;
+            const weight = style.fontWeight || '600';
+            const family = style.fontFamily || 'sans-serif';
+            ctx.font = weight + ' ' + fontSize + 'px ' + family;
+            ctx.fillStyle = style.color || '#e8ecf4';
+            ctx.textBaseline = 'middle';
+            const pad = 4;
+            const textX = (Math.max(segLeft, leftCss) - leftCss + pad) * scaleX;
+            ctx.fillText(text, textX, (hCss * 0.5) * scaleY);
+        }
+    }
+
+    function captureMusicalTrackStrip(trackEl, gridCanvas, leftCss, widthCss) {
+        const hCss = Math.max(1, trackEl.clientHeight | 0);
+        if (!(widthCss > 0)) return null;
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const sw = Math.max(1, Math.ceil(widthCss * dpr));
+        const sh = Math.max(1, Math.ceil(hCss * dpr));
+        const off = document.createElement('canvas');
+        off.width = sw;
+        off.height = sh;
+        const ctx = off.getContext('2d');
+        if (!ctx) return null;
+        ctx.fillStyle = musicalTrackStripBackgroundCss(trackEl);
+        ctx.fillRect(0, 0, sw, sh);
+        if (gridCanvas && gridCanvas.width > 0 && gridCanvas.height > 0) {
+            const gridStrip = captureCanvasStrip(gridCanvas, leftCss, 0, widthCss, hCss);
+            if (gridStrip) {
+                ctx.drawImage(gridStrip, 0, 0, sw, sh);
+            }
+        }
+        paintMusicalTrackSegmentsOnStrip(ctx, trackEl, leftCss, widthCss, hCss, dpr, dpr);
+        return off;
+    }
+
+    /** Musical 4 トラックを縦1枚に合成（region swap moves と同じ水平範囲） */
+    function captureMusicalTracksSwapStrip(leftCss, widthCss) {
+        const specs = getMusicalSwapTrackSpecs();
+        if (!specs) return null;
+        const strips = [];
+        let totalHCss = 0;
+        for (let i = 0; i < specs.length; i++) {
+            const spec = specs[i];
+            const hCss = Math.max(1, spec.trackEl.clientHeight | 0);
+            const strip = captureMusicalTrackStrip(spec.trackEl, spec.gridCanvas, leftCss, widthCss);
+            if (!strip) return null;
+            strips.push({ strip, hCss });
+            totalHCss += hCss;
+        }
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const totalW = Math.max(1, Math.ceil(widthCss * dpr));
+        const totalH = Math.max(1, Math.ceil(totalHCss * dpr));
+        const off = document.createElement('canvas');
+        off.width = totalW;
+        off.height = totalH;
+        const ctx = off.getContext('2d');
+        if (!ctx) return null;
+        let y = 0;
+        for (let i = 0; i < strips.length; i++) {
+            const sh = Math.max(1, Math.ceil(strips[i].hCss * dpr));
+            ctx.drawImage(strips[i].strip, 0, y, totalW, sh);
+            y += sh;
+        }
+        return off;
+    }
+
+    function syncMusicalTracksSwapLayerPlacement(lanesInner, layer) {
+        if (!lanesInner || !layer) return;
+        if (typeof window.syncWaveformLanesViewportWidthCss === 'function') {
+            window.syncWaveformLanesViewportWidthCss();
+        }
+        if (layer.parentElement !== lanesInner) {
+            lanesInner.appendChild(layer);
+        }
+        const laneCount =
+            typeof window.getMusicalTrackLaneCount === 'function'
+                ? window.getMusicalTrackLaneCount() | 0
+                : specsLengthFromDom();
+        layer.style.gridRow = laneCount > 0 ? '1 / ' + (laneCount + 1) : '1 / 5';
+        layer.style.gridColumn = '1';
+    }
+
+    function specsLengthFromDom() {
+        const specs = getMusicalSwapTrackSpecs();
+        return specs ? specs.length : 4;
+    }
+
+    function removeMusicalTracksSwapLayer(layer) {
+        if (!layer) return;
+        const anims = layer.querySelectorAll('.audio-waveform-lane__region-swap-anim');
+        for (let i = 0; i < anims.length; i++) {
+            releaseRegionSwapGhostMotionBlur(anims[i]);
+        }
+        if (layer.parentNode) layer.remove();
+    }
+
+    function collectMusicalTracksSwapMoves(moves, gapSwap) {
+        if (gapSwap || !moves || !moves.length) return [];
+        const out = [];
+        for (let i = 0; i < moves.length; i++) {
+            if (moves[i].kind === 'silent-gap') continue;
+            out.push(moves[i]);
+        }
+        return filterVisibleRegionSwapMoves(out);
+    }
+
+    /** 波形ストリップ + Rehearsal 着色 + 拍線グリッドを合成キャプチャ */
     function captureRegionSwapStrip(waveCanvas, trackEl, leftCss, widthCss, heightCss) {
         const wave = captureCanvasStrip(waveCanvas, leftCss, 0, widthCss, heightCss);
         if (!wave) return null;
-        if (!isMusicalGridPhraseFillVisibleSafe()) return wave;
-
-        const gridCanvas = resolveMusicalGridCanvasEl();
-        if (!gridCanvas || !(gridCanvas.width > 0) || !(gridCanvas.height > 0)) return wave;
+        if (!isMusicalGridRehearsalFillVisibleSafe()) return wave;
 
         const laneTopCss = trackTopInLanesInnerCss(trackEl);
-        const grid = captureCanvasStrip(gridCanvas, leftCss, laneTopCss, widthCss, heightCss);
-        if (!grid) return wave;
-
         const ctx = wave.getContext('2d');
         if (!ctx) return wave;
-        ctx.drawImage(grid, 0, 0);
+
+        const rehearsalFill = resolveRehearsalFillCanvasEl();
+        if (rehearsalFill && rehearsalFill.width > 0 && rehearsalFill.height > 0) {
+            const fillStrip = captureCanvasStrip(
+                rehearsalFill,
+                leftCss,
+                laneTopCss,
+                widthCss,
+                heightCss,
+            );
+            if (fillStrip) ctx.drawImage(fillStrip, 0, 0);
+        }
+
+        const gridCanvas = resolveMusicalGridCanvasEl();
+        if (gridCanvas && gridCanvas.width > 0 && gridCanvas.height > 0) {
+            const grid = captureCanvasStrip(gridCanvas, leftCss, laneTopCss, widthCss, heightCss);
+            if (grid) ctx.drawImage(grid, 0, 0);
+        }
         return wave;
     }
 
@@ -513,6 +728,12 @@
         return typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
     }
 
+    function hideRegionSwapWaveformGridOverlaysAfterCapture() {
+        if (typeof window.clearRegionSwapWaveformGridOverlays === 'function') {
+            window.clearRegionSwapWaveformGridOverlays();
+        }
+    }
+
     function setRegionSwapCompositeActive(active) {
         const inner = waveformLanesInnerEl();
         if (!inner) return;
@@ -552,7 +773,7 @@
         }
     }
 
-    function startRegionSwapRevealFade(lane, trackEl, swapLayer) {
+    function startRegionSwapRevealFade(lane, trackEl, swapLayer, musicalSwapLayer) {
         playbackRegionSwapAnimActive = false;
         playbackRegionSwapAnimPending = false;
         scheduleMusicalGridRedrawAfterRegionSwapAnim();
@@ -564,26 +785,32 @@
 
         const lanesInner = waveformLanesInnerEl();
         clearRegionSwapRevealFadeClasses(lane, lanesInner);
-        if (swapLayer) {
-            swapLayer.classList.remove(
+        const crossfadeLayers = [swapLayer, musicalSwapLayer];
+        for (let ci = 0; ci < crossfadeLayers.length; ci++) {
+            const el = crossfadeLayers[ci];
+            if (!el) continue;
+            el.classList.remove(
                 'audio-waveform-lane__region-swap-layer--crossfade-out',
                 'audio-waveform-lane__region-swap-layer--crossfade-out--active',
             );
-            swapLayer.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out');
+            el.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out');
         }
         if (lane) lane.classList.add('audio-waveform-lane--region-swap-reveal');
         if (lanesInner) lanesInner.classList.add('audio-waveform-composite--region-swap-reveal');
         if (lane) void lane.offsetHeight;
         if (swapLayer) void swapLayer.offsetHeight;
+        if (musicalSwapLayer) void musicalSwapLayer.offsetHeight;
 
         requestAnimationFrame(() => {
             if (lane) lane.classList.add('audio-waveform-lane--region-swap-reveal--active');
             if (lanesInner) lanesInner.classList.add('audio-waveform-composite--region-swap-reveal--active');
-            if (swapLayer) {
-                swapLayer.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out--active');
+            for (let ci = 0; ci < crossfadeLayers.length; ci++) {
+                const el = crossfadeLayers[ci];
+                if (el) el.classList.add('audio-waveform-lane__region-swap-layer--crossfade-out--active');
             }
             setTimeout(() => {
                 if (swapLayer) removePlaybackRegionSwapLayer(swapLayer);
+                if (musicalSwapLayer) removeMusicalTracksSwapLayer(musicalSwapLayer);
                 clearRegionSwapRevealFadeClasses(lane, lanesInner);
             }, REGION_SWAP_REVEAL_FADE_MS + 48);
         });
@@ -601,7 +828,12 @@
             }
         }
         if (o.fadeIn && lane && regionSwapRevealFadeAllowed()) {
-            startRegionSwapRevealFade(lane, trackEl, o.swapLayer || null);
+            startRegionSwapRevealFade(
+                lane,
+                trackEl,
+                o.swapLayer || null,
+                o.musicalSwapLayer || null,
+            );
             return;
         }
         if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
@@ -685,15 +917,22 @@
         redrawOpt,
         onComplete,
         animStartMs,
+        musicalGhosts,
     ) {
         const t0 = Number.isFinite(animStartMs) ? animStartMs : performance.now();
         let finished = false;
         paintPlaybackRegionSwapGhosts(ghosts, 0);
+        if (musicalGhosts && musicalGhosts.length) {
+            paintPlaybackRegionSwapGhosts(musicalGhosts, 0);
+        }
 
         function finish(elapsedMs) {
             if (finished) return;
             finished = true;
             paintPlaybackRegionSwapGhosts(ghosts, 1);
+            if (musicalGhosts && musicalGhosts.length) {
+                paintPlaybackRegionSwapGhosts(musicalGhosts, 1);
+            }
             if (typeof onComplete === 'function') {
                 onComplete(elapsedMs);
             } else {
@@ -706,6 +945,9 @@
             const elapsed = now - t0;
             const progress = Math.min(1, elapsed / REGION_SWAP_ANIM_MS);
             paintPlaybackRegionSwapGhosts(ghosts, progress);
+            if (musicalGhosts && musicalGhosts.length) {
+                paintPlaybackRegionSwapGhosts(musicalGhosts, progress);
+            }
             if (progress >= 1) {
                 finish(elapsed);
                 return;
@@ -771,6 +1013,7 @@
                       {
                           contentOnlySwap,
                           forceTimelineSwap,
+                          includeSlideMoves: !!spec.includeSlideMoves,
                           oldOverlayIntervals,
                           swapUnitSegmentIndicesA: spec.swapUnitSegmentIndicesA,
                           swapUnitSegmentIndicesB: spec.swapUnitSegmentIndicesB,
@@ -802,6 +1045,10 @@
         layer.className = 'audio-waveform-lane__region-swap-layer';
         layer.setAttribute('aria-hidden', 'true');
 
+        const enableMusicalTrackSwapAnim =
+            spec.enableMusicalTrackSwapAnim !== false && isMusicalGridVisibleSafe();
+        let musicalLayer = null;
+
         function schedulePersistAfterSwapCommit() {
             if (typeof window.schedulePersistExtraTrackLayout === 'function') {
                 window.schedulePersistExtraTrackLayout();
@@ -813,8 +1060,9 @@
             }
         }
 
-        function runPostSwapHeavyWork(applyOk, swapLayer, onRedrawDone) {
+        function runPostSwapHeavyWork(applyOk, swapLayer, musicalSwapLayer, onRedrawDone) {
             const trackRef = { type: 'extra', slot };
+            const historyRestore = !!spec.historyRestore;
             const runPersist = () => {
                 if (!applyOk) return;
                 if (typeof window.flushPersistSessionNow === 'function') {
@@ -834,18 +1082,22 @@
                 }
             };
             const runRedraw = () => {
-                if (applyOk && typeof syncRegionSwapVisualPresentation === 'function') {
-                    syncRegionSwapVisualPresentation(trackRef, redrawOpt || {});
-                }
+                if (applyOk && typeof finalizeSwap === 'function') finalizeSwap();
                 if (typeof schedulePersistSession === 'function') {
                     schedulePersistSession();
                 }
                 revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, {
-                    skipRedraw: true,
+                    skipRedraw: !historyRestore,
                     fadeIn: true,
                     swapLayer: swapLayer || null,
+                    musicalSwapLayer: musicalSwapLayer || null,
                 });
-                if (applyOk && typeof finalizeSwap === 'function') finalizeSwap();
+                if (!historyRestore) {
+                    refreshRegionRehearsalMarksAfterSwap();
+                }
+                if (typeof window.refreshRehearsalTrack === 'function') {
+                    window.refreshRehearsalTrack();
+                }
                 if (typeof onRedrawDone === 'function') onRedrawDone();
                 if (typeof requestIdleCallback === 'function') {
                     requestIdleCallback(runPersist, { timeout: 1200 });
@@ -878,10 +1130,11 @@
             }
             if (!applyOk) {
                 removePlaybackRegionSwapLayer(layer);
+                if (musicalLayer) removeMusicalTracksSwapLayer(musicalLayer);
                 revealPlaybackRegionSwapLane(trackEl, lane, slot, redrawOpt, { skipRedraw: false });
                 playbackRegionSwapAnimPending = false;
             } else {
-                runPostSwapHeavyWork(applyOk, layer);
+                runPostSwapHeavyWork(applyOk, layer, musicalLayer);
             }
             if (typeof window.regionSwapDiagLog === 'function') {
                 window.regionSwapDiagLog('swap/animation/done', {
@@ -896,6 +1149,7 @@
             playbackRegionSwapAnimActive = false;
             scheduleMusicalGridRedrawAfterRegionSwapAnim();
             removePlaybackRegionSwapLayer(layer);
+            if (musicalLayer) removeMusicalTracksSwapLayer(musicalLayer);
             if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
             if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
             setRegionSwapCompositeActive(false);
@@ -923,7 +1177,7 @@
             return false;
         }
 
-        function buildSwapAnimationGhosts() {
+        function captureSwapAnimationSnapshots() {
             const snapshots = [];
             let captureMiss = 0;
             for (let i = 0; i < moves.length; i++) {
@@ -941,20 +1195,96 @@
                 }
                 snapshots.push({ move, bitmap: bitmap || null });
             }
+
+            let musicalPrepared = { ok: true, snapshots: [], captureMiss: 0, skipped: true };
+            if (enableMusicalTrackSwapAnim) {
+                musicalPrepared = captureMusicalTracksSwapSnapshots(moves, gapSwap);
+                if (!musicalPrepared.ok) {
+                    return {
+                        ok: false,
+                        reason: musicalPrepared.reason || 'musical capture incomplete',
+                        index: musicalPrepared.index,
+                    };
+                }
+            }
+
+            return {
+                ok: true,
+                snapshots,
+                captureMiss,
+                musicalSnapshots: musicalPrepared.snapshots || [],
+                musicalCaptureMiss: musicalPrepared.captureMiss | 0,
+                musicalSkipped: !!musicalPrepared.skipped,
+            };
+        }
+
+        function captureMusicalTracksSwapSnapshots(moves, gapSwap) {
+            if (!isMusicalGridVisibleSafe()) {
+                return { ok: true, snapshots: [], captureMiss: 0, skipped: true };
+            }
+            const musicalMoves = collectMusicalTracksSwapMoves(moves, gapSwap);
+            if (musicalMoves.length < 2 || !swapMovesHaveVisibleDisplacement(musicalMoves)) {
+                return { ok: true, snapshots: [], captureMiss: 0, skipped: true };
+            }
+            const specs = getMusicalSwapTrackSpecs();
+            if (!specs) {
+                return { ok: true, snapshots: [], captureMiss: 0, skipped: true };
+            }
+            const snapshots = [];
+            let captureMiss = 0;
+            for (let i = 0; i < musicalMoves.length; i++) {
+                const move = musicalMoves[i];
+                const bitmap = captureMusicalTracksSwapStrip(move.from.left, move.from.width);
+                if (!bitmap) captureMiss++;
+                snapshots.push({ move, bitmap: bitmap || null });
+            }
+            return { ok: true, snapshots, captureMiss, skipped: false };
+        }
+
+        function assembleSwapAnimationGhosts(captured) {
             layer.replaceChildren();
             const ghosts = [];
-            for (let i = 0; i < snapshots.length; i++) {
-                const built = buildRegionSwapGhost(snapshots[i], hCss);
-                if (!built) return { ok: false, reason: 'ghost build incomplete', index: i };
+            for (let i = 0; i < captured.snapshots.length; i++) {
+                const built = buildRegionSwapGhost(captured.snapshots[i], hCss);
+                if (!built) {
+                    return { ok: false, reason: 'ghost build incomplete', index: i };
+                }
                 layer.appendChild(built.el);
                 ghosts.push(built);
             }
-            return { ok: true, ghosts, captureMiss };
+
+            const musicalGhosts = [];
+            if (captured.musicalSnapshots && captured.musicalSnapshots.length) {
+                const specs = getMusicalSwapTrackSpecs();
+                const totalH = specs ? musicalSwapTracksTotalHeightCss(specs) : hCss;
+                for (let i = 0; i < captured.musicalSnapshots.length; i++) {
+                    const built = buildRegionSwapGhost(captured.musicalSnapshots[i], totalH);
+                    if (!built) {
+                        return {
+                            ok: false,
+                            reason: 'musical ghost build incomplete',
+                            index: i,
+                        };
+                    }
+                    musicalGhosts.push(built);
+                }
+            }
+
+            return {
+                ok: true,
+                ghosts,
+                captureMiss: captured.captureMiss | 0,
+                musicalGhosts,
+                musicalCaptureMiss: captured.musicalCaptureMiss | 0,
+                musicalSkipped: !!captured.musicalSkipped,
+            };
         }
 
         function beginSwapAnimationPlayback(prepared) {
             const ghosts = prepared.ghosts;
             const captureMiss = prepared.captureMiss | 0;
+            const musicalGhosts = prepared.musicalGhosts || [];
+            const musicalCaptureMiss = prepared.musicalCaptureMiss | 0;
             try {
                 layer.classList.add('audio-waveform-lane__region-swap-layer--lanes-overlay');
                 if (typeof window.syncLaneOverlayGridPlacement === 'function') {
@@ -962,10 +1292,31 @@
                 } else {
                     trackEl.appendChild(layer);
                 }
+
+                if (musicalGhosts.length) {
+                    musicalLayer = document.createElement('div');
+                    musicalLayer.className =
+                        'audio-waveform-lane__region-swap-layer audio-waveform-lane__region-swap-layer--musical-tracks';
+                    musicalLayer.setAttribute('aria-hidden', 'true');
+                    musicalLayer.classList.add('audio-waveform-lane__region-swap-layer--lanes-overlay');
+                    const lanesInner = waveformLanesInnerEl();
+                    syncMusicalTracksSwapLayerPlacement(lanesInner, musicalLayer);
+                    for (let mi = 0; mi < musicalGhosts.length; mi++) {
+                        musicalLayer.appendChild(musicalGhosts[mi].el);
+                    }
+                }
+
                 void layer.offsetHeight;
+                if (musicalLayer) void musicalLayer.offsetHeight;
+
+                paintPlaybackRegionSwapGhosts(ghosts, 0);
+                if (musicalGhosts.length) {
+                    paintPlaybackRegionSwapGhosts(musicalGhosts, 0);
+                }
+
                 const animStartMs = performance.now();
                 playbackRegionSwapAnimActive = true;
-                scheduleMusicalGridRedrawAfterRegionSwapAnim();
+                hideRegionSwapWaveformGridOverlaysAfterCapture();
                 setRegionSwapCompositeActive(true);
                 trackEl.classList.add('audio-waveform-lane--region-swap-active');
                 lane.classList.add('audio-waveform-lane--region-swap-active');
@@ -975,10 +1326,21 @@
                         moveCount: moves.length,
                     });
                 }
+                if (
+                    musicalCaptureMiss > 0 &&
+                    typeof window.regionSwapDiagLog === 'function'
+                ) {
+                    window.regionSwapDiagLog('swap/animation/musical-fallback', {
+                        captureMiss: musicalCaptureMiss,
+                        moveCount: musicalGhosts.length,
+                    });
+                }
                 if (typeof window.regionSwapDiagLog === 'function') {
                     window.regionSwapDiagLog('swap/animation/start', {
                         targetMs: REGION_SWAP_ANIM_MS,
                         moveCount: moves.length,
+                        musicalMoveCount: musicalGhosts.length,
+                        musicalSkipped: !!prepared.musicalSkipped,
                     });
                 }
                 animatePlaybackRegionSwapGhosts(
@@ -990,6 +1352,7 @@
                     redrawOpt,
                     finishSwapAfterAnimation,
                     animStartMs,
+                    musicalGhosts,
                 );
             } catch (err) {
                 playbackRegionSwapAnimActive = false;
@@ -999,6 +1362,7 @@
                 if (trackEl) trackEl.classList.remove('audio-waveform-lane--region-swap-active');
                 if (lane) lane.classList.remove('audio-waveform-lane--region-swap-active');
                 removePlaybackRegionSwapLayer(layer);
+                if (musicalLayer) removeMusicalTracksSwapLayer(musicalLayer);
                 if (typeof window.regionSwapDiagLog === 'function') {
                     window.regionSwapDiagLog('swap/animation/error', {
                         message: err && err.message ? err.message : String(err),
@@ -1008,10 +1372,38 @@
             }
         }
 
+        let captured;
+        try {
+            captured = captureSwapAnimationSnapshots();
+        } catch (captureErr) {
+            if (typeof window.regionSwapDiagLog === 'function') {
+                window.regionSwapDiagLog('swap/animation/capture-error', {
+                    message:
+                        captureErr && captureErr.message
+                            ? captureErr.message
+                            : String(captureErr),
+                });
+            }
+            return regionSwapAnimReject('capture failed');
+        }
+        if (!captured || !captured.ok) {
+            return regionSwapAnimReject(captured && captured.reason ? captured.reason : 'capture incomplete');
+        }
+
         playbackRegionSwapAnimPending = true;
         try {
             requestAnimationFrame(() => {
-                const prepared = buildSwapAnimationGhosts();
+                let prepared;
+                try {
+                    prepared = assembleSwapAnimationGhosts(captured);
+                } catch (assembleErr) {
+                    recoverSwapWithoutAnimation(
+                        assembleErr && assembleErr.message
+                            ? assembleErr.message
+                            : String(assembleErr),
+                    );
+                    return;
+                }
                 if (!prepared.ok) {
                     recoverSwapWithoutAnimation(prepared.reason);
                     return;
@@ -1038,12 +1430,12 @@
         return playbackRegionSwapAnimActive || playbackRegionSwapAnimPending;
     }
 
-    /** 背景の Phrase 着色のみ抑止（ゴーストキャプチャ前の pending では消さない） */
-    function isPlaybackRegionSwapPhraseFillSuppressed() {
+    /** 背景の Rehearsal 着色・小節線オーバーレイを抑止（キャプチャ後 active のみ） */
+    function isPlaybackRegionSwapRehearsalFillSuppressed() {
         return playbackRegionSwapAnimActive;
     }
 
     window.playPlaybackRegionSwapAnimation = playPlaybackRegionSwapAnimation;
     window.syncRegionSwapVisualPresentation = syncRegionSwapVisualPresentation;
     window.isPlaybackRegionSwapAnimActive = isPlaybackRegionSwapAnimActive;
-    window.isPlaybackRegionSwapPhraseFillSuppressed = isPlaybackRegionSwapPhraseFillSuppressed;
+    window.isPlaybackRegionSwapRehearsalFillSuppressed = isPlaybackRegionSwapRehearsalFillSuppressed;

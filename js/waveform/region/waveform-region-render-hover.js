@@ -67,7 +67,33 @@
         const hit = document.elementFromPoint(clientX, clientY);
         if (hit) {
             const fromHit = hit.closest('.audio-waveform-lane__playback-region');
-            if (fromHit) return fromHit;
+            if (fromHit) {
+                const lane = fromHit.closest('.audio-waveform-lane--extra');
+                const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                if (m) {
+                    const slot = parseInt(m[1], 10);
+                    const segmentIndex = Number(fromHit.dataset.segmentIndex);
+                    const transportSec = transportSecAtClientX(clientX);
+                    if (
+                        Number.isFinite(segmentIndex) &&
+                        segmentIndex >= 0 &&
+                        Number.isFinite(transportSec)
+                    ) {
+                        const track = { type: 'extra', slot };
+                        const interval = getSegmentRegionInteractiveTimelineInterval(
+                            track,
+                            segmentIndex,
+                        );
+                        if (
+                            transportSec >= interval.startSec - 0.0005 &&
+                            transportSec < interval.endSec - 0.002
+                        ) {
+                            return fromHit;
+                        }
+                    }
+                }
+                return null;
+            }
         }
 
         const slot = extraLaneSlotFromClientY(clientY);
@@ -104,9 +130,13 @@
 
         const segments = getTrackSegments(track);
         for (let i = 0; i < segments.length; i++) {
-            const start = getSegmentRegionTimelineIn(track, i);
-            const end = getSegmentTimelineEnd(track, i);
-            if (transportSec < start - 0.0005 || transportSec >= end - 0.002) continue;
+            const interval = getSegmentRegionInteractiveTimelineInterval(track, i);
+            if (
+                transportSec < interval.startSec - 0.0005 ||
+                transportSec >= interval.endSec - 0.002
+            ) {
+                continue;
+            }
             const el = container.querySelector(
                 '.audio-waveform-lane__playback-region[data-segment-index="' + i + '"]',
             );
@@ -607,8 +637,8 @@
             regions[i].classList.remove('audio-waveform-lane__playback-region--ew-cursor');
             regions[i].style.removeProperty('cursor');
         }
-        if (typeof syncPhraseBoundaryDeferToRegionHandles === 'function') {
-            syncPhraseBoundaryDeferToRegionHandles(false);
+        if (typeof syncRehearsalBoundaryDeferToRegionHandles === 'function') {
+            syncRehearsalBoundaryDeferToRegionHandles(false);
         }
     }
 
@@ -651,8 +681,8 @@
             return;
         }
         const onHandle = applyRegionEwCursorFromPointer(clientX, clientY);
-        if (typeof syncPhraseBoundaryDeferToRegionHandles === 'function') {
-            syncPhraseBoundaryDeferToRegionHandles(onHandle);
+        if (typeof syncRehearsalBoundaryDeferToRegionHandles === 'function') {
+            syncRehearsalBoundaryDeferToRegionHandles(onHandle);
         }
         lanes.classList.toggle(REGION_HANDLE_HOVER_CURSOR_CLASS, onHandle);
     }

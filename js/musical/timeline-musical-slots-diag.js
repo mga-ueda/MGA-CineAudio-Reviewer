@@ -48,22 +48,24 @@
         writeLog(LOG_PREFIX + ' ' + stage + (tail ? ' | ' + tail : ''));
     }
 
-    function musicalSlotDiagPhraseSnapshot() {
+    function musicalSlotDiagRehearsalSnapshot() {
         let text = '';
         let meter = '';
         if (typeof getMusicalGridPersistSnapshot === 'function') {
             const snap = getMusicalGridPersistSnapshot();
             if (snap) {
-                if (snap.phrase != null) text = String(snap.phrase);
-                if (snap.meter != null) meter = String(snap.meter);
+                if (snap.rehearsal != null) text = String(snap.rehearsal);
+                if (typeof getCommittedMusicalGridMeterText === 'function') {
+                    meter = getCommittedMusicalGridMeterText();
+                }
             }
         }
         const fill =
-            typeof window.getMusicalGridPhraseFillVisible === 'function' &&
-            window.getMusicalGridPhraseFillVisible();
+            typeof window.getMusicalGridRehearsalFillVisible === 'function' &&
+            window.getMusicalGridRehearsalFillVisible();
         const counts =
-            typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
-                ? window.getExpandedPhraseGroupBarCountsSnapshot()
+            typeof window.getExpandedRehearsalGroupBarCountsSnapshot === 'function'
+                ? window.getExpandedRehearsalGroupBarCountsSnapshot()
                 : [];
         return { text, meter, fill: !!fill, counts, countsHead: counts.slice(0, 12) };
     }
@@ -76,10 +78,10 @@
             kind: slot.kind,
             musical: {
                 contentBars: m.contentBarCount | 0,
-                phraseBars: m.phraseBarCount | 0,
-                phraseIdx:
-                    m.phraseSlotIndex >= 0
-                        ? phraseSlotLabelForDiagnostics(m.phraseSlotIndex)
+                rehearsalBars: m.rehearsalBarCount | 0,
+                rehearsalIdx:
+                    m.rehearsalSlotIndex >= 0
+                        ? rehearsalSlotLabelForDiagnostics(m.rehearsalSlotIndex)
                         : null,
                 meterBarStart: m.meterBarStart | 0,
             },
@@ -88,6 +90,29 @@
                 out: musicalSlotDiagFmtSec(slot.timelineEndSec),
             },
         };
+        if (
+            typeof window.resolveSwapTransportSpanForSlot === 'function' &&
+            Number.isFinite(slot.timelineStartSec)
+        ) {
+            const span = window.resolveSwapTransportSpanForSlot(slot);
+            if (span) {
+                row.transportSpan = {
+                    label: span.label,
+                    barStart: span.transportBarStart | 0,
+                    barCount: span.transportBarCount | 0,
+                    start: musicalSlotDiagFmtSec(span.startSec),
+                    end: musicalSlotDiagFmtSec(span.endSec),
+                };
+                const contentBars = m.contentBarCount | 0;
+                const transportBars = span.transportBarCount | 0;
+                if (slot.kind !== 'silent' && contentBars !== transportBars) {
+                    row.barCountMismatch = {
+                        contentBars,
+                        transportBars,
+                    };
+                }
+            }
+        }
         if (slot.kind === 'silent') {
             row.silentGapIndex = (slot.silentGapIndex | 0) + 1;
         } else if (slot.segmentRefs && slot.segmentRefs.length) {
@@ -139,20 +164,24 @@
             musicalSlotDiagLog('dump/error', { label, error: 'invalid track' });
             return;
         }
-        const phrase = musicalSlotDiagPhraseSnapshot();
+        const rehearsal = musicalSlotDiagRehearsalSnapshot();
         const slots =
             typeof getTrackTimelineSlots === 'function'
-                ? getTrackTimelineSlots(track, { writeCache: false })
+                ? getTrackTimelineSlots(track, {
+                      writeCache: false,
+                      forceRebuild: true,
+                      skipReadCacheStore: true,
+                  })
                 : [];
         const swapUnits = slots.map((s, i) => musicalSlotDiagSummarizeSwapUnit(s, i));
         const ranges =
-            typeof window.getPhraseGroupRangesSnapshot === 'function'
-                ? window.getPhraseGroupRangesSnapshot()
+            typeof window.getRehearsalGroupRangesSnapshot === 'function'
+                ? window.getRehearsalGroupRangesSnapshot()
                 : [];
         const rangePreview = [];
         for (let i = 0; i < Math.min(ranges.length, 12); i++) {
             rangePreview.push({
-                phrase: i + 1,
+                rehearsal: i + 1,
                 start: musicalSlotDiagFmtSec(ranges[i].startSec),
                 end: musicalSlotDiagFmtSec(ranges[i].endSec),
             });
@@ -167,17 +196,17 @@
         musicalSlotDiagLog('dump/' + (label || 'snapshot'), {
             ex: track.slot + 1,
             engine,
-            phrase: {
-                text: phrase.text,
-                meter: phrase.meter,
-                fill: phrase.fill,
-                countsHead: phrase.countsHead,
-                countLen: phrase.counts.length,
+            rehearsal: {
+                text: rehearsal.text,
+                meter: rehearsal.meter,
+                fill: rehearsal.fill,
+                countsHead: rehearsal.countsHead,
+                countLen: rehearsal.counts.length,
             },
             swapUnits,
             unitCount: swapUnits.length,
             selection,
-            phraseRanges: rangePreview,
+            rehearsalRanges: rangePreview,
             rangeCount: ranges.length,
         });
     }
@@ -195,24 +224,24 @@
         }
     }
 
-    function phraseSlotLabelForDiagnostics(phraseSlotIndex) {
-        const i = phraseSlotIndex | 0;
+    function rehearsalSlotLabelForDiagnostics(rehearsalSlotIndex) {
+        const i = rehearsalSlotIndex | 0;
         if (i < 0) return null;
-        if (typeof window.rehearsalMarkLabelForPhraseSlotIndex === 'function') {
-            return window.rehearsalMarkLabelForPhraseSlotIndex(i);
+        if (typeof window.rehearsalMarkLabelForRehearsalSlotIndex === 'function') {
+            return window.rehearsalMarkLabelForRehearsalSlotIndex(i);
         }
-        if (typeof window.phraseGroupLabelForIndex === 'function') {
-            return window.phraseGroupLabelForIndex(i);
+        if (typeof window.rehearsalGroupLabelForIndex === 'function') {
+            return window.rehearsalGroupLabelForIndex(i);
         }
         return String(i + 1);
     }
 
     function musicalSlotDiagSummarizeMusicalOrigin(m) {
         const binding = m && typeof m === 'object' ? m : {};
-        const phraseIdx = binding.phraseSlotIndex | 0;
+        const rehearsalIdx = binding.rehearsalSlotIndex | 0;
         return {
-            phraseSlotIndex: phraseIdx >= 0 ? phraseIdx : null,
-            phraseLabel: phraseIdx >= 0 ? phraseSlotLabelForDiagnostics(phraseIdx) : null,
+            rehearsalSlotIndex: rehearsalIdx >= 0 ? rehearsalIdx : null,
+            rehearsalLabel: rehearsalIdx >= 0 ? rehearsalSlotLabelForDiagnostics(rehearsalIdx) : null,
         };
     }
 
@@ -220,7 +249,11 @@
         const r = ref && typeof ref === 'object' ? ref : {};
         const slots =
             typeof getTrackTimelineSlots === 'function'
-                ? getTrackTimelineSlots(track, { writeCache: false })
+                ? getTrackTimelineSlots(track, {
+                      writeCache: false,
+                      forceRebuild: true,
+                      skipReadCacheStore: true,
+                  })
                 : [];
         let unitIdx = -1;
         if (
@@ -313,7 +346,7 @@
         const m = row.musical || {};
         const parts = [
             row.label || '?',
-            'phraseSlot=' + (m.phraseLabel || '—'),
+            'rehearsalSlot=' + (m.rehearsalLabel || '—'),
         ];
         if (!row.bindingResolved) parts.push('**musical unresolved**');
         if (row.identity) parts.push('entity=' + row.identity);
@@ -473,28 +506,28 @@
                         (r.built.regions || '—') +
                         ') ← cache=' +
                         r.cached.identity +
-                        ' phrase=' +
-                        (r.cached.musical && r.cached.musical.phraseLabel
-                            ? r.cached.musical.phraseLabel
+                        ' rehearsal=' +
+                        (r.cached.musical && r.cached.musical.rehearsalLabel
+                            ? r.cached.musical.rehearsalLabel
                             : '?'),
                 );
             }
         }
-        musicalSlotDiagLog('origin/cache-merge', {
+        const mergePayload = {
             ex,
             unitCount: units.length,
             persistedCount: persisted.length,
             mergeMode: mergeByIdentity ? 'identity' : 'index',
             identityMismatchCount: mismatchCount,
             allMatch: mismatchCount === 0,
-            warning:
-                mismatchCount > 0
-                    ? mergeByIdentity
-                        ? 'rebuild entity missing from cache or identity mismatch'
-                        : 'cache index order differs from rebuild — musical may bind to wrong unit'
-                    : undefined,
-            rows,
-        });
+        };
+        if (mismatchCount > 0) {
+            mergePayload.warning = mergeByIdentity
+                ? 'rebuild entity missing from cache or identity mismatch'
+                : 'cache index order differs from rebuild — musical may bind to wrong unit';
+            mergePayload.rows = rows;
+        }
+        musicalSlotDiagLog('origin/cache-merge', mergePayload);
     }
     function musicalSlotDiagDumpOriginBindings(trackOrSlot, label) {
         const track = resolveMusicalSlotDiagTrackRef(trackOrSlot);
@@ -504,7 +537,11 @@
         }
         const slots =
             typeof getTrackTimelineSlots === 'function'
-                ? getTrackTimelineSlots(track, { writeCache: false })
+                ? getTrackTimelineSlots(track, {
+                      writeCache: false,
+                      forceRebuild: true,
+                      skipReadCacheStore: true,
+                  })
                 : [];
         const state =
             typeof window.getPlaybackRegionsState === 'function'
@@ -529,31 +566,31 @@
                         : null,
                 musical: musicalSlotDiagSummarizeMusicalOrigin(s && s.musical),
             })),
-            legend: 'phraseSlot = Phrase slot on timeline',
+            legend: 'rehearsalSlot = Rehearsal slot on timeline',
         });
     }
     function logSessionRestoreMusicalSlotSnapshot() {
         if (!musicalSlotDiagEnabled()) return;
-        const phrase = musicalSlotDiagPhraseSnapshot();
+        const rehearsal = musicalSlotDiagRehearsalSnapshot();
         const n =
             typeof window.getExtraTrackCount === 'function' ? window.getExtraTrackCount() : 0;
         if (typeof writeLog === 'function') {
             writeLog(
                 LOG_PREFIX +
-                    ' session/restore === begin === Phrase="' +
-                    (phrase.text || '') +
+                    ' session/restore === begin === Rehearsal="' +
+                    (rehearsal.text || '') +
                     '" fill=' +
-                    (phrase.fill ? 'ON' : 'OFF') +
+                    (rehearsal.fill ? 'ON' : 'OFF') +
                     ' counts=' +
-                    JSON.stringify(phrase.countsHead),
+                    JSON.stringify(rehearsal.countsHead),
             );
         }
-        musicalSlotDiagLog('session/restore/phrase', {
-            phraseText: phrase.text,
-            phraseMeter: phrase.meter,
-            phraseFill: phrase.fill,
-            countsHead: phrase.countsHead,
-            countLen: phrase.counts.length,
+        musicalSlotDiagLog('session/restore/rehearsal', {
+            rehearsalText: rehearsal.text,
+            rehearsalMeter: rehearsal.meter,
+            rehearsalFill: rehearsal.fill,
+            countsHead: rehearsal.countsHead,
+            countLen: rehearsal.counts.length,
         });
         const allIssues = [];
         let reportedTracks = 0;
@@ -608,7 +645,7 @@
 
     window.musicalSlotDiagLog = musicalSlotDiagLog;
     window.musicalSlotDiagFmtSec = musicalSlotDiagFmtSec;
-    window.musicalSlotDiagPhraseSnapshot = musicalSlotDiagPhraseSnapshot;
+    window.musicalSlotDiagRehearsalSnapshot = musicalSlotDiagRehearsalSnapshot;
     window.musicalSlotDiagSummarizeSwapUnit = musicalSlotDiagSummarizeSwapUnit;
     window.musicalSlotDiagSummarizeMusicalOrigin = musicalSlotDiagSummarizeMusicalOrigin;
     window.musicalSlotDiagWriteReadableLines = musicalSlotDiagWriteReadableLines;

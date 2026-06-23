@@ -1,7 +1,73 @@
 /**
- * musical-grid-phrase.js — Phrase 定義・ラベル・小節展開
+ * musical-grid-rehearsal.js — Rehearsal 定義・ラベル・小節展開
  */
+    let timelineMusicalSampleRateHint = 0;
+
+    function setTimelineMusicalSampleRate(rate) {
+        const r = Number(rate) | 0;
+        timelineMusicalSampleRateHint = r > 0 ? r : 0;
+    }
+
+    /** WAV マーカー import と同じ sampleRate（読込時 set / 未設定時は Ex バッファ） */
+    function resolveTimelineMusicalSampleRate() {
+        if (timelineMusicalSampleRateHint > 0) return timelineMusicalSampleRateHint;
+        const n =
+            typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
+        for (let slot = 0; slot < n; slot++) {
+            if (
+                typeof extraTrackBySlot !== 'function' ||
+                typeof getExtraTrackClipBuffer !== 'function'
+            ) {
+                continue;
+            }
+            const tr = extraTrackBySlot(slot);
+            if (!tr) continue;
+            const buf = getExtraTrackClipBuffer(tr, 'main');
+            if (buf && buf.sampleRate > 0) return buf.sampleRate | 0;
+        }
+        return 0;
+    }
+
+    /** 拍ごとに sample 累積 → 小節頭を sample 境界へ（WAV cue の round(sample) と揃える） */
+    function collectSampleAccurateBarBoundarySecs(meterSpec, durationSec, sampleRate) {
+        const sr = Number(sampleRate) | 0;
+        const boundaries = [];
+        if (!(durationSec > 0) || !meterSpec || !(sr > 0)) return boundaries;
+        let totalSamples = 0;
+        boundaries.push(0);
+        let barIndex = 0;
+        const maxBars = 200000;
+        while (totalSamples / sr < durationSec - 1e-9 && barIndex < maxBars) {
+            const entry = getMeterEntryForBar(meterSpec, barIndex);
+            if (!entry) break;
+            let barSamples = 0;
+            if (typeof forEachMeterBarBeat === 'function') {
+                forEachMeterBarBeat(0, entry, (beat) => {
+                    barSamples += Math.round(beat.beatDur * sr);
+                });
+            } else {
+                barSamples = Math.round(meterBarDurationSec(entry) * sr);
+            }
+            if (barSamples <= 0) break;
+            totalSamples += barSamples;
+            boundaries.push(Math.min(durationSec, totalSamples / sr));
+            barIndex += 1;
+        }
+        if (!boundaries.length || boundaries[boundaries.length - 1] < durationSec - 1e-9) {
+            boundaries.push(durationSec);
+        }
+        return boundaries;
+    }
+
     function collectBarBoundarySecs(meterSpec, durationSec) {
+        const sr =
+            typeof isAnyExtraTrackTempoStretched === 'function' &&
+            isAnyExtraTrackTempoStretched()
+                ? 0
+                : resolveTimelineMusicalSampleRate();
+        if (sr > 0) {
+            return collectSampleAccurateBarBoundarySecs(meterSpec, durationSec, sr);
+        }
         const boundaries = [];
         if (!(durationSec > 0) || !meterSpec) return boundaries;
         let t = 0;
@@ -76,12 +142,12 @@
         return boundaries;
     }
 
-    /** Phrase 欄が 3 項以上の明示グループ列のとき、その小節数合計（例: 8,3,1,…,2 → 22） */
-    function minimumBarCountFromExplicitPhraseSpec(phraseSpec) {
-        if (!phraseSpec || !phraseSpec.sizes || phraseSpec.sizes.length < 3) return 0;
+    /** Rehearsal 欄が 3 項以上の明示グループ列のとき、その小節数合計（例: 8,3,1,…,2 → 22） */
+    function minimumBarCountFromExplicitRehearsalSpec(rehearsalSpec) {
+        if (!rehearsalSpec || !rehearsalSpec.sizes || rehearsalSpec.sizes.length < 3) return 0;
         let sum = 0;
-        for (let i = 0; i < phraseSpec.sizes.length; i++) {
-            const n = phraseSpec.sizes[i] | 0;
+        for (let i = 0; i < rehearsalSpec.sizes.length; i++) {
+            const n = rehearsalSpec.sizes[i] | 0;
             if (n > 0) sum += n;
         }
         return sum;
@@ -101,15 +167,15 @@
     }
 
     /**
-     * Phrase 展開・着色・リージョン再配置用のタイムライン尺。
-     * クリップ長 < 明示 Phrase 全小節（GAC 先頭無音など）のとき、後半グループが切れないよう延長する。
+     * Rehearsal 展開・着色・リージョン再配置用のタイムライン尺。
+     * クリップ長 < 明示 Rehearsal 全小節（GAC 先頭無音など）のとき、後半グループが切れないよう延長する。
      */
-    function resolvePhraseLayoutDurationSec(meterSpec, durationSec, phraseSpec) {
+    function resolveRehearsalLayoutDurationSec(meterSpec, durationSec, rehearsalSpec) {
         const master = Number(durationSec);
         if (!Number.isFinite(master) || !(master > 0) || !meterSpec) {
             return Number.isFinite(master) && master > 0 ? master : 0;
         }
-        const minBars = minimumBarCountFromExplicitPhraseSpec(phraseSpec);
+        const minBars = minimumBarCountFromExplicitRehearsalSpec(rehearsalSpec);
         if (!(minBars > 0)) return master;
         let gridDur = durationSecForBarCount(meterSpec, minBars);
         if (!(gridDur > master + 1e-9)) return master;
@@ -127,7 +193,7 @@
     }
 
     /** 末尾の未完サイクル（例: 1,8,4,8 + 1 bar）を最終グループへ吸収する */
-    function mergePartialPhraseCycleTail(counts, sizes) {
+    function mergePartialRehearsalCycleTail(counts, sizes) {
         if (!counts || !sizes || !sizes.length || counts.length <= sizes.length) {
             return counts;
         }
@@ -146,20 +212,20 @@
         return merged;
     }
 
-    /** phraseSpec から各 Phrase グループの小節数列を展開する。 */
-    function expandPhraseSpecToGroupBarCounts(meterSpec, durationSec, phraseSpec) {
-        const effectiveDuration = resolvePhraseLayoutDurationSec(
+    /** rehearsalSpec から各 Rehearsal グループの小節数列を展開する。 */
+    function expandRehearsalSpecToGroupBarCounts(meterSpec, durationSec, rehearsalSpec) {
+        const effectiveDuration = resolveRehearsalLayoutDurationSec(
             meterSpec,
             durationSec,
-            phraseSpec,
+            rehearsalSpec,
         );
         const boundaries =
             typeof collectPlaybackAlignedBarBoundarySecs === 'function'
                 ? collectPlaybackAlignedBarBoundarySecs(meterSpec, effectiveDuration)
                 : collectBarBoundarySecs(meterSpec, effectiveDuration);
         const totalBars = Math.max(0, boundaries.length - 1);
-        if (!totalBars || !phraseSpec || !phraseSpec.sizes) return [];
-        const sizes = phraseSpec.sizes;
+        if (!totalBars || !rehearsalSpec || !rehearsalSpec.sizes) return [];
+        const sizes = rehearsalSpec.sizes;
         const counts = [];
         let groupIndex = 0;
         let barsInGroup = 0;
@@ -173,17 +239,17 @@
                 barsInGroup = 0;
             }
         }
-        return mergePartialPhraseCycleTail(counts, sizes);
+        return mergePartialRehearsalCycleTail(counts, sizes);
     }
-    function groupBarCountsMatchPhraseSizes(counts, sizes) {
+    function groupBarCountsMatchRehearsalSizes(counts, sizes) {
         if (!counts || !counts.length || !sizes || !sizes.length) return false;
         for (let i = 0; i < counts.length; i++) {
             if (barGroupSizeForIndex(i, sizes) !== counts[i]) return false;
         }
         return true;
     }
-    /** barGroupSizeForIndex の逆算: 指定長の Phrase 候補を counts から構成する。 */
-    function candidatePhraseSizesForLength(counts, len) {
+    /** barGroupSizeForIndex の逆算: 指定長の Rehearsal 候補を counts から構成する。 */
+    function candidateRehearsalSizesForLength(counts, len) {
         if (!counts || !counts.length || len < 1 || len > counts.length) return null;
         if (len === 1) {
             if (counts.every((c) => c === counts[0])) return [counts[0]];
@@ -202,26 +268,26 @@
         sizes.push(tailVal);
         return sizes;
     }
-    /** 展開済みグループ小節数列から、同等の Phrase 指定を最短表現へ圧縮する。 */
-    function inferMinimalPhraseSizesFromGroupBarCounts(counts) {
+    /** 展開済みグループ小節数列から、同等の Rehearsal 指定を最短表現へ圧縮する。 */
+    function inferMinimalRehearsalSizesFromGroupBarCounts(counts) {
         if (!counts || !counts.length) return [];
         for (let len = 1; len <= counts.length; len++) {
-            const candidate = candidatePhraseSizesForLength(counts, len);
-            if (candidate && groupBarCountsMatchPhraseSizes(counts, candidate)) {
+            const candidate = candidateRehearsalSizesForLength(counts, len);
+            if (candidate && groupBarCountsMatchRehearsalSizes(counts, candidate)) {
                 return candidate;
             }
         }
         return counts.slice();
     }
-    function formatPhraseTextFromGroupBarCounts(counts, opt) {
+    function formatRehearsalTextFromGroupBarCounts(counts, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!counts || !counts.length) return '';
         const sizes =
-            o.optimize === false ? counts.slice() : inferMinimalPhraseSizesFromGroupBarCounts(counts);
+            o.optimize === false ? counts.slice() : inferMinimalRehearsalSizesFromGroupBarCounts(counts);
         if (!sizes.length) return '';
         return sizes.join(',');
     }
-    function phraseGroupCountsEqual(a, b) {
+    function rehearsalGroupCountsEqual(a, b) {
         if (!a || !b || a.length !== b.length) return false;
         for (let i = 0; i < a.length; i++) {
             if ((a[i] | 0) !== (b[i] | 0)) return false;
@@ -234,7 +300,7 @@
         for (let i = 0; i < end; i++) sum += counts[i];
         return sum;
     }
-    function countsForPhraseBoundaryAtBarIndex(startCounts, boundaryIndex, targetBarK) {
+    function countsForRehearsalBoundaryAtBarIndex(startCounts, boundaryIndex, targetBarK) {
         const b = boundaryIndex | 0;
         if (!startCounts || b < 0 || b >= startCounts.length - 1) {
             return startCounts ? startCounts.slice() : [];
@@ -272,7 +338,7 @@
         }
         return newCounts;
     }
-    function targetBarKForPhraseBoundaryDrag(
+    function targetBarKForRehearsalBoundaryDrag(
         startBarK,
         startClientX,
         clientX,
@@ -318,20 +384,20 @@
         const bar = barIndexForBoundarySec(targetSec, barBoundaries);
         return Math.max(lo, Math.min(hi, bar));
     }
-    function applyPhraseBoundaryDragPreview(counts) {
-        const prevLen = phraseBoundaryDragCounts ? phraseBoundaryDragCounts.length : 0;
-        phraseBoundaryDragCounts = counts.slice();
+    function applyRehearsalBoundaryDragPreview(counts) {
+        const prevLen = rehearsalBoundaryDragCounts ? rehearsalBoundaryDragCounts.length : 0;
+        rehearsalBoundaryDragCounts = counts.slice();
         drawMusicalGridOverlay();
         if (prevLen !== counts.length) {
-            updatePhraseBoundaryOverlay();
+            updateRehearsalBoundaryOverlay();
         } else {
-            repositionPhraseBoundaryHandlesFromSnapshot();
+            repositionRehearsalBoundaryHandlesFromSnapshot();
         }
     }
-    function resolveCurrentExpandedPhraseGroupBarCounts() {
+    function resolveCurrentExpandedRehearsalGroupBarCounts() {
         readMusicalGridFromInputs();
-        if (phraseBoundaryDragCounts && phraseBoundaryDragCounts.length) {
-            return phraseBoundaryDragCounts.slice();
+        if (rehearsalBoundaryDragCounts && rehearsalBoundaryDragCounts.length) {
+            return rehearsalBoundaryDragCounts.slice();
         }
         const settings = musicalGridDrawSettings();
         if (!settings || !settings.meterSpec) return [];
@@ -340,49 +406,46 @@
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return [];
-        return resolvePhraseGroupBarCounts(
+        return resolveRehearsalGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
     }
-    /** 展開 counts から Phrase 欄テキストを最短表現へ圧縮（確定時・セーブ前）。 */
-    function compressPhraseDefinitionFromExpandedCounts(opt) {
+    /** 展開 counts から Rehearsal 欄テキストを最短表現へ圧縮（確定時・セーブ前）。 */
+    function compressRehearsalDefinitionFromExpandedCounts(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const counts = resolveCurrentExpandedPhraseGroupBarCounts();
+        const counts = resolveCurrentExpandedRehearsalGroupBarCounts();
         if (!counts.length) return false;
-        const before = musicalGridPhraseText;
-        applyExplicitPhraseGroupBarCounts(counts, {
+        const before = musicalGridRehearsalText;
+        applyExplicitRehearsalGroupBarCounts(counts, {
             skipUndo: !!o.skipUndo,
-            preservePhraseText: false,
+            preserveRehearsalText: false,
             optimize: true,
         });
-        if (typeof writeLog === 'function' && before !== musicalGridPhraseText) {
-            writeLog('Phrase: compressed ' + before + ' -> ' + musicalGridPhraseText);
+        if (typeof writeLog === 'function' && before !== musicalGridRehearsalText) {
+            writeLog('Rehearsal: compressed ' + before + ' -> ' + musicalGridRehearsalText);
         }
-        return before !== musicalGridPhraseText;
+        return before !== musicalGridRehearsalText;
     }
-    function applyExplicitPhraseGroupBarCounts(counts, opt) {
+    function applyExplicitRehearsalGroupBarCounts(counts, opt) {
         if (!counts || !counts.length) return;
         const o = opt && typeof opt === 'object' ? opt : {};
-        if (!o.skipUndo) requestPhraseUndoCapture();
-        if (o.preservePhraseText) {
-            setPhraseGroupBarCountsOverride(counts);
+        if (!o.skipUndo) requestRehearsalUndoCapture();
+        if (o.preserveRehearsalText) {
+            setRehearsalGroupBarCountsOverride(counts);
         } else {
-            const text = formatPhraseTextFromGroupBarCounts(counts, {
+            const text = formatRehearsalTextFromGroupBarCounts(counts, {
                 optimize: o.optimize !== false,
             });
-            musicalGridPhraseText = normalizeMusicalGridPhraseText(text);
-            if (musicalGridPhraseInput) {
-                musicalGridPhraseInput.value = musicalGridPhraseText;
-            }
-            // Phrase 欄は "1,4,8" 等に圧縮されても、着色は展開 counts（例: 1,4,8,8）に合わせる
-            setPhraseGroupBarCountsOverride(counts);
+            musicalGridRehearsalText = normalizeMusicalGridRehearsalText(text);
+            // Rehearsal spec は "1,4,8" 等に圧縮されても、着色は展開 counts（例: 1,4,8,8）に合わせる
+            setRehearsalGroupBarCountsOverride(counts);
         }
         clearMusicalGridPositionCache();
     }
-    /** 小節 index k（その小節の開始＝小節線）で Phrase グループを 2 分割。境界上は null。 */
-    function splitPhraseGroupAtBarIndex(counts, barIndex) {
+    /** 小節 index k（その小節の開始＝小節線）で Rehearsal グループを 2 分割。境界上は null。 */
+    function splitRehearsalGroupAtBarIndex(counts, barIndex) {
         const k = barIndex | 0;
         if (!counts || !counts.length || k <= 0) return null;
         let sum = 0;
@@ -412,16 +475,16 @@
         return 0.05;
     }
     /**
-     * transport 秒が小節線（各小節の開始）に近いとき、その bar index で Phrase 分割候補を返す。
+     * transport 秒が小節線（各小節の開始）に近いとき、その bar index で Rehearsal 分割候補を返す。
      * @param {object} [opt]
      * @param {boolean} [opt.nearestBarLine] true なら閾値に関係なく最寄りの小節線（シークバー用）
      * @returns {{ barIndex: number, barSec: number, counts: number[] }|{ barIndex: number, invalid: true }|null}
      */
-    function resolveMusicalGridBarLinePhraseSplitAtTransportSec(transportSec, opt) {
+    function resolveMusicalGridBarLineRehearsalSplitAtTransportSec(transportSec, opt) {
         if (!getMusicalGridVisible()) return null;
         const o = opt && typeof opt === 'object' ? opt : {};
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return null;
+        if (!settings || !settings.rehearsalSpec) return null;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
@@ -449,13 +512,13 @@
         }
         if (bestK < 1) return null;
         if (!o.nearestBarLine && bestDist > threshold) return null;
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (!counts.length) return null;
-        const nextCounts = splitPhraseGroupAtBarIndex(counts, bestK);
+        const nextCounts = splitRehearsalGroupAtBarIndex(counts, bestK);
         if (!nextCounts) {
             return { barIndex: bestK, invalid: true };
         }
@@ -478,7 +541,7 @@
         return null;
     }
     /** 波形ポインタ優先。トラック外または座標なしはシークバー位置。 */
-    function resolvePhraseEditTransportSec() {
+    function resolveRehearsalEditTransportSec() {
         const pointerOnWaveform = isWaveformPointerInsideLanes();
         let transportSec = pointerOnWaveform ? waveformPointerTransportSec() : null;
         let useSeekbar = !pointerOnWaveform;
@@ -490,7 +553,7 @@
         return { transportSec, useSeekbar };
     }
     /** 波形外はシークバー、波形上はポインタ（join 専用。ポインタ X のフォールバックなし）。 */
-    function resolvePhraseJoinTargetSec() {
+    function resolveRehearsalJoinTargetSec() {
         if (isWaveformPointerInsideLanes()) {
             const transportSec = waveformPointerTransportSec();
             if (transportSec == null) return null;
@@ -500,23 +563,23 @@
         if (transportSec == null) return null;
         return { transportSec, useSeekbar: true };
     }
-    function snapSecToPhraseBoundaryStops(sec, threshold) {
+    function snapSecToRehearsalBoundaryStops(sec, threshold) {
         const s = Number(sec);
         if (!Number.isFinite(s)) return sec;
         const settings = musicalGridDrawSettings();
-        if (!settings || !settings.phraseSpec) return sec;
+        if (!settings || !settings.rehearsalSpec) return sec;
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
         if (!(master > 0)) return sec;
-        const counts = expandPhraseSpecToGroupBarCounts(
+        const counts = expandRehearsalSpecToGroupBarCounts(
             settings.meterSpec,
             master,
-            settings.phraseSpec,
+            settings.rehearsalSpec,
         );
         if (counts.length < 2) return sec;
-        const ranges = collectPhraseGroupRangesFromBarCounts(
+        const ranges = collectRehearsalGroupRangesFromBarCounts(
             settings.meterSpec,
             master,
             counts,
@@ -550,13 +613,13 @@
         const sec = transportSecFromClientX(clientX);
         return Number.isFinite(sec) ? sec : null;
     }
-    function splitPhraseAtWaveformPointer() {
+    function splitRehearsalAtWaveformPointer() {
         if (!getMusicalGridVisible()) return false;
-        if (phraseBoundaryDragActive) return false;
-        const target = resolvePhraseEditTransportSec();
+        if (rehearsalBoundaryDragActive) return false;
+        const target = resolveRehearsalEditTransportSec();
         if (!target) return false;
         const { transportSec, useSeekbar } = target;
-        const hit = resolveMusicalGridBarLinePhraseSplitAtTransportSec(transportSec, {
+        const hit = resolveMusicalGridBarLineRehearsalSplitAtTransportSec(transportSec, {
             nearestBarLine: useSeekbar,
         });
         if (!hit) return false;
@@ -564,49 +627,49 @@
         if (hit.invalid) {
             if (typeof writeLog === 'function') {
                 writeLog(
-                    'Phrase: already at boundary (bar ' +
+                    'Rehearsal: already at boundary (bar ' +
                         barLabel +
                         (useSeekbar ? ', seekbar' : '') +
                         ')',
                 );
             }
             if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Phrase', "Can't split here", 'error');
+                flashSeekHint('Rehearsal', "Can't split here", 'error');
             }
             return true;
         }
-        applyExplicitPhraseGroupBarCounts(hit.counts);
-        persistPhraseWaveformEditAndRedraw({ skipUndo: true });
+        applyExplicitRehearsalGroupBarCounts(hit.counts);
+        persistRehearsalWaveformEditAndRedraw({ skipUndo: true });
         if (typeof writeLog === 'function') {
             writeLog(
-                'Phrase split at bar ' +
+                'Rehearsal split at bar ' +
                     barLabel +
                     (useSeekbar ? ' (seekbar)' : '') +
                     ': ' +
-                    musicalGridPhraseText,
+                    musicalGridRehearsalText,
             );
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(
-                'Phrase',
+                'Rehearsal',
                 'Split at bar ' + barLabel + (useSeekbar ? ' (seekbar)' : ''),
                 'notice',
             );
         }
         return true;
     }
-    function handleMusicalGridPhraseSplitKeydown(e) {
+    function handleMusicalGridRehearsalSplitKeydown(e) {
         if (!matchUserShortcut(e, 'regionSplit')) return false;
         if (e.repeat) return false;
         if (!getMusicalGridVisible()) return false;
-        splitPhraseAtWaveformPointer();
+        splitRehearsalAtWaveformPointer();
         e.preventDefault();
         e.stopPropagation();
         return true;
     }
-    function resolvePhraseGroupIndexAtTransportSec(transportSec) {
-        if (!getMusicalGridPhraseFillVisible()) return null;
-        const ranges = getPhraseGroupRangesSnapshot();
+    function resolveRehearsalGroupIndexAtTransportSec(transportSec) {
+        if (!getMusicalGridRehearsalFillVisible()) return null;
+        const ranges = getRehearsalGroupRangesSnapshot();
         if (!ranges.length) return null;
         const s = Number(transportSec);
         if (!Number.isFinite(s)) return null;
@@ -618,4 +681,3 @@
         }
         return null;
     }
-    /** Phrase 欄 1 サイクル内の sizes[lo]↔sizes[hi] を交換し grid 全体を再展開（RegionSwap 用）。 */

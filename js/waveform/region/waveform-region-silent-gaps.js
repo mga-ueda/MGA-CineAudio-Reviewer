@@ -1,41 +1,51 @@
 /**
  * waveform-region-silent-gaps.js — 無音 gap 収集・選択・メタデータ
  */
-    /** タイムライン上で隣接する無音区間を 1 つにまとめる（phrase 境界での分割表示を防ぐ） */
+    /** タイムライン上で隣接する無音区間を 1 つにまとめる（同一 Rehearsal スロット内のみ） */
     function mergeAdjacentSilentGapIntervals(gaps, eps) {
         if (!gaps || gaps.length <= 1) return gaps ? gaps.slice() : [];
         const out = [];
         let cur = {
             startSec: gaps[0].startSec,
             endSec: gaps[0].endSec,
-            phraseIndex: gaps[0].phraseIndex,
+            rehearsalIndex: gaps[0].rehearsalIndex,
             partial: !!gaps[0].partial,
+            afterSegmentIndex: gaps[0].afterSegmentIndex,
+            beforeSegmentIndex: gaps[0].beforeSegmentIndex,
         };
         for (let i = 1; i < gaps.length; i++) {
             const g = gaps[i];
             if (!g || !Number.isFinite(g.startSec) || !Number.isFinite(g.endSec)) continue;
-            if (g.startSec <= cur.endSec + eps) {
+            const curRi = Number.isFinite(cur.rehearsalIndex) ? cur.rehearsalIndex | 0 : -1;
+            const gRi = Number.isFinite(g.rehearsalIndex) ? g.rehearsalIndex | 0 : -1;
+            const sameRehearsal = curRi < 0 || gRi < 0 || curRi === gRi;
+            if (g.startSec <= cur.endSec + eps && sameRehearsal) {
                 cur.endSec = Math.max(cur.endSec, g.endSec);
                 cur.partial = !!(cur.partial || g.partial);
+                if (cur.beforeSegmentIndex == null || cur.beforeSegmentIndex < 0) {
+                    cur.beforeSegmentIndex = g.beforeSegmentIndex;
+                }
             } else {
                 out.push(cur);
                 cur = {
                     startSec: g.startSec,
                     endSec: g.endSec,
-                    phraseIndex: g.phraseIndex,
+                    rehearsalIndex: g.rehearsalIndex,
                     partial: !!g.partial,
+                    afterSegmentIndex: g.afterSegmentIndex,
+                    beforeSegmentIndex: g.beforeSegmentIndex,
                 };
             }
         }
         out.push(cur);
-        return refreshSilentGapPhraseMetadata(out);
+        return refreshSilentGapRehearsalMetadata(out);
     }
 
-    /** 無音 gap の phraseIndex / phraseBarCount — 重なり最大の Phrase スロット基準 */
-    function refreshSilentGapPhraseMetadata(gaps) {
+    /** 無音 gap の rehearsalIndex / rehearsalBarCount — 重なり最大の Rehearsal スロット基準 */
+    function refreshSilentGapRehearsalMetadata(gaps) {
         if (!gaps || !gaps.length) return gaps ? gaps.slice() : [];
-        const counts = expandedPhraseGroupBarCountsSnapshot();
-        const ranges = phraseSlotRangesSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!ranges.length) return gaps;
         for (let i = 0; i < gaps.length; i++) {
             const gap = gaps[i];
@@ -53,12 +63,12 @@
                 }
             }
             if (bestIdx != null && bestIdx >= 0) {
-                gap.phraseIndex = bestIdx;
+                gap.rehearsalIndex = bestIdx;
                 const spanBars = estimateSilentGapBarSpan(gap);
                 if (spanBars > 0) {
-                    gap.phraseBarCount = spanBars;
+                    gap.rehearsalBarCount = spanBars;
                 } else if (counts.length && bestIdx < counts.length) {
-                    gap.phraseBarCount = counts[bestIdx] | 0;
+                    gap.rehearsalBarCount = counts[bestIdx] | 0;
                 }
             }
         }
@@ -68,12 +78,12 @@
     /** 境界誤差レベルの微小無音（例: 41.247–41.250s）を除外 */
     function filterNegligibleSilentGaps(gaps, eps) {
         if (!gaps.length) return gaps;
-        const counts = expandedPhraseGroupBarCountsSnapshot();
-        const ranges = phraseSlotRangesSnapshot();
+        const counts = expandedRehearsalGroupBarCountsSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         return gaps.filter((gap) => {
             const dur = gap.endSec - gap.startSec;
             if (!(dur > eps * 4)) return false;
-            const pi = Number.isFinite(gap.phraseIndex) ? gap.phraseIndex | 0 : -1;
+            const pi = Number.isFinite(gap.rehearsalIndex) ? gap.rehearsalIndex | 0 : -1;
             if (pi >= 0 && ranges[pi] && counts[pi] > 0) {
                 const slotDur = ranges[pi].endSec - ranges[pi].startSec;
                 const bars = counts[pi] | 0;
@@ -86,18 +96,18 @@
     }
 
     /**
-     * フレーズ先頭に置かれたリージョンより後ろの trailing 無音を除外する。
-     * 非対称 swap 後に phrase 枠内へリージョン＋無音が二重に見えるのを防ぐ。
+     * Rehearsal 区間先頭に置かれたリージョンより後ろの trailing 無音を除外する。
+     * 非対称 swap 後に rehearsal 枠内へリージョン＋無音が二重に見えるのを防ぐ。
      */
-    function suppressTrailingSilentGapsAfterPhraseAnchoredRegions(track, gaps, eps) {
+    function suppressTrailingSilentGapsAfterRehearsalAnchoredRegions(track, gaps, eps) {
         if (!gaps.length) return gaps;
-        const ranges = phraseSlotRangesSnapshot();
+        const ranges = rehearsalSlotRangesSnapshot();
         if (!ranges.length) return gaps;
         const segments = getTrackSegments(track);
         const anchoredOut = new Map();
         for (let si = 0; si < segments.length; si++) {
             const regionIn = getSegmentRegionTimelineIn(track, si);
-            const pi = phraseSlotIndexAtRegionInSec(regionIn);
+            const pi = rehearsalSlotIndexAtRegionInSec(regionIn);
             if (pi == null || pi < 0) continue;
             const r = ranges[pi];
             if (!r || !Number.isFinite(r.startSec)) continue;
@@ -109,7 +119,7 @@
         }
         if (!anchoredOut.size) return gaps;
         return gaps.filter((gap) => {
-            const pi = Number.isFinite(gap.phraseIndex) ? gap.phraseIndex | 0 : -1;
+            const pi = Number.isFinite(gap.rehearsalIndex) ? gap.rehearsalIndex | 0 : -1;
             if (pi < 0) return true;
             const regionOut = anchoredOut.get(pi);
             if (regionOut == null) return true;
@@ -144,12 +154,12 @@
     }
 
     /**
-     * フレーズモード: 各 Phrase スロットからリージョンのタイムライン占有を引いた無音区間。
+     * Rehearsal モード: 各 Rehearsal スロットからリージョンのタイムライン占有を引いた無音区間。
      * Region In だけがスロット内にあっても、クリック位置が音源 span 外なら選択可能。
      */
-    function collectPhraseModeUncoveredSilentIntervals(track, eps) {
-        if (typeof getPhraseGroupRangesSnapshot !== 'function') return [];
-        const ranges = getPhraseGroupRangesSnapshot();
+    function collectRehearsalModeUncoveredSilentIntervals(track, eps) {
+        if (typeof getRehearsalGroupRangesSnapshot !== 'function') return [];
+        const ranges = getRehearsalGroupRangesSnapshot();
         if (!ranges.length) return [];
         const segments = getTrackSegments(track);
         const gaps = [];
@@ -159,7 +169,7 @@
             if (!r || !(r.endSec - r.startSec > eps)) continue;
             const covers = [];
             for (let si = 0; si < segments.length; si++) {
-                const cover = getSegmentPhraseCoverageInterval(track, si);
+                const cover = getSegmentRehearsalCoverageInterval(track, si);
                 const lo = Math.max(r.startSec, cover.startSec);
                 const hi = Math.min(r.endSec, cover.endSec);
                 if (hi - lo > eps) {
@@ -174,7 +184,7 @@
                 gaps.push({
                     startSec: part.startSec,
                     endSec: part.endSec,
-                    phraseIndex: pi,
+                    rehearsalIndex: pi,
                     partial: merged.length > 0,
                 });
             }
@@ -182,25 +192,24 @@
 
         gaps.sort((a, b) => a.startSec - b.startSec);
         let mergedGaps = mergeAdjacentSilentGapIntervals(gaps, eps);
-        mergedGaps = suppressTrailingSilentGapsAfterPhraseAnchoredRegions(track, mergedGaps, eps);
+        mergedGaps = suppressTrailingSilentGapsAfterRehearsalAnchoredRegions(track, mergedGaps, eps);
         mergedGaps = filterNegligibleSilentGaps(mergedGaps, eps);
-        mergedGaps = refreshSilentGapPhraseMetadata(mergedGaps);
+        mergedGaps = refreshSilentGapRehearsalMetadata(mergedGaps);
         attachSilentGapNeighborIndices(mergedGaps, track, eps);
         return mergedGaps;
     }
 
-    /** タイムライン上の無音隙間（非フレーズ: セグメント間／フレーズ: 1 スロット = 1 リージョン） */
+    /** タイムライン上の無音隙間（Rehearsal 着色 ON 時は枠内 uncovered、OFF 時はセグメント間） */
     function collectTrackSilentGaps(track) {
         const segments = getTrackSegments(track);
         if (!segments.length) return [];
         const eps = segmentBoundaryJoinEpsilonSec();
 
-        const phraseMode =
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible();
-
-        if (phraseMode) {
-            return collectPhraseModeUncoveredSilentIntervals(track, eps);
+        if (
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
+        ) {
+            return collectRehearsalModeUncoveredSilentIntervals(track, eps);
         }
 
         const t0 = getTrackTimelineStartSec(track);
@@ -274,7 +283,7 @@
         const gaps = collectTrackSilentGaps(track);
         return gaps.map((gap, i) => ({
             listIndex: i,
-            phraseSlot: Number.isFinite(gap.phraseIndex) ? (gap.phraseIndex | 0) + 1 : null,
+            rehearsalSlot: Number.isFinite(gap.rehearsalIndex) ? (gap.rehearsalIndex | 0) + 1 : null,
             partial: !!gap.partial,
             start: regionSwapDiagFmtSec(gap.startSec),
             end: regionSwapDiagFmtSec(gap.endSec),
@@ -294,20 +303,20 @@
         }
         const gapIndex = resolveSilentGapListIndexAtTransport(track, transportSec);
         const gaps = collectTrackSilentGaps(track);
-        const phraseExpanded = phraseSlotIndexAtTransportSec(transportSec);
-        const ranges = phraseSlotRangesSnapshot();
-        const phraseRange =
-            phraseExpanded != null && ranges[phraseExpanded | 0]
-                ? ranges[phraseExpanded | 0]
+        const rehearsalExpanded = rehearsalSlotIndexAtTransportSec(transportSec);
+        const ranges = rehearsalSlotRangesSnapshot();
+        const rehearsalRange =
+            rehearsalExpanded != null && ranges[rehearsalExpanded | 0]
+                ? ranges[rehearsalExpanded | 0]
                 : null;
         const anchored =
-            phraseExpanded != null &&
-            isPhraseSlotWithoutAnchoredRegion(track, phraseExpanded | 0, ranges) === false;
+            rehearsalExpanded != null &&
+            isRehearsalSlotWithoutAnchoredRegion(track, rehearsalExpanded | 0, ranges) === false;
         let regionUnderSpan = null;
         const segments = getTrackSegments(track);
         const eps = segmentBoundaryJoinEpsilonSec();
         for (let si = 0; si < segments.length; si++) {
-            const cover = getSegmentPhraseCoverageInterval(track, si);
+            const cover = getSegmentRehearsalCoverageInterval(track, si);
             if (
                 transportSec >= cover.startSec - eps &&
                 transportSec < cover.endSec - eps
@@ -323,28 +332,28 @@
                 ex: slot + 1,
                 transportSec: regionSwapDiagFmtSec(transportSec),
                 gapIndex,
-                phraseSlot: gap && Number.isFinite(gap.phraseIndex) ? (gap.phraseIndex | 0) + 1 : null,
+                rehearsalSlot: gap && Number.isFinite(gap.rehearsalIndex) ? (gap.rehearsalIndex | 0) + 1 : null,
                 partial: !!(gap && gap.partial),
                 regionUnderSpan,
-                phraseExpanded: phraseExpanded != null ? phraseExpanded + 1 : null,
+                rehearsalExpanded: rehearsalExpanded != null ? rehearsalExpanded + 1 : null,
             };
         }
         let reason = 'transport-outside-silent-gaps';
-        if (phraseExpanded == null) reason = 'phrase-slot-unresolved';
-        else if (!phraseRange) reason = 'phrase-range-missing';
+        if (rehearsalExpanded == null) reason = 'rehearsal-slot-unresolved';
+        else if (!rehearsalRange) reason = 'rehearsal-range-missing';
         else if (regionUnderSpan != null) reason = 'under-region-span';
-        else if (anchored) reason = 'phrase-slot-has-region-in';
-        else reason = 'phrase-empty-not-listed';
+        else if (anchored) reason = 'rehearsal-slot-has-region-in';
+        else reason = 'rehearsal-empty-not-listed';
         return {
             ok: false,
             reason,
             ex: slot + 1,
             transportSec: regionSwapDiagFmtSec(transportSec),
-            phraseExpanded: phraseExpanded != null ? phraseExpanded + 1 : null,
-            phraseRange: phraseRange
+            rehearsalExpanded: rehearsalExpanded != null ? rehearsalExpanded + 1 : null,
+            rehearsalRange: rehearsalRange
                 ? {
-                      start: regionSwapDiagFmtSec(phraseRange.startSec),
-                      end: regionSwapDiagFmtSec(phraseRange.endSec),
+                      start: regionSwapDiagFmtSec(rehearsalRange.startSec),
+                      end: regionSwapDiagFmtSec(rehearsalRange.endSec),
                   }
                 : null,
             regionUnderSpan,
@@ -377,10 +386,10 @@
         return pruned;
     }
 
-    /** 無音↔リージョン入れ替え時の移動先（フレーズ空きはフレーズ範囲先頭） */
+    /** 無音↔リージョン入れ替え時の移動先（Rehearsal 区間空きはRehearsal 区間範囲先頭） */
     function silentGapMoveTargetSec(gap, track) {
-        const slot = phraseSlotIndexForSilentGap(gap, track);
-        const start = slot != null ? phraseSlotStartSec(slot) : null;
+        const slot = rehearsalSlotIndexForSilentGap(gap, track);
+        const start = slot != null ? rehearsalSlotStartSec(slot) : null;
         if (start != null) return start;
         return gap ? gap.startSec : 0;
     }

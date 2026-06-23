@@ -77,6 +77,18 @@
             shift: false,
             alt: false,
         },
+        transportSeekHomeStart: {
+            code: 'Home',
+            primary: true,
+            shift: false,
+            alt: false,
+        },
+        transportSeekHomeEnd: {
+            code: 'End',
+            primary: true,
+            shift: false,
+            alt: false,
+        },
         rangeLoopPageUp10: {
             code: 'PageUp',
             primary: true,
@@ -100,31 +112,28 @@
             alt: false,
             shift: false,
         },
-        musicalGridPhraseToggle: {
-            code: 'KeyP',
+        musicalGridRehearsalToggle: {
+            code: 'KeyR',
             primary: false,
             ctrl: false,
             meta: false,
             alt: false,
             shift: false,
         },
-        musicalGridMeterFocus: {
-            code: 'KeyT',
+        rehearsalMarkInsert: {
+            code: 'KeyR',
+            primary: true,
+            shift: true,
+            alt: false,
+        },
+        analyzeToggle: {
+            code: 'KeyA',
             primary: false,
             ctrl: false,
             meta: false,
-            alt: true,
+            alt: false,
             shift: false,
         },
-        musicalGridPhraseFocus: {
-            code: 'KeyP',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: true,
-            shift: false,
-        },
-        analyzeToggle: { code: 'KeyA', primary: false, ctrl: false, meta: false, alt: false },
         metronomeClickToggle: {
             code: 'KeyC',
             primary: false,
@@ -133,14 +142,7 @@
             alt: false,
             shift: false,
         },
-        rehearsalMarkOffsetToggle: {
-            code: 'KeyR',
-            primary: false,
-            ctrl: false,
-            meta: false,
-            alt: false,
-            shift: false,
-        },
+
         layoutModeToggle: {
             code: 'KeyH',
             primary: false,
@@ -156,7 +158,8 @@
             meta: false,
             alt: false,
             shift: false,
-        }, // 開発者向け定数（診断ログ・リージョン操作帯・タイムストレッチ検証）
+        }, // 開発者向け定数（診断ログ・操作帯デバッグ描画・タイムストレッチ検証）
+        logDownload: { code: 'KeyD', primary: true, shift: true, alt: false }, // F10 いずれか ON 時のみ
 
         // ---------- セッション I/O ----------
         sessionAllClear: { code: 'Delete', primary: true, shift: true, alt: true },
@@ -206,7 +209,7 @@
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
         regionSelectAll: { code: 'KeyA', primary: true, shift: false, alt: false },
         regionSelectAtSeekbar: {
-            codes: ['Enter', 'NumpadEnter'],
+            keys: ['Enter'],
             ctrl: false,
             meta: false,
             alt: false,
@@ -215,7 +218,7 @@
         },
         regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
         regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
-        // Phrase 着色 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
+        // Rehearsal 表示 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
         regionInNudge: { code: 'KeyI', ctrl: false, meta: false, alt: false, shift: true, primary: false },
         regionOutNudge: { code: 'KeyO', ctrl: false, meta: false, alt: false, shift: true, primary: false },
         regionEscape: { code: 'Escape', ctrl: false, alt: false, meta: false },
@@ -319,8 +322,23 @@
             alt: false,
             shift: false,
         },
-        waveformLaneSeekHome: { code: 'Home' },
-        waveformLaneSeekEnd: { code: 'End' },
+        /** Tempo/Sig ON 時 — 修飾キーなし Home/End で前後の小節線へ（Rehearsal 境界・マーカーは含まない） */
+        musicalGridBarNavPrev: {
+            code: 'Home',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
+        musicalGridBarNavNext: {
+            code: 'End',
+            primary: false,
+            ctrl: false,
+            meta: false,
+            alt: false,
+            shift: false,
+        },
         waveformLaneSeekPrev: { code: 'ArrowLeft' },
         waveformLaneSeekNext: { code: 'ArrowRight' },
         waveformTimelineCenterSeekbar: {
@@ -342,17 +360,13 @@
 
         // ---------- 修飾キー ----------
         altSnapModifier: { key: 'Alt' },
-
-        // ---------- Musical Grid 入力欄 ----------
-        musicalGridInputArrowUp: { key: 'ArrowUp' },
-        musicalGridInputArrowDown: { key: 'ArrowDown' },
     };
 
     // 内部で使う確定値。通常は編集不要。
     const INTERNAL_SHORTCUTS = {};
     const SHORTCUTS = Object.freeze({ ...USER_SHORTCUTS, ...INTERNAL_SHORTCUTS });
 
-    // 補助マップ: 0-9（テンキー／数字キー）は「全体を10分割した位置」へジャンプ。
+    // 補助マップ: 0-9（上段数字キー／テンキー）は尺の 0/10〜9/10 へジャンプ（小節ジャンプは G ダイアログ）。
     const NUMPAD_SEEK_DIGITS = Object.freeze({
         Digit0: 0,
         Digit1: 1,
@@ -385,6 +399,8 @@
             'ArrowRight',
             'PageUp',
             'PageDown',
+            'Home',
+            'End',
             'KeyL',
             'KeyA',
             'KeyH',
@@ -502,18 +518,6 @@
         return keyboardShiftHeld;
     }
 
-    /** 小節ジャンプ用 Shift 判定（テンキーは shiftKey が付かないことがある） */
-    function isBarJumpShiftHeld(event) {
-        if (shiftPhysicalDownCount > 0) return true;
-        if (keyboardShiftHeld) return true;
-        if (!event) return false;
-        if (event.shiftKey) return true;
-        if (typeof event.getModifierState === 'function' && event.getModifierState('Shift')) {
-            return true;
-        }
-        return isShiftModifierActive(event);
-    }
-
     function resetShiftModifierTracking() {
         keyboardShiftHeld = false;
         shiftPhysicalDownCount = 0;
@@ -537,25 +541,6 @@
             { capture: true },
         );
         window.addEventListener('blur', resetShiftModifierTracking);
-    }
-
-    /**
-     * リージョン内小節ジャンプ用の数字。
-     * - テンキー: Shift 不要（OS が Shift を付与しないため）
-     * - 上段数字キー: Shift 必須（修飾なしは % ジャンプ）
-     */
-    function getRegionBarJumpDigit(event) {
-        if (!event || event.ctrlKey || event.metaKey || event.altKey) return null;
-        const digit = getNumpadSeekDigit(event.code);
-        if (digit == null) return null;
-        if (isNumpadDigitKeyCode(event.code)) return digit;
-        if (isTopRowDigitKeyCode(event.code) && isBarJumpShiftHeld(event)) return digit;
-        return null;
-    }
-
-    /** Shift + 0–9 — getRegionBarJumpDigit のエイリアス（後方互換） */
-    function getShiftSeekDigit(event) {
-        return getRegionBarJumpDigit(event);
     }
 
     initShiftModifierTracking();
@@ -653,13 +638,10 @@
             addExtraTrack: formatShortcutDef(s.addExtraTrack),
             markerHide: formatShortcutDef(s.markerHideToggle),
             analyze: formatShortcutDef(s.analyzeToggle),
-            metronomeClick: formatShortcutDef(s.metronomeClickToggle),
-            rehearsalMarkOffset: formatShortcutDef(s.rehearsalMarkOffsetToggle),
-            layoutMode: formatShortcutDef(s.layoutModeToggle),
+        metronomeClick: formatShortcutDef(s.metronomeClickToggle),
+        layoutMode: formatShortcutDef(s.layoutModeToggle),
             musicalGrid: formatShortcutDef(s.musicalGridToggle),
-            musicalPhrase: formatShortcutDef(s.musicalGridPhraseToggle),
-            musicalGridMeterFocus: formatShortcutDef(s.musicalGridMeterFocus),
-            musicalGridPhraseFocus: formatShortcutDef(s.musicalGridPhraseFocus),
+            musicalRehearsal: formatShortcutDef(s.musicalGridRehearsalToggle),
             sessionImport: formatShortcutDef(s.sessionImport),
             sessionExport: formatShortcutDef(s.sessionExport),
             sessionAllClear: formatShortcutDef(s.sessionAllClear),
@@ -674,6 +656,15 @@
             waveformLaneHeight: chordWithArrows(['Shift', 'Ctrl'], 'ArrowUp', 'ArrowDown'),
             waveformTimelineCenterSeekbar: formatShortcutDef(s.waveformTimelineCenterSeekbar),
             markerStopJump: chordWithArrows(['Ctrl'], 'ArrowLeft', 'ArrowRight'),
+            musicalGridBarNav: chordWithArrows([], 'Home', 'End'),
+            transportSeekStart:
+                formatShortcutDef(s.transportSeekPageStart) +
+                ' / ' +
+                formatShortcutDef(s.transportSeekHomeStart),
+            transportSeekEnd:
+                formatShortcutDef(s.transportSeekPageEnd) +
+                ' / ' +
+                formatShortcutDef(s.transportSeekHomeEnd),
             tcNudgeFrame: chordWithArrows([], 'NumpadAdd', 'NumpadSubtract'),
             tcNudgeSec: chordWithArrows(['Shift'], 'NumpadAdd', 'NumpadSubtract'),
             tcClearOut: formatShortcutDef(s.markerPanelTcDeleteOut),
@@ -734,25 +725,7 @@
         setElementTitle(lanes, msg('tooltip.waveformLanes', h));
 
         const gridTitle = msg('tooltip.musicalGrid', h);
-        const gridChk = document.getElementById('musicalGridVisibleCheckbox');
-        setElementTitle(gridChk, gridTitle);
-        if (gridChk) {
-            const gridLbl = gridChk.closest('label');
-            setElementTitle(gridLbl, gridTitle);
-        }
-
-        const phraseTitle = msg('tooltip.musicalPhrase', h);
-        const phraseChk = document.getElementById('musicalGridPhraseFillCheckbox');
-        setElementTitle(phraseChk, phraseTitle);
-        if (phraseChk) {
-            const phraseLbl = phraseChk.closest('label');
-            setElementTitle(phraseLbl, phraseTitle);
-        }
-
-        const meterInputTitle = msg('tooltip.musicalGridMeterInput', h);
-        setElementTitle(document.getElementById('musicalGridMeterInput'), meterInputTitle);
-        const phraseInputTitle = msg('tooltip.musicalGridPhraseInput', h);
-        setElementTitle(document.getElementById('musicalGridPhraseInput'), phraseInputTitle);
+        setElementTitle(document.getElementById('musicalGridVisibleCheckbox'), gridTitle);
 
         const analyzeTitle = msg('tooltip.analyzeCheckbox', h);
         setElementTitle(document.getElementById('analyzeOnCheckbox'), analyzeTitle);
@@ -764,15 +737,6 @@
             document.getElementById('metronomeClickToggleWrap'),
             msg('tooltip.metronomeClickWrap', h),
         );
-
-        const offsetTitle = msg('tooltip.rehearsalMarkOffset', h);
-        setElementTitle(document.getElementById('rehearsalMarkOffsetWrap'), offsetTitle);
-        const offsetChk = document.getElementById('rehearsalMarkOffsetCheckbox');
-        setElementTitle(offsetChk, offsetTitle);
-        if (offsetChk) {
-            const offsetLbl = offsetChk.closest('label');
-            setElementTitle(offsetLbl, offsetTitle);
-        }
 
         setElementTitle(document.getElementById('masterVolSlider'), msg('tooltip.masterVolSlider', h));
         setElementTitle(document.getElementById('masterVolWrap'), msg('tooltip.masterVolWrap', h));
@@ -806,6 +770,7 @@
         setElementTitle(document.getElementById('seekBar'), msg('tooltip.seekBar'));
 
         setElementTitle(document.getElementById('logCopyBtn'), msg('tooltip.logCopy'));
+        setElementTitle(document.getElementById('logDownloadBtn'), msg('tooltip.logDownload'));
         setElementTitle(document.getElementById('logClearBtn'), msg('tooltip.logClear'));
         const logWeOnlyTitle = msg('tooltip.logWeOnly');
         const logWeOnlyCb = document.getElementById('logWeOnlyCheckbox');
@@ -836,6 +801,41 @@
         return matchesShortcut(event, def, opt);
     }
 
+    function isMarkerStopJumpEvent(event, opt) {
+        const o = opt || {};
+        return (
+            matchUserShortcut(event, 'markerStopJumpPrev', o) ||
+            matchUserShortcut(event, 'markerStopJumpNext', o)
+        );
+    }
+
+    function isMarkerStopJumpNextEvent(event, opt) {
+        const o = opt || {};
+        return matchUserShortcut(event, 'markerStopJumpNext', o);
+    }
+
+    function isMusicalGridBarNavEvent(event, opt) {
+        const o = opt || {};
+        return (
+            matchUserShortcut(event, 'musicalGridBarNavPrev', o) ||
+            matchUserShortcut(event, 'musicalGridBarNavNext', o)
+        );
+    }
+
+    function isMusicalGridBarNavNextEvent(event, opt) {
+        const o = opt || {};
+        return matchUserShortcut(event, 'musicalGridBarNavNext', o);
+    }
+
+    function isTransportSeekExtremeEvent(event) {
+        return (
+            matchUserShortcut(event, 'transportSeekPageStart') ||
+            matchUserShortcut(event, 'transportSeekPageEnd') ||
+            matchUserShortcut(event, 'transportSeekHomeStart') ||
+            matchUserShortcut(event, 'transportSeekHomeEnd')
+        );
+    }
+
     function matchMixLaneVolumeUp(event, opt) {
         return (
             matchUserShortcut(event, 'mixLaneVolumeUp', opt) ||
@@ -860,15 +860,17 @@
     window.formatShortcutDef = formatShortcutDef;
     window.matchesShortcut = matchesShortcut;
     window.matchUserShortcut = matchUserShortcut;
+    window.isMarkerStopJumpEvent = isMarkerStopJumpEvent;
+    window.isMarkerStopJumpNextEvent = isMarkerStopJumpNextEvent;
+    window.isMusicalGridBarNavEvent = isMusicalGridBarNavEvent;
+    window.isMusicalGridBarNavNextEvent = isMusicalGridBarNavNextEvent;
+    window.isTransportSeekExtremeEvent = isTransportSeekExtremeEvent;
     window.matchMixLaneVolumeUp = matchMixLaneVolumeUp;
     window.matchMixLaneVolumeDown = matchMixLaneVolumeDown;
     window.matchMixLaneVolumeKey = matchMixLaneVolumeKey;
     window.getUserShortcut = getUserShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
-    window.getRegionBarJumpDigit = getRegionBarJumpDigit;
-    window.getShiftSeekDigit = getShiftSeekDigit;
     window.isShiftModifierActive = isShiftModifierActive;
-    window.isBarJumpShiftHeld = isBarJumpShiftHeld;
     window.isNumpadDigitKeyCode = isNumpadDigitKeyCode;
     window.isTopRowDigitKeyCode = isTopRowDigitKeyCode;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;

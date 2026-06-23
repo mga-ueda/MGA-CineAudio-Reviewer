@@ -610,7 +610,13 @@
                 : 0;
 
         let timelineEnd = null;
-        if (typeof getSegmentTimelineEnd === 'function') {
+        if (typeof getSegmentRegionTimelineOut === 'function') {
+            timelineEnd = getSegmentRegionTimelineOut(track, segmentIndex);
+        }
+        if (
+            !(Number.isFinite(timelineEnd) && timelineEnd > playbackStart + 0.00001) &&
+            typeof getSegmentTimelineEnd === 'function'
+        ) {
             timelineEnd = getSegmentTimelineEnd(track, segmentIndex);
         }
         if (

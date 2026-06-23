@@ -36,14 +36,14 @@
         return formatExTrack(slot) + ' R' + ((segmentIndex | 0) + 1);
     }
 
-    function formatPhraseLabelForActionLog(phraseSlotIndex) {
-        const i = phraseSlotIndex | 0;
+    function formatRehearsalLabelForActionLog(rehearsalSlotIndex) {
+        const i = rehearsalSlotIndex | 0;
         if (i < 0) return '?';
-        if (typeof window.rehearsalMarkLabelForPhraseSlotIndex === 'function') {
-            return window.rehearsalMarkLabelForPhraseSlotIndex(i);
+        if (typeof window.rehearsalMarkLabelForRehearsalSlotIndex === 'function') {
+            return window.rehearsalMarkLabelForRehearsalSlotIndex(i);
         }
-        if (typeof window.phraseGroupLabelForIndex === 'function') {
-            return window.phraseGroupLabelForIndex(i);
+        if (typeof window.rehearsalGroupLabelForIndex === 'function') {
+            return window.rehearsalGroupLabelForIndex(i);
         }
         return String(i + 1);
     }
@@ -63,13 +63,13 @@
             parts.push('unit ' + ((unitIndex | 0) + 1));
         }
         const m = slot.musical || {};
-        const phraseIdx = m.phraseSlotIndex | 0;
-        if (phraseIdx >= 0) {
-            parts.push('Phrase ' + formatPhraseLabelForActionLog(phraseIdx));
+        const rehearsalIdx = m.rehearsalSlotIndex | 0;
+        if (rehearsalIdx >= 0) {
+            parts.push('Rehearsal ' + formatRehearsalLabelForActionLog(rehearsalIdx));
         }
-        let bars = m.phraseBarCount | 0;
-        if (!(bars > 0) && countsOpt && phraseIdx >= 0 && phraseIdx < countsOpt.length) {
-            bars = countsOpt[phraseIdx] | 0;
+        let bars = m.rehearsalBarCount | 0;
+        if (!(bars > 0) && countsOpt && rehearsalIdx >= 0 && rehearsalIdx < countsOpt.length) {
+            bars = countsOpt[rehearsalIdx] | 0;
         }
         if (bars > 0) parts.push(bars + ' bars');
         return parts.join(', ');
@@ -100,8 +100,8 @@
         actionLog('Marker', message, opt);
     }
 
-    function logPhraseAction(message, opt) {
-        actionLog('Phrase', message, opt);
+    function logRehearsalAction(message, opt) {
+        actionLog('Rehearsal', message, opt);
     }
 
     function logExAudioAction(message, opt) {
@@ -157,13 +157,13 @@
     window.formatActionTc = formatActionTc;
     window.formatExTrack = formatExTrack;
     window.formatRegionRef = formatRegionRef;
-    window.formatPhraseLabelForActionLog = formatPhraseLabelForActionLog;
+    window.formatRehearsalLabelForActionLog = formatRehearsalLabelForActionLog;
     window.formatSwapUnitActionLabel = formatSwapUnitActionLabel;
     window.formatRegionSwapActionMessage = formatRegionSwapActionMessage;
     window.formatRegionHistoryActionMessage = formatRegionHistoryActionMessage;
     window.logRegionAction = logRegionAction;
     window.logMarkerAction = logMarkerAction;
-    window.logPhraseAction = logPhraseAction;
+    window.logRehearsalAction = logRehearsalAction;
     window.logExAudioAction = logExAudioAction;
     window.logMixAction = logMixAction;
     window.logVideoAction = logVideoAction;

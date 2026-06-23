@@ -12,6 +12,8 @@
         'liteWaveform',
         'waveformLite',
         'rangeLoop',
+        'rehearsalMark',
+        'musicalGridPhraseFillVisible',
     ]);
 
     const ALLOWED_SESSION_ROW_KEYS = new Set([
@@ -24,10 +26,10 @@
         'mBlob',
         'markers',
         'markerMemo',
+        'markersDisplayHidden',
         'playbackRegion',
         'mix',
         'extraTracks',
-        'rehearsalMark',
         'audioOnlySession',
         '__saveStamp',
         '__regionPinnedBySlot',
@@ -36,7 +38,6 @@
     const ALLOWED_IMPORT_SESSION_KEYS = new Set([
         ...ALLOWED_SESSION_ROW_KEYS,
         'videoBlobKey',
-        'rehearsalMark',
     ]);
 
     function findDeprecatedKey(obj, pathPrefix) {
@@ -49,9 +50,143 @@
         return null;
     }
 
+    const MUSICAL_GRID_SNAP_KEYS = new Set([
+        'rehearsal',
+        'rehearsalGroupBarCounts',
+        'gridVisible',
+        'rehearsalFillVisible',
+        'stretchDelta',
+        'tempoTrackEvents',
+        'signatureTrackEvents',
+        'rehearsalMarkTrackEvents',
+    ]);
+
+    const MUSICAL_GRID_LEGACY_SNAP_KEYS = new Set([
+        'meter',
+        'tempo',
+        'timeSignature',
+        'bars',
+        'phrase',
+        'phraseFillVisible',
+        'phraseGroupBarCounts',
+    ]);
+
+    const REGION_SEGMENT_EPS = 1e-6;
+
+    function isLegacyGridOnlyRegionSegment(seg) {
+        if (!seg || typeof seg !== 'object') return false;
+        const inS = Number(seg.sourceInSec) || 0;
+        const outS = Number(seg.sourceOutSec) || 0;
+        return outS - inS <= REGION_SEGMENT_EPS;
+    }
+
+    function validateRegionSegmentEntry(seg, pathPrefix) {
+        if (!seg || typeof seg !== 'object') {
+            return pathPrefix + ' (not an object)';
+        }
+        if (isLegacyGridOnlyRegionSegment(seg)) {
+            return pathPrefix + ' (legacy grid-only segment)';
+        }
+        const lead = Number(seg.regionLeadPadSec) || 0;
+        const regionIn = Number(seg.regionTimelineInSec);
+        const anchor = Number(seg.timelineStartSec);
+        if (
+            lead <= REGION_SEGMENT_EPS &&
+            Number.isFinite(regionIn) &&
+            Number.isFinite(anchor) &&
+            regionIn < anchor - REGION_SEGMENT_EPS
+        ) {
+            return pathPrefix + ' (legacy implicit lead pad)';
+        }
+        return null;
+    }
+
+    function validateRegionSegmentList(segments, pathPrefix) {
+        if (segments == null) return null;
+        if (!Array.isArray(segments)) return pathPrefix + ' (not an array)';
+        for (let i = 0; i < segments.length; i++) {
+            const err = validateRegionSegmentEntry(segments[i], pathPrefix + '[' + i + ']');
+            if (err) return err;
+        }
+        return null;
+    }
+
+    function validateExtraTrackEntry(entry, pathPrefix) {
+        if (!entry || typeof entry !== 'object') {
+            return pathPrefix + ' (not an object)';
+        }
+        if ('regionSegments' in entry) {
+            const segErr = validateRegionSegmentList(entry.regionSegments, pathPrefix + '.regionSegments');
+            if (segErr) return segErr;
+        }
+        return null;
+    }
+
+    function validatePlaybackRegionBlock(playbackRegion, pathPrefix) {
+        if (playbackRegion == null) return null;
+        if (typeof playbackRegion !== 'object') return pathPrefix + ' (not an object)';
+        if ('extra' in playbackRegion) {
+            if (!Array.isArray(playbackRegion.extra)) {
+                return pathPrefix + '.extra (not an array)';
+            }
+            for (let i = 0; i < playbackRegion.extra.length; i++) {
+                const extra = playbackRegion.extra[i];
+                const base = pathPrefix + '.extra[' + i + ']';
+                if (extra && typeof extra === 'object' && 'segments' in extra) {
+                    const segErr = validateRegionSegmentList(extra.segments, base + '.segments');
+                    if (segErr) return segErr;
+                }
+            }
+        }
+        return null;
+    }
+
     function validateMusicalGridSnap(snap, pathPrefix) {
         if (snap == null) return null;
         if (typeof snap !== 'object') return pathPrefix + ' (not an object)';
+        for (const key of Object.keys(snap)) {
+            if (MUSICAL_GRID_LEGACY_SNAP_KEYS.has(key)) {
+                return pathPrefix + '.' + key + ' (legacy field)';
+            }
+            if (!MUSICAL_GRID_SNAP_KEYS.has(key)) {
+                return pathPrefix + '.' + key;
+            }
+        }
+        if ('gridVisible' in snap && typeof snap.gridVisible !== 'boolean') {
+            return pathPrefix + '.gridVisible';
+        }
+        if ('rehearsalFillVisible' in snap && typeof snap.rehearsalFillVisible !== 'boolean') {
+            return pathPrefix + '.rehearsalFillVisible';
+        }
+        if ('stretchDelta' in snap && !Number.isFinite(Number(snap.stretchDelta))) {
+            return pathPrefix + '.stretchDelta';
+        }
+        if ('rehearsalGroupBarCounts' in snap) {
+            if (!Array.isArray(snap.rehearsalGroupBarCounts)) {
+                return pathPrefix + '.rehearsalGroupBarCounts';
+            }
+            for (let i = 0; i < snap.rehearsalGroupBarCounts.length; i++) {
+                const n = Number(snap.rehearsalGroupBarCounts[i]);
+                if (!(Number.isFinite(n) && n > 0)) {
+                    return pathPrefix + '.rehearsalGroupBarCounts[' + i + ']';
+                }
+            }
+        }
+        if ('tempoTrackEvents' in snap) {
+            if (!Array.isArray(snap.tempoTrackEvents)) {
+                return pathPrefix + '.tempoTrackEvents';
+            }
+        }
+        if ('signatureTrackEvents' in snap) {
+            if (!Array.isArray(snap.signatureTrackEvents)) {
+                return pathPrefix + '.signatureTrackEvents';
+            }
+        }
+        if ('rehearsalMarkTrackEvents' in snap) {
+            if (!Array.isArray(snap.rehearsalMarkTrackEvents)) {
+                return pathPrefix + '.rehearsalMarkTrackEvents';
+            }
+        }
         return null;
     }
 
@@ -73,18 +208,6 @@
                     return pathPrefix + '.extraLanesOpen[' + i + ']';
                 }
             }
-        }
-        return null;
-    }
-
-    function validateRehearsalMarkSnap(snap, pathPrefix) {
-        if (snap == null) return null;
-        if (typeof snap !== 'object') return pathPrefix + ' (not an object)';
-        for (const key of Object.keys(snap)) {
-            if (key !== 'offset') return pathPrefix + '.' + key;
-        }
-        if ('offset' in snap && typeof snap.offset !== 'boolean') {
-            return pathPrefix + '.offset';
         }
         return null;
     }
@@ -125,9 +248,20 @@
             if (mgErr) return { valid: false, reason: 'invalid musicalGrid: ' + mgErr };
         }
 
-        if (row.rehearsalMark != null) {
-            const rmErr = validateRehearsalMarkSnap(row.rehearsalMark, 'rehearsalMark');
-            if (rmErr) return { valid: false, reason: 'invalid rehearsalMark: ' + rmErr };
+        if (Array.isArray(row.extraTracks)) {
+            for (let i = 0; i < row.extraTracks.length; i++) {
+                const exErr = validateExtraTrackEntry(row.extraTracks[i], 'extraTracks[' + i + ']');
+                if (exErr) return { valid: false, reason: 'invalid extraTracks: ' + exErr };
+            }
+        }
+
+        if (row.playbackRegion != null) {
+            const prErr = validatePlaybackRegionBlock(row.playbackRegion, 'playbackRegion');
+            if (prErr) return { valid: false, reason: 'invalid playbackRegion: ' + prErr };
+        }
+
+        if ('markersDisplayHidden' in row && typeof row.markersDisplayHidden !== 'boolean') {
+            return { valid: false, reason: 'invalid markersDisplayHidden' };
         }
 
         return { valid: true, reason: '' };
@@ -158,10 +292,33 @@
                 return { valid: false, reason: 'invalid prefs.musicalGridVisible' };
             }
             if (
-                'musicalGridPhraseFillVisible' in prefs &&
-                typeof prefs.musicalGridPhraseFillVisible !== 'boolean'
+                'musicalGridRehearsalFillVisible' in prefs &&
+                typeof prefs.musicalGridRehearsalFillVisible !== 'boolean'
             ) {
-                return { valid: false, reason: 'invalid prefs.musicalGridPhraseFillVisible' };
+                return { valid: false, reason: 'invalid prefs.musicalGridRehearsalFillVisible' };
+            }
+            if (prefs.devConstants != null) {
+                if (typeof prefs.devConstants !== 'object') {
+                    return { valid: false, reason: 'invalid prefs.devConstants' };
+                }
+                if (
+                    prefs.devConstants.debugLog != null &&
+                    typeof prefs.devConstants.debugLog !== 'object'
+                ) {
+                    return { valid: false, reason: 'invalid prefs.devConstants.debugLog' };
+                }
+                if (
+                    'regionHandleHitDebug' in prefs.devConstants &&
+                    typeof prefs.devConstants.regionHandleHitDebug !== 'boolean'
+                ) {
+                    return { valid: false, reason: 'invalid prefs.devConstants.regionHandleHitDebug' };
+                }
+                if (
+                    'tempoStretchSkipApply' in prefs.devConstants &&
+                    typeof prefs.devConstants.tempoStretchSkipApply !== 'boolean'
+                ) {
+                    return { valid: false, reason: 'invalid prefs.devConstants.tempoStretchSkipApply' };
+                }
             }
         }
 

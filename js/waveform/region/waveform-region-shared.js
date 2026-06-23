@@ -8,12 +8,17 @@
     var regionHandleDragKind = null;
     /** スプリット境界移動ドラッグ中（クロスフェードプレビューを抑止） */
     var regionHandleDragSplitBoundary = false;
-    /** Phrase 着色 ON — フレーズグループ境界をリージョンハンドルでドラッグ中 */
-    var regionHandleDragPhraseBoundary = false;
-    var regionHandleDragPhraseBoundaryCtx = null;
-    var regionHandleDragPhraseBoundaryLatestCounts = null;
+    /** Rehearsal 着色 ON — Rehearsal 区間グループ境界をリージョンハンドルでドラッグ中 */
+    var regionHandleDragRehearsalBoundary = false;
+    var regionHandleDragRehearsalBoundaryCtx = null;
+    var regionHandleDragRehearsalBoundaryLatestCounts = null;
     var regionHandleDragPointerId = null;
     var regionHandleDragStartClientX = NaN;
+    /** In/Out ドラッグ開始時の幾何（ジェスチャー全体で絶対位置を計算） */
+    var regionHandleDragStartRegionIn = NaN;
+    var regionHandleDragStartAnchorSec = NaN;
+    var regionHandleDragStartSourceInSec = NaN;
+    var regionHandleDragStartSourceOutSec = NaN;
     var regionHandleDragDidMove = false;
     var regionHandleDragCaptureEl = null;
     var regionHandleDragDocMove = null;

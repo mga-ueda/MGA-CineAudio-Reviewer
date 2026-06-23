@@ -446,7 +446,7 @@
     }
 
     function schedulePersistSession() {
-        if (sessionRestoreInProgress) return;
+        if (sessionRestoreInProgress || sessionRestoreTeardownPending) return;
         clearTimeout(persistSessionTimer);
         if (typeof setSessionSaveDebounceActive === 'function') {
             setSessionSaveDebounceActive('session', true);
@@ -528,13 +528,9 @@
                 }
                 if (sessionRestoreActiveWorkToken === workToken) {
                     sessionRestoreActiveWorkToken = null;
-                    sessionRestoreInProgress = false;
                 }
                 if (typeof updateSessionAllClearButton === 'function') {
                     updateSessionAllClearButton();
-                }
-                if (typeof schedulePersistSession === 'function') {
-                    schedulePersistSession();
                 }
             }
         };
@@ -545,6 +541,7 @@
             } finally {
                 if (isSessionRestoreWorkCancelled(workToken)) return;
                 sessionRestoreTeardownPending = true;
+                sessionRestoreInProgress = false;
                 try {
                     if (typeof waitForSessionWaveformsAndEndRestoreLock === 'function') {
                         await waitForSessionWaveformsAndEndRestoreLock();
@@ -565,9 +562,18 @@
                             );
                         }
                     }
-                    if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
+                    if (typeof refreshRehearsalMarkTrackEventsAfterMasterDurationReady === 'function') {
+                        try {
+                            refreshRehearsalMarkTrackEventsAfterMasterDurationReady();
+                        } catch (_) {}
+                    } else if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
                         try {
                             refreshAllRegionRehearsalMarkLabels();
+                        } catch (_) {}
+                    }
+                    if (typeof refreshMusicalGridTrackEventsAfterMasterDurationReady === 'function') {
+                        try {
+                            refreshMusicalGridTrackEventsAfterMasterDurationReady();
                         } catch (_) {}
                     }
                     if (typeof updateAllPlaybackRegionOverlays === 'function') {
@@ -743,6 +749,7 @@
                 delete row.markerMemo;
             }
         }
+        attachMarkersDisplayHiddenToRow(row);
         if (typeof getMixPersistSnapshot === 'function') {
             row.mix = getMixPersistSnapshot();
         }
@@ -847,6 +854,7 @@
                 delete row.markerMemo;
             }
         }
+        attachMarkersDisplayHiddenToRow(row);
         let persistedRegionSegments = 0;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
@@ -1029,6 +1037,13 @@
         return !!(row && typeof row.markerMemo === 'string' && row.markerMemo.trim());
     }
 
+    function attachMarkersDisplayHiddenToRow(row) {
+        if (!row || typeof row !== 'object') return;
+        if (typeof areMarkersHiddenOnTimeline === 'function') {
+            row.markersDisplayHidden = areMarkersHiddenOnTimeline();
+        }
+    }
+
     function sessionRowHasRestorableContent(row) {
         if (!row || typeof row !== 'object') return false;
         if (row.mBlob && (row.mBlob.size || 0) > 0) return true;
@@ -1058,6 +1073,7 @@
                 delete row.markerMemo;
             }
         }
+        attachMarkersDisplayHiddenToRow(row);
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion) row.playbackRegion = playbackRegion;
@@ -1071,9 +1087,6 @@
                 row.extraTracks = extra;
             }
         }
-        if (typeof getRehearsalMarkPersistSnapshot === 'function') {
-            row.rehearsalMark = getRehearsalMarkPersistSnapshot();
-        }
         /* スペクトラム・メーター床は localStorage のユーザー設定のみ（セッションに含めない） */
     }
 
@@ -1084,8 +1097,48 @@
             v: SESSION_ROW_VERSION,
             loopPlayback: getLoopPlaybackEnabled(),
         };
+        attachMarkersDisplayHiddenToRow(row);
         if (typeof getMusicalGridPersistSnapshot === 'function') {
             row.musicalGrid = getMusicalGridPersistSnapshot();
+        }
+        if (typeof musicalTrackPersistDiagLog === 'function' && row.musicalGrid) {
+            const mg = row.musicalGrid;
+            musicalTrackPersistDiagLog('session/save-row', {
+                hasMusicalGrid: true,
+                meter:
+                    typeof getCommittedMusicalGridMeterText === 'function'
+                        ? getCommittedMusicalGridMeterText()
+                        : '',
+                tempoTrackEvents:
+                    typeof musicalTrackPersistDiagSummarizeTempoEvents === 'function'
+                        ? musicalTrackPersistDiagSummarizeTempoEvents(mg.tempoTrackEvents)
+                        : {
+                              count: Array.isArray(mg.tempoTrackEvents) ? mg.tempoTrackEvents.length : 0,
+                              missing: !Array.isArray(mg.tempoTrackEvents),
+                          },
+                signatureTrackEvents:
+                    typeof musicalTrackPersistDiagSummarizeSignatureEvents === 'function'
+                        ? musicalTrackPersistDiagSummarizeSignatureEvents(mg.signatureTrackEvents)
+                        : {
+                              count: Array.isArray(mg.signatureTrackEvents)
+                                  ? mg.signatureTrackEvents.length
+                                  : 0,
+                              missing: !Array.isArray(mg.signatureTrackEvents),
+                          },
+                rehearsalMarkTrackEvents:
+                    typeof musicalTrackPersistDiagSummarizeRehearsalEvents === 'function'
+                        ? musicalTrackPersistDiagSummarizeRehearsalEvents(mg.rehearsalMarkTrackEvents)
+                        : {
+                              count: Array.isArray(mg.rehearsalMarkTrackEvents)
+                                  ? mg.rehearsalMarkTrackEvents.length
+                                  : 0,
+                              missing: !Array.isArray(mg.rehearsalMarkTrackEvents),
+                          },
+                state:
+                    typeof musicalTrackPersistDiagLiveState === 'function'
+                        ? musicalTrackPersistDiagLiveState()
+                        : null,
+            });
         }
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
@@ -1115,6 +1168,19 @@
 
     window.buildSessionPersistRow = buildSessionPersistRow;
 
+    function clearSessionPersistMemoryState() {
+        lastSessionRowSnapshot = null;
+        for (const slot of Object.keys(regionPersistFloorBySlot)) {
+            delete regionPersistFloorBySlot[slot];
+        }
+        for (const slot of Object.keys(regionPersistFloorPayloadBySlot)) {
+            delete regionPersistFloorPayloadBySlot[slot];
+        }
+        for (const slot of Object.keys(regionPersistEpochSavedBySlot)) {
+            delete regionPersistEpochSavedBySlot[slot];
+        }
+    }
+
     /** All Clear 等: 保存セッションを IndexedDB から完全削除 */
     async function deleteStoredSession() {
         clearTimeout(persistSessionTimer);
@@ -1122,6 +1188,7 @@
         if (typeof setSessionSaveDebounceActive === 'function') {
             setSessionSaveDebounceActive('session', false);
         }
+        clearSessionPersistMemoryState();
         if (!window.indexedDB) return;
         try {
             const db = await openIdb();
@@ -1412,17 +1479,17 @@
                             );
                         }
                     }
-                    if (
-                        prEntry &&
-                        Array.isArray(prEntry.timelineSlots) &&
-                        prEntry.timelineSlots.length &&
-                        typeof window.restoreTimelineSlotsForTrack === 'function'
-                    ) {
-                        window.restoreTimelineSlotsForTrack(
-                            { type: 'extra', slot: entry.slot },
-                            prEntry.timelineSlots,
-                        );
-                    }
+                }
+                if (
+                    prEntry &&
+                    Array.isArray(prEntry.timelineSlots) &&
+                    prEntry.timelineSlots.length &&
+                    typeof window.restoreTimelineSlotsForTrack === 'function'
+                ) {
+                    window.restoreTimelineSlotsForTrack(
+                        { type: 'extra', slot: entry.slot },
+                        prEntry.timelineSlots,
+                    );
                 }
                 if (
                     typeof isExtraTrackLoadedFn === 'function' &&
@@ -1455,6 +1522,16 @@
             writeLog('Extra audio restore: ' + restoredCount + ' track(s) decoded');
         }
         if (restoreAborted()) return;
+        if (typeof finalizeAllPlaybackRegionsAfterSessionRestore === 'function') {
+            try {
+                finalizeAllPlaybackRegionsAfterSessionRestore();
+            } catch (err) {
+                writeLog(
+                    'Extra audio restore: region finalize incomplete — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        }
         if (typeof refreshAllExtraTrackLaneVisibility === 'function') {
             refreshAllExtraTrackLaneVisibility();
         }
@@ -1507,7 +1584,9 @@
     }
 
     async function finishSessionRestoreFromRow(row, opt) {
-        if (typeof resetMarkersDisplayHidden === 'function') {
+        if (typeof applyMarkersDisplayHiddenFromSession === 'function') {
+            applyMarkersDisplayHiddenFromSession(row);
+        } else if (typeof resetMarkersDisplayHidden === 'function') {
             resetMarkersDisplayHidden();
         }
         const o = opt && typeof opt === 'object' ? opt : {};
@@ -1560,9 +1639,9 @@
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
-        if (typeof logSessionRestoreRegionPhraseSnapshot === 'function') {
+        if (typeof logSessionRestoreRegionRehearsalSnapshot === 'function') {
             requestAnimationFrame(() => {
-                logSessionRestoreRegionPhraseSnapshot();
+                logSessionRestoreRegionRehearsalSnapshot();
             });
         }
         requestAnimationFrame(() => {
@@ -1642,19 +1721,63 @@
         if (!row || typeof row !== 'object') return false;
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
+            if (typeof musicalTrackPersistDiagLog === 'function') {
+                const mg = row.musicalGrid;
+                musicalTrackPersistDiagLog('session/apply-row/begin', {
+                    hasMusicalGrid: true,
+                    meter:
+                    typeof getCommittedMusicalGridMeterText === 'function'
+                        ? getCommittedMusicalGridMeterText()
+                        : '',
+                    tempoTrackEvents:
+                        typeof musicalTrackPersistDiagSummarizeTempoEvents === 'function'
+                            ? musicalTrackPersistDiagSummarizeTempoEvents(mg.tempoTrackEvents)
+                            : {
+                                  count: Array.isArray(mg.tempoTrackEvents)
+                                      ? mg.tempoTrackEvents.length
+                                      : 0,
+                                  missing: !Array.isArray(mg.tempoTrackEvents),
+                              },
+                    signatureTrackEvents:
+                        typeof musicalTrackPersistDiagSummarizeSignatureEvents === 'function'
+                            ? musicalTrackPersistDiagSummarizeSignatureEvents(mg.signatureTrackEvents)
+                            : {
+                                  count: Array.isArray(mg.signatureTrackEvents)
+                                      ? mg.signatureTrackEvents.length
+                                      : 0,
+                                  missing: !Array.isArray(mg.signatureTrackEvents),
+                              },
+                    rehearsalMarkTrackEvents:
+                        typeof musicalTrackPersistDiagSummarizeRehearsalEvents === 'function'
+                            ? musicalTrackPersistDiagSummarizeRehearsalEvents(
+                                  mg.rehearsalMarkTrackEvents,
+                              )
+                            : {
+                                  count: Array.isArray(mg.rehearsalMarkTrackEvents)
+                                      ? mg.rehearsalMarkTrackEvents.length
+                                      : 0,
+                                  missing: !Array.isArray(mg.rehearsalMarkTrackEvents),
+                              },
+                    before:
+                        typeof musicalTrackPersistDiagLiveState === 'function'
+                            ? musicalTrackPersistDiagLiveState()
+                            : null,
+                });
+            }
             applyMusicalGridPersistSnapshot(row.musicalGrid);
+            if (typeof musicalTrackPersistDiagLog === 'function') {
+                musicalTrackPersistDiagLog('session/apply-row/done', {
+                    after:
+                        typeof musicalTrackPersistDiagLiveState === 'function'
+                            ? musicalTrackPersistDiagLiveState()
+                            : null,
+                });
+            }
         }
         if (typeof drawMusicalGridOverlay === 'function') {
             drawMusicalGridOverlay();
-        } else if (typeof updatePhraseBoundaryOverlay === 'function') {
-            updatePhraseBoundaryOverlay();
-        }
-        if (typeof applyRehearsalMarkImportSnapshot === 'function') {
-            applyRehearsalMarkImportSnapshot(
-                row.rehearsalMark && typeof row.rehearsalMark === 'object'
-                    ? row.rehearsalMark
-                    : { offset: false },
-            );
+        } else         if (typeof updateRehearsalBoundaryOverlay === 'function') {
+            updateRehearsalBoundaryOverlay();
         }
         if (typeof setSessionMixRestore === 'function') {
             setSessionMixRestore(row.mix);

@@ -174,3 +174,6 @@
     if (typeof initWaveformFocusRestore === 'function') {
         initWaveformFocusRestore();
     }
+    if (typeof initModalOverlayFocusTrap === 'function') {
+        initModalOverlayFocusTrap();
+    }

@@ -54,7 +54,7 @@
             <p class="app-confirm-overlay__title" id="appConfirmTitle"></p>
             <p class="app-confirm-overlay__body" id="appConfirmBody"></p>
             <div class="app-confirm-overlay__actions">
-                <button type="button" id="appConfirmCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="appConfirmCancel" class="session-io-btn">Cansel</button>
                 <button type="button" id="appConfirmOk" class="session-io-btn session-io-btn--export">OK</button>
             </div>
         </div>
@@ -66,9 +66,16 @@
             <p class="app-confirm-overlay__body">Copy と同じ形式（# / In / Out / Feedback、時刻は 00:00:00.000）の表を貼り付けて OK を押してください。</p>
             <textarea id="markerPasteTextarea" class="marker-paste-overlay__textarea" rows="10" spellcheck="false" aria-label="Marker table text"></textarea>
             <div class="app-confirm-overlay__actions">
-                <button type="button" id="markerPasteCancel" class="session-io-btn">キャンセル</button>
+                <button type="button" id="markerPasteCancel" class="session-io-btn">Cansel</button>
                 <button type="button" id="markerPasteOk" class="session-io-btn session-io-btn--export">OK</button>
             </div>
+        </div>
+    </div>
+
+    <div id="regionBarJumpOverlay" class="region-bar-jump-overlay" hidden aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="regionBarJumpOverlayTitle">
+        <div class="region-bar-jump-overlay__box">
+            <p class="region-bar-jump-overlay__title" id="regionBarJumpOverlayTitle">Go to Measure</p>
+            <input type="text" id="regionBarJumpInput" class="region-bar-jump-overlay__input" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" spellcheck="false" aria-label="Measure number">
         </div>
     </div>
 
@@ -129,27 +136,25 @@
     <div class="layout-dock-panel-content layout-dock-panel-content--playback" data-layout-panel="playback" id="layoutDockPanelPlayback">
             <div class="transport-bar transport-bar--playback" id="playerPlaybackBar">
                 <div class="transport-bar__row transport-bar__row--playback" role="group" aria-label="Playback controls">
-                    <div class="transport-opt-box transport-opt-chip transport-opt-box--playback">
-                        <div class="transport-opt-cell transport-opt-cell--playback">
-                            <label class="transport-compact-lbl transport-compact-lbl--row transport-opt-label">
-                                <input type="checkbox" id="loopPlaybackCheckbox" checked>
-                                <span>Loop</span>
-                            </label>
+                    <div
+                        class="transport-opt-chip transport-musical-pos"
+                        id="musicalGridPlayheadPos"
+                        aria-live="polite"
+                       
+                    >--- --- ---:--</div>
+                    <div
+                        class="metronome-click-toggle-container transport-opt-box transport-opt-chip transport-opt-box--playback"
+                        id="metronomeClickToggleWrap"
+                    >
+                        <div class="transport-playback-opt">
+                            <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)">
+                            <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
+                        </div>
+                        <div class="transport-playback-opt">
+                            <input type="checkbox" id="loopPlaybackCheckbox" checked aria-label="Loop playback">
+                            <label class="transport-opt-label" for="loopPlaybackCheckbox">Loop</label>
                         </div>
                     </div>
-                    <a
-                        href="guide.html"
-                        id="transportGuideLink"
-                        class="transport-shortcuts-link transport-opt-chip"
-                       
-                    >How To</a>
-                    <a
-                        href="shortcuts.html"
-                        id="transportShortcutsLink"
-                        class="transport-shortcuts-link transport-opt-chip"
-                       
-                    >Shortcut</a>
-                    <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all">All Clear</button>
                     <button type="button" id="playStopBtn" disabled>Play</button>
                 </div>
             </div>
@@ -207,6 +212,18 @@
     <section class="audio-waveform-composite file-drop-target file-drop-target--both" id="audioWaveformComposite" aria-label="音声波形">
         <div class="audio-waveform-composite__grid">
             <div class="audio-waveform-composite__sidebar">
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--musical" id="musicalRehearsalMeta">
+                    <span class="audio-waveform-lane-meta__title">Rehearsal Mark</span>
+                </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--musical" id="musicalTempoMeta">
+                    <span class="audio-waveform-lane-meta__title">Tempo</span>
+                </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--musical" id="musicalSignatureMeta">
+                    <span class="audio-waveform-lane-meta__title">Signature</span>
+                </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--musical" id="musicalMeasureMeta">
+                    <span class="audio-waveform-lane-meta__title">Measure</span>
+                </div>
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
                     <div class="audio-waveform-lane-meta__row">
                         <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
@@ -243,7 +260,35 @@
                 role="presentation"
             >
                 <div class="audio-waveform-composite__lanes-inner" id="audioWaveformLanesInner">
-                <p class="file-drop-empty-hint file-drop-empty-hint--audio" id="audioDropEmptyHint">Drop extra audio anywhere on the page</p>
+                <div class="audio-waveform-lane audio-waveform-lane--musical audio-waveform-lane--rehearsal" id="musicalRehearsalLane">
+                    <div class="audio-waveform-lane__track musical-track-lane__track" id="musicalRehearsalTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas class="musical-track-lane__grid-canvas" id="musicalRehearsalGridCanvas" aria-hidden="true"></canvas>
+                        <div class="musical-track-lane__segments musical-track-lane__segments--rehearsal-measure" id="musicalRehearsalMeasureSegments" aria-hidden="true"></div>
+                        <div class="musical-track-lane__segments musical-track-lane__segments--rehearsal-mark" id="musicalRehearsalSegments" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--musical audio-waveform-lane--tempo" id="musicalTempoLane">
+                    <div class="audio-waveform-lane__track musical-track-lane__track" id="musicalTempoTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas class="musical-track-lane__grid-canvas" id="musicalTempoGridCanvas" aria-hidden="true"></canvas>
+                        <div class="musical-track-lane__segments" id="musicalTempoSegments" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--musical audio-waveform-lane--signature" id="musicalSignatureLane">
+                    <div class="audio-waveform-lane__track musical-track-lane__track" id="musicalSignatureTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas class="musical-track-lane__grid-canvas" id="musicalSignatureGridCanvas" aria-hidden="true"></canvas>
+                        <div class="musical-track-lane__segments" id="musicalSignatureSegments" aria-hidden="true"></div>
+                    </div>
+                </div>
+                <div class="audio-waveform-lane audio-waveform-lane--musical audio-waveform-lane--measure" id="musicalMeasureLane">
+                    <div class="audio-waveform-lane__track musical-track-lane__track" id="musicalMeasureTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                        <canvas class="musical-track-lane__grid-canvas" id="musicalMeasureGridCanvas" aria-hidden="true"></canvas>
+                        <div class="musical-track-lane__segments musical-track-lane__segments--measure" id="musicalMeasureSegments" aria-hidden="true"></div>
+                    </div>
+                </div>
                 <div class="audio-waveform-lane audio-waveform-lane--video" id="audioWaveformLaneVideo">
                     <div class="audio-waveform-lane__track" id="audioWaveformTrack">
                         <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
@@ -274,6 +319,16 @@
                     aria-hidden="true"
                 ></div>
                 <canvas
+                    class="audio-waveform-composite__rehearsal-fill"
+                    id="audioWaveformRehearsalFill"
+                    aria-hidden="true"
+                ></canvas>
+                <canvas
+                    class="audio-waveform-composite__bar-lines"
+                    id="audioWaveformBarLines"
+                    aria-hidden="true"
+                ></canvas>
+                <canvas
                     class="audio-waveform-composite__musical-grid"
                     id="audioWaveformMusicalGrid"
                     aria-hidden="true"
@@ -297,52 +352,6 @@
     <div class="layout-dock-panel-content layout-dock-panel-content--transport" data-layout-panel="transport" id="layoutDockPanelTransport">
     <div id="transportOptionsSection">
     <div class="transport-bar">
-        <div class="transport-bar__row transport-bar__row--grid">
-            <div
-                class="transport-opt-chip transport-musical-pos"
-                id="musicalGridPlayheadPos"
-                aria-live="polite"
-               
-            >---:--:--</div>
-            <div class="musical-grid-options transport-opt-chip" role="group" aria-label="Musical grid">
-                <label
-                    class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
-                   
-                >
-                    <input type="checkbox" id="musicalGridVisibleCheckbox">
-                    <span>Tempo/Sig</span>
-                </label>
-                <input
-                    type="text"
-                    id="musicalGridMeterInput"
-                    class="transport-text-input musical-grid-input musical-grid-input--meter"
-                    inputmode="decimal"
-                    lang="en"
-                    autocomplete="off"
-                    spellcheck="false"
-                    placeholder="140-4/4"
-                   
-                >
-                <label
-                    class="transport-compact-lbl transport-compact-lbl--row transport-opt-label musical-grid-toggle"
-                   
-                >
-                    <input type="checkbox" id="musicalGridPhraseFillCheckbox">
-                    <span>Phrase</span>
-                </label>
-                <input
-                    type="text"
-                    id="musicalGridPhraseInput"
-                    class="transport-text-input musical-grid-input musical-grid-input--phrase"
-                    inputmode="numeric"
-                    lang="en"
-                    autocomplete="off"
-                    spellcheck="false"
-                    placeholder="1,8"
-                   
-                >
-            </div>
-        </div>
         <div class="transport-bar__options-cluster">
         <div class="transport-bar__row transport-bar__row--secondary">
             <div
@@ -381,17 +390,11 @@
             </div>
         </div>
         <div class="transport-bar__row transport-bar__row--export">
-            <div class="metronome-click-toggle-container transport-opt-chip" id="metronomeClickToggleWrap">
-                <label class="transport-opt-label" for="metronomeClickCheckbox">Click</label>
-                <input type="checkbox" id="metronomeClickCheckbox" aria-label="Metronome click (C to toggle)">
-            </div>
             <div class="analyze-toggle-container transport-opt-chip" id="analyzeToggleWrap">
-                <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
-                <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze（Live のオン/オフ。A で Live/解析停止を切替）">
-            </div>
-            <div class="rehearsal-offset-toggle-container transport-opt-chip" id="rehearsalMarkOffsetWrap">
-                <label class="transport-opt-label" for="rehearsalMarkOffsetCheckbox">R. Offset</label>
-                <input type="checkbox" id="rehearsalMarkOffsetCheckbox" aria-label="Rehearsal mark offset (R. Offset)">
+                <div class="transport-playback-opt">
+                    <input type="checkbox" id="analyzeOnCheckbox" aria-label="Analyze（Live のオン/オフ。A で Live/解析停止を切替）">
+                    <label class="transport-opt-label" for="analyzeOnCheckbox">Analyze</label>
+                </div>
             </div>
             <div class="session-io-cluster" id="sessionIoCluster" role="group" aria-label="Export media selection">
                 <div class="session-export-media transport-opt-chip" id="sessionExportMediaOpts">
@@ -410,6 +413,7 @@
                 <button type="button" id="sessionImportBtn" class="session-io-btn session-io-btn--import">Import Review</button>
                 <button type="button" id="sessionExportBtn" class="session-io-btn session-io-btn--export" disabled>Export Review</button>
                 <button type="button" id="sessionExportVideoBtn" class="session-io-btn session-io-btn--export-video session-io-btn--export-wave" disabled>Export Wave</button>
+                <button type="button" id="sessionAllClearBtn" class="session-io-btn session-io-btn--clear-all">All Clear</button>
             </div>
         </div>
         </div>
@@ -532,7 +536,7 @@
         <summary class="app-doc-fold__summary" id="app-manual-heading">使い方</summary>
         <div class="app-doc-fold__body app-manual">
             <ul>
-                <li>操作手順・画面構成・各機能の説明は <a href="guide.html" target="_blank" rel="noopener noreferrer">guide.html</a>（使い方）を参照してください。トランスポート行 <strong>How To</strong> リンクからも同じページを新しいウィンドウで開けます。</li>
+                <li>操作手順・画面構成・各機能の説明は <a href="guide.html" target="_blank" rel="noopener noreferrer">guide.html</a>（使い方）を参照してください。</li>
             </ul>
         </div>
     </details>
@@ -541,7 +545,7 @@
         <summary class="app-doc-fold__summary" id="app-manual-shortcuts-heading">キーボードショートカット</summary>
         <div class="app-doc-fold__body app-manual">
             <ul>
-                <li>一覧は <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">shortcuts.html</a>（ショートカットリスト）を参照してください。トランスポート行 <strong>Shortcut</strong> リンクからも同じページを開けます。</li>
+                <li>一覧は <a href="shortcuts.html" target="_blank" rel="noopener noreferrer">shortcuts.html</a>（ショートカットリスト）を参照してください。</li>
             </ul>
         </div>
     </details>
@@ -620,6 +624,7 @@
     <script src="js/core/async-utils.js"></script>
     <script src="js/ui/log-core.js"></script>
     <script src="js/ui/prefs-log.js"></script>
+    <script src="js/boot/dev-constants-boot.js"></script>
     <script src="js/ui/log-action-format.js"></script>
     <script src="js/ui/ui-helpers.js"></script>
     <script src="js/musical/mp4-fps.js"></script>
@@ -631,8 +636,12 @@
     <script src="js/waveform/waveform-timeline-zoom.js"></script>
     <script src="js/waveform/waveform-viewport-visual.js"></script>
     <script src="js/musical/musical-grid-meter.js"></script>
+    <script src="js/musical/musical-track-persist-diag.js"></script>
+    <script src="js/musical/musical-grid-align-diag.js"></script>
     <script src="js/musical/musical-grid-ui.js"></script>
-    <script src="js/musical/musical-grid-phrase.js"></script>
+    <script src="js/musical/musical-grid-rehearsal-spec.js"></script>
+    <script src="js/musical/musical-grid-rehearsal.js"></script>
+    <script src="js/musical/musical-grid-tracks.js"></script>
     <script src="js/musical/musical-grid-ops.js"></script>
     <script src="js/transport/player-timecode-overlay.js"></script>
     <script src="js/transport/timecode-seek.js"></script>
@@ -648,7 +657,7 @@
     <script src="js/waveform/region/waveform-region-selection.js"></script>
     <script src="js/waveform/region/waveform-region-boundary-join.js"></script>
     <script src="js/waveform/region/waveform-region-playback-map.js"></script>
-    <script src="js/waveform/region/waveform-region-phrase.js"></script>
+    <script src="js/waveform/region/waveform-region-rehearsal.js"></script>
     <script src="js/waveform/region/waveform-region-silent-gaps.js"></script>
     <script src="js/vendor/SignalsmithStretch.js"></script>
     <script src="js/audio/signalsmith-stretch-main-thread.js"></script>
@@ -673,7 +682,9 @@
     <script src="js/waveform/region/waveform-region-ui.js"></script>
     <script src="js/waveform/region/waveform-region-io.js"></script>
     <script src="js/musical/timeline-musical-slots-diag.js"></script>
+    <script src="js/musical/musical-swap-planner.js"></script>
     <script src="js/musical/timeline-musical-slots.js"></script>
+    <script src="js/musical/timeline-musical-slots-invariant.js"></script>
     <script src="js/audio/loudness-lkfs.js"></script>
     <script src="js/audio/audio-decode.js"></script>
     <script src="js/waveform/audio-waveform-scrub.js"></script>
@@ -705,6 +716,7 @@
     <script src="js/markers/markers-overlay.js"></script>
     <script src="js/markers/markers-copy-paste.js"></script>
     <script src="js/markers/markers-ops.js"></script>
+    <script src="js/markers/marker-pointer-diag.js"></script>
     <script src="js/markers/markers-list-waveform.js"></script>
     <script src="js/markers/markers-init.js"></script>
     <script src="js/media/drop-files.js"></script>

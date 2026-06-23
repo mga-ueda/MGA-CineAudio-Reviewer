@@ -17,8 +17,8 @@
         lane.classList.toggle('audio-waveform-lane--has-regions', hasRegions);
         if (
             hadRegions !== hasRegions &&
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible()
         ) {
             if (typeof scheduleMusicalGridRedraw === 'function') {
                 scheduleMusicalGridRedraw();
@@ -32,7 +32,7 @@
         ) {
             renderAudioWaveformMarkers();
         }
-        syncTrackPhraseRehearsalMarks(track);
+        syncTrackRehearsalRehearsalMarks(track);
     }
 
     function buildSilentGapOverlayEl(track, gapIndex, gap, slotsOpt) {
@@ -41,16 +41,15 @@
         el.dataset.silentGapIndex = String(gapIndex);
         el.setAttribute('aria-hidden', 'true');
         let title = '無音スロット';
-        if (Number.isFinite(gap.phraseIndex)) {
-            if (typeof phraseGroupLabelForIndex === 'function') {
-                const mark = phraseGroupLabelForIndex(gap.phraseIndex);
+        if (Number.isFinite(gap.rehearsalIndex)) {
+            if (typeof rehearsalGroupLabelForIndex === 'function') {
+                const mark = rehearsalGroupLabelForIndex(gap.rehearsalIndex);
                 if (mark) title += '（リハーサル名 ' + mark + ' 付近）';
             }
             if (gap.partial) title += '（部分無音）';
         }
-        title += ' — Ctrl+クリックで選択（Phrase 着色（P）ON 時は E で入れ替え可）';
+        title += ' — Ctrl+クリックで選択';
         el.title = title;
-        appendSwapUnitMusicalMetaToEl(track, el, { silentGapIndex: gapIndex | 0 }, slotsOpt);
         if (isSilentGapEntrySelected(track.slot, gapIndex)) {
             el.classList.add('audio-waveform-lane__playback-silent-gap--selected');
         }
@@ -103,7 +102,7 @@
             handleIn.title =
                 'リージョン ' +
                 (segmentIndex + 1) +
-                ' の In（ドラッグでソース開始位置。Phrase 着色（P）OFF 時 ' +
+                ' の In（ドラッグでソース開始位置。Rehearsal 表示（R）OFF 時 ' +
                 nudgeInKey +
                 ' で1拍前へ）';
             el.appendChild(handleIn);
@@ -116,7 +115,7 @@
             handleOut.title =
                 'リージョン ' +
                 (segmentIndex + 1) +
-                ' の Out（ドラッグでソース終了位置。Phrase 着色（P）OFF 時 ' +
+                ' の Out（ドラッグでソース終了位置。Rehearsal 表示（R）OFF 時 ' +
                 nudgeOutKey +
                 ' で1拍後方へ）';
             el.appendChild(handleOut);
@@ -200,18 +199,6 @@
         pitchLabel.hidden = !pitchText;
         pitchLabel.setAttribute('aria-hidden', pitchText ? 'false' : 'true');
         el.appendChild(pitchLabel);
-        if (shouldShowMusicalMetaOnSegment(track, segmentIndex)) {
-            const restoreBusy =
-                typeof isSessionRestoreBusy === 'function' && isSessionRestoreBusy();
-            if (!restoreBusy || (Array.isArray(slotsOpt) && slotsOpt.length)) {
-                appendSwapUnitMusicalMetaToEl(
-                    track,
-                    el,
-                    { segmentIndex: segmentIndex | 0 },
-                    slotsOpt,
-                );
-            }
-        }
         const cursorLine = document.createElement('div');
         cursorLine.className = 'audio-waveform-lane__playback-region__cursor-line';
         cursorLine.setAttribute('aria-hidden', 'true');
@@ -261,7 +248,7 @@
             trackStart,
             getSegmentRegionTimelineIn(track, segmentIndex),
         );
-        const outTransport = getSegmentTimelineEnd(track, segmentIndex);
+        const outTransport = getSegmentRegionTimelineOut(track, segmentIndex);
         const leftPct =
             typeof transportSecToTimelineLeftPercent === 'function'
                 ? transportSecToTimelineLeftPercent(inTransport)
@@ -280,11 +267,19 @@
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
         const regionDur = Math.max(0.001, outTransport - inTransport);
         const playbackFromRegion = Math.max(0, playbackStart - inTransport);
+        const leadPad = getSegmentRegionLeadPadSec(track, segmentIndex);
+        const playbackOffsetRatio = Math.max(0, Math.min(1, playbackFromRegion / regionDur));
+        if (leadPad > 0.00001) {
+            el.classList.add('audio-waveform-lane__playback-region--lead-pad');
+            el.style.setProperty('--region-playback-offset', playbackOffsetRatio * 100 + '%');
+        } else {
+            el.classList.remove('audio-waveform-lane__playback-region--lead-pad');
+            el.style.removeProperty('--region-playback-offset');
+        }
         const fadeInSec = getSegmentFadeDurationSec(track, segmentIndex, 'in');
         const fadeOutSec = getSegmentFadeDurationSec(track, segmentIndex, 'out');
         const fadeInRatio = Math.max(0, Math.min(1, fadeInSec / regionDur));
         const fadeOutRatio = Math.max(0, Math.min(1, fadeOutSec / regionDur));
-        const playbackOffsetRatio = Math.max(0, Math.min(1, playbackFromRegion / regionDur));
 
         const fadeCurve = el.querySelector('.audio-waveform-lane__playback-region__fade-curve');
         if (fadeCurve) {

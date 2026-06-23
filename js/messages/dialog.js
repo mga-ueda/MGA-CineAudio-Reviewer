@@ -3,7 +3,7 @@
  */
 (function messagesDialogModule() {
     registerMessages({
-        'dialog.common.cancel': 'キャンセル',
+        'dialog.common.cancel': 'Cansel',
         'dialog.common.ok': 'OK',
         'dialog.common.cancelTitle': '確認ダイアログを閉じる',
         'dialog.common.okTitle': 'この内容で確定',
@@ -61,5 +61,8 @@
         'dialog.extraAudio.cannotLoadTitle': 'Cannot load extra audio',
         'dialog.extraAudio.tooLargeBody': (p) =>
             'File size (' + p.mb + ' MB) exceeds the limit (' + p.limitMb + ' MB).',
+
+        'dialog.regionBarJump.title': 'Go to Measure',
+        'dialog.regionBarJump.inputLabel': 'Measure number',
     });
 })();

@@ -87,7 +87,7 @@
     }
     /**
      * タイムライン順の隣接 Region Out/In を整列（移動由来の sub-frame 誤差のみ）。
-     * - 重なり解消: |gap| ≲ eps×8 のみ（大きな重なりは phrase 配置の結果 — 触らない）
+     * - 重なり解消: |gap| ≲ eps×8 のみ（大きな重なりは rehearsal 配置の結果 — 触らない）
      * - 微小隙間: 同閾値以内かつ segment index がタイムライン順と一致するときのみ
      * - タイムライン順が segment index 逆転（入れ替え直後）のペアはスキップ
      */
@@ -131,12 +131,12 @@
                 if (!isOverlap && !isMicroGap) continue;
                 const targetIn = prevOut;
                 if (isMicroGap) {
-                    const phraseBefore = phraseSlotIndexAtRegionInSec(curIn);
-                    const phraseAfter = phraseSlotIndexAtRegionInSec(targetIn);
+                    const rehearsalBefore = rehearsalSlotIndexAtRegionInSec(curIn);
+                    const rehearsalAfter = rehearsalSlotIndexAtRegionInSec(targetIn);
                     if (
-                        phraseBefore != null &&
-                        phraseAfter != null &&
-                        phraseBefore !== phraseAfter
+                        rehearsalBefore != null &&
+                        rehearsalAfter != null &&
+                        rehearsalBefore !== rehearsalAfter
                     ) {
                         continue;
                     }
@@ -198,6 +198,8 @@
     }
     window.finalizeSegmentCopyTimelineLayout = finalizeSegmentCopyTimelineLayout;
     window.snapshotSegmentTimelineAnchorsOnCopies = snapshotSegmentTimelineAnchorsOnCopies;
+    window.fitPartialSwapUnitToTimelineSpan = fitPartialSwapUnitToTimelineSpan;
+    window.alignRegionSwapUnitToSlotSpan = alignRegionSwapUnitToSlotSpan;
     /** 入れ替え前: 全セグメントの絶対タイムライン位置を segments コピーへ固定 */
     function snapshotSegmentTimelineAnchorsOnCopies(track, segments) {
         if (!segments || !segments.length) return;
@@ -216,7 +218,7 @@
             : anchor;
         applySegmentToSilentGapPosition(track, segmentIndex, seg, regionIn + delta, t0);
     }
-    /** 無音フレーズスロット先頭へリージョン In を合わせる（In パッドは維持） */
+    /** 無音Rehearsal スロット先頭へリージョン In を合わせる（In パッドは維持） */
     function applySegmentToSilentGapPosition(track, segmentIndex, seg, targetRegionIn, t0) {
         if (!seg || !Number.isFinite(targetRegionIn)) return;
         const anchor = Number.isFinite(seg.timelineStartSec)
@@ -225,6 +227,14 @@
         const regionIn = Number.isFinite(seg.regionTimelineInSec)
             ? seg.regionTimelineInSec
             : getSegmentRegionTimelineIn(track, segmentIndex);
+        const delta = targetRegionIn - regionIn;
+        if (Math.abs(delta) < 0.00001) return;
+        if (Number.isFinite(seg.regionTimelineOutSec)) {
+            seg.timelineStartSec = anchor + delta;
+            seg.regionTimelineInSec = Math.max(0, regionIn + delta);
+            seg.regionTimelineOutSec = seg.regionTimelineOutSec + delta;
+            return;
+        }
         const inPad = Math.max(0, regionIn - anchor);
         const newAnchor = targetRegionIn - inPad;
         seg.timelineStartSec = newAnchor;
@@ -233,8 +243,8 @@
         // syncTrackHeadPadFromFirstSegment へ委譲 — プレビュー配置中の live 更新は
         // 入れ替えアニメの「旧位置」取得を壊すため行わない
     }
-    /** Phrase グループ除去後 — 残存 timelineSlots の phraseSlotIndex を詰める */
-    function remapTimelineSlotPhraseIndicesAfterGroupRemoval(track, removedIndex) {
+    /** Rehearsal グループ除去後 — 残存 timelineSlots の rehearsalSlotIndex を詰める */
+    function remapTimelineSlotRehearsalIndicesAfterGroupRemoval(track, removedIndex) {
         if (!isExtraTrackRef(track)) return;
         const state = getPlaybackRegionsState(track);
         const slots =
@@ -245,32 +255,32 @@
         for (let i = 0; i < slots.length; i++) {
             const slot = slots[i];
             if (!slot || !slot.musical) continue;
-            const psi = slot.musical.phraseSlotIndex | 0;
+            const psi = slot.musical.rehearsalSlotIndex | 0;
             if (psi > ri) {
                 remapped.push({ unit: i, from: psi + 1, to: psi });
-                slot.musical.phraseSlotIndex = psi - 1;
+                slot.musical.rehearsalSlotIndex = psi - 1;
             }
         }
-        silentGapDeleteDiagLog('remap/phrase-slot-index', {
+        silentGapDeleteDiagLog('remap/rehearsal-slot-index', {
             ex: track.slot + 1,
-            removedPhraseSlot: ri + 1,
+            removedRehearsalSlot: ri + 1,
             remapped,
         });
     }
 
-    /** 波形ポインタ位置の無音 gap を削除（Phrase 欄 Delete の全切り直しを避ける） */
-    function tryDeleteSilentGapAtPhraseEditPointer(transportSec) {
+    /** 波形ポインタ位置の無音 gap を削除（Rehearsal 欄 Delete の全切り直しを避ける） */
+    function tryDeleteSilentGapAtRehearsalEditPointer(transportSec) {
         silentGapDeleteDiagLog('pointer/begin', {
             transportSec: regionSwapDiagFmtSec(transportSec),
-            phraseFillOn:
-                typeof getMusicalGridPhraseFillVisible === 'function' &&
-                getMusicalGridPhraseFillVisible(),
+            rehearsalFillOn:
+                typeof getMusicalGridRehearsalFillVisible === 'function' &&
+                getMusicalGridRehearsalFillVisible(),
         });
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
-            silentGapDeleteDiagLog('pointer/reject', { reason: 'phrase-fill-off' });
+            silentGapDeleteDiagLog('pointer/reject', { reason: 'rehearsal-fill-off' });
             return false;
         }
         if (!Number.isFinite(transportSec)) {
@@ -347,8 +357,8 @@
         return indices;
     }
 
-    /** gap 区間の内部に音源リージョンが無い（境界のみ）= 専用無音フレーズ削除 */
-    function isDedicatedSilentPhraseGapDelete(track, gap) {
+    /** gap 区間の内部に音源リージョンが無い（境界のみ）= 専用無音Rehearsal 区間の削除 */
+    function isDedicatedSilentRehearsalGapDelete(track, gap) {
         if (!gap || !isExtraTrackRef(track)) return false;
         const eps = segmentBoundaryJoinEpsilonSec();
         const segments = getTrackSegments(track);
@@ -366,34 +376,34 @@
         return true;
     }
 
-    /** フレーズ欄テキスト優先でグループ除去後の counts を構築 */
-    function buildPhraseCountsAfterSilentGapSplice(pi, fallbackCounts) {
-        const phraseText = regionSwapDiagPhraseText();
-        if (phraseText && typeof window.parsePhraseGroupingSpec === 'function') {
-            const spec = window.parsePhraseGroupingSpec(phraseText);
+    /** Rehearsal 定義テキスト優先でグループ除去後の counts を構築 */
+    function buildRehearsalCountsAfterSilentGapSplice(pi, fallbackCounts) {
+        const rehearsalText = regionSwapDiagRehearsalText();
+        if (rehearsalText && typeof window.parseRehearsalGroupingSpec === 'function') {
+            const spec = window.parseRehearsalGroupingSpec(rehearsalText);
             if (spec && spec.sizes && spec.sizes.length >= 2 && pi < spec.sizes.length) {
                 const sizes = spec.sizes.slice();
                 sizes.splice(pi, 1);
                 if (sizes.length) {
-                    return { next: sizes.slice(), source: 'phrase-spec' };
+                    return { next: sizes.slice(), source: 'rehearsal-spec' };
                 }
             }
         }
-        if (typeof window.splicePhraseGroupAtIndex === 'function') {
-            const next = window.splicePhraseGroupAtIndex(fallbackCounts, pi);
+        if (typeof window.spliceRehearsalGroupAtIndex === 'function') {
+            const next = window.spliceRehearsalGroupAtIndex(fallbackCounts, pi);
             if (next) return { next, source: 'expanded-counts' };
         }
         return null;
     }
 
-    /** 無音 gap 削除時の Phrase counts 更新方針（リップル前のトラック状態で判定） */
-    function resolveSilentGapPhraseCountUpdate(gap, track, counts, pi) {
+    /** 無音 gap 削除時の Rehearsal counts 更新方針（リップル前のトラック状態で判定） */
+    function resolveSilentGapRehearsalCountUpdate(gap, track, counts, pi) {
         const slotBars = counts[pi] | 0;
         const spanBars =
             typeof estimateSilentGapBarSpan === 'function'
                 ? estimateSilentGapBarSpan(gap) | 0
                 : 0;
-        const dedicatedSilent = isDedicatedSilentPhraseGapDelete(track, gap);
+        const dedicatedSilent = isDedicatedSilentRehearsalGapDelete(track, gap);
 
         if (gap.partial && !dedicatedSilent) {
             return {
@@ -401,7 +411,7 @@
                 next: counts.slice(),
                 countsBefore: counts.slice(),
                 shrinkOnly: false,
-                skipPhraseApply: true,
+                skipRehearsalApply: true,
                 dedicatedSilent,
                 spanBars,
                 slotBars,
@@ -422,21 +432,21 @@
                 next,
                 countsBefore: counts.slice(),
                 shrinkOnly: true,
-                skipPhraseApply: false,
+                skipRehearsalApply: false,
                 dedicatedSilent,
                 spanBars,
                 slotBars,
                 countsSource: 'shrink',
             };
         }
-        const spliced = buildPhraseCountsAfterSilentGapSplice(pi, counts);
+        const spliced = buildRehearsalCountsAfterSilentGapSplice(pi, counts);
         if (!spliced || !spliced.next) return null;
         return {
             mode: dedicatedSilent ? 'splice-dedicated' : 'splice',
             next: spliced.next,
             countsBefore: counts.slice(),
             shrinkOnly: false,
-            skipPhraseApply: false,
+            skipRehearsalApply: false,
             dedicatedSilent,
             spanBars,
             slotBars,
@@ -444,14 +454,14 @@
         };
     }
 
-    /** 無音 gap 削除に伴う Phrase 展開 counts を更新（リージョン全体の切り直しは行わない） */
-    function syncPhraseGridAfterSilentGapDelete(gap, track, precomputedPlan) {
-        silentGapDeleteDiagLog('phrase-sync/begin', {
+    /** 無音 gap 削除に伴う Rehearsal 展開 counts を更新（リージョン全体の切り直しは行わない） */
+    function syncRehearsalGridAfterSilentGapDelete(gap, track, precomputedPlan) {
+        silentGapDeleteDiagLog('rehearsal-sync/begin', {
             ex: isExtraTrackRef(track) ? track.slot + 1 : null,
             gap: gap
                 ? {
-                      phraseSlot: Number.isFinite(gap.phraseIndex)
-                          ? (gap.phraseIndex | 0) + 1
+                      rehearsalSlot: Number.isFinite(gap.rehearsalIndex)
+                          ? (gap.rehearsalIndex | 0) + 1
                           : null,
                       partial: !!gap.partial,
                       start: regionSwapDiagFmtSec(gap.startSec),
@@ -461,41 +471,41 @@
             before: silentGapDeleteDiagSnapshotTrack(track),
         });
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
-            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'phrase-fill-off' });
+            silentGapDeleteDiagLog('rehearsal-sync/reject', { reason: 'rehearsal-fill-off' });
             return false;
         }
-        if (!gap || !Number.isFinite(gap.phraseIndex) || gap.phraseIndex < 0) {
-            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'gap-phrase-missing' });
+        if (!gap || !Number.isFinite(gap.rehearsalIndex) || gap.rehearsalIndex < 0) {
+            silentGapDeleteDiagLog('rehearsal-sync/reject', { reason: 'gap-rehearsal-missing' });
             return false;
         }
-        const pi = gap.phraseIndex | 0;
+        const pi = gap.rehearsalIndex | 0;
         const plan =
             precomputedPlan && precomputedPlan.next
                 ? precomputedPlan
                 : (() => {
                       const counts =
-                          typeof window.getExpandedPhraseGroupBarCountsSnapshot ===
+                          typeof window.getExpandedRehearsalGroupBarCountsSnapshot ===
                           'function'
-                              ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                              ? window.getExpandedRehearsalGroupBarCountsSnapshot()
                               : [];
                       if (!counts.length || pi >= counts.length) return null;
-                      return resolveSilentGapPhraseCountUpdate(gap, track, counts, pi);
+                      return resolveSilentGapRehearsalCountUpdate(gap, track, counts, pi);
                   })();
         if (!plan || !plan.next) {
-            silentGapDeleteDiagLog('phrase-sync/reject', { reason: 'counts-update-failed' });
+            silentGapDeleteDiagLog('rehearsal-sync/reject', { reason: 'counts-update-failed' });
             return false;
         }
         const countsBefore =
             precomputedPlan && precomputedPlan.countsBefore
                 ? precomputedPlan.countsBefore.slice()
-                : typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
-                  ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                : typeof window.getExpandedRehearsalGroupBarCountsSnapshot === 'function'
+                  ? window.getExpandedRehearsalGroupBarCountsSnapshot()
                   : [];
-        const phraseBefore = regionSwapDiagPhraseText();
-        silentGapDeleteDiagLog('phrase-sync/plan', {
+        const rehearsalBefore = regionSwapDiagRehearsalText();
+        silentGapDeleteDiagLog('rehearsal-sync/plan', {
             mode: plan.mode,
             dedicatedSilent: plan.dedicatedSilent,
             partial: !!gap.partial,
@@ -503,79 +513,79 @@
             slotBars: plan.slotBars || null,
             countsSource: plan.countsSource || null,
             countsAfter: plan.next.slice(0, 12),
-            skipPhraseApply: !!plan.skipPhraseApply,
+            skipRehearsalApply: !!plan.skipRehearsalApply,
             precomputed: !!precomputedPlan,
         });
-        if (!plan.skipPhraseApply) {
-            silentGapDeleteDiagLog('phrase-sync/apply', {
+        if (!plan.skipRehearsalApply) {
+            silentGapDeleteDiagLog('rehearsal-sync/apply', {
                 mode: plan.mode,
                 shrinkOnly: !!plan.shrinkOnly,
                 relayoutRegions: false,
                 optimize: false,
                 compress: true,
             });
-            if (typeof window.applyPhraseGroupBarCountsForRegionSwap === 'function') {
-                window.applyPhraseGroupBarCountsForRegionSwap(plan.next, {
+            if (typeof window.applyRehearsalGroupBarCountsForRegionSwap === 'function') {
+                window.applyRehearsalGroupBarCountsForRegionSwap(plan.next, {
                     skipUndo: true,
                     relayoutRegions: false,
                     optimize: false,
                 });
-            } else if (typeof window.clearPhraseGroupBarCountsOverride === 'function') {
-                window.clearPhraseGroupBarCountsOverride();
+            } else if (typeof window.clearRehearsalGroupBarCountsOverride === 'function') {
+                window.clearRehearsalGroupBarCountsOverride();
             }
             if (!plan.shrinkOnly && isExtraTrackRef(track)) {
-                remapTimelineSlotPhraseIndicesAfterGroupRemoval(track, pi);
+                remapTimelineSlotRehearsalIndicesAfterGroupRemoval(track, pi);
             }
             if (
                 !plan.shrinkOnly &&
                 countsBefore.length &&
                 pi < countsBefore.length &&
-                typeof window.spliceMusicalGridMeterForRemovedPhraseGroup === 'function'
+                typeof window.spliceMusicalGridMeterForRemovedRehearsalGroup === 'function'
             ) {
-                const meterChanged = window.spliceMusicalGridMeterForRemovedPhraseGroup(
+                const meterChanged = window.spliceMusicalGridMeterForRemovedRehearsalGroup(
                     countsBefore,
                     pi,
                 );
-                silentGapDeleteDiagLog('phrase-sync/meter-splice', {
-                    phraseSlot: pi + 1,
+                silentGapDeleteDiagLog('rehearsal-sync/meter-splice', {
+                    rehearsalSlot: pi + 1,
                     removedBars: countsBefore[pi] | 0,
                     changed: !!meterChanged,
                 });
             }
-            if (typeof window.compressPhraseDefinitionFromExpandedCounts === 'function') {
-                const phraseMid = regionSwapDiagPhraseText();
-                const compressed = window.compressPhraseDefinitionFromExpandedCounts({
+            if (typeof window.compressRehearsalDefinitionFromExpandedCounts === 'function') {
+                const rehearsalMid = regionSwapDiagRehearsalText();
+                const compressed = window.compressRehearsalDefinitionFromExpandedCounts({
                     skipUndo: true,
                 });
-                silentGapDeleteDiagLog('phrase-sync/compress', {
+                silentGapDeleteDiagLog('rehearsal-sync/compress', {
                     changed: !!compressed,
-                    phraseMid,
-                    phraseAfter: regionSwapDiagPhraseText(),
+                    rehearsalMid,
+                    rehearsalAfter: regionSwapDiagRehearsalText(),
                 });
             }
         }
-        silentGapDeleteDiagLog('phrase-sync/done', {
-            phraseBefore,
-            phraseAfter: regionSwapDiagPhraseText(),
+        silentGapDeleteDiagLog('rehearsal-sync/done', {
+            rehearsalBefore,
+            rehearsalAfter: regionSwapDiagRehearsalText(),
             after: silentGapDeleteDiagSnapshotTrack(track),
         });
-        regionSwapDiagLog('phrase/silent-gap-delete', {
-            phraseIndex: pi + 1,
+        regionSwapDiagLog('rehearsal/silent-gap-delete', {
+            rehearsalIndex: pi + 1,
             partial: !!gap.partial,
             mode: plan.mode,
             shrinkOnly: !!plan.shrinkOnly,
             spanBars: plan.spanBars || null,
             slotBars: plan.slotBars || null,
-            before: phraseBefore,
-            after: regionSwapDiagPhraseText(),
+            before: rehearsalBefore,
+            after: regionSwapDiagRehearsalText(),
             countsHead: plan.next.slice(0, 8),
         });
         if (typeof writeLog === 'function') {
             writeLog(
-                'Phrase: removed slot ' +
+                'Rehearsal: removed slot ' +
                     (pi + 1) +
                     ' (silent gap delete): ' +
-                    regionSwapDiagPhraseText(),
+                    regionSwapDiagRehearsalText(),
             );
         }
         return true;
@@ -605,41 +615,41 @@
             });
             return false;
         }
-        const phraseFillOn =
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible();
-        let phrasePlanBeforeRipple = null;
-        if (phraseFillOn && Number.isFinite(gap.phraseIndex) && gap.phraseIndex >= 0) {
-            const pi = gap.phraseIndex | 0;
+        const rehearsalFillOn =
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible();
+        let rehearsalPlanBeforeRipple = null;
+        if (rehearsalFillOn && Number.isFinite(gap.rehearsalIndex) && gap.rehearsalIndex >= 0) {
+            const pi = gap.rehearsalIndex | 0;
             const counts =
-                typeof window.getExpandedPhraseGroupBarCountsSnapshot === 'function'
-                    ? window.getExpandedPhraseGroupBarCountsSnapshot()
+                typeof window.getExpandedRehearsalGroupBarCountsSnapshot === 'function'
+                    ? window.getExpandedRehearsalGroupBarCountsSnapshot()
                     : [];
             if (counts.length && pi < counts.length) {
-                phrasePlanBeforeRipple = resolveSilentGapPhraseCountUpdate(
+                rehearsalPlanBeforeRipple = resolveSilentGapRehearsalCountUpdate(
                     gap,
                     track,
                     counts,
                     pi,
                 );
-                silentGapDeleteDiagLog('delete/phrase-plan-pre-ripple', {
+                silentGapDeleteDiagLog('delete/rehearsal-plan-pre-ripple', {
                     ex: track.slot + 1,
                     gapIndex: gapIndex | 0,
-                    phraseSlot: pi + 1,
-                    plan: phrasePlanBeforeRipple
+                    rehearsalSlot: pi + 1,
+                    plan: rehearsalPlanBeforeRipple
                         ? {
-                              mode: phrasePlanBeforeRipple.mode,
-                              dedicatedSilent: phrasePlanBeforeRipple.dedicatedSilent,
-                              countsSource: phrasePlanBeforeRipple.countsSource,
-                              countsAfter: phrasePlanBeforeRipple.next.slice(0, 12),
-                              skipPhraseApply: !!phrasePlanBeforeRipple.skipPhraseApply,
+                              mode: rehearsalPlanBeforeRipple.mode,
+                              dedicatedSilent: rehearsalPlanBeforeRipple.dedicatedSilent,
+                              countsSource: rehearsalPlanBeforeRipple.countsSource,
+                              countsAfter: rehearsalPlanBeforeRipple.next.slice(0, 12),
+                              skipRehearsalApply: !!rehearsalPlanBeforeRipple.skipRehearsalApply,
                           }
                         : null,
                 });
             }
         }
         if (!(opt && opt.skipUndoCapture) && !regionUndoPaused) {
-            requestRegionUndoCapture({ includePhrase: !!phraseFillOn });
+            requestRegionUndoCapture({ includeRehearsal: !!rehearsalFillOn });
         }
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments.length) {
@@ -647,9 +657,9 @@
             return false;
         }
         const shouldRemoveGridSegments =
-            phrasePlanBeforeRipple &&
-            !phrasePlanBeforeRipple.shrinkOnly &&
-            phrasePlanBeforeRipple.mode !== 'ripple-only';
+            rehearsalPlanBeforeRipple &&
+            !rehearsalPlanBeforeRipple.shrinkOnly &&
+            rehearsalPlanBeforeRipple.mode !== 'ripple-only';
         let removedGridSegmentIndices = [];
         if (shouldRemoveGridSegments) {
             removedGridSegmentIndices = collectGridOnlySegmentIndicesInsideGap(track, gap, eps);
@@ -710,7 +720,7 @@
         });
         applySegmentsToState(track, normalized, {
             skipUndo: true,
-            skipMusicalRefresh: phraseFillOn,
+            skipMusicalRefresh: rehearsalFillOn,
             segmentStructureChanged: removedGridSegmentIndices.length > 0,
             affectedSegmentIndices: normalized.map((_, i) => i),
         });
@@ -735,8 +745,8 @@
                 });
             }
         }
-        if (phraseFillOn) {
-            syncPhraseGridAfterSilentGapDelete(gap, track, phrasePlanBeforeRipple);
+        if (rehearsalFillOn) {
+            syncRehearsalGridAfterSilentGapDelete(gap, track, rehearsalPlanBeforeRipple);
             if (typeof window.scheduleMusicalGridRedraw === 'function') {
                 window.scheduleMusicalGridRedraw();
             }
@@ -748,7 +758,7 @@
             } else if (typeof window.refreshAllRegionRehearsalMarkLabels === 'function') {
                 window.refreshAllRegionRehearsalMarkLabels();
             }
-            silentGapDeleteDiagLog('delete/after-phrase-rebuild', {
+            silentGapDeleteDiagLog('delete/after-rehearsal-rebuild', {
                 ex: track.slot + 1,
                 after: silentGapDeleteDiagSnapshotTrack(track),
             });
@@ -761,8 +771,8 @@
             gapIndex: gapIndex | 0,
             after: silentGapDeleteDiagSnapshotTrack(track),
         });
-        const label = Number.isFinite(gap.phraseIndex)
-            ? 'phrase ' + (gap.phraseIndex + 1)
+        const label = Number.isFinite(gap.rehearsalIndex)
+            ? 'rehearsal ' + (gap.rehearsalIndex + 1)
             : 'gap @ ' + gap.startSec.toFixed(2) + 's';
         writeLog(
             'Ex ' +
@@ -789,12 +799,40 @@
                 collectRegionGroupMemberIndices(track, idx),
             );
         }
-        const joined = collectPhraseSlotJoinedSegmentIndices(track, idx);
+        const joined = collectRehearsalSlotJoinedSegmentIndices(track, idx);
         if (joined.length > 1) {
             return sortSegmentIndicesByTimeline(track, joined);
         }
         return [idx];
     }
+    function sortSegmentIndicesOnCopies(track, segments, indices) {
+        const copyIn =
+            typeof window.segmentCopyRegionIn === 'function'
+                ? window.segmentCopyRegionIn
+                : null;
+        return indices
+            .slice()
+            .filter((i) => i >= 0)
+            .sort((a, b) => {
+                let aIn = NaN;
+                let bIn = NaN;
+                if (segments && segments[a] && copyIn) {
+                    aIn = copyIn(segments[a]);
+                } else if (typeof getSegmentRegionTimelineIn === 'function') {
+                    aIn = getSegmentRegionTimelineIn(track, a);
+                }
+                if (segments && segments[b] && copyIn) {
+                    bIn = copyIn(segments[b]);
+                } else if (typeof getSegmentRegionTimelineIn === 'function') {
+                    bIn = getSegmentRegionTimelineIn(track, b);
+                }
+                if (Number.isFinite(aIn) && Number.isFinite(bIn) && Math.abs(aIn - bIn) > 1e-9) {
+                    return aIn - bIn;
+                }
+                return a - b;
+            });
+    }
+
     function repositionRegionSwapUnitToTimelineSec(
         track,
         segments,
@@ -822,6 +860,102 @@
             );
         }
     }
+
+    /**
+     * partial RegionSwap — リージョン In/Out をリハーサルマークスパン [targetIn, targetOut] に合わせる。
+     * 音源長がスパンより長い場合は Out 側をトリムする。
+     */
+    function fitPartialSwapUnitToTimelineSpan(
+        track,
+        segments,
+        unitIndices,
+        targetInSec,
+        targetOutSec,
+    ) {
+        if (
+            !unitIndices ||
+            !unitIndices.length ||
+            !Number.isFinite(targetInSec) ||
+            !Number.isFinite(targetOutSec) ||
+            targetOutSec <= targetInSec + 1e-6
+        ) {
+            return;
+        }
+        const sorted = sortSegmentIndicesOnCopies(track, segments, unitIndices);
+        const leader = sorted[0];
+        const seg = segments[leader];
+        if (!seg) return;
+        const minSec =
+            typeof PLAYBACK_REGION_MIN_SEC !== 'undefined'
+                ? PLAYBACK_REGION_MIN_SEC
+                : 0.01;
+        const sourceIn = Number(seg.sourceInSec) || 0;
+        const sourceOut = Number(seg.sourceOutSec) || 0;
+        const sourceSpan = Math.max(minSec, sourceOut - sourceIn);
+        const spanDur = Math.max(minSec, targetOutSec - targetInSec);
+        seg.sourceInSec = sourceIn;
+        seg.regionTimelineInSec = targetInSec;
+        seg.timelineStartSec = targetInSec;
+        if (sourceSpan > spanDur + 1e-6) {
+            seg.sourceOutSec = sourceIn + spanDur;
+            delete seg.regionTimelineOutSec;
+        } else {
+            seg.sourceOutSec = sourceOut;
+            if (spanDur > sourceSpan + 1e-6) {
+                seg.regionTimelineOutSec = targetOutSec;
+            } else {
+                delete seg.regionTimelineOutSec;
+            }
+        }
+    }
+
+    /**
+     * recompose 後 — リージョン In/Out を slot スパンに合わせる（音源が slot より短い場合は表示 span まで伸ばす）。
+     */
+    function alignRegionSwapUnitToSlotSpan(
+        track,
+        segments,
+        unitIndices,
+        targetInSec,
+        targetOutSec,
+    ) {
+        if (
+            !unitIndices ||
+            !unitIndices.length ||
+            !Number.isFinite(targetInSec) ||
+            !Number.isFinite(targetOutSec) ||
+            targetOutSec <= targetInSec + 1e-6
+        ) {
+            return;
+        }
+        const sorted = sortSegmentIndicesOnCopies(track, segments, unitIndices);
+        const leader = sorted[0];
+        const seg = segments[leader];
+        if (!seg) return;
+        const minSec =
+            typeof PLAYBACK_REGION_MIN_SEC !== 'undefined'
+                ? PLAYBACK_REGION_MIN_SEC
+                : 0.01;
+        const sourceIn = Number(seg.sourceInSec) || 0;
+        const sourceOut = Number(seg.sourceOutSec) || 0;
+        const sourceSpan = Math.max(minSec, sourceOut - sourceIn);
+        const spanDur = Math.max(minSec, targetOutSec - targetInSec);
+        seg.sourceInSec = sourceIn;
+        seg.regionTimelineInSec = targetInSec;
+        seg.timelineStartSec = targetInSec;
+        if (sourceSpan > spanDur + 1e-6) {
+            seg.sourceOutSec = sourceIn + spanDur;
+            delete seg.regionTimelineOutSec;
+        } else {
+            seg.sourceOutSec = sourceOut;
+            if (spanDur > sourceSpan + 1e-6) {
+                seg.regionTimelineOutSec = targetOutSec;
+            } else {
+                delete seg.regionTimelineOutSec;
+            }
+        }
+    }
+    window.sortSegmentIndicesOnCopies = sortSegmentIndicesOnCopies;
     function playbackRegionSwapBlockReason() {
         if (
             typeof isPlaybackRegionSwapAnimActive === 'function' &&
@@ -830,10 +964,10 @@
             return 'swap animation in progress';
         }
         if (
-            typeof getMusicalGridPhraseFillVisible !== 'function' ||
-            !getMusicalGridPhraseFillVisible()
+            typeof getMusicalGridRehearsalFillVisible !== 'function' ||
+            !getMusicalGridRehearsalFillVisible()
         ) {
-            return 'phrase tint off';
+            return 'rehearsal tint off';
         }
         if (
             typeof window.isTimelineSlotRegionSwapEnabled === 'function' &&
@@ -856,20 +990,25 @@
         if (!isTrackRegionActive(track)) {
             return 'no active regions';
         }
-        const gapEntries = regionSelectionEntries.filter((e) => e.segmentIndex < 0);
-        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
-        if (gapEntries.length > 0) {
-            if (gapEntries.length !== 1 || segEntries.length !== 1) {
-                return 'select 1 silent gap and 1 region';
-            }
-            const resolved = resolveSilentGapSwapSegmentIndices(track, segEntries);
-            if (!resolved.length) {
-                return 'invalid region';
-            }
-            return null;
-        }
-        if (a.segmentIndex === b.segmentIndex) {
+        if (a.segmentIndex >= 0 && b.segmentIndex >= 0 && a.segmentIndex === b.segmentIndex) {
             return 'select 2 different regions';
+        }
+        if (typeof window.resolveSwapSelectionAudioSlotPair === 'function') {
+            if (typeof window.invalidateTrackTimelineSlotsReadCache === 'function') {
+                window.invalidateTrackTimelineSlotsReadCache();
+            }
+            const slots =
+                typeof window.getTrackTimelineSlots === 'function'
+                    ? window.getTrackTimelineSlots(track, {
+                          writeCache: false,
+                          forceRebuild: true,
+                          skipReadCacheStore: true,
+                      })
+                    : [];
+            const resolved = window.resolveSwapSelectionAudioSlotPair(track, a, b, slots);
+            if (!resolved.ok) {
+                return resolved.reason;
+            }
         }
         return null;
     }
@@ -886,26 +1025,28 @@
         writeLog('Playback region: cannot swap (' + reason + ')');
         if (typeof flashSeekHint === 'function') {
             let hint = "Can't swap regions";
-            if (reason === 'select 1 silent gap and 1 region') {
-                hint = 'Ctrl+click: silent slot + 1 region (2 items)';
-            } else if (reason === 'phrase slot unresolved') {
-                hint = 'Could not resolve Phrase slot for selected regions';
-            } else if (reason === 'phrase slot outside spec cycle') {
-                hint = 'Phrase slot out of range — check Phrase definition';
-            } else if (reason === 'invalid phrase spec' || reason === 'phrase fill off') {
-                hint = 'Turn on Phrase fill and fix Phrase definition';
-            } else if (reason === 'same phrase slot') {
-                hint = 'Already in that phrase slot';
+            if (reason === 'paired audio unresolved') {
+                hint = 'Could not resolve audio region paired with selected silent gap';
+            } else if (reason === 'same rehearsal block') {
+                hint = 'Select two different Rehearsal blocks (not a region and its silent gap)';
+            } else if (reason === 'rehearsal slot unresolved') {
+                hint = 'Could not resolve Rehearsal slot for selected regions';
+            } else if (reason === 'rehearsal slot outside spec cycle') {
+                hint = 'Rehearsal slot out of range — check Rehearsal definition';
+            } else if (reason === 'invalid rehearsal spec' || reason === 'rehearsal fill off') {
+                hint = 'Turn on Rehearsal fill and fix Rehearsal definition';
+            } else if (reason === 'same rehearsal slot') {
+                hint = 'Already in that rehearsal slot';
             } else if (
-                reason === 'phrase span swap not applied' ||
-                reason === 'phrase span swap failed' ||
-                reason === 'phrase span unresolved'
+                reason === 'rehearsal span swap not applied' ||
+                reason === 'rehearsal span swap failed' ||
+                reason === 'rehearsal span unresolved'
             ) {
-                hint = 'Phrase span swap not applied — check [MusicalSlot] log';
-            } else if (reason === 'phrase span bar sum mismatch') {
-                hint = 'Phrase bar counts differ — cannot swap these regions';
-            } else if (reason === 'phrase block swap API missing') {
-                hint = 'Phrase block swap unavailable — reload the app';
+                hint = 'Rehearsal span swap not applied — check [MusicalSlot] log';
+            } else if (reason === 'rehearsal span bar sum mismatch') {
+                hint = 'Rehearsal bar counts differ — cannot swap these regions';
+            } else if (reason === 'rehearsal block swap API missing') {
+                hint = 'Rehearsal block swap unavailable — reload the app';
             }
             flashSeekHint('Region', hint, 'error');
         }
@@ -919,10 +1060,9 @@
         }
         const result = window.swapSelectedTimelineSlots();
         if (result && result.ok) {
-            if (!result.noop && typeof clearRegionSelection === 'function') {
+            if (typeof clearRegionSelection === 'function') {
                 clearRegionSelection();
             }
-            regionSwapDiagDumpSelectionTracks('swap/done-slot');
             return true;
         }
         if (result && result.reason) {

@@ -46,7 +46,10 @@
             const seg = segments[i];
             const regionIn = getSegmentRegionTimelineIn(track, i);
             const playbackStart = getSegmentPlaybackTimelineStart(track, i);
-            const absEnd = getSegmentTimelineEnd(track, i);
+            const absEnd =
+                forPlayback && typeof getSegmentRegionTimelineOut === 'function'
+                    ? getSegmentRegionTimelineOut(track, i)
+                    : getSegmentTimelineEnd(track, i);
             const absStart = forPlayback ? playbackStart : regionIn;
 
             const joinedNext =

@@ -46,10 +46,10 @@
             root = document.createElement('div');
             root.className = REGION_HIT_DEBUG_OVERLAY_CLASS;
             root.setAttribute('aria-hidden', 'true');
-            const phrase = inner.querySelector(
-                '.audio-waveform-composite__phrase-boundaries',
+            const rehearsal = inner.querySelector(
+                '.audio-waveform-composite__rehearsal-boundaries',
             );
-            if (phrase) phrase.insertAdjacentElement('afterend', root);
+            if (rehearsal) rehearsal.insertAdjacentElement('afterend', root);
             else inner.appendChild(root);
         }
         root.hidden = false;
@@ -70,7 +70,7 @@
         return el;
     }
 
-    /** 専用オーバーレイ上の client 座標矩形（musical-grid / Phrase 着色は隠さない） */
+    /** 専用オーバーレイ上の client 座標矩形（musical-grid / Rehearsal 着色は隠さない） */
     function placeRegionHitDebugEl(el, overlayRoot, clientBox) {
         if (!el || !overlayRoot || !clientBox) return;
         const overlayRect = overlayRoot.getBoundingClientRect();
@@ -245,19 +245,19 @@
         }
     }
 
-    function syncPhraseBoundaryHitDebug() {
-        const root = document.querySelector('.audio-waveform-composite__phrase-boundaries');
+    function syncRehearsalBoundaryHitDebug() {
+        const root = document.querySelector('.audio-waveform-composite__rehearsal-boundaries');
         if (!root) return;
         root.classList.toggle(
-            'audio-waveform-composite__phrase-boundaries--hit-debug',
+            'audio-waveform-composite__rehearsal-boundaries--hit-debug',
             isRegionHandleHitDebugOn(),
         );
     }
 
     function syncRegionHitDebugLanesPresentation() {
         ensureRegionHitDebugOverlayRoot();
-        if (typeof syncPhraseBoundaryDeferToRegionHandles === 'function') {
-            syncPhraseBoundaryDeferToRegionHandles(isRegionHandleHitDebugOn());
+        if (typeof syncRehearsalBoundaryDeferToRegionHandles === 'function') {
+            syncRehearsalBoundaryDeferToRegionHandles(isRegionHandleHitDebugOn());
         }
     }
 
@@ -279,12 +279,106 @@
         syncContainerRegionHitDebugOverlays(track, container, overlayRoot);
     }
 
+    function placeClientRectHitDebug(overlayRoot, kindClass, targetEl) {
+        if (!targetEl || !overlayRoot) return;
+        const r = targetEl.getBoundingClientRect();
+        if (!(r.width > 0) || !(r.height > 0)) return;
+        placeRegionHitDebugEl(createRegionHitDebugEl(kindClass), overlayRoot, {
+            left: r.left,
+            top: r.top,
+            width: r.width,
+            height: r.height,
+        });
+    }
+
+    function syncMusicalTrackHitDebugOverlays(overlayRoot) {
+        if (!overlayRoot || !isRegionHandleHitDebugOn()) return;
+
+        const rehearsalSegments = document.getElementById('musicalRehearsalSegments');
+        if (rehearsalSegments) {
+            const segEls = rehearsalSegments.querySelectorAll(
+                '.musical-track-lane__segment--rehearsal',
+            );
+            for (let i = 0; i < segEls.length; i++) {
+                const seg = segEls[i];
+                placeClientRectHitDebug(overlayRoot, '--rehearsal-segment', seg);
+                const frame = seg.querySelector(
+                    '.musical-track-lane__segment-value--rehearsal-mark',
+                );
+                const text = seg.querySelector('.rehearsal-mark__text');
+                if (frame) {
+                    placeClientRectHitDebug(overlayRoot, '--rehearsal-frame', frame);
+                }
+                if (text) {
+                    placeClientRectHitDebug(overlayRoot, '--rehearsal-edit', text);
+                }
+            }
+        }
+        const rehearsalTrack = document.getElementById('musicalRehearsalTrack');
+        if (rehearsalTrack) {
+            placeClientRectHitDebug(overlayRoot, '--musical-track-add', rehearsalTrack);
+        }
+
+        const tempoSegments = document.getElementById('musicalTempoSegments');
+        if (tempoSegments) {
+            const dragEls = tempoSegments.querySelectorAll(
+                '.musical-track-lane__segment-value--draggable',
+            );
+            for (let i = 0; i < dragEls.length; i++) {
+                placeClientRectHitDebug(overlayRoot, '--tempo-drag', dragEls[i]);
+            }
+            const segEls = tempoSegments.querySelectorAll('.musical-track-lane__segment--tempo');
+            for (let i = 0; i < segEls.length; i++) {
+                placeClientRectHitDebug(overlayRoot, '--tempo-segment', segEls[i]);
+            }
+        }
+        const tempoTrack = document.getElementById('musicalTempoTrack');
+        if (tempoTrack) {
+            placeClientRectHitDebug(overlayRoot, '--musical-track-add', tempoTrack);
+        }
+
+        const signatureSegments = document.getElementById('musicalSignatureSegments');
+        if (signatureSegments) {
+            const dragEls = signatureSegments.querySelectorAll(
+                '.musical-track-lane__segment-value--draggable',
+            );
+            for (let i = 0; i < dragEls.length; i++) {
+                placeClientRectHitDebug(overlayRoot, '--signature-drag', dragEls[i]);
+            }
+            const segEls = signatureSegments.querySelectorAll(
+                '.musical-track-lane__segment--signature',
+            );
+            for (let i = 0; i < segEls.length; i++) {
+                placeClientRectHitDebug(overlayRoot, '--signature-segment', segEls[i]);
+            }
+        }
+        const signatureTrack = document.getElementById('musicalSignatureTrack');
+        if (signatureTrack) {
+            placeClientRectHitDebug(overlayRoot, '--musical-track-add', signatureTrack);
+        }
+    }
+
+    function syncMusicalTrackHitDebugLanePresentation() {
+        const on = isRegionHandleHitDebugOn();
+        const laneIds = [
+            'musicalRehearsalLane',
+            'musicalTempoLane',
+            'musicalSignatureLane',
+        ];
+        for (let i = 0; i < laneIds.length; i++) {
+            const lane = document.getElementById(laneIds[i]);
+            if (!lane) continue;
+            lane.classList.toggle('audio-waveform-lane--musical-hit-debug', on);
+        }
+    }
+
     function refreshAllRegionHandleHitDebug() {
         syncRegionHitDebugLanesPresentation();
+        syncMusicalTrackHitDebugLanePresentation();
         clearAllRegionHitDebugEls();
         const overlayRoot = ensureRegionHitDebugOverlayRoot();
         if (!overlayRoot) {
-            syncPhraseBoundaryHitDebug();
+            syncRehearsalBoundaryHitDebug();
             return;
         }
         const n =
@@ -295,7 +389,8 @@
             if (!container) continue;
             refreshTrackRegionHandleHitDebug(track, container, overlayRoot);
         }
-        syncPhraseBoundaryHitDebug();
+        syncMusicalTrackHitDebugOverlays(overlayRoot);
+        syncRehearsalBoundaryHitDebug();
     }
 
     let regionHitDebugRefreshRaf = 0;
@@ -430,9 +525,12 @@
             isExtraTrackRef(track) && Number.isFinite(track.slot)
                 ? { ex: (track.slot | 0) + 1, lightweight }
                 : { lightweight };
+        const diagSilent = { silent: true };
         const diagRun =
             typeof window.regionRestoreDiagRunStep === 'function'
-                ? window.regionRestoreDiagRunStep
+                ? function (label, fn, detail, opt) {
+                      return window.regionRestoreDiagRunStep(label, fn, detail, opt);
+                  }
                 : function (_label, fn) {
                       return fn();
                   };
@@ -458,11 +556,13 @@
                 }
             },
             diagEx,
+            diagSilent,
         );
         const container = diagRun(
             'overlay/getContainer',
             () => getPlaybackRegionsContainerEl(track),
             diagEx,
+            diagSilent,
         );
         if (!container) {
             diagLog('overlay/no-container', diagEx);
@@ -480,7 +580,7 @@
                 ? getWaveformLanesPointerClientY()
                 : null;
         if (restoreHover) setHoveredPlaybackRegion(null);
-        diagRun('overlay/clearDom', () => container.replaceChildren(), diagEx);
+        diagRun('overlay/clearDom', () => container.replaceChildren(), diagEx, diagSilent);
         const state = getPlaybackRegionsState(track);
         const hasConfiguredRegions =
             state &&
@@ -491,6 +591,7 @@
             'overlay/getTrackSegments',
             () => getTrackSegments(track),
             diagEx,
+            diagSilent,
         );
         if (
             !segments.length &&
@@ -502,12 +603,13 @@
                 'overlay/getTrackSegments-after-default',
                 () => getTrackSegments(track),
                 diagEx,
+                diagSilent,
             );
         }
         if (!segments.length) {
             container.hidden = true;
             syncExtraLaneRegionsClassForTrack(track);
-            syncTrackPhraseRehearsalMarks(track);
+            syncTrackRehearsalRehearsalMarks(track);
             diagLog('overlay/empty-hidden', diagEx);
             return;
         }
@@ -515,13 +617,14 @@
         let labelSlots = null;
         if (
             !lightweight &&
-            isMusicalGridPhraseFillVisibleSafe() &&
+            isMusicalGridRehearsalFillVisibleSafe() &&
             typeof window.getTrackTimelineSlots === 'function'
         ) {
             labelSlots = diagRun(
                 'overlay/getTimelineSlots',
                 () => window.getTrackTimelineSlots(track, { writeCache: false }),
                 diagEx,
+                diagSilent,
             );
         }
         diagRun(
@@ -529,22 +632,9 @@
             () => {
                 for (let i = 0; i < segments.length; i++) {
                     const seg = segments[i];
-                    const stepLabel = 'overlay/region/' + (i + 1);
-                    if (typeof window.regionRestoreDiagRunStep === 'function') {
-                        window.regionRestoreDiagRunStep(
-                            stepLabel,
-                            () => {
-                                const el = buildRegionOverlayEl(track, i, seg, labelSlots);
-                                positionRegionOverlayEl(el, track, i, seg);
-                                container.appendChild(el);
-                            },
-                            diagEx,
-                        );
-                    } else {
-                        const el = buildRegionOverlayEl(track, i, seg, labelSlots);
-                        positionRegionOverlayEl(el, track, i, seg);
-                        container.appendChild(el);
-                    }
+                    const el = buildRegionOverlayEl(track, i, seg, labelSlots);
+                    positionRegionOverlayEl(el, track, i, seg);
+                    container.appendChild(el);
                 }
             },
             Object.assign({}, diagEx, { segCount: segments.length }),
@@ -570,6 +660,7 @@
                     return silentGaps.length;
                 },
                 diagEx,
+                diagSilent,
             );
             diagRun(
                 'overlay/crossfadeMarkers',
@@ -584,6 +675,7 @@
                     return crossfadeZones.length;
                 },
                 diagEx,
+                diagSilent,
             );
         }
         diagRun(
@@ -602,6 +694,7 @@
                 }
             },
             diagEx,
+            diagSilent,
         );
         syncExtraLaneRegionsClassForTrack(track);
         syncRegionSelectionClasses();
@@ -612,6 +705,7 @@
                     refreshTrackFadeTriangleVisibility(track, container);
                 },
                 diagEx,
+                diagSilent,
             );
         }
         scheduleWaveformRegionOverlayRefresh();
@@ -624,15 +718,20 @@
         }
         if (
             !lightweight &&
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible() &&
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible() &&
             isTrackRegionActive(track) &&
             typeof scheduleMusicalGridRedraw === 'function'
         ) {
             scheduleMusicalGridRedraw();
         }
         if (!lightweight) {
-            diagRun('overlay/phraseMarks', () => syncTrackPhraseRehearsalMarks(track), diagEx);
+            diagRun(
+                'overlay/rehearsalMarks',
+                () => syncTrackRehearsalRehearsalMarks(track),
+                diagEx,
+                diagSilent,
+            );
         }
         diagLog('overlay/done', diagEx);
         } finally {

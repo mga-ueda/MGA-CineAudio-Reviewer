@@ -1,5 +1,5 @@
 /**
- * ixml-musical-import.js — Nuendo/Cubase iXML から Tempo/Sig・Phrase を構築。
+ * ixml-musical-import.js — Nuendo/Cubase iXML から Tempo/Sig・Rehearsal を構築。
  */
 (function ixmlMusicalImportModule() {
     function ixmlFirstChildElementByTag(el, tagNames) {
@@ -182,12 +182,18 @@
         if (!(barDur > 0)) return null;
         const bars = Math.round(gac / barDur);
         if (bars < 1 || bars > 999) return null;
-        if (Math.abs(gac - bars * barDur) > 0.02) return null;
+        if (Math.abs(gac - bars * barDur) > 0.05) return null;
         return { bars, bpm: Math.round(bpm), sig: { num: 4, den: 4 } };
     }
 
-    function inferPreRollFromGacAssetStartTimeAuto(gacStartSec) {
-        const candidates = [140, 120, 134, 100, 160, 180, 200];
+    function inferPreRollFromGacAssetStartTimeAuto(gacStartSec, tempoHint) {
+        const candidates = [];
+        const hint = Number(tempoHint);
+        if (hint > 0) candidates.push(Math.round(hint));
+        const defaults = [140, 120, 134, 100, 160, 180, 200];
+        for (let i = 0; i < defaults.length; i++) {
+            if (candidates.indexOf(defaults[i]) < 0) candidates.push(defaults[i]);
+        }
         for (let i = 0; i < candidates.length; i++) {
             const found = inferPreRollFromGacAssetStartTime(gacStartSec, candidates[i]);
             if (found) return found;
@@ -230,7 +236,7 @@
             if (deduped[i].sig) continue;
             const prev = i > 0 ? deduped[i - 1] : null;
             const nextBeat = i + 1 < deduped.length ? deduped[i + 1].beat : null;
-            const delta = nextBeat != null && prev != null ? nextBeat - deduped[i].beat : null;
+            const delta = nextBeat != null ? nextBeat - deduped[i].beat : null;
             deduped[i].sig = inferSteinbergSigForBeatSpan(delta, deduped[i].bpm);
             if (prev && prev.sig == null && nextBeat != null) {
                 const prevDelta = deduped[i].beat - prev.beat;
@@ -252,12 +258,7 @@
         if (beats === 6) return { num: 6, den: 4 };
         if (beats === 7) return { num: 7, den: 4 };
         if (beats === 9) return { num: 9, den: 4 };
-        if (beats === 4 || beats === 8 || beats === 12 || beats === 16) {
-            return { num: 4, den: 4 };
-        }
-        if (beats > 0 && beats <= 32) {
-            return { num: beats, den: 4 };
-        }
+        // テンポマーカー間の拍数 — 4/4 小節の倍数（24 拍 = 6 小節など）
         return { num: 4, den: 4 };
     }
 
@@ -293,7 +294,10 @@
         if (!changes.length) return [];
 
         const entries = [];
-        const preRoll = inferPreRollFromGacAssetStartTimeAuto(data.gacAssetStartTime);
+        const preRoll = inferPreRollFromGacAssetStartTimeAuto(
+            data.gacAssetStartTime,
+            data.tempo,
+        );
         if (preRoll && preRoll.bars > 0) {
             for (let i = 0; i < preRoll.bars; i++) {
                 entries.push({
@@ -306,7 +310,11 @@
         let clipBeatCursor = 0;
         for (let i = 0; i < changes.length; i++) {
             const cur = changes[i];
-            if (clipDurationSec > 0 && entries.length > (preRoll ? preRoll.bars : 0)) {
+            if (
+                !o.forRehearsalOnly &&
+                clipDurationSec > 0 &&
+                entries.length > (preRoll ? preRoll.bars : 0)
+            ) {
                 let usedSec = 0;
                 const clipStartIdx = preRoll ? preRoll.bars : 0;
                 for (let ei = clipStartIdx; ei < entries.length; ei++) {
@@ -328,7 +336,7 @@
             clipBeatCursor = nextBeat != null ? nextBeat : clipBeatCursor + span;
         }
 
-        if (!(clipDurationSec > 0)) return entries;
+        if (o.forRehearsalOnly || !(clipDurationSec > 0)) return entries;
 
         const clipEntriesStart = preRoll ? preRoll.bars : 0;
         while (entries.length > clipEntriesStart + 1) {
@@ -343,6 +351,25 @@
         }
 
         trimPartialTailBarFromClipDuration(entries, clipEntriesStart, clipDurationSec);
+        return entries;
+    }
+
+    /** Rehearsal 用 — forRehearsalOnly 構築後にクリップ長だけ合わせる（途中打ち切りはしない） */
+    function trimRehearsalMeterEntriesToClipDuration(entries, preRoll, clipDurationSec) {
+        if (!Array.isArray(entries) || !entries.length) return entries;
+        const clipSec = Number(clipDurationSec);
+        if (!(clipSec > 0)) return entries;
+        const clipStart = preRoll && preRoll.bars > 0 ? preRoll.bars : 0;
+        if (clipStart >= entries.length) return entries;
+        while (entries.length > clipStart + 1) {
+            let totalSec = 0;
+            for (let i = clipStart; i < entries.length; i++) {
+                totalSec += steinbergMeterEntryBarDuration(entries[i]);
+            }
+            if (totalSec <= clipSec + 0.05) break;
+            entries.pop();
+        }
+        trimPartialTailBarFromClipDuration(entries, clipStart, clipSec);
         return entries;
     }
 
@@ -461,8 +488,19 @@
         return entry.bpm + '-' + sig.num + '/' + sig.den;
     }
 
-    function phraseBarCountsFromSequenceMeterEntries(entries) {
+    function rehearsalBarCountsFromSequenceMeterEntries(entries, preRollBars) {
         if (!Array.isArray(entries) || !entries.length) return null;
+        const preRoll = Math.max(0, preRollBars | 0);
+        if (preRoll > 0 && preRoll < entries.length) {
+            const headCounts = rehearsalBarCountsFromSequenceMeterEntries(
+                entries.slice(0, preRoll),
+            );
+            const tailCounts = rehearsalBarCountsFromSequenceMeterEntries(
+                entries.slice(preRoll),
+            );
+            if (!headCounts || !tailCounts) return null;
+            return headCounts.concat(tailCounts);
+        }
         const counts = [];
         let i = 0;
         while (i < entries.length) {
@@ -564,9 +602,21 @@
         };
     }
 
-    /** 冒頭無音リージョン — Nuendo GACAssetStartTime（なければ MusicalUpbeat） */
+    /** 先頭リージョン手前の無音尺 — GAC PreRoll 小節（なければ GACAssetStartTime / MusicalUpbeat） */
     function resolveIxmlGridLeadPadSec(data) {
         if (!data) return 0;
+        const preRoll = inferPreRollFromGacAssetStartTimeAuto(
+            data.gacAssetStartTime,
+            data.tempo,
+        );
+        if (preRoll && preRoll.bars > 0) {
+            const entry = { bpm: preRoll.bpm, sig: preRoll.sig };
+            let sec = 0;
+            for (let i = 0; i < preRoll.bars; i++) {
+                sec += steinbergMeterEntryBarDuration(entry);
+            }
+            if (sec > 0.001) return sec;
+        }
         const attrs = data.attrs || {};
         const gac = Number(String(attrs.GACAssetStartTime || attrs.gacAssetStartTime || '').trim());
         if (Number.isFinite(gac) && gac > 0.001) return gac;
@@ -622,7 +672,7 @@
         return bpm + '-' + sig.num + '/' + sig.den;
     }
 
-    function phraseBarCountsFromRangeMarkers(markers, meterText) {
+    function rehearsalBarCountsFromRangeMarkers(markers, meterText) {
         if (
             typeof parseMeterSpec !== 'function' ||
             typeof getMeterEntryForBar !== 'function' ||
@@ -652,7 +702,185 @@
         return counts.length ? counts : null;
     }
 
-    function phraseBarCountsFromAudioRegionListXml(regionListRaw, meterText) {
+    /** 末尾 1 小節が PreRoll と同じ Tempo/Sig のみ — 23 小節目以降の Tempo 復帰など Rehearsal 境界にしない */
+    function trimEchoPreRollRehearsalTail(counts, entries, preRoll) {
+        if (!preRoll || !Array.isArray(counts) || counts.length < 2) return counts;
+        if (!Array.isArray(entries) || !entries.length) return counts;
+        if ((counts[counts.length - 1] | 0) !== 1) return counts;
+        const preRollKey = meterEntryTokenKey({
+            bpm: preRoll.bpm,
+            sig: preRoll.sig || { num: 4, den: 4 },
+        });
+        const lastKey = meterEntryTokenKey(entries[entries.length - 1]);
+        if (preRollKey && lastKey === preRollKey) {
+            return counts.slice(0, -1);
+        }
+        return counts;
+    }
+
+    function rehearsalBarCountsFromNuendoTempoMap(data, opt) {
+        if (!data || !(data.tempo > 0)) return null;
+        if (!Array.isArray(data.audioTempiMarkers) || !data.audioTempiMarkers.length) {
+            return null;
+        }
+        const preRoll = inferPreRollFromGacAssetStartTimeAuto(
+            data.gacAssetStartTime,
+            data.tempo,
+        );
+        const clipDurationSec =
+            opt && Number(opt.clipDurationSec) > 0
+                ? Number(opt.clipDurationSec)
+                : data.gacAssetLength;
+        const rehearsalOpt =
+            opt && typeof opt === 'object'
+                ? Object.assign({}, opt, { forRehearsalOnly: true })
+                : { forRehearsalOnly: true };
+        let entries = buildNuendoProjectMeterEntries(data, rehearsalOpt);
+        entries = trimRehearsalMeterEntriesToClipDuration(
+            entries,
+            preRoll,
+            clipDurationSec,
+        );
+        if (!entries.length) return null;
+        let counts = rehearsalBarCountsFromSequenceMeterEntries(
+            entries,
+            preRoll && preRoll.bars > 0 ? preRoll.bars : 0,
+        );
+        if (!counts || !counts.length) return null;
+        counts = trimEchoPreRollRehearsalTail(counts, entries, preRoll);
+        return counts && counts.length ? counts : null;
+    }
+
+    function readSteinbergItemAttrValue(itemEl, attrName) {
+        const itemAttrList = ixmlFirstChildElementByTag(itemEl, ['ATTR_LIST']);
+        if (!itemAttrList) return null;
+        const want = String(attrName || '').toUpperCase();
+        for (let j = 0; j < itemAttrList.childNodes.length; j++) {
+            const nestedAttr = itemAttrList.childNodes[j];
+            if (
+                !nestedAttr ||
+                nestedAttr.nodeType !== Node.ELEMENT_NODE ||
+                String(nestedAttr.tagName || '').toUpperCase() !== 'ATTR'
+            ) {
+                continue;
+            }
+            const nestedNameEl = ixmlFirstChildElementByTag(nestedAttr, ['NAME']);
+            if (!nestedNameEl) continue;
+            if (String(ixmlElementPlainText(nestedNameEl) || '').toUpperCase() !== want) {
+                continue;
+            }
+            const nestedValueEl = ixmlFirstChildElementByTag(nestedAttr, ['VALUE']);
+            return nestedValueEl ? ixmlElementPlainText(nestedValueEl) : null;
+        }
+        return null;
+    }
+
+    function rehearsalBarCountsFromRegionDurationSecs(durationsSec, meterText, clipBarOffset) {
+        if (
+            typeof parseMeterSpec !== 'function' ||
+            typeof getMeterEntryForBar !== 'function' ||
+            typeof meterBarDurationSec !== 'function'
+        ) {
+            return null;
+        }
+        const meterSpec = parseMeterSpec(meterText);
+        if (!meterSpec) return null;
+        const durations = Array.isArray(durationsSec) ? durationsSec : [];
+        if (!durations.length) return null;
+
+        let barIndex = Math.max(0, clipBarOffset | 0);
+        const counts = [];
+        for (let i = 0; i < durations.length; i++) {
+            let timeLeft = Math.max(0, Number(durations[i]) || 0);
+            if (!(timeLeft > 1e-6)) continue;
+            let barsInGroup = 0;
+            while (timeLeft > 1e-6) {
+                const entry = getMeterEntryForBar(meterSpec, barIndex);
+                if (!entry) break;
+                const barDur = meterBarDurationSec(entry);
+                if (!(barDur > 1e-6)) break;
+                barsInGroup += 1;
+                timeLeft -= barDur;
+                barIndex += 1;
+            }
+            if (barsInGroup > 0) counts.push(barsInGroup);
+        }
+        return counts.length ? counts : null;
+    }
+
+    /** Nuendo AudioRegionList — ITEM / AudioMarkerStart+End（End は次 ITEM 手前までの長さ[samples]） */
+    function rehearsalBarCountsFromSteinbergItemRegionList(regionListRaw, meterText, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const sampleRate = Number(o.sampleRate) || 0;
+        if (!(sampleRate > 0)) return null;
+        const raw = String(regionListRaw || '').trim();
+        if (!raw || raw.indexOf('<') < 0 || typeof DOMParser !== 'function') return null;
+        if (raw.indexOf('<ITEM') < 0) return null;
+
+        let doc;
+        try {
+            doc = new DOMParser().parseFromString('<ROOT>' + raw + '</ROOT>', 'application/xml');
+        } catch (_) {
+            return null;
+        }
+        if (doc.getElementsByTagName('parsererror').length) return null;
+
+        const items = doc.getElementsByTagName('ITEM');
+        if (!items || !items.length) return null;
+
+        const parsed = [];
+        for (let i = 0; i < items.length; i++) {
+            const startSamples = Number(readSteinbergItemAttrValue(items[i], 'AudioMarkerStart'));
+            const endSamples = Number(readSteinbergItemAttrValue(items[i], 'AudioMarkerEnd'));
+            if (!Number.isFinite(startSamples) || !(startSamples >= 0)) continue;
+            if (!Number.isFinite(endSamples) || !(endSamples > 0)) continue;
+            parsed.push({ startSamples, endSamples });
+        }
+        if (!parsed.length) return null;
+        parsed.sort((a, b) => a.startSamples - b.startSamples);
+
+        const durationsSec = [];
+        for (let i = 0; i < parsed.length; i++) {
+            const cur = parsed[i];
+            const next = i + 1 < parsed.length ? parsed[i + 1] : null;
+            let lenSamples;
+            if (
+                next &&
+                Math.abs(cur.startSamples + cur.endSamples - next.startSamples) < 1
+            ) {
+                lenSamples = cur.endSamples;
+            } else if (cur.endSamples > cur.startSamples) {
+                lenSamples = cur.endSamples - cur.startSamples;
+            } else {
+                lenSamples = cur.endSamples;
+            }
+            if (lenSamples > 0) durationsSec.push(lenSamples / sampleRate);
+        }
+        if (!durationsSec.length) return null;
+
+        const preRoll = inferPreRollFromGacAssetStartTimeAuto(
+            o.gacAssetStartTime,
+            o.tempo,
+        );
+        const clipBarOffset = preRoll && preRoll.bars > 0 ? preRoll.bars : 0;
+        const clipCounts = rehearsalBarCountsFromRegionDurationSecs(
+            durationsSec,
+            meterText,
+            clipBarOffset,
+        );
+        if (!clipCounts || !clipCounts.length) return null;
+        if (clipBarOffset > 0) return [clipBarOffset].concat(clipCounts);
+        return clipCounts;
+    }
+
+    function rehearsalBarCountsFromAudioRegionListXml(regionListRaw, meterText, opt) {
+        const steinbergCounts = rehearsalBarCountsFromSteinbergItemRegionList(
+            regionListRaw,
+            meterText,
+            opt,
+        );
+        if (steinbergCounts && steinbergCounts.length) return steinbergCounts;
+
         const raw = String(regionListRaw || '').trim();
         if (!raw || raw.indexOf('<') < 0 || typeof DOMParser !== 'function') return null;
         if (
@@ -731,43 +959,48 @@
         return counts.length ? counts : null;
     }
 
-    function resolvePhraseFromIxmlAndMarkers(data, meterText, opt) {
-        let counts = phraseBarCountsFromAudioRegionListXml(
-            data && data.audioRegionList,
-            meterText,
-        );
-        let source = counts && counts.length ? 'ixml-audioRegionList' : null;
-        if (
-            !counts &&
-            data &&
-            Array.isArray(data.audioTempiMarkers) &&
-            data.audioTempiMarkers.length
-        ) {
-            const entries = buildNuendoProjectMeterEntries(data, opt);
-            counts = phraseBarCountsFromSequenceMeterEntries(entries);
-            if (counts && counts.length) source = 'ixml-audioTempiList';
+    function resolveRehearsalFromIxmlAndMarkers(data, meterText, opt) {
+        const rehearsalOpt =
+            opt && typeof opt === 'object'
+                ? Object.assign({}, opt, {
+                      gacAssetStartTime: data && data.gacAssetStartTime,
+                      tempo: data && data.tempo,
+                  })
+                : {
+                      gacAssetStartTime: data && data.gacAssetStartTime,
+                      tempo: data && data.tempo,
+                  };
+        let counts = rehearsalBarCountsFromNuendoTempoMap(data, opt);
+        let source = counts && counts.length ? 'ixml-audioTempiList' : null;
+        if (!counts) {
+            counts = rehearsalBarCountsFromAudioRegionListXml(
+                data && data.audioRegionList,
+                meterText,
+                rehearsalOpt,
+            );
+            if (counts && counts.length) source = 'ixml-audioRegionList';
         }
         if (
             !counts &&
             opt &&
-            Array.isArray(opt.waveMarkersForPhrase) &&
-            opt.waveMarkersForPhrase.length
+            Array.isArray(opt.waveMarkersForRehearsal) &&
+            opt.waveMarkersForRehearsal.length
         ) {
-            counts = phraseBarCountsFromRangeMarkers(opt.waveMarkersForPhrase, meterText);
+            counts = rehearsalBarCountsFromRangeMarkers(opt.waveMarkersForRehearsal, meterText);
             if (counts && counts.length) source = 'wav-regions';
         }
         if (!counts && typeof getMarkersSnapshot === 'function') {
-            counts = phraseBarCountsFromRangeMarkers(getMarkersSnapshot(), meterText);
+            counts = rehearsalBarCountsFromRangeMarkers(getMarkersSnapshot(), meterText);
             if (counts && counts.length) source = 'wav-regions';
         }
         if (!counts || !counts.length) return null;
-        let phraseText = counts.join(',');
-        if (typeof formatPhraseTextFromGroupBarCounts === 'function') {
-            phraseText = formatPhraseTextFromGroupBarCounts(counts, { optimize: true });
+        let rehearsalText = counts.join(',');
+        if (typeof formatRehearsalTextFromGroupBarCounts === 'function') {
+            rehearsalText = formatRehearsalTextFromGroupBarCounts(counts, { optimize: true });
         }
         return {
-            phraseText: phraseText || counts.join(','),
-            phraseGroupBarCounts: counts,
+            rehearsalText: rehearsalText || counts.join(','),
+            rehearsalGroupBarCounts: counts,
             source: source || 'unknown',
         };
     }
@@ -832,47 +1065,131 @@
         return 0;
     }
 
-    function relayoutExtraTrackRegionsFromIxmlPhrase(slot, layoutOpt, opt) {
+    /** iXML のグリッド先頭オフセットをリージョン In / lead pad / 再生開始位置へ反映（Rehearsal 分割は行わない） */
+    function applyIxmlRegionStartToExtraTrack(slot, data, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        const lo = layoutOpt && typeof layoutOpt === 'object' ? layoutOpt : {};
-        if (typeof window.applyPhraseCompositionToAllExtraTrackRegions !== 'function') {
-            return 0;
-        }
-        const leadPadSec = Math.max(0, Number(lo.leadPadSec) || 0);
-        const sourceOffsetSec = Math.max(0, Number(lo.sourceOffsetSec) || 0);
-        let phraseFillWasOff = false;
+        if (!Number.isFinite(slot) || slot < 0) return false;
+        const track = { type: 'extra', slot: slot | 0 };
+        const gridLeadPadSec = resolveIxmlGridLeadPadSec(data);
+        const sourceTimeOffsetSec = resolveIxmlSourceSyncOffsetSec(data, {
+            sampleRate: o.sampleRate,
+        });
+        if (gridLeadPadSec <= 0.001 && sourceTimeOffsetSec <= 0.001) return false;
+
         if (
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            !getMusicalGridPhraseFillVisible() &&
-            typeof setMusicalGridPhraseFillVisible === 'function'
+            typeof isTrackRegionActive === 'function' &&
+            !isTrackRegionActive(track) &&
+            typeof ensureDefaultTrackRegion === 'function'
         ) {
-            phraseFillWasOff = true;
-            setMusicalGridPhraseFillVisible(true, { silent: true, skipRegionRefresh: true });
+            ensureDefaultTrackRegion(track, { skipOverlay: true, silent: true });
         }
-        if (typeof clearMusicalGridPositionCache === 'function') {
-            clearMusicalGridPositionCache();
+        if (
+            typeof getTrackSegments !== 'function' ||
+            typeof getPlaybackRegionsState !== 'function' ||
+            typeof getTrackSourceDurationSec !== 'function'
+        ) {
+            return false;
+        }
+        const existing = getTrackSegments(track);
+        if (!existing.length) return false;
+        const fullClipDur = getTrackSourceDurationSec(track);
+        if (!(fullClipDur > 0.001)) return false;
+
+        const t0 =
+            typeof getTrackTimelineStartSec === 'function' ? getTrackTimelineStartSec(track) : 0;
+        const placementSec = t0;
+        const clipId =
+            existing[0] && existing[0].clipId
+                ? existing[0].clipId
+                : typeof getDefaultExtraClipId === 'function'
+                  ? getDefaultExtraClipId(slot | 0)
+                  : 'main';
+        const regId =
+            typeof newRegionId === 'function'
+                ? newRegionId
+                : function fallbackRegionId() {
+                      return (
+                          'reg-' +
+                          Date.now().toString(36) +
+                          '-' +
+                          Math.random().toString(36).slice(2, 9)
+                      );
+                  };
+
+        let nextSegments = null;
+        if (gridLeadPadSec > 0.001) {
+            nextSegments = [
+                {
+                    id: regId(),
+                    clipId: clipId,
+                    sourceInSec: 0,
+                    sourceOutSec: fullClipDur,
+                    timelineStartSec: placementSec + gridLeadPadSec,
+                    regionTimelineInSec: placementSec,
+                    regionLeadPadSec: gridLeadPadSec,
+                },
+            ];
+        } else if (sourceTimeOffsetSec > 0.001) {
+            nextSegments = [
+                {
+                    id: existing[0].id || regId(),
+                    clipId: clipId,
+                    sourceInSec: 0,
+                    sourceOutSec: fullClipDur,
+                    timelineStartSec: placementSec + sourceTimeOffsetSec,
+                    regionTimelineInSec: placementSec,
+                },
+            ];
+        }
+        if (!nextSegments || !nextSegments.length) return false;
+
+        let applied = false;
+        if (typeof window.setTrackSegments === 'function') {
+            applied = window.setTrackSegments(track, nextSegments, {
+                silent: true,
+                skipUndo: true,
+                segmentStructureChanged: nextSegments.length !== existing.length,
+            });
+        } else if (typeof applySegmentsToState === 'function') {
+            applied = applySegmentsToState(track, nextSegments, {
+                silent: true,
+                skipUndo: true,
+                segmentStructureChanged: nextSegments.length !== existing.length,
+            });
+        } else {
+            const state = getPlaybackRegionsState(track);
+            if (!state) return false;
+            state.segments = nextSegments;
+            state.active = true;
+            state.headPadSec = Math.max(0, placementSec - t0);
+            state.regionTimelineInSec = Math.max(0, placementSec);
+            if (gridLeadPadSec > 0.001) {
+                state.regionLeadPadSec = gridLeadPadSec;
+            } else {
+                delete state.regionLeadPadSec;
+            }
+            applied = true;
+        }
+
+        if (!applied) return false;
+
+        if (typeof bumpRegionPersistEpoch === 'function') {
+            bumpRegionPersistEpoch(slot | 0);
         }
         if (typeof notifyMasterTransportDurationChanged === 'function') {
             notifyMasterTransportDurationChanged();
         }
-        const rebuilt = window.applyPhraseCompositionToAllExtraTrackRegions({
-            mapSourceFromBarRanges: true,
-            gridLeadPadSec: leadPadSec > 0.001 ? leadPadSec : 0,
-            sourceTimeOffsetSec: sourceOffsetSec > 0.001 ? sourceOffsetSec : 0,
-            preservePhraseBarCountsOverride: true,
-            forceLayout: true,
-            onlySlot: Number.isFinite(slot) ? slot : undefined,
-            silent: true,
-            skipUndo: true,
-        });
-        if (
-            phraseFillWasOff &&
-            !o.keepPhraseFillOn &&
-            typeof setMusicalGridPhraseFillVisible === 'function'
-        ) {
-            setMusicalGridPhraseFillVisible(false, { silent: true, skipRegionRefresh: true });
+        if (typeof updateTrackRegionOverlays === 'function') {
+            updateTrackRegionOverlays(track);
+        } else if (typeof redrawAfterRegionChange === 'function') {
+            redrawAfterRegionChange(slot | 0, {
+                segmentStructureChanged: nextSegments.length !== existing.length,
+            });
         }
-        return rebuilt;
+        if (typeof syncExtraAudioToTransport === 'function') {
+            syncExtraAudioToTransport({ force: true });
+        }
+        return true;
     }
 
     function applyMusicalGridFromParsedIxml(xmlText, opt) {
@@ -884,20 +1201,26 @@
         const meterText = buildMeterTextFromSteinbergMusicalData(data, o);
         if (!meterText) return false;
 
-        const phrase = resolvePhraseFromIxmlAndMarkers(data, meterText, o);
-        const snap = { meter: meterText };
-        if (phrase && phrase.phraseText) {
-            snap.phrase = phrase.phraseText;
-            if (phrase.phraseGroupBarCounts && phrase.phraseGroupBarCounts.length) {
-                snap.phraseGroupBarCounts = phrase.phraseGroupBarCounts;
+        const rehearsal = resolveRehearsalFromIxmlAndMarkers(data, meterText, o);
+        if (typeof importMeterSpecFromText === 'function') {
+            importMeterSpecFromText(meterText);
+        } else if (typeof setMusicalGridMeterText === 'function') {
+            setMusicalGridMeterText(meterText);
+        }
+        const snap = {};
+        if (rehearsal && rehearsal.rehearsalText) {
+            snap.rehearsal = rehearsal.rehearsalText;
+            if (rehearsal.rehearsalGroupBarCounts && rehearsal.rehearsalGroupBarCounts.length) {
+                snap.rehearsalGroupBarCounts = rehearsal.rehearsalGroupBarCounts;
             }
         }
 
         applyMusicalGridPersistSnapshot(snap);
+        if (typeof setTimelineMusicalSampleRate === 'function' && Number(o.sampleRate) > 0) {
+            setTimelineMusicalSampleRate(o.sampleRate);
+        }
         if (typeof setMusicalGridVisible === 'function') {
-            setMusicalGridVisible(true, { silent: true, persist: true });
-        } else if (typeof writePrefs === 'function') {
-            writePrefs();
+            setMusicalGridVisible(true, { silent: true });
         }
         if (typeof scheduleMusicalGridRedraw === 'function') {
             scheduleMusicalGridRedraw();
@@ -905,40 +1228,22 @@
 
         const leadPadSec = resolveIxmlGridLeadPadSec(data);
         const sourceOffsetSec = resolveIxmlSourceSyncOffsetSec(data, { sampleRate: o.sampleRate });
-        let regionsRelaid = 0;
-        if (
-            phrase &&
-            phrase.phraseGroupBarCounts &&
-            phrase.phraseGroupBarCounts.length &&
-            o.relayoutRegions !== false
-        ) {
-            regionsRelaid = relayoutExtraTrackRegionsFromIxmlPhrase(
-                o.slot,
-                { leadPadSec: leadPadSec, sourceOffsetSec: sourceOffsetSec },
-                o,
-            );
-        }
-
-        if (
-            leadPadSec > 0.001 &&
-            regionsRelaid > 0 &&
-            typeof setRehearsalMarkOffsetEnabled === 'function'
-        ) {
-            setRehearsalMarkOffsetEnabled(true, { silent: true });
+        if (Number.isFinite(o.slot)) {
+            applyIxmlRegionStartToExtraTrack(o.slot, data, o);
         }
 
         if (typeof writeLog === 'function') {
             const label = o.logLabel ? o.logLabel + ': ' : '';
             let msg = label + 'Tempo/Sig from iXML → ' + meterText;
-            if (phrase && phrase.phraseText) {
-                msg += ', Phrase → ' + phrase.phraseText;
-                if (phrase.source === 'wav-regions') {
+            if (rehearsal && rehearsal.rehearsalText) {
+                msg += ', Rehearsal → ' + rehearsal.rehearsalText;
+                if (rehearsal.source === 'wav-regions') {
                     msg += ' (from WAV cycle regions)';
-                } else if (phrase.source === 'ixml-audioTempiList') {
+                } else if (rehearsal.source === 'ixml-audioTempiList') {
                     msg += ' (from iXML tempo map)';
                 }
             } else if (data && data.upbeatSec != null) {
-                msg += ' (Phrase: no region data)';
+                msg += ' (Rehearsal: no region data)';
             }
             writeLog(msg);
             if (leadPadSec > 0.001 || sourceOffsetSec > 0.001) {
@@ -951,17 +1256,6 @@
                     padMsg += ', source sync ' + sourceOffsetSec.toFixed(6) + ' s';
                 }
                 writeLog(padMsg);
-            }
-            if (leadPadSec > 0.001 && regionsRelaid > 0) {
-                writeLog(label + 'R. Offset enabled (upbeat lead region)');
-            }
-            if (regionsRelaid > 0) {
-                writeLog(
-                    label +
-                        'Phrase regions relaid (' +
-                        regionsRelaid +
-                        ' track(s))',
-                );
             }
         }
         return true;

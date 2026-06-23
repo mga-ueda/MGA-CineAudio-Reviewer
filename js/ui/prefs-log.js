@@ -23,8 +23,25 @@
         return level === 'warn' || level === 'error';
     }
 
+    /** F10 の DEBUG_LOG が 1 つでも ON の間は diag tier を UI に出さない（内部蓄積・DL は全行）。 */
+    function isDiagLogUiSuppressed() {
+        return (
+            typeof window.isAnyDebugLogCategoryEnabled === 'function' &&
+            window.isAnyDebugLogCategoryEnabled()
+        );
+    }
+
+    function isLogEntryDiagTier(entry) {
+        return !!(entry && entry.tier === 'diag');
+    }
+
+    window.isDiagLogUiSuppressed = isDiagLogUiSuppressed;
+
     function getLogEntriesForDisplay() {
         let entries = logLines;
+        if (isDiagLogUiSuppressed()) {
+            entries = entries.filter((e) => !isLogEntryDiagTier(e));
+        }
         if (logWeOnlyFilter) {
             entries = entries.filter(isLogEntryWarnOrError);
         }
@@ -358,7 +375,7 @@
     }
 
     async function copyLogToClipboard() {
-        const text = getLogEntriesForDisplay().map(logEntryPlainText).join('\n');
+        const text = logLines.map(logEntryPlainText).join('\n');
         if (!text) return false;
         try {
             if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -428,7 +445,9 @@
                 : normalizeLogEntry({ message: String(message), level: opt && opt.level });
         logLines.push(entry);
         trimLogLinesToMax();
-        syncLogEl();
+        if (!isDiagLogUiSuppressed() || !isLogEntryDiagTier(entry)) {
+            syncLogEl();
+        }
         return entry;
     }
 
@@ -449,8 +468,35 @@
     window.writeLogWarn = writeLogWarn;
     window.writeLogError = writeLogError;
 
+    function triggerLogDownload() {
+        if (!logLines.length) {
+            if (typeof writeMetaLog === 'function') {
+                writeMetaLog('Log', msg('log.download.empty'));
+            } else {
+                writeLog(msg('log.download.empty'));
+            }
+            return;
+        }
+        const fileName = downloadLogToFile();
+        if (fileName) {
+            if (typeof writeMetaLog === 'function') {
+                writeMetaLog('Log', msg('log.download.saved', fileName));
+            } else {
+                writeLog(msg('log.download.saved', fileName));
+            }
+        } else {
+            if (typeof writeMetaLog === 'function') {
+                writeMetaLog('Log', msg('log.download.failed'));
+            } else {
+                writeLog(msg('log.download.failed'));
+            }
+        }
+    }
+
     window.clearLog = clearLog;
     window.copyLogToClipboard = copyLogToClipboard;
+    window.downloadLogToFile = downloadLogToFile;
+    window.triggerLogDownload = triggerLogDownload;
 
     (function bindLogActionButtons() {
         const clearBtn = document.getElementById('logClearBtn');
@@ -481,28 +527,7 @@
         const downloadBtn = document.getElementById('logDownloadBtn');
         if (downloadBtn) {
             downloadBtn.addEventListener('click', () => {
-                if (!logLines.length) {
-                    if (typeof writeMetaLog === 'function') {
-                        writeMetaLog('Log', msg('log.download.empty'));
-                    } else {
-                        writeLog(msg('log.download.empty'));
-                    }
-                    return;
-                }
-                const fileName = downloadLogToFile();
-                if (fileName) {
-                    if (typeof writeMetaLog === 'function') {
-                        writeMetaLog('Log', msg('log.download.saved', fileName));
-                    } else {
-                        writeLog(msg('log.download.saved', fileName));
-                    }
-                } else {
-                    if (typeof writeMetaLog === 'function') {
-                        writeMetaLog('Log', msg('log.download.failed'));
-                    } else {
-                        writeLog(msg('log.download.failed'));
-                    }
-                }
+                triggerLogDownload();
             });
         }
         const weOnlyCb = document.getElementById('logWeOnlyCheckbox');
@@ -641,10 +666,10 @@
             } else if (typeof prev.musicalGridVisible === 'boolean') {
                 payload.musicalGridVisible = prev.musicalGridVisible;
             }
-            if (typeof getMusicalGridPhraseFillVisible === 'function') {
-                payload.musicalGridPhraseFillVisible = getMusicalGridPhraseFillVisible();
-            } else if (typeof prev.musicalGridPhraseFillVisible === 'boolean') {
-                payload.musicalGridPhraseFillVisible = prev.musicalGridPhraseFillVisible;
+            if (typeof getMusicalGridRehearsalFillVisible === 'function') {
+                payload.musicalGridRehearsalFillVisible = getMusicalGridRehearsalFillVisible();
+            } else if (typeof prev.musicalGridRehearsalFillVisible === 'boolean') {
+                payload.musicalGridRehearsalFillVisible = prev.musicalGridRehearsalFillVisible;
             }
             if (typeof getMetronomeClickEnabled === 'function') {
                 payload.metronomeClickEnabled = getMetronomeClickEnabled();
@@ -665,6 +690,11 @@
                 payload.layoutDock = getLayoutDockPersistSnapshot();
             } else if (prev.layoutDock && typeof prev.layoutDock === 'object') {
                 payload.layoutDock = prev.layoutDock;
+            }
+            if (typeof getDevConstantsPersistSnapshot === 'function') {
+                payload.devConstants = getDevConstantsPersistSnapshot();
+            } else if (prev.devConstants && typeof prev.devConstants === 'object') {
+                payload.devConstants = prev.devConstants;
             }
             localStorage.setItem(LS_PREFS_KEY, JSON.stringify(payload));
         } catch (_) {}

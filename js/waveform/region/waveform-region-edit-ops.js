@@ -463,12 +463,12 @@
         }
         if (typeof clearRegionSelection === 'function') clearRegionSelection();
         const gapEntries = entries.filter((e) => e.segmentIndex < 0);
-        const phraseFillOn =
-            typeof getMusicalGridPhraseFillVisible === 'function' &&
-            getMusicalGridPhraseFillVisible();
+        const rehearsalFillOn =
+            typeof getMusicalGridRehearsalFillVisible === 'function' &&
+            getMusicalGridRehearsalFillVisible();
         if (!regionUndoPaused) {
             requestRegionUndoCapture({
-                includePhrase: !!(phraseFillOn && gapEntries.length),
+                includeRehearsal: !!(rehearsalFillOn && gapEntries.length),
             });
         }
 
@@ -998,6 +998,26 @@
         return trackHasCrossfadeOverlapForWaveformPreview({ type: 'extra', slot });
     }
 
+    /** In/Out ハンドル — ソース In/Out または region In が変わるので波形を追従描画 */
+    function needsRegionEdgeWaveformPreviewDuringGeometryDrag(slot, opt) {
+        if (!isRegionGeometryOnlyDrag(opt)) return false;
+        if (!(typeof slot === 'number' && slot >= 0)) return false;
+        if (
+            regionHandleDragActive &&
+            (regionHandleDragKind === 'in' || regionHandleDragKind === 'out')
+        ) {
+            return true;
+        }
+        return false;
+    }
+
+    function needsWaveformPreviewDuringRegionGeometryDrag(slot, opt) {
+        return (
+            needsCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt) ||
+            needsRegionEdgeWaveformPreviewDuringGeometryDrag(slot, opt)
+        );
+    }
+
     /** ドラッグ中の軽量更新（フェード＝クロスフェードプレビューは除く） */
     function isRegionGeometryOnlyDrag(opt) {
         if (opt && opt.geometryOnly === false) return false;
@@ -1066,11 +1086,11 @@
 
     function redrawAfterRegionChange(slot, opt) {
         const geometryOnly = isRegionGeometryOnlyDrag(opt);
-        const crossfadeWaveform = needsCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt);
-        if (geometryOnly && !crossfadeWaveform) {
+        const waveformPreview = needsWaveformPreviewDuringRegionGeometryDrag(slot, opt);
+        if (geometryOnly && !waveformPreview) {
             return;
         }
-        if (geometryOnly && crossfadeWaveform) {
+        if (geometryOnly && waveformPreview) {
             redrawCrossfadeWaveformPreviewDuringGeometryDrag(slot, opt);
             return;
         }
@@ -1134,6 +1154,49 @@
         }
     }
 
+    /** リハーサルマーク追従 — タイムライン先頭の小節線はスキップ */
+    function isRehearsalBarLineAtTimelineStart(transportSec) {
+        const t = Number(transportSec);
+        return !Number.isFinite(t) || t <= 1e-6;
+    }
+
+    function splitAllExtraTrackRegionsAtBarLine(transportSec, opt) {
+        if (isRehearsalBarLineAtTimelineStart(transportSec)) return 0;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return 0;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        let count = 0;
+        const n = getExtraTrackCount();
+        for (let slot = 0; slot < n; slot++) {
+            if (!isExtraSlotUsableForRegion(slot)) continue;
+            const track = { type: 'extra', slot };
+            if (!isTrackRegionActive(track)) continue;
+            if (!(getTrackSourceDurationSec(track) > PLAYBACK_REGION_MIN_SEC)) continue;
+            if (trySplitTrackAtTransportSec(track, t, { skipUndo: true, silent: true })) {
+                count++;
+            }
+        }
+        if (count > 0 && !o.silent && typeof writeLog === 'function') {
+            writeLog(
+                'Rehearsal mark: split regions at ' +
+                    t.toFixed(3) +
+                    ' s (' +
+                    count +
+                    ' track' +
+                    (count === 1 ? '' : 's') +
+                    ')',
+            );
+        }
+        return count;
+    }
+
+    window.isRehearsalBarLineAtTimelineStart = isRehearsalBarLineAtTimelineStart;
+    window.splitAllExtraTrackRegionsAtBarLine = splitAllExtraTrackRegionsAtBarLine;
+    window.trySplitTrackAtTransportSec = trySplitTrackAtTransportSec;
     window.getActiveMixExtraSlotFromDom = getActiveMixExtraSlotFromDom;
     window.needsCrossfadeWaveformPreviewDuringGeometryDrag =
         needsCrossfadeWaveformPreviewDuringGeometryDrag;
+    window.needsRegionEdgeWaveformPreviewDuringGeometryDrag =
+        needsRegionEdgeWaveformPreviewDuringGeometryDrag;
+    window.needsWaveformPreviewDuringRegionGeometryDrag =
+        needsWaveformPreviewDuringRegionGeometryDrag;

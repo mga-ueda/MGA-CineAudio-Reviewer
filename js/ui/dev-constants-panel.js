@@ -12,6 +12,10 @@
         'TEMPO_STRETCH',
         'SILENT_GAP_DELETE',
         'IXML',
+        'MUSICAL_TRACK_PERSIST',
+        'REGION_BAR_JUMP',
+        'GRID_ALIGN',
+        'MARKER_POINTER',
     ];
 
     const DEBUG_LOG_META = {
@@ -26,9 +30,9 @@
             desc: '平行移動ドラッグ確定時のポインタ位置・スナップ後・実際の region In。境界ずれの調査に。',
         },
         MUSICAL_SLOT: {
-            label: 'Musical / Phrase スロット',
+            label: 'Musical / Rehearsal スロット',
             tag: '[MusicalSlot]',
-            desc: 'SwapUnit バインディング・入れ替え・無音選択。Phrase 着色時の番号ずれ・binding 不整合の調査。',
+            desc: 'SwapUnit バインディング・入れ替え・無音選択。Rehearsal 着色時の番号ずれ・binding 不整合の調査。',
         },
         WAVEFORM_VIEWPORT: {
             label: '波形ビューポート',
@@ -53,20 +57,44 @@
         SILENT_GAP_DELETE: {
             label: '無音 gap 削除',
             tag: '[SilentGapDel]',
-            desc: 'Ctrl+クリック無音選択・Delete 経路。削除効かない・フレーズ定義崩れの調査。',
+            desc: 'Ctrl+クリック無音選択・Delete 経路。削除効かない・Rehearsal 定義崩れの調査。',
         },
         IXML: {
             label: 'iXML / WAV メタデータ',
             tag: '[iXML]',
             desc: 'WAV 読込時の iXML・AXML・BWF bext・INFO 全文をログへ。',
         },
+        MUSICAL_TRACK_PERSIST: {
+            label: 'Musical トラック保存/復元',
+            tag: '[MusicalTrack]',
+            desc:
+                'Rehearsal / Tempo / Signature トラックの set・persist・snapshot・apply・pending・セッション IDB 経路をログ。テンポ定義・拍子変化・リハーサルマークの保存・復元不具合の調査用。',
+        },
+        REGION_BAR_JUMP: {
+            label: 'Measure ジャンプ (G / 数字)',
+            tag: 'BarJump',
+            desc:
+                'G ダイアログ Measure ジャンプの resolve/hit・miss・skipped。Measure 1 = タイムライン先頭。',
+        },
+        GRID_ALIGN: {
+            label: 'マーカー ↔ 小節線',
+            tag: 'GridAln',
+            desc:
+                'WAV 読込後 — 各マーカー In/Out と最寄り小節境界の秒差・フレーム差・描画 px 差。累積ドリフト調査用。',
+        },
+        MARKER_POINTER: {
+            label: 'MARKERS / 操作帯 pointer',
+            tag: 'MrkPtr',
+            desc:
+                '波形 capture — リージョン In/Out/Fade vs MARKERS ドラッグ vs シークの採否、resolve 成否、ドラッグ適用秒。T ON で動かない調査用。',
+        },
     };
 
     const REGION_HIT_DEBUG_META = {
-        label: 'リージョン操作帯',
+        label: '操作帯デバッグ描画',
         tag: 'overlay',
         desc:
-            'Fade 三角・In/Out・Split・クロスフェード重なり・Phrase 境界・上端 fade 予約帯を色分け表示（ログとは別）。',
+            'リージョン（Fade/In/Out/Split/x-fade/Rehearsal）と Musical トラック（Rehearsal 枠/文字、Tempo/Sig ドラッグ・編集）の当たり判定を色分け表示（ログとは別）。',
     };
 
     let overlayEl = null;
@@ -83,14 +111,20 @@
         return window.TEMPO_STRETCH_VERIFY;
     }
 
-    function setTempoStretchSkipApply(on) {
+    function persistDevConstantsPrefs() {
+        if (typeof writePrefs === 'function') writePrefs();
+    }
+
+    function setTempoStretchSkipApply(on, options) {
+        const silent = options && options.silent;
         ensureTempoStretchVerify().skipApply = !!on;
         if (skipApplyCheckbox) skipApplyCheckbox.checked = !!on;
-        if (typeof writeLog === 'function') {
+        if (!silent && typeof writeLog === 'function') {
             writeLog(
                 '[TempoStretch/Verify] skipApply ' + (on ? 'ON' : 'OFF'),
             );
         }
+        persistDevConstantsPrefs();
     }
 
     function debugLogKeysInPanelOrder() {
@@ -116,11 +150,8 @@
     }
 
     function applyDebugLogSideEffects() {
-        if (typeof window.applyDebugLogToggleSideEffects === 'function') {
-            window.applyDebugLogToggleSideEffects();
-        }
-        if (typeof window.scheduleWaveformRegionOverlayRefresh === 'function') {
-            window.scheduleWaveformRegionOverlayRefresh();
+        if (typeof window.applyDevConstantsRuntimeSideEffects === 'function') {
+            window.applyDevConstantsRuntimeSideEffects();
         }
     }
 
@@ -130,6 +161,7 @@
         }
         window.DEBUG_LOG[key] = !!on;
         applyDebugLogSideEffects();
+        persistDevConstantsPrefs();
     }
 
     function setRegionHandleHitDebug(on) {
@@ -137,6 +169,7 @@
         window.REGION_HANDLE_HIT_DEBUG = v;
         window.FADE_TRIANGLE_HIT_DEBUG = v;
         applyDebugLogSideEffects();
+        persistDevConstantsPrefs();
     }
 
     function setAllOff() {
@@ -147,9 +180,10 @@
         }
         window.REGION_HANDLE_HIT_DEBUG = false;
         window.FADE_TRIANGLE_HIT_DEBUG = false;
-        setTempoStretchSkipApply(false);
+        setTempoStretchSkipApply(false, { silent: true });
         syncCheckboxesFromState();
         applyDebugLogSideEffects();
+        persistDevConstantsPrefs();
     }
 
     function buildActionButton(label, onClick) {
@@ -332,7 +366,7 @@
 
         const drawBlock = buildSection(
             'デバッグ描画',
-            'ログではなく波形 overlay 上への色付き表示。',
+            'ログではなく波形 overlay 上への色付き当たり判定表示（リージョン + Musical トラック）。',
             null,
         );
         drawBlock.list.appendChild(
@@ -373,7 +407,7 @@
         const hint = document.createElement('p');
         hint.className = 'dev-constants-panel__hint';
         hint.textContent =
-            '実行中のみ有効。再読み込みで初期値に戻ります。いずれか ON の間はログ行数が無制限（OFF で 500 行上限）。';
+            '設定は localStorage に保存（Import/Export 対象外）。いずれか ON の間はログ行数が無制限（OFF で 500 行上限）。';
 
         headerText.appendChild(title);
         headerText.appendChild(hint);
@@ -415,6 +449,23 @@
             }
         });
 
+        const logDownloadBtn = document.createElement('button');
+        logDownloadBtn.type = 'button';
+        logDownloadBtn.className = 'dev-constants-panel__all-off-btn';
+        logDownloadBtn.textContent = 'ログダウンロード';
+        if (typeof msg === 'function') {
+            logDownloadBtn.title = msg('tooltip.logDownload');
+        }
+        logDownloadBtn.addEventListener('click', () => {
+            if (typeof window.triggerLogDownload === 'function') {
+                window.triggerLogDownload();
+                return;
+            }
+            if (typeof writeLog === 'function') {
+                writeLog('Log download unavailable');
+            }
+        });
+
         const logClearBtn = document.createElement('button');
         logClearBtn.type = 'button';
         logClearBtn.className = 'dev-constants-panel__all-off-btn';
@@ -428,6 +479,7 @@
 
         headerActions.appendChild(allOffBtn);
         headerActions.appendChild(logCopyBtn);
+        headerActions.appendChild(logDownloadBtn);
         headerActions.appendChild(logClearBtn);
 
         header.appendChild(headerText);
@@ -439,7 +491,9 @@
 
         const footer = document.createElement('p');
         footer.className = 'dev-constants-panel__footer';
-        footer.innerHTML = '<kbd>F10</kbd> 開閉 · <kbd>Esc</kbd> / 枠外クリックで閉じる';
+        footer.innerHTML =
+            '<kbd>F10</kbd> 開閉 · <kbd>Esc</kbd> / 枠外クリックで閉じる · ' +
+            'いずれか ON 時 <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> ログ DL';
 
         panelEl.appendChild(header);
         panelEl.appendChild(bodyEl);
@@ -481,6 +535,23 @@
         else openDevConstantsPanel();
     }
 
+    function isAnyDevConstantsPanelCheckboxEnabled() {
+        if (
+            typeof window.isAnyDebugLogCategoryEnabled === 'function' &&
+            window.isAnyDebugLogCategoryEnabled()
+        ) {
+            return true;
+        }
+        if (
+            typeof window.isRegionHandleHitDebugEnabled === 'function' &&
+            window.isRegionHandleHitDebugEnabled()
+        ) {
+            return true;
+        }
+        const verify = window.TEMPO_STRETCH_VERIFY;
+        return !!(verify && verify.skipApply);
+    }
+
     function handleDevConstantsPanelKeydown(e) {
         if (!e || e.type !== 'keydown') return false;
         if (open && e.code === 'Escape') {
@@ -493,9 +564,21 @@
             toggleDevConstantsPanel();
             return true;
         }
+        if (
+            typeof matchUserShortcut === 'function' &&
+            matchUserShortcut(e, 'logDownload') &&
+            isAnyDevConstantsPanelCheckboxEnabled()
+        ) {
+            e.preventDefault();
+            if (typeof window.triggerLogDownload === 'function') {
+                window.triggerLogDownload();
+            }
+            return true;
+        }
         return false;
     }
 
+    window.isAnyDevConstantsPanelCheckboxEnabled = isAnyDevConstantsPanelCheckboxEnabled;
     window.handleDevConstantsPanelKeydown = handleDevConstantsPanelKeydown;
     window.toggleDevConstantsPanel = toggleDevConstantsPanel;
     window.closeDevConstantsPanel = closeDevConstantsPanel;

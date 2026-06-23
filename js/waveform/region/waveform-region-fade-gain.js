@@ -215,6 +215,19 @@
         regionInTransport,
         regionDur,
     ) {
+        if (
+            typeof isSegmentSilentGridRegion === 'function' &&
+            isSegmentSilentGridRegion(track, segmentIndex)
+        ) {
+            return {
+                fadeInAxisRatio: 0,
+                fadeOutAxisRatio: 1,
+                showIn: false,
+                showOut: false,
+                fadeInSec: 0,
+                fadeOutSec: 0,
+            };
+        }
         const dur = Math.max(0.001, Number(regionDur) || 0);
         const regionIn = Number(regionInTransport) || 0;
         const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
@@ -312,6 +325,12 @@
 
     /** 三角マーカー表示可否（従来の fadeMax または等パワー重なり） */
     function segmentFadeTriangleHandleAllowed(track, segmentIndex, kind) {
+        if (
+            typeof isSegmentSilentGridRegion === 'function' &&
+            isSegmentSilentGridRegion(track, segmentIndex)
+        ) {
+            return false;
+        }
         const maxAllowed = getSegmentFadeDurationLimit(track, segmentIndex, kind);
         if (maxAllowed > 0.0005) return true;
         return (

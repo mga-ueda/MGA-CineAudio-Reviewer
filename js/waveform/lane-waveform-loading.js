@@ -32,13 +32,18 @@
     function resolveLaneGridRowStr(lane) {
         if (!lane) return '';
         if (lane.style.gridRow) return lane.style.gridRow;
+        if (lane.id === 'musicalRehearsalLane') return '1';
+        if (lane.id === 'musicalTempoLane') return '2';
+        if (lane.id === 'musicalSignatureLane') return '3';
+        if (lane.id === 'musicalMeasureLane') return '4';
         const videoMeta =
             typeof audioWaveformPanel !== 'undefined' ? audioWaveformPanel : null;
         const videoLane =
             typeof audioWaveformLaneVideo !== 'undefined' ? audioWaveformLaneVideo : null;
         const videoShown = !!(videoMeta && !videoMeta.hidden);
-        if (lane === videoLane) return videoShown ? '1' : '';
-        let row = videoShown ? 2 : 1;
+        let row = 5;
+        if (lane === videoLane) return videoShown ? String(row) : '';
+        if (videoShown) row += 1;
         const n = typeof EXTRA_TRACK_COUNT !== 'undefined' ? EXTRA_TRACK_COUNT : 0;
         for (let i = 0; i < n; i++) {
             const meta = document.getElementById('extraAudioMeta' + i);

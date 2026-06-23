@@ -349,7 +349,16 @@
             typeof stopPlaybackReturnTransportToHead === 'function'
         ) {
             stopPlaybackReturnTransportToHead();
-            writeLog('Playback: end reached (returned to head)');
+            const returnSec =
+                typeof transportPlaybackStartSec !== 'undefined' &&
+                Number.isFinite(transportPlaybackStartSec)
+                    ? transportPlaybackStartSec
+                    : 0;
+            writeLog(
+                'Playback: end reached (returned to ' +
+                    formatTimecodeForTransport(returnSec) +
+                    ')',
+            );
             return;
         }
         videoMain.pause();

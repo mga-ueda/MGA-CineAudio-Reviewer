@@ -243,6 +243,23 @@
                 ? existing.absoluteBufferOff
                 : Number(segHit.bufferOff) || 0;
             let keepExisting = pitch === (existing.pitchSemitones || 0);
+            if (keepExisting && (existing.segmentIndex | 0) !== (segHit.segmentIndex | 0)) {
+                keepExisting = false;
+            }
+            if (keepExisting) {
+                const expectedOff = Number(segHit.bufferOff) || 0;
+                if (Math.abs(absOff - expectedOff) > 0.002) {
+                    keepExisting = false;
+                } else if (
+                    existing.src &&
+                    existing.src.playbackRate &&
+                    Number.isFinite(existing.src.playbackRate.value) &&
+                    existing.src.playbackRate.value < 0.985
+                ) {
+                    // transport-swap 後に regionTimelineOutSec パディング由来の低速再生が残る場合
+                    keepExisting = false;
+                }
+            }
             if (
                 keepExisting &&
                 pitch !== 0 &&
@@ -718,9 +735,11 @@
         let pitchSliceTimelineFitRate = 1;
         if (Number.isFinite(playTransportSec)) {
             let timelineEnd =
-                typeof getSegmentTimelineEnd === 'function'
-                    ? getSegmentTimelineEnd(trackRef, segHit.segmentIndex)
-                    : segHit.timelineEnd;
+                typeof getSegmentRegionTimelineOut === 'function'
+                    ? getSegmentRegionTimelineOut(trackRef, segHit.segmentIndex)
+                    : typeof getSegmentTimelineEnd === 'function'
+                      ? getSegmentTimelineEnd(trackRef, segHit.segmentIndex)
+                      : segHit.timelineEnd;
             if (!Number.isFinite(timelineEnd)) {
                 timelineEnd = segHit.timelineEnd;
             }
@@ -849,6 +868,71 @@
             }
         }
         playDur = Math.max(0.002, playDur);
+        let regionTimelineFitRate = 1;
+        if (
+            segmentPitch === 0 &&
+            !usesPitchSlice &&
+            !useLivePitchStretch &&
+            Number.isFinite(playTransportSec) &&
+            typeof getSegmentRegionTimelineOut === 'function' &&
+            typeof getSegmentPlaybackTimelineStart === 'function'
+        ) {
+            const playbackStart = getSegmentPlaybackTimelineStart(
+                trackRef,
+                segHit.segmentIndex,
+            );
+            const regionOut = getSegmentRegionTimelineOut(
+                trackRef,
+                segHit.segmentIndex,
+            );
+            const totalTimelineSpan = Math.max(0, regionOut - playbackStart);
+            let totalSourceSpan = Math.max(0.002, playDur);
+            if (typeof getTrackSegments === 'function') {
+                const segRow = getTrackSegments(trackRef)[segHit.segmentIndex];
+                if (
+                    segRow &&
+                    Number.isFinite(segRow.sourceInSec) &&
+                    Number.isFinite(segRow.sourceOutSec)
+                ) {
+                    totalSourceSpan = Math.max(
+                        0.002,
+                        segRow.sourceOutSec - segRow.sourceInSec,
+                    );
+                }
+            }
+            if (totalTimelineSpan > totalSourceSpan + 0.001) {
+                regionTimelineFitRate = totalSourceSpan / totalTimelineSpan;
+                if (
+                    typeof pitchPlaybackLog === 'function' &&
+                    Math.abs(regionTimelineFitRate - 1) > 0.005
+                ) {
+                    pitchPlaybackLog('start/region-timeline-fit', {
+                        segmentIndex: segHit.segmentIndex,
+                        regionTimelineFitRate,
+                        totalTimelineSpan,
+                        totalSourceSpan,
+                        timelineRemain: Math.max(0, regionOut - playTransportSec),
+                        sourceRemain: playDur,
+                        playbackStart,
+                        regionOut,
+                        hasStoredOut: (() => {
+                            if (typeof getTrackSegments !== 'function') return null;
+                            const segRow = getTrackSegments(trackRef)[segHit.segmentIndex];
+                            return !!(
+                                segRow && Number.isFinite(segRow.regionTimelineOutSec)
+                            );
+                        })(),
+                    });
+                }
+                const timelineEnd = regionOut;
+                const timelineRemain = Math.max(0, timelineEnd - playTransportSec);
+                playDur = Math.min(
+                    playDur,
+                    timelineRemain * regionTimelineFitRate + 0.006 * regionTimelineFitRate,
+                    playbackBuffer.duration - startAt,
+                );
+            }
+        }
         if (usesPitchSlice && typeof pitchPlaybackLog === 'function') {
             const timelineEndLog =
                 typeof getSegmentTimelineEnd === 'function'
@@ -934,8 +1018,8 @@
             pitchRate = applySegmentPitchToBufferSource(src, segmentPitch);
         } else {
             src.detune.value = 0;
-            src.playbackRate.value = 1;
-            pitchRate = 1;
+            src.playbackRate.value = regionTimelineFitRate;
+            pitchRate = regionTimelineFitRate;
         }
         const segGain = ctx.createGain();
         segGain.gain.value = Math.max(0, gainLinear);

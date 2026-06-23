@@ -12,6 +12,13 @@
                 markerPanelPointerInside = false;
                 markerPanelHoverId = null;
                 updateMarkerListRowClasses();
+                if (
+                    typeof isMarkerListEditableFieldActive === 'function' &&
+                    !isMarkerListEditableFieldActive() &&
+                    typeof cancelTransportExplicitSeekTail === 'function'
+                ) {
+                    cancelTransportExplicitSeekTail();
+                }
             });
             markerPanelEl.addEventListener(
                 'keydown',
@@ -51,6 +58,12 @@
                     return;
                 }
                 if (handleMarkerHideViewKeydown(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                } else if (
+                    typeof handleMusicalGridBarNavKeydown === 'function' &&
+                    handleMusicalGridBarNavKeydown(e)
+                ) {
                     e.preventDefault();
                     e.stopPropagation();
                 } else if (handleMarkerStopJumpKeydown(e)) {
@@ -121,7 +134,6 @@
                 if (typeof scheduleWaveformFocusRestore === 'function') scheduleWaveformFocusRestore();
             });
         }
-        updateMarkerHideViewButton();
         syncMarkerMemoTextarea();
         if (audioWaveformMarkers) {
             audioWaveformMarkers.replaceChildren();
@@ -129,9 +141,10 @@
             audioWaveformMarkers.hidden = true;
         }
         renderMarkerList();
-        renderSeekBarMarkers();
+        applyMarkersDisplayVisibility();
         updateMarkerRangeHint();
         updateMarkerCommentOverlay();
+        updateMarkerHideViewButton();
 
         const lanes =
             typeof audioWaveformLanesTracks !== 'undefined'

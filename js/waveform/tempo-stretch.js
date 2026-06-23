@@ -787,7 +787,7 @@
         return s;
     }
 
-    /** Tempo/Sig 接頭辞のみ変更時 — Phrase 再配置せず region 列を比例スケール */
+    /** Tempo/Sig 接頭辞のみ変更時 — Rehearsal 再配置せず region 列を比例スケール */
     function scaleAllExtraTrackRegionsForTempoStretch(prevSpec, nextSpec, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const scale = tempoStretchRegionScaleFactor(prevSpec, nextSpec);

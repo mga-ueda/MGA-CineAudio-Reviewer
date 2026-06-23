@@ -18,18 +18,17 @@
             const tr = extraTrackBySlot(track.slot);
             if (tr) tr.viewportPeaks = null;
         }
-        if (Number.isFinite(opt && opt.regionHeadPadSec)) {
+        if (opt && Number.isFinite(opt.regionHeadPadSec)) {
             state.headPadSec = Math.max(0, opt.regionHeadPadSec);
         }
-        if (Number.isFinite(opt && opt.regionTimelineInSec)) {
-            state.regionTimelineInSec = Math.max(0, opt.regionTimelineInSec);
-        } else {
-            delete state.regionTimelineInSec;
+        if (opt && Number.isFinite(opt.regionTimelineInSec) && state.segments[0]) {
+            state.segments[0].regionTimelineInSec = opt.regionTimelineInSec;
         }
-        if (Number.isFinite(opt && opt.regionLeadPadSec) && opt.regionLeadPadSec > 0) {
-            state.regionLeadPadSec = Math.max(0, opt.regionLeadPadSec);
-        } else {
-            delete state.regionLeadPadSec;
+        if (opt && Number.isFinite(opt.regionLeadPadSec) && opt.regionLeadPadSec > 0 && state.segments[0]) {
+            state.segments[0].regionLeadPadSec = Math.max(0, opt.regionLeadPadSec);
+        }
+        if (typeof syncTrackRegionHeadStateFromFirstSegment === 'function') {
+            syncTrackRegionHeadStateFromFirstSegment(track);
         }
         if (!(opt && opt.skipOverlay) && typeof updateTrackRegionOverlays === 'function') {
             updateTrackRegionOverlays(track);
@@ -194,11 +193,16 @@
             const regionIn =
                 state && Number.isFinite(state.regionTimelineInSec)
                     ? state.regionTimelineInSec
-                    : undefined;
+                    : typeof getSegmentRegionTimelineIn === 'function'
+                      ? getSegmentRegionTimelineIn(track, 0)
+                      : undefined;
             const regionLead =
                 state && Number.isFinite(state.regionLeadPadSec) && state.regionLeadPadSec > 0
                     ? state.regionLeadPadSec
-                    : undefined;
+                    : typeof getSegmentRegionLeadPadSec === 'function' &&
+                        getSegmentRegionLeadPadSec(track, 0) > 0.00001
+                      ? getSegmentRegionLeadPadSec(track, 0)
+                      : undefined;
             let timelineSlots;
             if (typeof window.timelineSlotsPersistSlice === 'function') {
                 try {
@@ -213,22 +217,40 @@
                 regionTimelineInSec: regionIn,
                 regionLeadPadSec: regionLead,
                 timelineSlots,
-                segments: segments.map((seg, i) => {
-                    const raw = getRawSegmentEntry(track, i);
+                segments: segments.map((seg, segIndex) => {
+                    const raw = getRawSegmentEntry(track, segIndex);
                     const entry = {
                         id: seg.id,
                         clipId: seg.clipId,
                         sourceInSec: seg.sourceInSec,
                         sourceOutSec: seg.sourceOutSec,
                     };
-                    if (raw && Number.isFinite(raw.timelineStartSec)) {
-                        entry.timelineStartSec = raw.timelineStartSec;
+                    const timelineStart =
+                        raw && Number.isFinite(raw.timelineStartSec)
+                            ? raw.timelineStartSec
+                            : typeof getSegmentTimelineStart === 'function'
+                              ? getSegmentTimelineStart(track, segIndex)
+                              : undefined;
+                    if (Number.isFinite(timelineStart)) {
+                        entry.timelineStartSec = timelineStart;
                     }
-                    if (raw && Number.isFinite(raw.regionTimelineInSec)) {
-                        entry.regionTimelineInSec = raw.regionTimelineInSec;
+                    const segRegionIn =
+                        raw && Number.isFinite(raw.regionTimelineInSec)
+                            ? raw.regionTimelineInSec
+                            : typeof getSegmentRegionTimelineIn === 'function'
+                              ? getSegmentRegionTimelineIn(track, segIndex)
+                              : undefined;
+                    if (Number.isFinite(segRegionIn)) {
+                        entry.regionTimelineInSec = segRegionIn;
                     }
-                    if (raw && Number.isFinite(raw.regionLeadPadSec)) {
-                        entry.regionLeadPadSec = raw.regionLeadPadSec;
+                    const segLeadPad =
+                        typeof getSegmentRegionLeadPadSec === 'function'
+                            ? getSegmentRegionLeadPadSec(track, segIndex)
+                            : raw && Number.isFinite(raw.regionLeadPadSec)
+                              ? raw.regionLeadPadSec
+                              : 0;
+                    if (segLeadPad > 0.00001) {
+                        entry.regionLeadPadSec = segLeadPad;
                     }
                     if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
                         entry.gainDb = raw.gainDb;
@@ -310,18 +332,21 @@
                         if (Number.isFinite(entry.headPadSec)) {
                             state.headPadSec = Math.max(0, entry.headPadSec);
                         }
-                        if (Number.isFinite(entry.regionTimelineInSec)) {
-                            state.regionTimelineInSec = Math.max(
-                                0,
-                                entry.regionTimelineInSec,
-                            );
-                        } else {
-                            delete state.regionTimelineInSec;
+                        if (Number.isFinite(entry.regionTimelineInSec) && state.segments[0]) {
+                            state.segments[0].regionTimelineInSec = entry.regionTimelineInSec;
                         }
-                        if (Number.isFinite(entry.regionLeadPadSec)) {
-                            state.regionLeadPadSec = Math.max(0, entry.regionLeadPadSec);
-                        } else {
-                            delete state.regionLeadPadSec;
+                        if (
+                            Number.isFinite(entry.regionLeadPadSec) &&
+                            entry.regionLeadPadSec > 0 &&
+                            state.segments[0]
+                        ) {
+                            state.segments[0].regionLeadPadSec = Math.max(
+                                0,
+                                entry.regionLeadPadSec,
+                            );
+                        }
+                        if (typeof syncTrackRegionHeadStateFromFirstSegment === 'function') {
+                            syncTrackRegionHeadStateFromFirstSegment(track);
                         }
                         if (!batchRestore) {
                             if (typeof window.refreshTrackTimelineMusicalSlots === 'function') {

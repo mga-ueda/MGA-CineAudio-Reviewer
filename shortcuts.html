@@ -20,7 +20,7 @@
                     <tr>
                         <td>テキスト入力中は下記の多くが無効</td>
                         <td>—</td>
-                        <td>入力欄・コメント欄・TC 欄・Additional Comments 欄など。一部 <kbd>Esc</kbd> は有効（優先順位は末尾参照）。マーカー一覧行への <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> は Comment / In / Out 欄の編集中も有効。<strong>Comment</strong> 列や Additional Comments 欄の編集中は <kbd>T</kbd> / <kbd>P</kbd> など多くのグローバルショートカットは無効</td>
+                        <td>入力欄・コメント欄・TC 欄・Additional Comments 欄など。一部 <kbd>Esc</kbd> は有効（優先順位は末尾参照）。マーカー一覧行への <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> は Comment / In / Out 欄の編集中も有効。<strong>Comment</strong> 列や Additional Comments 欄の編集中は <kbd>T</kbd> / <kbd>R</kbd> など多くのグローバルショートカットは無効</td>
                     </tr>
                     <tr>
                         <td>Mac（修飾キー）</td>
@@ -43,7 +43,7 @@
                     <tr>
                         <td>ファイルの読み込み</td>
                         <td>ドロップ</td>
-                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当。<strong>WAV / WAVE のみ</strong> — 埋め込みマーカー/リージョンと<strong>埋め込み Comment（ラベル）</strong>を Markers パネルへ自動反映（FLAC / MP3 / OGG / M4A 等は非対応）。Nuendo/Cubase 等の <strong>iXML</strong>（Steinberg メタデータ）があれば Tempo/Sig・Phrase・再生リージョンも Audio Track へ自動反映（Import Review / セッション復元時を除く）</td>
+                        <td>ページ内のどこへでも（入力欄以外）。拡張子で判別 — 動画・追加音声・.mgacr を読み込み。混在時は .mgacr のみ。Audio Track レーン上なら同トラックへクリップ追加。波形エリア全体へ複数音声をドロップすると空いている Audio Track へ<strong>1 ファイルずつ</strong>順に割当。<strong>WAV / WAVE のみ</strong> — 埋め込みマーカー/リージョンと<strong>埋め込み Comment（ラベル）</strong>を Markers パネルへ自動反映（FLAC / MP3 / OGG / M4A 等は非対応）。Nuendo/Cubase 等の <strong>iXML</strong>（Steinberg メタデータ）があれば Tempo/Sig・Rehearsal・再生リージョンも Audio Track へ自動反映（Import Review / セッション復元時を除く）</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">再生（動画読込後）</th>
@@ -88,33 +88,38 @@
                     </tr>
                     <tr>
                         <td>冒頭へ</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>PgUp</kbd></td>
+                        <td><kbd>Ctrl</kbd>+<kbd>PgUp</kbd> / <kbd>Ctrl</kbd>+<kbd>Home</kbd></td>
                         <td>タイムライン先頭（0）。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>末尾へ</td>
-                        <td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd></td>
+                        <td><kbd>Ctrl</kbd>+<kbd>PgDn</kbd> / <kbd>Ctrl</kbd>+<kbd>End</kbd></td>
                         <td>タイムライン末尾。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>タイムライン上の停止点へ移動</td>
                         <td><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td><kbd>→</kbd>＝次、<kbd>←</kbd>＝前。マーカー表示中（Hide でない）＞小節/フレーズ（Tempo/Sig または Phrase 着色。拍線は含まない）＞リージョンの優先順。キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開</td>
+                        <td>マーカー表示中（Hide でない）＞小節/Rehearsal 区間（Tempo/Sig または Rehearsal 表示。拍線は含まない）＞リージョンの優先順。キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開</td>
+                    </tr>
+                    <tr>
+                        <td>小節線へ移動（前/次）</td>
+                        <td><kbd>Home</kbd> / <kbd>End</kbd></td>
+                        <td><strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> 時のみ。修飾キーなしの <kbd>Home</kbd>/<kbd>End</kbd> で前後の<strong>小節線</strong>へ（Rehearsal 境界・マーカー・リージョンは含まない）。キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開</td>
                     </tr>
                     <tr>
                         <td>位置ジャンプ（尺の10分割）</td>
-                        <td><kbd>0</kbd>〜<kbd>9</kbd>（<strong>上段</strong>の数字キー、<kbd>Shift</kbd> なし）</td>
-                        <td>尺の0/10〜9/10へ（<kbd>9</kbd>は90%）。テンキーは小節ジャンプ優先のため、Tempo/Sig OFF 時など小節ジャンプが無効なときのみ % 指定</td>
+                        <td><kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー／テンキー）</td>
+                        <td>尺の0/10〜9/10へ（<kbd>9</kbd>は90%）。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>リージョン内の小節へジャンプ</td>
-                        <td><kbd>0</kbd>〜<kbd>9</kbd>（<strong>テンキー</strong>）/<kbd>Shift</kbd>+<kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー）</td>
-                        <td>Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、表示されている小節番号（1 始まり）へジャンプ。テンキーは <kbd>Shift</kbd> 不要。数字を続けて入力し、約 0.3 秒待つと確定（例: テンキー <kbd>1</kbd>→<kbd>3</kbd> で 13 小節目）。再生中はシーク後に再生を再開</td>
+                        <td><kbd>G</kbd></td>
+                        <td>Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、小節番号入力ダイアログを開く（表示されている 1 始まりの番号）。リージョンを 2 つ以上選択している場合はグループ化が優先。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
                         <td>リハーサル名へジャンプ</td>
                         <td><kbd>Shift</kbd>+<kbd>A</kbd>〜<kbd>Z</kbd></td>
-                        <td>Tempo/Sig・Phrase 欄に有効な定義があり、Audio Track にリージョンがあるとき、リハーサル名 A/B/C… の先頭へ（<kbd>Shift</kbd>+<kbd>A</kbd>=A、<kbd>Shift</kbd>+<kbd>B</kbd>=B …）。Phrase 着色（<kbd>P</kbd>）の表示は不要。該当のリハーサル名が無いキーは無効</td>
+                        <td>Tempo/Sig・Rehearsal 欄に有効な定義があり、Audio Track にリージョンがあるとき、リハーサル名 A/B/C… の先頭へ（<kbd>Shift</kbd>+<kbd>A</kbd>=A、<kbd>Shift</kbd>+<kbd>B</kbd>=B …）。Rehearsal 表示（<kbd>R</kbd>）の表示は不要。該当のリハーサル名が無いキーは無効</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">トランスポート・表示（動画読込後）</th>
@@ -127,17 +132,12 @@
                     <tr>
                         <td>Click（メトロノーム）のオン/オフ</td>
                         <td><kbd>C</kbd></td>
-                        <td>オプションバー中段の Click チェックと同じ。Click ON かつ再生中のみクリック音が鳴る（BPM/拍子は Tempo/Sig 入力に従う）。通常拍子は 1 拍目が高音、変拍子（例: <code>120-3/8+5/8</code>）は各拍子グループの先頭拍が高音。音量はミックス RMS に連動（楽曲より大きく、Analyze 表示は不要）。デフォルト OFF。設定は次回起動時に復元（Import/Export には含めない）</td>
+                        <td>映像直下の再生バーの Click チェックと同じ。Click ON かつ再生中のみクリック音が鳴る（BPM/拍子は Tempo / Signature トラック定義に従う）。通常拍子は 1 拍目が高音、変拍子（例: <code>120-3/8+5/8</code>）は各拍子グループの先頭拍が高音。音量はミックス RMS に連動（楽曲より大きく、Analyze 表示は不要）。デフォルト OFF。設定は次回起動時に復元（Import/Export には含めない）</td>
                     </tr>
                     <tr>
                         <td>Analyze（スペクトラム/メーター）の Live/解析停止</td>
                         <td><kbd>A</kbd></td>
                         <td>Live（スペクトラム・メーター更新）と解析停止（アイドル表示へ戻す・更新停止）を切替。スペクトラム/メーターは常時表示。オプションバーの Analyze チェック（ON＝Live）でも同様。解析停止中も CLIP PROTECT は動作。設定は次回起動時に復元（Import/Export には含めない）</td>
-                    </tr>
-                    <tr>
-                        <td>R. Offset（リハーサルマークオフセット）のオン/オフ</td>
-                        <td><kbd>R</kbd></td>
-                        <td>オプションバー中段の R. Offset チェックと同じ。先頭フレーズをアウフタクトとしてリハーサル名を付けない。Import/Export Review およびセッション復元に保存</td>
                     </tr>
                     <tr>
                         <td>レイアウト（縦型/横型）の切替</td>
@@ -147,7 +147,7 @@
                     <tr>
                         <td>開発者向け定数パネル</td>
                         <td><kbd>F10</kbd></td>
-                        <td>診断ログ（カテゴリ別）・リージョン操作帯（Fade/In/Out/Split/クロスフェード/Phrase 境界の色分け）・タイムストレッチ検証。実行中のみ有効。再読み込みですべて OFF。<kbd>Esc</kbd> または枠外クリックで閉じる。診断ログのいずれか ON の間はログ行数無制限（すべて OFF で 500 行上限）</td>
+                        <td>診断ログ（カテゴリ別）・操作帯デバッグ描画（リージョン: Fade/In/Out/Split/クロスフェード/Rehearsal + Musical トラック: Rehearsal / Tempo / Signature）・タイムストレッチ検証。localStorage に保存（Import/Export 対象外）。<kbd>Esc</kbd> または枠外クリックで閉じる。診断ログのいずれか ON の間はログ行数無制限（すべて OFF で 500 行上限）。いずれか ON の間は <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> でログ全文をファイル保存も可</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">マーカー（動画または追加音声読込後）</th>
@@ -170,12 +170,12 @@
                     <tr>
                         <td>ポイント追加</td>
                         <td><kbd>Ins</kbd>（短押し）</td>
-                        <td>押下から離すまで0.2秒未満。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ再生中は Tempo/Sig 定義の4分音符グリッドへ丸める</td>
+                        <td>押下から離すまで0.2秒未満。<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong>かつ再生中は Tempo/Sig 定義の4分音符グリッドへ丸める</td>
                     </tr>
                     <tr>
                         <td>範囲追加（Ins 長押し）</td>
                         <td><kbd>Ins</kbd>（長押し）</td>
-                        <td>0.2秒以上押したまま離すと、押下〜離しの位置で範囲マーカー。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong>かつ再生中は In / Out 確定時にそれぞれ4分音符へ丸める（<kbd>[</kbd>/<kbd>]</kbd> では丸めない）</td>
+                        <td>0.2秒以上押したまま離すと、押下〜離しの位置で範囲マーカー。<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong>かつ再生中は In / Out 確定時にそれぞれ4分音符へ丸める（<kbd>[</kbd>/<kbd>]</kbd> では丸めない）</td>
                     </tr>
                     <tr>
                         <td>範囲 In の開始（再生位置）</td>
@@ -296,22 +296,17 @@
                     <tr>
                         <td>Tempo/Sig 表示のオン/オフ</td>
                         <td><kbd>T</kbd></td>
-                        <td>小節/拍ガイド表示を切り替え（オプションバー上段の Tempo/Sig チェックと同じ）</td>
+                        <td>小節/拍ガイド表示を切り替え（Measure トラック左の Tempo/Sig 表示と同じ）</td>
                     </tr>
                     <tr>
-                        <td>Phrase 着色のオン/オフ</td>
-                        <td><kbd>P</kbd></td>
-                        <td>フレーズ着色とリハーサル名ラベルの表示/非表示（オプションバー上段の Phrase チェックと同じ）</td>
+                        <td>Rehearsal 表示のオン/オフ</td>
+                        <td><kbd>R</kbd></td>
+                        <td>Rehearsal 着色とリハーサル名ラベルの表示/非表示（Audio Track 上の Rehearsal オーバーレイ）</td>
                     </tr>
                     <tr>
-                        <td>Tempo/Sig 入力欄へフォーカス</td>
-                        <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
-                        <td>BPM・拍子入力欄を編集モードに（<kbd>Enter</kbd>/<kbd>Esc</kbd> で確定/取消）</td>
-                    </tr>
-                    <tr>
-                        <td>Phrase 入力欄へフォーカス</td>
-                        <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
-                        <td>Phrase 小節数入力欄を編集モードに（<kbd>Enter</kbd>/<kbd>Esc</kbd> で確定/取消）</td>
+                        <td>リハーサルマークの追加</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td>
+                        <td>シークバー位置にリハーサルマークを追加（小節線へスナップ）。ラベルは直前マークの続き（A→B→C…）を自動付与。同じ小節に既存マークがあるときはそのマークを選択。Rehearsal Mark トラック上のダブルクリック追加と同じルール</td>
                     </tr>
                     <tr>
                         <td>ソロ（ポインタ下の Video Audio/Audio Track）</td>
@@ -334,98 +329,83 @@
                         <td>ポインタ下の Video Audio/Audio Track（0 dBをまたぐときは一度0 dBで止まる）</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">Tempo/Sig・Phrase 入力欄（オプションバー上段）</th>
+                        <th scope="colgroup" colspan="3">Musical トラック（Tempo / Signature）</th>
                     </tr>
                     <tr>
-                        <td>メーター欄へフォーカス</td>
-                        <td><kbd>Alt</kbd>+<kbd>T</kbd></td>
-                        <td>波形レーンから Tempo/Sig 入力へ移る（<kbd>T</kbd> 単体はグリッド表示の切替）</td>
+                        <td>Tempo / Signature の編集開始</td>
+                        <td>ダブルクリック（トラック上）</td>
+                        <td>波形左の <strong>Tempo</strong> / <strong>Signature</strong> トラック上のセグメントをダブルクリック。空き部分のダブルクリックで新規追加も可（<kbd>T</kbd> 単体はグリッド表示の切替）</td>
                     </tr>
                     <tr>
-                        <td>フレーズ欄へフォーカス</td>
-                        <td><kbd>Alt</kbd>+<kbd>P</kbd></td>
-                        <td>波形レーンから Phrase 入力へ移る（<kbd>P</kbd> 単体は Phrase 着色の切替）</td>
+                        <td>BPM の ±1 / ±10</td>
+                        <td><kbd>↑</kbd>/<kbd>↓</kbd> / <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
+                        <td>Tempo トラックの編集入力中。BPM を ±1（Shift で ±10）</td>
                     </tr>
                     <tr>
-                        <td>BPM・拍子の ±1（メーター欄）</td>
-                        <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>メーター（BPM/拍子）入力欄にフォーカスがあるとき。カーソル位置の BPM または拍子（分子・分母）を ±1。末尾では <code>,120-4/4</code> を追加（完成した変拍子 <code>149-3/4+5/4</code>、拍子繰り返し <code>120-3/4:5/4</code> も同様）。<code>+</code> または <code>:</code> で終わる入力途中だけ <code>4/4</code> を補完（例: <code>149-3/8+</code> → ↑ → <code>149-3/8+4/4</code>、<code>120-3/4:</code> → ↑ → <code>120-3/4:4/4</code>）。1 要素内で <code>+</code> と <code>:</code> の併用は不可（<kbd>Enter</kbd>/<kbd>Esc</kbd> 確定時は直前の有効値）。<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10</td>
+                        <td>拍子の ±1 / ±10</td>
+                        <td><kbd>↑</kbd>/<kbd>↓</kbd> / <kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
+                        <td>Signature トラックの編集入力中。カーソル位置の分子・分母を ±1（Shift で ±10）。末尾では <code>,120-4/4</code> を追加（変拍子 <code>149-3/4+5/4</code>、拍子繰り返し <code>120-3/4:5/4</code> も同様）。<code>+</code> または <code>:</code> で終わる入力途中だけ <code>4/4</code> を補完</td>
                     </tr>
                     <tr>
-                        <td>BPM・拍子の ±10（メーター欄）</td>
-                        <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>メーター（BPM/拍子）入力欄にフォーカスがあるとき。カーソル位置の BPM または拍子（分子・分母）を ±10</td>
-                    </tr>
-                    <tr>
-                        <td>フレーズ長の ±1（フレーズ欄）</td>
-                        <td><kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>フレーズ長入力欄にフォーカスがあるとき。カンマ区切りの<strong>末尾</strong>では ±1 の代わりに <code>,8</code> を追加（上下どちらも）</td>
-                    </tr>
-                    <tr>
-                        <td>フレーズ長の ±10（フレーズ欄）</td>
-                        <td><kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd></td>
-                        <td>同上。末尾では ±10 の代わりに <code>,8</code> を追加</td>
-                    </tr>
-                    <tr>
-                        <td>Tempo/Sig ↔ Phrase 入力欄の移動</td>
-                        <td><kbd>Tab</kbd></td>
-                        <td>メーター欄では Phrase 欄へ、Phrase 欄ではメーター欄へフォーカスを移す</td>
-                    </tr>
-                    <tr>
-                        <td>入力確定（メーター/フレーズ欄）</td>
+                        <td>入力確定</td>
                         <td><kbd>Enter</kbd></td>
-                        <td>確定後、波形レーンへフォーカスを戻す</td>
+                        <td>編集内容を確定</td>
                     </tr>
                     <tr>
-                        <td>入力取消（メーター/フレーズ欄）</td>
+                        <td>入力取消</td>
                         <td><kbd>Esc</kbd></td>
-                        <td>フォーカス解除。波形レーンへフォーカスを戻す</td>
+                        <td>編集を破棄</td>
                     </tr>
                     <tr class="shortcut-table__section">
-                        <th scope="colgroup" colspan="3">フレーズ編集（Tempo/Sig 表示 <kbd>T</kbd> が ON のとき）</th>
+                        <th scope="colgroup" colspan="3">Rehearsal 区間の編集（Tempo/Sig 表示 <kbd>T</kbd> が ON のとき）</th>
                     </tr>
                     <tr>
-                        <td>フレーズ分割（小節線）</td>
+                        <td>Rehearsal 区間の分割（小節線）</td>
                         <td><kbd>X</kbd></td>
                         <td>波形上：ポインタ近くの<strong>小節線</strong>で分割。波形外（再生中も同様）：<strong>シークバー</strong>に最も近い小節線で分割。Tempo/Sig ON 時はリージョン分割にはならない</td>
                     </tr>
                     <tr>
-                        <td>フレーズ連結（境界）</td>
+                        <td>Rehearsal 区間の連結（境界）</td>
                         <td><kbd>B</kbd></td>
-                        <td>波形上：ポインタ近くの<strong>フレーズ境界</strong>で左右を1つに。波形外（再生中も同様）：シークバーが<strong>フレーズ境界上</strong>のときのみ（途中では不可）。Tempo/Sig ON 時はリージョン結合にはならない。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
+                        <td>波形上：ポインタ近くの<strong>Rehearsal 区間境界</strong>で左右を1つに。波形外（再生中も同様）：シークバーが<strong>Rehearsal 区間境界上</strong>のときのみ（途中では不可）。Tempo/Sig ON 時はリージョン結合にはならない。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
                     </tr>
                     <tr>
-                        <td>フレーズ削除</td>
+                        <td>Rehearsal 区間の削除</td>
                         <td><kbd>Del</kbd>/<kbd>Backspace</kbd></td>
-                        <td>波形上：ポインタ下のフレーズを隣接フレーズへ吸収。波形外（再生中も同様）：シークバー位置のフレーズ。最後の1フレーズは不可。Tempo/Sig ON 時はリージョン削除より先</td>
+                        <td>波形上：ポインタ下のRehearsal 区間を隣接Rehearsal 区間へ吸収。波形外（再生中も同様）：シークバー位置のRehearsal 区間。最後の1Rehearsal 区間は不可。Tempo/Sig ON 時はリージョン削除より先</td>
                     </tr>
                     <tr>
-                        <td>フレーズ境界のドラッグ</td>
+                        <td>Rehearsal 区間境界のドラッグ</td>
                         <td>マウス（着色帯境界ハンドル／リージョンハンドル）</td>
-                        <td>フレーズ着色 <kbd>P</kbd> ON 時、着色帯上の境界ハンドル、または隣接フレーズ境界上のリージョン In/Out・スプリットハンドルをドラッグ。小節線へスナップし隣接フレーズ間で小節数を再分配・左端/右端で結合。Phrase 入力欄へ確定反映</td>
+                        <td>Rehearsal 表示 <kbd>R</kbd> ON 時、着色帯上の境界ハンドル、または隣接 Rehearsal 区間境界上のリージョン In/Out・スプリットハンドルをドラッグ。小節線へスナップし隣接区間間で小節数を再分配・左端/右端で結合。Rehearsal 定義へ確定反映</td>
                     </tr>
                     <tr>
-                        <td>フレーズ定義の元に戻す</td>
+                        <td>Rehearsal 定義の元に戻す</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
-                        <td>分割・連結・削除・境界ドラッグ・入力欄編集など。フレーズ履歴が空のときはリージョン編集を元に戻す</td>
+                        <td>分割・連結・削除・境界ドラッグなど。Rehearsal 定義の履歴が空のときはリージョン編集を元に戻す</td>
                     </tr>
                     <tr>
-                        <td>フレーズ定義のやり直し</td>
+                        <td>Rehearsal 定義のやり直し</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
-                        <td>上記のやり直し。フレーズ履歴が空のときはリージョン編集をやり直す</td>
+                        <td>上記のやり直し。Rehearsal 区間履歴が空のときはリージョン編集をやり直す</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">波形レーンにフォーカス時</th>
                     </tr>
                     <tr>
-                        <td>先頭へ</td>
-                        <td><kbd>Home</kbd></td>
-                        <td>波形レーン（<kbd>Tab</kbd> でフォーカス可）にフォーカスがあるとき</td>
+                        <td>冒頭へ</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Home</kbd></td>
+                        <td>波形レーン（<kbd>Tab</kbd> でフォーカス可）にフォーカスがあるとき。グローバルでは <kbd>Ctrl</kbd>+<kbd>PgUp</kbd> も同じ</td>
                     </tr>
                     <tr>
                         <td>末尾へ</td>
-                        <td><kbd>End</kbd></td>
-                        <td>同上</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>End</kbd></td>
+                        <td>同上。グローバルでは <kbd>Ctrl</kbd>+<kbd>PgDn</kbd> も同じ</td>
+                    </tr>
+                    <tr>
+                        <td>停止点へ（前/次）</td>
+                        <td><kbd>Home</kbd> / <kbd>End</kbd></td>
+                        <td><strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> 時のみ。前後の<strong>小節線</strong>へ（<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の停止点ナビとは別）。レーンにフォーカスがあると他のショートカット用にフォーカスが外れる</td>
                     </tr>
                     <tr>
                         <td>1フレーム</td>
@@ -465,8 +445,8 @@
                     </tr>
                     <tr>
                         <td>範囲指定（停止点まで）</td>
-                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd></td>
-                        <td>現在地から <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の次ジャンプ先まで。押すたびに同方向へ停止点を追加（キーリピート可）</td>
+                        <td><kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> / <kbd>Shift</kbd>+<kbd>Ctrl</kbd>+<kbd>Home</kbd>/<kbd>End</kbd></td>
+                        <td>現在地から <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> の次ジャンプ先まで。Shift+Ctrl+<kbd>Home</kbd>/<kbd>End</kbd> は <kbd>Home</kbd>/<kbd>End</kbd> と同じ小節線ジャンプ先まで（Tempo/Sig ON 時）。押すたびに同方向へ停止点を追加（キーリピート可）</td>
                     </tr>
                     <tr>
                         <td>解除</td>
@@ -484,17 +464,17 @@
                     <tr>
                         <td>スプリット（2リージョンに分割）</td>
                         <td><kbd>X</kbd></td>
-                        <td><strong>Tempo/Sig OFF</strong> 時：リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブな Audio Track</strong>（トラック名が赤いもの）を<strong>シークバー</strong>（再生ヘッド）の位置で分割（<strong>Tempo/Sig ON</strong> 時はフレーズ分割を参照）</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：リージョン上にポインタがあるときは<strong>カーソル直下</strong>で分割。リージョン上にないときは<strong>アクティブな Audio Track</strong>（トラック名が赤いもの）を<strong>シークバー</strong>（再生ヘッド）の位置で分割（<strong>Tempo/Sig ON</strong> 時はRehearsal 区間の分割を参照）</td>
                     </tr>
                     <tr>
                         <td>結合（隣接リージョンを1つに）</td>
                         <td><kbd>B</kbd></td>
-                        <td><strong>Tempo/Sig OFF</strong> 時：隣接境界上にポインタを置く、シークバーを境界上に置く、または同一 Audio Track 上で<strong>隙間なく連続するリージョン</strong>（件数不限）を <kbd>Ctrl</kbd>+クリックで選択してから実行。波形が連続している境界のみ（クロスフェード・入れ替え後は不可）（<strong>Tempo/Sig ON</strong> 時はフレーズ連結を参照）。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：隣接境界上にポインタを置く、シークバーを境界上に置く、または同一 Audio Track 上で<strong>隙間なく連続するリージョン</strong>（件数不限）を <kbd>Ctrl</kbd>+クリックで選択してから実行。波形が連続している境界のみ（クロスフェード・入れ替え後は不可）（<strong>Tempo/Sig ON</strong> 時はRehearsal 区間の連結を参照）。<kbd>B</kbd> は <strong>B</strong>ond（結合）の頭文字</td>
                     </tr>
                     <tr>
                         <td>複数選択</td>
                         <td><kbd>Ctrl</kbd>+クリック（リージョンまたは無音スロット上）</td>
-                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> では無音スロット 1 つ＋リージョン 1 つの組み合わせも可（<kbd>E</kbd> で入れ替え）。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
+                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
                     </tr>
                     <tr>
                         <td>全選択（対象トラック）</td>
@@ -502,39 +482,39 @@
                         <td>対象 Audio Track（アクティブ/ポインタ下）の<strong>全リージョン</strong>を選択。他トラックの選択は解除。無音スロットは含まない。入力欄フォーカス中は無効</td>
                     </tr>
                     <tr>
-                        <td>選択（シークバー/範囲ループ）</td>
+                        <td>追加選択（シークバー/範囲ループ）</td>
                         <td><kbd>Enter</kbd></td>
-                        <td>アクティブな Audio Track で、シークバー直下のリージョンを選択。範囲ループ指定中はその区間に属するリージョンを選択（境界のみ・わずかな重なりのみは除外）。入力欄フォーカス中は無効</td>
+                        <td>アクティブな Audio Track で、シークバー直下のリージョンを既存の選択に<strong>追加</strong>（解除しない）。範囲ループ指定中はその区間に属するリージョンを追加（境界のみ・わずかな重なりのみは除外）。グループ内リージョンはメンバー全体を追加。入力欄フォーカス中は無効</td>
                     </tr>
                     <tr>
                         <td>グループ化 / 解除</td>
                         <td><kbd>G</kbd></td>
-                        <td>未グループ: 2つ以上選択（<strong>トラックをまたいで可</strong>）して <kbd>G</kbd> でグループ化（グループ内のいずれかにホバーすると<strong>メンバーすべて黄色枠</strong>・まとめてドラッグ可）。グループ内を選択して <kbd>G</kbd> で解除</td>
+                        <td>未グループ: 2つ以上選択（<strong>トラックをまたいで可</strong>）して <kbd>G</kbd> でグループ化（グループ内のいずれかにホバーすると<strong>メンバーすべて黄色枠</strong>・まとめてドラッグ可）。グループ内を選択して <kbd>G</kbd> で解除。グループ化が成立しないときは小節ジャンプ（上記「リージョン内の小節へジャンプ」）</td>
                     </tr>
                     <tr>
-                        <td>入れ替え（フレーズ並び）</td>
+                        <td>入れ替え（Rehearsal 区間並び）</td>
                         <td><kbd>E</kbd></td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>、または<strong>無音スロット 1 つ＋リージョン 1 つ</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。成功時は交差スライドアニメーションで位置を入れ替え、確定直後に波形へ反映。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
+                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> 時のみ。同一 Audio Track 上で<strong>2 リージョン</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>隣接していなくても可</strong>）。成功時は交差スライドアニメーションで位置を入れ替え、確定直後に波形へ反映。元の長さを保ち、先の位置に収まらなければ後続をずらして空け、短くなった側の余り隙間は詰める。無音スロットとの入れ替えは不可。不能時は赤トースト（英語）とログ。<kbd>E</kbd> は <strong>E</strong>xchange（入れ替え）の頭文字</td>
                     </tr>
                     <tr>
                         <td>ソース In/Out・スプリット点</td>
                         <td>ハンドル操作（Audio Track）</td>
-                        <td>隣接時は境界を1本のスプリットハンドルで移動。離した後は各リージョンに In/Out。<strong>Phrase 着色（<kbd>P</kbd>）ON</strong> で隣接フレーズ境界のときはフレーズ境界ドラッグ（小節スナップ・Phrase 欄更新）。<strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時はわずかな隙間・重なりの隣接境界もドラッグ可</td>
+                        <td>隣接時は境界を1本のスプリットハンドルで移動。離した後は各リージョンに In/Out。<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> で隣接Rehearsal 区間境界のときはRehearsal 区間境界ドラッグ（小節スナップ・Rehearsal 欄更新）。<strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時はわずかな隙間・重なりの隣接境界もドラッグ可</td>
                     </tr>
                     <tr>
                         <td>Fade In / Fade Out</td>
                         <td>三角ハンドル操作（Audio Track）/<kbd>Alt</kbd>+<kbd>I</kbd> / <kbd>Alt</kbd>+<kbd>O</kbd></td>
-                        <td>リージョン上端の三角ハンドルを内側へドラッグでフェード長を調整（Phrase 着色 ON 時は Phrase 境界と重なる位置でも操作可）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）は<strong>シークバー位置</strong>までフェードを伸ばす（In＝リージョン頭から、Out＝リージョン末尾から）。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。再生中も反映。操作帯の確認は <kbd>F10</kbd> のリージョン操作帯</td>
+                        <td>リージョン上端の三角ハンドルを内側へドラッグでフェード長を調整（Rehearsal 表示 ON 時は Rehearsal 境界と重なる位置でも操作可）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）は<strong>シークバー位置</strong>までフェードを伸ばす（In＝リージョン頭から、Out＝リージョン末尾から）。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。再生中も反映。操作帯の確認は <kbd>F10</kbd> の操作帯デバッグ描画</td>
                     </tr>
                     <tr>
                         <td>リージョン In を 1 拍分手前へ</td>
                         <td><kbd>Shift</kbd>+<kbd>I</kbd></td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時のみ。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。クリップ内容は動かさず In だけ前へ（In ハンドルドラッグと同じ経路）。移動量は参照位置の <strong>Tempo/Sig</strong> 定義に基づく <strong>1 拍</strong>（変拍子の各拍長に追従。Tempo/Sig 未設定時は不可）。隣接リージョンと重なると等パワー・クロスフェード（Fade In / Fade Out 三角で表示）。波形が連続している境界では不可</td>
+                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時のみ。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。クリップ内容は動かさず In だけ前へ（In ハンドルドラッグと同じ経路）。移動量は参照位置の <strong>Tempo/Sig</strong> 定義に基づく <strong>1 拍</strong>（変拍子の各拍長に追従。Tempo/Sig 未設定時は不可）。隣接リージョンと重なると等パワー・クロスフェード（Fade In / Fade Out 三角で表示）。波形が連続している境界では不可</td>
                     </tr>
                     <tr>
                         <td>リージョン Out を 1 拍分後方へ</td>
                         <td><kbd>Shift</kbd>+<kbd>O</kbd></td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）OFF</strong> 時のみ。対象・移動量・クロスフェード・連続境界の制約は <kbd>Shift</kbd>+<kbd>I</kbd> と同様。クリップ内容は動かさず Out だけ後方へ（Out ハンドルドラッグと同じ経路）</td>
+                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時のみ。対象・移動量・クロスフェード・連続境界の制約は <kbd>Shift</kbd>+<kbd>I</kbd> と同様。クリップ内容は動かさず Out だけ後方へ（Out ハンドルドラッグと同じ経路）</td>
                     </tr>
                     <tr>
                         <td>クリップ開始位置（タイムライン）</td>
@@ -549,7 +529,7 @@
                     <tr>
                         <td>リージョンキー（±半音）</td>
                         <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイール（Audio Track）</td>
-                        <td><strong>Phrase 着色（<kbd>P</kbd>）ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを自動付与し、Markers パネルの <strong>Comment</strong> 列に <code>キーを +1 する</code> 等を入力（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。Key 0 に戻すと同範囲の自動付与マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
+                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> かつリージョン選択中のみ。±1 半音刻み（上＝上げ・下＝下げ、-12〜+12）。複数選択時はまとめて同じ半音数だけ変更。0 以外はリージョン中央に <code>Key +1</code> 等を表示。リージョン尺は維持（タイムストレッチ）。補正のたびに In〜Out の範囲マーカーを自動付与し、Markers パネルの <strong>Comment</strong> 列に <code>キーを +1 する</code> 等を入力（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。Key 0 に戻すと同範囲の自動付与マーカーを削除。セッション保存・エクスポート/インポートに含む</td>
                     </tr>
                     <tr>
                         <td>リージョン情報をコピー</td>
@@ -574,17 +554,17 @@
                     <tr>
                         <td>リージョン削除</td>
                         <td><kbd>Del</kbd>/<kbd>Backspace</kbd></td>
-                        <td><strong>Tempo/Sig OFF</strong> 時：<kbd>Ctrl</kbd>+クリックで選択（シアン枠）したリージョンを削除（複数選択可。最後の1つで全解除）。<strong>Tempo/Sig ON</strong> 時はフレーズ削除を先に判定</td>
+                        <td><strong>Tempo/Sig OFF</strong> 時：<kbd>Ctrl</kbd>+クリックで選択（シアン枠）したリージョンを削除（複数選択可。最後の1つで全解除）。<strong>Tempo/Sig ON</strong> 時はRehearsal 区間の削除を先に判定</td>
                     </tr>
                     <tr>
                         <td>元に戻す（スプリット・削除・範囲変更など）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
-                        <td>フレーズ定義の履歴があればそれを優先。なければリージョン編集の履歴（いずれも回数無制限）</td>
+                        <td>Rehearsal 定義の履歴があればそれを優先。なければリージョン編集の履歴（いずれも回数無制限）</td>
                     </tr>
                     <tr>
                         <td>やり直し</td>
                         <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></td>
-                        <td>元に戻すで戻した操作を進める（フレーズ定義を優先、なければリージョン）</td>
+                        <td>元に戻すで戻した操作を進める（Rehearsal 定義を優先、なければリージョン）</td>
                     </tr>
                     <tr>
                         <td>解除</td>
@@ -613,6 +593,11 @@
                         <td>ログをファイル保存</td>
                         <td>クリック（Download）</td>
                         <td>ログ全文をテキストファイルで保存（フィルタは反映しない）</td>
+                    </tr>
+                    <tr>
+                        <td>ログをファイル保存（診断ログ ON 時）</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd></td>
+                        <td><kbd>F10</kbd> の開発者向け定数パネルで、診断ログ・操作帯デバッグ描画・タイムストレッチ検証の<strong>いずれかが ON</strong> の間のみ。ログ全文をテキストファイルで保存（フィルタは反映しない）</td>
                     </tr>
                     <tr>
                         <td>ログを消去</td>

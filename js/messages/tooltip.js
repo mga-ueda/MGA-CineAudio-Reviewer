@@ -42,16 +42,9 @@
             ' または Shift+Ctrl+ホイール上/下でトラック高さ変更（100%〜400%）、Shift+ホイールで横スクロール。' +
             h.waveformTimelineCenterSeekbar +
             ' で再生ヘッドを画面中央へ（一瞬センターロック）。',
-        'tooltip.musicalGrid': (h) => '小節・拍グリッドの表示（' + h.musicalGrid + '）',
-        'tooltip.musicalPhrase': (h) => 'フレーズ着色と番号（' + h.musicalPhrase + '）',
-        'tooltip.musicalGridMeterInput': (h) =>
-            'Tempo/Sig — BPM-拍子（例: 140-4/4、変拍子 140-3/8+5/8、拍子繰り返し 140-3/4:5/4）。1 要素内で + と : は併用不可（確定時は直前の有効値）。' +
-            h.musicalGridMeterFocus +
-            ' で編集、Tab で Phrase 欄へ、Enter/Esc で確定',
-        'tooltip.musicalGridPhraseInput': (h) =>
-            'Phrase 小節数（例: 8 / 1,8）。' +
-            h.musicalGridPhraseFocus +
-            ' で編集、Tab で Tempo/Sig 欄へ、Enter/Esc で確定',
+        'tooltip.musicalGrid': (h) =>
+            '小節・拍グリッドの表示（' + h.musicalGrid + '）',
+        'tooltip.musicalRehearsal': (h) => 'Rehearsal 表示と番号（' + h.musicalRehearsal + '）',
         'tooltip.analyzeCheckbox': (h) =>
             'Live のオン/オフ（' + h.analyze + ' でも Live ↔ 解析停止を切替）',
         'tooltip.analyzeWrap': (h) =>
@@ -64,10 +57,6 @@
             'Click — 再生中に BPM/拍子グリッドへ同期したクリック音（' +
             h.metronomeClick +
             ' で切替）。音量はミックス RMS に連動（楽曲より大きく、Analyze 不要）。設定は次回起動時に復元。',
-        'tooltip.rehearsalMarkOffset': (h) =>
-            'R. Offset — 冒頭小節をアウフタクトとしてリハーサル名を付けない（' +
-            h.rehearsalMarkOffset +
-            ' で切替）。Import/Export Review およびセッション復元に保存。',
         'tooltip.masterVolSlider': (h) =>
             'ダブルクリックまたは ' + h.masterVolReset + ' で 100%',
         'tooltip.masterVolWrap': (h) =>
@@ -90,6 +79,8 @@
         'tooltip.markerClearAll': 'すべてのマーカーを削除',
         'tooltip.seekBar': '再生ヘッド位置をシーク',
         'tooltip.logCopy': 'ログ全文をクリップボードへコピー',
+        'tooltip.logDownload':
+            'ログ全文をテキストファイルでダウンロード（F10 いずれか ON 時 Ctrl+Shift+D）',
         'tooltip.logClear': 'ログを消去',
         'tooltip.logWeOnly': '警告・エラーのみ表示（再読み込みで OFF に戻る）',
         'tooltip.logOpsOnly':
@@ -104,7 +95,7 @@
             '動画・追加音声・.mgacr をドロップして読み込み（ページ内どこでも可）',
         'tooltip.guideLink': 'How To を新しいウィンドウで開く',
         'tooltip.shortcutsLink': 'Shortcut 一覧を新しいウィンドウで開く',
-        'tooltip.musicalGridPlayheadPos': '現在地（小節・拍・ms）',
+        'tooltip.musicalGridPlayheadPos': '現在地（Tempo Signature 小節:拍）',
         'tooltip.spectrumFloorDb': 'スペクトラム表示の下限 dB',
         'tooltip.meterFloorDb': 'レベルメーター目盛りの下限 dB',
 

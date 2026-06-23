@@ -169,26 +169,29 @@
         return true;
     }
 
-    let rehearsalMarkOffsetEnabled = false;
-
-    /** Offset ON 時、リハーサル名なしフレーズの内部表現 */
+    /** 内部ラベル — リハーサル名なし区間（表示は空文字） */
     const REHEARSAL_MARK_UNLABELED = '_';
 
-    function rehearsalMarkOffsetSlotAdjustment() {
-        return rehearsalMarkOffsetEnabled ? 1 : 0;
-    }
-
-    /** フレーズスロット index（0 始まり）→ リハーサル名（A/B/… または REHEARSAL_MARK_UNLABELED） */
-    function rehearsalMarkLabelForPhraseSlotIndex(phraseSlotIndex) {
-        const phraseSlot = phraseSlotIndex | 0;
-        if (phraseSlot < 0) return REHEARSAL_MARK_UNLABELED;
-        const markIndex = phraseSlot - rehearsalMarkOffsetSlotAdjustment();
-        if (markIndex < 0) return REHEARSAL_MARK_UNLABELED;
-        if (typeof formatRegionRehearsalMarkLabel === 'function') {
-            return formatRegionRehearsalMarkLabel(markIndex);
+    /** Rehearsal スロット index（0 始まり）→ リハーサル名（A/B/… または REHEARSAL_MARK_UNLABELED） */
+    function rehearsalMarkLabelForRehearsalSlotIndex(rehearsalSlotIndex) {
+        const rehearsalSlot = rehearsalSlotIndex | 0;
+        if (rehearsalSlot < 0) return REHEARSAL_MARK_UNLABELED;
+        if (typeof getRehearsalGroupRangesForRegionRehearsalMarks === 'function') {
+            const ranges = getRehearsalGroupRangesForRegionRehearsalMarks();
+            const r = ranges[rehearsalSlot];
+            if (r && r.fromRehearsalEvent === true) {
+                const internal =
+                    typeof normalizeRehearsalMarkLabel === 'function'
+                        ? normalizeRehearsalMarkLabel(r.label)
+                        : String(r.label == null ? '' : r.label).trim();
+                if (internal && internal !== REHEARSAL_MARK_UNLABELED) return internal;
+            }
         }
-        if (typeof phraseGroupLabelForIndex === 'function') {
-            return phraseGroupLabelForIndex(markIndex);
+        if (typeof formatRegionRehearsalMarkLabel === 'function') {
+            return formatRegionRehearsalMarkLabel(rehearsalSlot);
+        }
+        if (typeof rehearsalGroupLabelForIndex === 'function') {
+            return rehearsalGroupLabelForIndex(rehearsalSlot);
         }
         return 'A';
     }
@@ -198,18 +201,254 @@
         return internalLabel === REHEARSAL_MARK_UNLABELED ? '' : internalLabel;
     }
 
-    /** キーボードリハーサル名 index（A=0）→ フレーズスロット index */
-    function phraseSlotIndexForRehearsalMarkKeyIndex(markIndex) {
-        return (markIndex | 0) + rehearsalMarkOffsetSlotAdjustment();
+    /** キーボードリハーサル名 index（A=0）→ Rehearsal スロット index */
+    function rehearsalSlotIndexForRehearsalMarkKeyIndex(markIndex) {
+        return markIndex | 0;
     }
 
-    function segmentIndexFromRehearsalMarkKey(e) {
+    /** リハーサルマーク表示文字列の先頭 1 文字（A–Z）。該当なしは null */
+    function firstLetterOfRehearsalMarkLabel(label) {
+        const s = String(label == null ? '' : label).trim();
+        if (!s.length) return null;
+        const ch = s.charAt(0).toUpperCase();
+        return ch >= 'A' && ch <= 'Z' ? ch : null;
+    }
+
+    /** ジャンプ／UI と同じリハーサル名表示文字列 */
+    function rehearsalMarkNavDisplayLabel(range, rangeIndex) {
+        if (!range) return '';
+        if (range.fromRehearsalEvent !== true) return '';
+        const raw = range.label != null ? String(range.label).trim() : '';
+        if (!raw) return '';
+        const internal =
+            typeof normalizeRehearsalMarkLabel === 'function'
+                ? normalizeRehearsalMarkLabel(raw)
+                : raw;
+        if (!internal || internal === REHEARSAL_MARK_UNLABELED) return '';
+        if (typeof rehearsalMarkDisplayLabel === 'function') {
+            return rehearsalMarkDisplayLabel(internal) || '';
+        }
+        return internal;
+    }
+
+    function getRehearsalMarkJumpRanges() {
+        if (typeof getRehearsalMarkNavRanges === 'function') {
+            return getRehearsalMarkNavRanges();
+        }
+        return typeof getRehearsalGroupRangesForRegionRehearsalMarks === 'function'
+            ? getRehearsalGroupRangesForRegionRehearsalMarks()
+            : [];
+    }
+
+    function rehearsalMarkLabelLetterFromKey(e) {
         if (!e || !e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return null;
         const key = e.key;
         if (!key || key.length !== 1) return null;
         const code = key.toUpperCase().charCodeAt(0);
         if (code < 65 || code > 90) return null;
-        return code - 65;
+        return key.toUpperCase();
+    }
+
+    /** Shift+英文字 — 先頭文字が letter に一致する範囲 index を時系列順に列挙 */
+    function collectRehearsalMarkRangeIndicesByLabelLetter(letter, ranges) {
+        const list = ranges || getRehearsalMarkJumpRanges();
+        if (!list.length || !letter) return [];
+        const target = String(letter).toUpperCase();
+        const out = [];
+        for (let i = 0; i < list.length; i++) {
+            const r = list[i];
+            if (!r) continue;
+            const display = rehearsalMarkNavDisplayLabel(r, i);
+            if (firstLetterOfRehearsalMarkLabel(display) === target) out.push(i);
+        }
+        return out;
+    }
+
+    /**
+     * 一致候補のうち transport が到達済みの最後の index（matches 配列上）。未到達は -1。
+     * リージョン In がマークより手前にある場合でも、マーク開始秒基準で判定する。
+     */
+    function rehearsalMarkMatchIndexAtTransportSec(ranges, matches, transportSec) {
+        if (!ranges || !matches || !matches.length || !Number.isFinite(transportSec)) return -1;
+        const eps = regionNavStopEpsilonSec();
+        const t = Number(transportSec);
+        const firstStart = ranges[matches[0]] && ranges[matches[0]].startSec;
+        if (!Number.isFinite(firstStart) || t + eps < firstStart) return -1;
+        let at = -1;
+        for (let i = 0; i < matches.length; i++) {
+            const start = ranges[matches[i]] && ranges[matches[i]].startSec;
+            if (Number.isFinite(start) && t + eps >= start) at = i;
+        }
+        return at;
+    }
+
+    function resolveSegmentIndexForRehearsalMarkRange(track, range, rangeIndex) {
+        if (!range || !Number.isFinite(range.startSec)) return -1;
+        const markSec = range.startSec;
+        const eps = regionNavStopEpsilonSec();
+        const maxMarkLeadGap = Math.max(eps, 0.25);
+
+        if (typeof getTrackTimelineSlots === 'function') {
+            const units = getTrackTimelineSlots(track, { writeCache: false });
+            for (let ui = 0; ui < units.length; ui++) {
+                const unit = units[ui];
+                if (
+                    !unit ||
+                    unit.kind === 'silent' ||
+                    !unit.segmentRefs ||
+                    !unit.segmentRefs.length ||
+                    !Number.isFinite(unit.timelineStartSec)
+                ) {
+                    continue;
+                }
+                if (Math.abs(unit.timelineStartSec - markSec) <= eps) {
+                    return unit.segmentRefs[0].segmentIndex | 0;
+                }
+            }
+            for (let ui = 0; ui < units.length; ui++) {
+                const unit = units[ui];
+                if (
+                    !unit ||
+                    unit.kind === 'silent' ||
+                    !unit.segmentRefs ||
+                    !unit.segmentRefs.length ||
+                    !Number.isFinite(unit.timelineStartSec) ||
+                    !Number.isFinite(unit.timelineEndSec)
+                ) {
+                    continue;
+                }
+                if (
+                    markSec >= unit.timelineStartSec - eps &&
+                    markSec < unit.timelineEndSec - eps
+                ) {
+                    return unit.segmentRefs[0].segmentIndex | 0;
+                }
+            }
+            if (range.fromRehearsalEvent && range.label) {
+                const want =
+                    typeof normalizeRehearsalMarkLabel === 'function'
+                        ? normalizeRehearsalMarkLabel(range.label)
+                        : String(range.label).trim();
+                if (want) {
+                    let bestSeg = -1;
+                    let bestDist = Infinity;
+                    for (let ui = 0; ui < units.length; ui++) {
+                        const unit = units[ui];
+                        if (
+                            !unit ||
+                            unit.kind === 'silent' ||
+                            !unit.segmentRefs ||
+                            !unit.segmentRefs.length ||
+                            !unit.musical ||
+                            !Number.isFinite(unit.timelineStartSec) ||
+                            !Number.isFinite(unit.timelineEndSec)
+                        ) {
+                            continue;
+                        }
+                        const lab =
+                            typeof normalizeRehearsalMarkLabel === 'function'
+                                ? normalizeRehearsalMarkLabel(unit.musical.rehearsalLabel)
+                                : String(unit.musical.rehearsalLabel || '').trim();
+                        if (!lab || lab !== want) continue;
+                        if (
+                            markSec >= unit.timelineStartSec - eps &&
+                            markSec < unit.timelineEndSec - eps
+                        ) {
+                            return unit.segmentRefs[0].segmentIndex | 0;
+                        }
+                        const lead = unit.timelineStartSec - markSec;
+                        if (lead >= -eps && lead <= maxMarkLeadGap) {
+                            const dist = Math.abs(unit.timelineStartSec - markSec);
+                            if (dist < bestDist) {
+                                bestDist = dist;
+                                bestSeg = unit.segmentRefs[0].segmentIndex | 0;
+                            }
+                        }
+                    }
+                    if (bestSeg >= 0) return bestSeg;
+                }
+            }
+        }
+
+        if (!range.fromRehearsalEvent) {
+            const rehearsalSlot =
+                range.paletteIndex != null && range.paletteIndex >= 0
+                    ? range.paletteIndex | 0
+                    : rangeIndex | 0;
+            if (typeof resolveSegmentIndexForRehearsalSlot === 'function') {
+                return resolveSegmentIndexForRehearsalSlot(track, rehearsalSlot);
+            }
+            return rehearsalSlot >= 0 ? rehearsalSlot : -1;
+        }
+        return -1;
+    }
+
+    function rehearsalMarkNavSeekSecForRange(track, range, rangeIndex) {
+        if (!range || !Number.isFinite(range.startSec)) return NaN;
+        const markSec = range.startSec;
+        const eps = regionNavStopEpsilonSec();
+        const segIdx = resolveSegmentIndexForRehearsalMarkRange(track, range, rangeIndex);
+        if (
+            segIdx >= 0 &&
+            typeof getSegmentRegionTimelineIn === 'function'
+        ) {
+            const regionIn = getSegmentRegionTimelineIn(track, segIdx);
+            if (Number.isFinite(regionIn) && regionIn >= markSec - eps) {
+                return regionIn;
+            }
+        }
+        if (typeof rehearsalNavStartSecForSlot === 'function' && !range.fromRehearsalEvent) {
+            const rehearsalSlot =
+                range.paletteIndex != null && range.paletteIndex >= 0
+                    ? range.paletteIndex | 0
+                    : rangeIndex | 0;
+            const navSec = rehearsalNavStartSecForSlot(track, rehearsalSlot, markSec);
+            if (Number.isFinite(navSec) && navSec >= markSec - eps) {
+                return navSec;
+            }
+        }
+        return markSec;
+    }
+
+    /**
+     * Shift+英文字 のジャンプ先範囲 index。
+     * 先頭文字が一致する候補を時系列順に列挙し、
+     * 現在位置が候補マーク開始秒以降なら次の候補へ（末尾なら先頭へ循環）。
+     * 未到達なら未来方向の最初の候補（先頭より前にいるときは先頭候補）。
+     */
+    function resolveRehearsalMarkJumpRangeIndex(labelLetter) {
+        const ranges = getRehearsalMarkJumpRanges();
+        const matches = collectRehearsalMarkRangeIndicesByLabelLetter(labelLetter, ranges);
+        if (!matches.length) return -1;
+
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+
+        const matchAt = rehearsalMarkMatchIndexAtTransportSec(ranges, matches, t);
+        if (matchAt >= 0) {
+            if (matches.length === 1) return matches[0];
+            return matches[(matchAt + 1) % matches.length];
+        }
+
+        const eps = regionNavStopEpsilonSec();
+        for (let i = 0; i < matches.length; i++) {
+            const ri = matches[i];
+            const r = ranges[ri];
+            if (r && Number.isFinite(r.startSec) && r.startSec > t + eps) return ri;
+        }
+        const firstR = ranges[matches[0]];
+        if (
+            firstR &&
+            Number.isFinite(firstR.startSec) &&
+            t + eps < firstR.startSec
+        ) {
+            return matches[0];
+        }
+        return -1;
     }
 
     function resolveRegionRehearsalJumpTrack() {
@@ -229,34 +468,47 @@
         return null;
     }
 
-    function jumpToRegionRehearsalMark(markIndex, opt) {
+    function jumpToRegionRehearsalMark(labelLetter, opt) {
         const track = resolveRegionRehearsalJumpTrack();
         if (!track || !isTrackRegionActive(track)) return false;
-        const mi = markIndex | 0;
-        if (mi < 0) return false;
-        const phraseSlot = phraseSlotIndexForRehearsalMarkKeyIndex(mi);
-        const ranges =
-            typeof getPhraseGroupRangesForRegionRehearsalMarks === 'function'
-                ? getPhraseGroupRangesForRegionRehearsalMarks()
-                : [];
-        if (phraseSlot < 0 || phraseSlot >= ranges.length) return false;
-        const r = ranges[phraseSlot];
+        const rangeIndex = resolveRehearsalMarkJumpRangeIndex(labelLetter);
+        if (rangeIndex < 0) return false;
+        const ranges = getRehearsalMarkJumpRanges();
+        const r = ranges[rangeIndex];
         if (!r || !Number.isFinite(r.startSec)) return false;
-        const seekSec =
-            typeof phraseNavStartSecForSlot === 'function'
-                ? phraseNavStartSecForSlot(track, phraseSlot, r.startSec)
-                : r.startSec;
-        const mark = rehearsalMarkLabelForPhraseSlotIndex(phraseSlot);
-        const markHint = rehearsalMarkDisplayLabel(mark) || mark;
+        const markHint = rehearsalMarkNavDisplayLabel(r, rangeIndex);
+        if (!markHint) return false;
+        const markSec = r.startSec;
+        const eps = regionNavStopEpsilonSec();
+        const maxMarkLeadGap = Math.max(eps, 0.25);
+        let seekSec = markSec;
+        let segmentIndex = -1;
+        if (r.fromRehearsalEvent) {
+            segmentIndex = resolveSegmentIndexForRehearsalMarkRange(track, r, rangeIndex);
+            if (
+                segmentIndex >= 0 &&
+                typeof getSegmentRegionTimelineIn === 'function'
+            ) {
+                const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+                if (
+                    Number.isFinite(regionIn) &&
+                    regionIn >= markSec - eps &&
+                    regionIn <= markSec + maxMarkLeadGap
+                ) {
+                    seekSec = regionIn;
+                }
+            }
+        } else {
+            seekSec = rehearsalMarkNavSeekSecForRange(track, r, rangeIndex);
+            segmentIndex = resolveSegmentIndexForRehearsalMarkRange(track, r, rangeIndex);
+        }
+        if (!Number.isFinite(seekSec)) return false;
         return seekToRegionNavStop(
             {
                 sec: seekSec,
                 edge: 'in',
                 slot: track.slot,
-                segmentIndex:
-                    typeof resolveSegmentIndexForPhraseSlot === 'function'
-                        ? resolveSegmentIndexForPhraseSlot(track, phraseSlot)
-                        : -1,
+                segmentIndex: segmentIndex,
             },
             {
                 resumeAfterSeek: !!(opt && opt.resumeAfterSeek),
@@ -267,8 +519,8 @@
     }
 
     function handlePlaybackRegionRehearsalMarkJumpKeydown(e) {
-        const markIndex = segmentIndexFromRehearsalMarkKey(e);
-        if (markIndex == null) return false;
+        const labelLetter = rehearsalMarkLabelLetterFromKey(e);
+        if (labelLetter == null) return false;
         if (e.repeat) return false;
         if (
             typeof transportControlsReady === 'function' &&
@@ -281,86 +533,27 @@
             typeof isTransportPlaying === 'function'
                 ? isTransportPlaying()
                 : typeof videoMain !== 'undefined' && videoMain && !videoMain.paused;
-        if (!jumpToRegionRehearsalMark(markIndex, { resumeAfterSeek: wasPlaying })) {
+        if (!jumpToRegionRehearsalMark(labelLetter, { resumeAfterSeek: wasPlaying })) {
             return false;
         }
         e.preventDefault();
         return true;
     }
 
-    function syncRehearsalMarkOffsetUi() {
-        const el = document.getElementById('rehearsalMarkOffsetCheckbox');
-        if (el) el.checked = rehearsalMarkOffsetEnabled;
-    }
-
-    function getRehearsalMarkOffsetEnabled() {
-        return rehearsalMarkOffsetEnabled;
-    }
-
-    function getRehearsalMarkPersistSnapshot() {
-        return { offset: rehearsalMarkOffsetEnabled };
-    }
-
-    function setRehearsalMarkOffsetEnabled(value, opt) {
-        const o = opt && typeof opt === 'object' ? opt : {};
-        rehearsalMarkOffsetEnabled = !!value;
-        syncRehearsalMarkOffsetUi();
-        if (typeof refreshAllRegionMusicalMetaPresentation === 'function') {
-            refreshAllRegionMusicalMetaPresentation();
-        } else if (typeof refreshAllRegionRehearsalMarkLabels === 'function') {
-            refreshAllRegionRehearsalMarkLabels();
-        }
-        if (!o.silent && typeof writeLog === 'function') {
-            writeLog('R. Offset: ' + (rehearsalMarkOffsetEnabled ? 'ON' : 'OFF'));
-        }
-        if (!o.silent && typeof flashSeekHint === 'function') {
-            flashSeekHint('R. Offset', rehearsalMarkOffsetEnabled ? 'ON' : 'OFF', 'notice');
-        }
-        if (!o.silent && typeof flashTransportOptBox === 'function') {
-            flashTransportOptBox('rehearsalMarkOffset');
-        }
-        if (typeof syncMetronomeToTransport === 'function') {
-            syncMetronomeToTransport({ force: true });
-        }
-        if (!o.silent && !o.skipPersist && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
-        }
-    }
-
-    function applyRehearsalMarkImportSnapshot(snap) {
-        const s = snap && typeof snap === 'object' ? snap : {};
-        setRehearsalMarkOffsetEnabled(!!s.offset, { silent: true });
-    }
-
-    function toggleRehearsalMarkOffset() {
-        setRehearsalMarkOffsetEnabled(!getRehearsalMarkOffsetEnabled());
-        return true;
-    }
-
-    function initRehearsalMarkOffsetUi() {
-        const el = document.getElementById('rehearsalMarkOffsetCheckbox');
-        if (!el || el.dataset.bound === '1') return;
-        el.dataset.bound = '1';
-        syncRehearsalMarkOffsetUi();
-        el.addEventListener('change', () => {
-            setRehearsalMarkOffsetEnabled(!!el.checked);
-        });
-    }
-
-    initRehearsalMarkOffsetUi();
-
     function resolveAdjacentRegionStopSec(dir, fromSec) {
         const stops = buildRegionNavStops();
         const n = stops.length;
         if (n === 0) return null;
-        const idx = regionNavStopIndexForCurrent(stops, dir, fromSec);
         const t = Number.isFinite(fromSec)
             ? fromSec
-            : typeof getTransportSec === 'function'
-              ? getTransportSec()
-              : typeof videoMain !== 'undefined' && videoMain
-                ? videoMain.currentTime || 0
-                : 0;
+            : typeof getCoalescedStopNavTransportSec === 'function'
+              ? getCoalescedStopNavTransportSec()
+              : typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        const idx = regionNavStopIndexForCurrent(stops, dir, t);
         const eps = regionNavStopEpsilonSec();
         let next;
         if (idx < 0) {
@@ -399,8 +592,8 @@
     };
     window.getActiveExtraSegmentsAtTransport = getActiveExtraSegmentsAtTransport;
     window.refreshSegmentHitAtTransport = refreshSegmentHitAtTransport;
-    window.phraseSlotPlacementSec = phraseSlotPlacementSec;
-    window.phraseSlotRegionInTargetSec = phraseSlotRegionInTargetSec;
+    window.rehearsalSlotPlacementSec = rehearsalSlotPlacementSec;
+    window.rehearsalSlotRegionInTargetSec = rehearsalSlotRegionInTargetSec;
     window.isSegmentBoundaryJoined = isSegmentBoundaryJoined;
     window.isSegmentBoundaryJoinableAtIndex = isSegmentBoundaryJoinableAtIndex;
     window.playbackRegionBoundaryJoinBlockReason = playbackRegionBoundaryJoinBlockReason;
@@ -414,8 +607,8 @@
     window.isSegmentSourceContinuousAtBoundary = isSegmentSourceContinuousAtBoundary;
     window.isSegmentSourceSplitAtBoundary = isSegmentSourceSplitAtBoundary;
     window.isSegmentMovableSplitBoundary = isSegmentMovableSplitBoundary;
-    window.isPhraseOffMovableSplitBoundaryEnabled =
-        isPhraseOffMovableSplitBoundaryEnabled;
+    window.isRehearsalOffMovableSplitBoundaryEnabled =
+        isRehearsalOffMovableSplitBoundaryEnabled;
     window.getContinuousJoinedSourceOutSec = getContinuousJoinedSourceOutSec;
     window.planIncomingSegmentStartAtJoinedBoundary =
         planIncomingSegmentStartAtJoinedBoundary;
@@ -466,22 +659,19 @@
     window.resolveRegionSwapUnitSegmentIndices = resolveRegionSwapUnitSegmentIndices;
     window.repositionRegionSwapUnitToTimelineSec = repositionRegionSwapUnitToTimelineSec;
     window.syncTrackHeadPadFromFirstSegment = syncTrackHeadPadFromFirstSegment;
+    window.syncTrackRegionHeadStateFromFirstSegment = syncTrackRegionHeadStateFromFirstSegment;
     window.segmentBoundaryJoinEpsilonSec = function segmentBoundaryJoinEpsilonSec() {
         return SEGMENT_BOUNDARY_JOIN_EPS_SEC;
     };
     window.getPlaybackRegionsState = getPlaybackRegionsState;
     window.requestRegionUndoCapture = requestRegionUndoCapture;
     window.attachRegionSwapAnimHintToUndoStackTop = attachRegionSwapAnimHintToUndoStackTop;
+    window.attachHeadPadSwapPreMarksToUndoStackTop = attachHeadPadSwapPreMarksToUndoStackTop;
     window.previewTrackSegmentsFromUndoEntry = previewTrackSegmentsFromUndoEntry;
     window.captureTrackRegionOverlayIntervals = captureTrackRegionOverlayIntervals;
     window.redrawAfterRegionChange = redrawAfterRegionChange;
     window.REHEARSAL_MARK_UNLABELED = REHEARSAL_MARK_UNLABELED;
-    window.rehearsalMarkLabelForPhraseSlotIndex = rehearsalMarkLabelForPhraseSlotIndex;
+    window.rehearsalMarkLabelForRehearsalSlotIndex = rehearsalMarkLabelForRehearsalSlotIndex;
     window.rehearsalMarkDisplayLabel = rehearsalMarkDisplayLabel;
-    window.phraseSlotIndexForRehearsalMarkKeyIndex = phraseSlotIndexForRehearsalMarkKeyIndex;
-    window.getRehearsalMarkOffsetEnabled = getRehearsalMarkOffsetEnabled;
-    window.setRehearsalMarkOffsetEnabled = setRehearsalMarkOffsetEnabled;
-    window.toggleRehearsalMarkOffset = toggleRehearsalMarkOffset;
-    window.getRehearsalMarkPersistSnapshot = getRehearsalMarkPersistSnapshot;
-    window.applyRehearsalMarkImportSnapshot = applyRehearsalMarkImportSnapshot;
+    window.rehearsalSlotIndexForRehearsalMarkKeyIndex = rehearsalSlotIndexForRehearsalMarkKeyIndex;
 

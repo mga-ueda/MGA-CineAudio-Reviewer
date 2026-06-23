@@ -1,0 +1,119 @@
+リージョン入れ替え（E キー）Slot エンジン — マーカー統合フェーズ
+
+拍子・テンポ入れ替えを 1 エンジンに寄せたときと同様、マーカーも
+「スワップ計画 → 一括適用」に収束させる。以下 3 フェーズで進める。
+
+────────────────────────────────────────
+Phase 1 — finalize へのマーカー再計算一本化（完了）
+────────────────────────────────────────
+目的:
+  リハーサルグリッドマーク・ユーザータイムラインマーカーの意味更新を
+  finalize（アニメ完了後 / 非アニメ時の即時）に集約する。
+
+やめたこと:
+  - recomposeAsymmetricRehearsalPairSwap 内の recomposeRehearsalMarksAfterPairSwap
+  - swapTimelineSlotsAtIndices 内の swapRehearsalMarkLabelsForRegionSwap（早期 label 交換）
+  - applySlotLayoutToSegments の commit 時ユーザーマーカー relayout（defer して finalize へ）
+
+finalize で行うこと:
+  - segment 幾何の master クランプ（部分スワップ）
+  - slot ↔ segment 同期・segmentRehearsalLabels 復元
+  - realignRehearsalMarksFromTimelineSlots（全 slot-engine スワップ）
+  - relocateUserTimelineMarkersAfterRegionLayout（スワップ前 bounds → 最終 bounds）
+  - 非対称 recompose 後の pinMeterTrackEventsAtMarkSecs
+
+ログ: marker/finalize-phase1（Phase 2 では marker/finalize-phase2 も併記）
+
+────────────────────────────────────────
+Phase 2 — planSlotPairSwap / applySlotSwapPlan（完了）
+────────────────────────────────────────
+目的:
+  plan が segment 幾形プレビューとスワップメタを返し、apply が単一 commit。
+  アニメは plan の previewSegments を動かすだけ。
+
+API:
+  - planSlotPairSwap(track, indexA, indexB, opt)
+      slot / meter / counts の計算、buildPreviewSegmentsFromSlots、swapAnim 構築
+      戻り値: previewSegments, nextCounts, swapAnim, willAnimateSwap 等
+  - applySlotSwapPlan(plan, opt)
+      undo、counts 適用、applySlotLayoutToSegments（previewSegments 渡し）、finalize
+  - swapTimelineSlotsAtIndices = plan + apply
+
+ログ:
+  - swap/plan-built
+  - swap/plan-applied
+  - marker/finalize-phase2
+
+残課題（Phase 3 向け）:
+  - meter の完全 dry-run（現状は plan 中に meter 層が live 更新される経路が残る）
+  - nextRehearsalMarkEvents / user marker mapping を plan オブジェクトに明示格納
+
+────────────────────────────────────────
+Phase 3 — 回帰 invariant チェック（完了）
+────────────────────────────────────────
+目的:
+  固定シナリオ（復元 → 典型スワップ列）で自動診断。
+
+チェック例:
+  - 全 region in/out が [0, master] 内
+  - ユーザーマーカーが所属 region 内
+  - グリッドマーク label = 各 counts 区間先頭リージョンの所属 label
+  - slot timeline ↔ region in / counts range / draw range の整合
+
+実装:
+  - js/musical/timeline-musical-slots-invariant.js
+      runMusicalSlotSwapInvariantChecks(track, slots, opt)
+  - finalizeSlotSwapPlan 完了時に swap/invariant-check を自動出力
+  - 非対称スワップ時は swapRehearsalMarkLabelsForRegionSwap が
+    postCounts 区間で mark sec を再配置（旧 draw range 幅のまま残さない）
+
+ログ: swap/invariant-check
+
+参照実装: js/musical/timeline-musical-slots.js
+  planSlotPairSwap / applySlotSwapPlan / swapTimelineSlotsAtIndices
+
+────────────────────────────────────────
+設計原則 — 唯一の真実（対処療法禁止）
+────────────────────────────────────────
+背景:
+  連続 transport-swap（非対称 16↔8 等）で不具合報告のたびに
+  「このケースだけ」分岐を足すと、あっちを立てればこっちが立たずになる。
+  修正は常に下記モデルへ寄せる。第 3 の配置モードを増やさない。
+
+唯一の真実:
+  transport mark-draw span（collectRehearsalMarkDrawRanges）
+  非対称 recompose + mark ripple 後は
+    postCounts[rehearsalSlotIndex] の transport 区間
+  と等価。どちらか一方を「別ルール」として実装しない。
+
+責務分割:
+  musical-swap-planner.js … 分類・nextCounts・meter plan（計画のみ）
+  timeline-musical-slots.js … 配置・segment 幾何・finalize
+
+実行経路（2 系統のみ）:
+  [非対称] barA ≠ barB
+    planMusicalSlotPairSwap → nextCounts
+    → recomposeAsymmetricRehearsalPairSwap + rippleRehearsalMarksForTransportSwap
+    → applyTransportSwapPairBarCountDestSpans（= applySlotTimelineFromCountsRange）
+    → syncSlotsFromMarkDrawRanges（非ペア）
+    → finalize（meter slice / invariant）
+
+  [対称 transport-anchored] barA = barB, counts 不変
+    timeline bounds 交換 + finalize で mark label 交換
+
+禁止パターン（再導入しない）:
+  - preSwap 開始座標でのペア配置
+  - transportAnchoredSwap / countsUnchanged 等フラグによる非対称配置分岐
+  - planner nextCounts の plan 側上書き（safety fix）
+  - label 検索と counts 配置の二重経路
+
+不具合修正手順:
+  1. swap/invariant-check / swap/verify-transport-swap で乖離点を特定
+  2. 乖離の前段（planner / recompose / ripple / finalize）を修正
+  3. 配置は counts 一本を維持
+  4. 復元 → 典型連続スワップ列で回帰
+
+コード内コメント:
+  js/musical/musical-swap-planner.js ファイルヘッダ
+  js/musical/timeline-musical-slots.js ファイルヘッダ
+  applyTransportSwapPairBarCountDestSpans / applyAsymmetricPartialSwapSlotTimelines

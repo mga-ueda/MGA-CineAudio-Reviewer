@@ -88,6 +88,17 @@
 
     window.isMarkerListEditableFieldActive = isMarkerListEditableFieldActive;
 
+    /** マーカー一覧パネルとの操作中（表示中かつポインタ／フォーカスがパネル内） */
+    function isMarkerPanelInteractionActive() {
+        if (markersDisplayHidden) return false;
+        if (markerPanelPointerInside) return true;
+        if (isMarkerAreaKeyboardActive()) return true;
+        if (isMarkerListEditableFieldActive()) return true;
+        return false;
+    }
+
+    window.isMarkerPanelInteractionActive = isMarkerPanelInteractionActive;
+
     function handleMarkerPendingRangeEscapeKeydown(e) {
         if (e.code !== 'Escape' || e.ctrlKey || e.altKey || e.metaKey) return false;
         if (e.repeat) return false;
@@ -1015,11 +1026,599 @@
         return true;
     }
 
+    function markerSecInsideTimelineRange(sec, range, eps) {
+        const t = Number(sec);
+        if (!Number.isFinite(t)) return false;
+        return t >= range.startSec - eps && t <= range.endSec + eps;
+    }
+
+    function markerRangeFullyInsideTimelineRange(m, range, eps) {
+        if (!m || m.type !== 'range') return false;
+        const start = Number(m.startSec);
+        const end = Number.isFinite(m.endSec) ? Number(m.endSec) : start;
+        if (!Number.isFinite(start)) return false;
+        return start >= range.startSec - eps && end <= range.endSec + eps;
+    }
+
+    function mapMarkerSecAcrossSwapRanges(sec, fromRange, toRange) {
+        const t = Number(sec);
+        if (!Number.isFinite(t)) return t;
+        const fromSpan = fromRange.endSec - fromRange.startSec;
+        if (!(fromSpan > 1e-9)) return toRange.startSec;
+        const u = (t - fromRange.startSec) / fromSpan;
+        const toSpan = toRange.endSec - toRange.startSec;
+        return toRange.startSec + u * toSpan;
+    }
+
+    function clampMarkerRangeToTimelineBounds(m, range) {
+        if (!m || !range || !Number.isFinite(range.startSec) || !Number.isFinite(range.endSec)) {
+            return;
+        }
+        const lo = range.startSec;
+        const hi = range.endSec;
+        if (m.type === 'point' && Number.isFinite(m.timeSec)) {
+            m.timeSec = Math.max(lo, Math.min(m.timeSec, hi));
+            return;
+        }
+        if (m.type === 'range' && Number.isFinite(m.startSec)) {
+            m.startSec = Math.max(lo, Math.min(m.startSec, hi));
+            if (Number.isFinite(m.endSec)) {
+                m.endSec = Math.max(m.startSec, Math.min(m.endSec, hi));
+            }
+        }
+    }
+
+    function markerTimelineSpan(m) {
+        if (!m || m.type === 'point') return 0;
+        const start = Number(m.startSec);
+        const end = Number.isFinite(m.endSec) ? Number(m.endSec) : start;
+        if (!Number.isFinite(start)) return 0;
+        return Math.max(0, end - start);
+    }
+
+    function markerOverlapWithBoundsRange(m, bounds) {
+        if (!m || !bounds) return 0;
+        const start =
+            m.type === 'point'
+                ? Number(m.timeSec)
+                : Number.isFinite(m.startSec)
+                  ? Number(m.startSec)
+                  : NaN;
+        const end =
+            m.type === 'range' && Number.isFinite(m.endSec)
+                ? Number(m.endSec)
+                : start;
+        if (!Number.isFinite(start)) return 0;
+        const lo = Math.max(start, bounds.startSec);
+        const hi = Math.min(end, bounds.endSec);
+        return Math.max(0, hi - lo);
+    }
+
+    function markerNearlyAlignsWithBounds(m, bounds, eps) {
+        if (!m || !bounds) return false;
+        const e = eps > 0 ? eps : markerOneFrameSec();
+        if (m.type === 'point') {
+            return markerSecNearlyEqual(m.timeSec, bounds.startSec);
+        }
+        if (m.type === 'range') {
+            return (
+                markerSecNearlyEqual(m.startSec, bounds.startSec) &&
+                markerSecNearlyEqual(m.endSec, bounds.endSec)
+            );
+        }
+        return false;
+    }
+
+    function isUserTimelineMarker(m) {
+        if (!m) return false;
+        const comment = m.comment != null ? String(m.comment) : '';
+        return (
+            !isRegionVolumeMarkerComment(comment) &&
+            !isRegionPitchMarkerComment(comment)
+        );
+    }
+
+    function markerSortSec(m) {
+        if (!m) return 0;
+        if (m.type === 'point') return Number(m.timeSec);
+        return Number.isFinite(m.startSec) ? Number(m.startSec) : 0;
+    }
+
+    function collectUserTimelineMarkersSorted() {
+        const out = [];
+        for (let i = 0; i < currentMarkers.length; i++) {
+            const m = currentMarkers[i];
+            if (isUserTimelineMarker(m)) out.push(m);
+        }
+        out.sort((a, b) => markerSortSec(a) - markerSortSec(b));
+        return out;
+    }
+
+    function scoreMarkerSegmentOwnership(m, oldBounds, eps) {
+        if (!m || !oldBounds) return -1;
+        if (markerNearlyAlignsWithBounds(m, oldBounds, eps)) {
+            return 1e6 + (oldBounds.endSec - oldBounds.startSec);
+        }
+        const overlap = markerOverlapWithBoundsRange(m, oldBounds);
+        if (overlap <= eps) return -1;
+        const segSpan = oldBounds.endSec - oldBounds.startSec;
+        if (!(segSpan > eps)) return -1;
+        const overlapRatio = overlap / segSpan;
+        const mSpan = markerTimelineSpan(m);
+        const mOverlapRatio =
+            mSpan > eps ? overlap / mSpan : overlap / segSpan;
+        if (overlapRatio >= 0.85 && mOverlapRatio >= 0.85) {
+            return overlap + segSpan * 10;
+        }
+        if (overlapRatio >= 0.5 && mOverlapRatio >= 0.85) {
+            return overlap;
+        }
+        return -1;
+    }
+
+    function scoreMarkerSegmentAssignment(m, oldBounds, eps) {
+        return scoreMarkerSegmentOwnership(m, oldBounds, eps);
+    }
+
+    function findSegmentIndexContainingTimelineSec(sec, boundsMap, eps) {
+        if (!boundsMap || !Number.isFinite(sec)) return -1;
+        let best = -1;
+        let bestSpan = Infinity;
+        const keys = Object.keys(boundsMap);
+        for (let ki = 0; ki < keys.length; ki++) {
+            const segIdx = keys[ki] | 0;
+            const bounds = boundsMap[segIdx];
+            if (
+                !bounds ||
+                !Number.isFinite(bounds.startSec) ||
+                !Number.isFinite(bounds.endSec)
+            ) {
+                continue;
+            }
+            if (sec < bounds.startSec - eps || sec > bounds.endSec + eps) continue;
+            const span = bounds.endSec - bounds.startSec;
+            if (span < bestSpan) {
+                bestSpan = span;
+                best = segIdx;
+            }
+        }
+        return best;
+    }
+
+    function mapTimelineSecAcrossSegmentLayoutChange(sec, segIdx, beforeBoundsMap, track) {
+        const oldBounds = beforeBoundsMap[segIdx];
+        const newBounds = getSegmentRegionTimelineBounds(track.slot, segIdx);
+        if (
+            !oldBounds ||
+            !newBounds ||
+            !Number.isFinite(oldBounds.startSec) ||
+            !Number.isFinite(oldBounds.endSec) ||
+            !Number.isFinite(newBounds.startSec) ||
+            !Number.isFinite(newBounds.endSec) ||
+            boundsPairNearlyEqual(oldBounds, newBounds)
+        ) {
+            return sec;
+        }
+        return mapMarkerSecAcrossSwapRanges(sec, oldBounds, newBounds);
+    }
+
+    function applyMarkerEndpointLayoutMapping(m, beforeBoundsMap, track, opt) {
+        if (!m || !beforeBoundsMap) return false;
+        const eps = markerOneFrameSec();
+        let changed = false;
+        if (m.type === 'point' && Number.isFinite(m.timeSec)) {
+            const segIdx = findSegmentIndexContainingTimelineSec(
+                m.timeSec,
+                beforeBoundsMap,
+                eps,
+            );
+            if (segIdx < 0) return false;
+            const next = clampMarkerSec(
+                mapTimelineSecAcrossSegmentLayoutChange(
+                    m.timeSec,
+                    segIdx,
+                    beforeBoundsMap,
+                    track,
+                ),
+                opt,
+            );
+            if (Math.abs(next - m.timeSec) > 1e-9) {
+                m.timeSec = next;
+                changed = true;
+            }
+            return changed;
+        }
+        if (m.type !== 'range' || !Number.isFinite(m.startSec)) return false;
+        const endSec = Number.isFinite(m.endSec) ? Number(m.endSec) : m.startSec;
+        const startSeg = findSegmentIndexContainingTimelineSec(
+            m.startSec,
+            beforeBoundsMap,
+            eps,
+        );
+        const endSeg = findSegmentIndexContainingTimelineSec(endSec, beforeBoundsMap, eps);
+        if (startSeg >= 0) {
+            const nextStart = clampMarkerSec(
+                mapTimelineSecAcrossSegmentLayoutChange(
+                    m.startSec,
+                    startSeg,
+                    beforeBoundsMap,
+                    track,
+                ),
+                opt,
+            );
+            if (Math.abs(nextStart - m.startSec) > 1e-9) {
+                m.startSec = nextStart;
+                changed = true;
+            }
+        }
+        if (endSeg >= 0) {
+            const nextEnd = clampMarkerSec(
+                mapTimelineSecAcrossSegmentLayoutChange(
+                    endSec,
+                    endSeg,
+                    beforeBoundsMap,
+                    track,
+                ),
+                opt,
+            );
+            if (Math.abs(nextEnd - m.endSec) > 1e-9) {
+                m.endSec = nextEnd;
+                changed = true;
+            }
+        }
+        if (
+            changed &&
+            Number.isFinite(m.endSec) &&
+            Number.isFinite(m.startSec) &&
+            m.endSec < m.startSec
+        ) {
+            const lo = Math.min(m.startSec, m.endSec);
+            const hi = Math.max(m.startSec, m.endSec);
+            m.startSec = lo;
+            m.endSec = hi;
+        }
+        return changed;
+    }
+
+    function applyMarkerRegionSwapMapping(m, fromRange, toRange, opt) {
+        if (!m || !fromRange || !toRange) return false;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const clampToTarget = o.clampToTargetRange !== false;
+        if (m.type === 'point') {
+            const next = clampMarkerSec(
+                mapMarkerSecAcrossSwapRanges(m.timeSec, fromRange, toRange),
+                opt,
+            );
+            if (Math.abs(next - m.timeSec) <= 1e-9) return false;
+            m.timeSec = next;
+            if (clampToTarget) clampMarkerRangeToTimelineBounds(m, toRange);
+            return true;
+        }
+        if (m.type !== 'range' || !Number.isFinite(m.startSec)) return false;
+        const nextStart = clampMarkerSec(
+            mapMarkerSecAcrossSwapRanges(m.startSec, fromRange, toRange),
+            opt,
+        );
+        let changed = Math.abs(nextStart - m.startSec) > 1e-9;
+        m.startSec = nextStart;
+        if (Number.isFinite(m.endSec)) {
+            const nextEnd = clampMarkerSec(
+                mapMarkerSecAcrossSwapRanges(m.endSec, fromRange, toRange),
+                opt,
+            );
+            if (Math.abs(nextEnd - m.endSec) > 1e-9) changed = true;
+            m.endSec = nextEnd;
+            if (!o.skipCollapse) {
+                collapseRangeMarkerToPointIfNarrow(m, { silent: true });
+            }
+        }
+        if (clampToTarget) clampMarkerRangeToTimelineBounds(m, toRange);
+        return changed;
+    }
+
+    function markerFullyInsideSegmentBounds(m, bounds, eps) {
+        if (!m || !bounds) return false;
+        const range = { startSec: bounds.startSec, endSec: bounds.endSec };
+        if (m.type === 'point') {
+            return markerSecInsideTimelineRange(m.timeSec, range, eps);
+        }
+        if (m.type === 'range') {
+            return markerRangeFullyInsideTimelineRange(m, range, eps);
+        }
+        return false;
+    }
+
+    /** リージョン再配置後 — ユーザーマーカーを旧 bounds 所属で新 bounds へ追従 */
+    function relocateUserTimelineMarkersAfterRegionLayout(track, beforeBoundsMap, opt) {
+        if (!markerTimelineReady() || !currentMarkers.length) return false;
+        if (
+            !track ||
+            track.type !== 'extra' ||
+            !Number.isFinite(track.slot) ||
+            !beforeBoundsMap ||
+            typeof getSegmentRegionTimelineBounds !== 'function'
+        ) {
+            return false;
+        }
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const eps = markerOneFrameSec();
+        const segCount =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track).length : 0;
+        if (!segCount) return false;
+
+        const userMarkers = collectUserTimelineMarkersSorted();
+        let changed = false;
+        let moved = 0;
+        const movedSegments = [];
+        const assignedMarkerIds = new Set();
+        const assignedSegmentIndices = new Set();
+        const snapEps =
+            typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                ? window.segmentBoundaryJoinEpsilonSec() * 0.25
+                : 1e-6;
+        const boundsEps =
+            typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                ? window.segmentBoundaryJoinEpsilonSec()
+                : snapEps;
+
+        const assignments = [];
+        for (let si = 0; si < segCount; si++) {
+            const oldBounds = beforeBoundsMap[si];
+            if (
+                !oldBounds ||
+                !Number.isFinite(oldBounds.startSec) ||
+                !Number.isFinite(oldBounds.endSec)
+            ) {
+                continue;
+            }
+            for (let mi = 0; mi < userMarkers.length; mi++) {
+                const m = userMarkers[mi];
+                if (!m) continue;
+                const score = scoreMarkerSegmentOwnership(m, oldBounds, eps);
+                if (score < eps) continue;
+                assignments.push({ si, m, score });
+            }
+        }
+        assignments.sort((a, b) => b.score - a.score);
+
+        for (let ai = 0; ai < assignments.length; ai++) {
+            const { si, m } = assignments[ai];
+            if (assignedMarkerIds.has(m.id) || assignedSegmentIndices.has(si)) continue;
+            const newBounds = getSegmentRegionTimelineBounds(track.slot, si);
+            if (
+                !newBounds ||
+                !Number.isFinite(newBounds.startSec) ||
+                !Number.isFinite(newBounds.endSec)
+            ) {
+                continue;
+            }
+            assignedMarkerIds.add(m.id);
+            assignedSegmentIndices.add(si);
+            if (
+                markerNearlyAlignsWithBounds(m, newBounds, snapEps) &&
+                markerFullyInsideSegmentBounds(m, newBounds, boundsEps)
+            ) {
+                continue;
+            }
+            const beforeStart = m.type === 'point' ? m.timeSec : m.startSec;
+            const beforeEnd = m.type === 'range' ? m.endSec : beforeStart;
+            applyRegionMarkerBounds(m, newBounds.startSec, newBounds.endSec);
+            const afterStart = m.type === 'point' ? m.timeSec : m.startSec;
+            const afterEnd = m.type === 'range' ? m.endSec : afterStart;
+            if (
+                Math.abs(beforeStart - afterStart) > 1e-9 ||
+                Math.abs(beforeEnd - afterEnd) > 1e-9
+            ) {
+                changed = true;
+                moved += 1;
+                if (movedSegments.indexOf(si) < 0) movedSegments.push(si);
+            }
+        }
+
+        if (!changed) return false;
+        persistMarkersAfterChange({
+            silent: o.silent !== false,
+            skipSessionFlush: !!o.skipSessionFlush,
+        });
+        if (typeof window.regionSwapDiagLog === 'function') {
+            window.regionSwapDiagLog('marker/relayout', {
+                moved,
+                mode: 'region-ownership',
+                segments: movedSegments.map((i) => (i | 0) + 1),
+            });
+        }
+        return true;
+    }
+
+    /** リージョン再配置後 — 全ユーザーマーカーを所属 region bounds 内へクランプ */
+    function findSegmentIndexForMarkerClamp(m, track, segCount, eps) {
+        if (!m || !Number.isFinite(track.slot)) return -1;
+        let bestSeg = -1;
+        let bestScore = -1;
+        const boundsEps =
+            typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                ? window.segmentBoundaryJoinEpsilonSec()
+                : eps;
+        for (let si = 0; si < segCount; si++) {
+            const bounds = getSegmentRegionTimelineBounds(track.slot, si);
+            if (
+                !bounds ||
+                !Number.isFinite(bounds.startSec) ||
+                !Number.isFinite(bounds.endSec)
+            ) {
+                continue;
+            }
+            const overlap = markerOverlapWithBoundsRange(m, bounds);
+            if (overlap <= boundsEps) continue;
+            let score = overlap;
+            if (markerNearlyAlignsWithBounds(m, bounds, boundsEps)) {
+                score += 1e6;
+            }
+            const mSpan = markerTimelineSpan(m);
+            const segSpan = bounds.endSec - bounds.startSec;
+            if (mSpan > boundsEps && Math.abs(mSpan - segSpan) <= boundsEps * 4) {
+                score += segSpan * 100;
+            } else if (mSpan > boundsEps) {
+                score += (overlap / mSpan) * segSpan;
+            }
+            if (score > bestScore) {
+                bestScore = score;
+                bestSeg = si;
+            }
+        }
+        return bestSeg;
+    }
+
+    function clampUserTimelineMarkersToTrackRegions(track, opt) {
+        if (!markerTimelineReady() || !currentMarkers.length) return false;
+        if (
+            !track ||
+            track.type !== 'extra' ||
+            !Number.isFinite(track.slot) ||
+            typeof getSegmentRegionTimelineBounds !== 'function'
+        ) {
+            return false;
+        }
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const eps = markerOneFrameSec();
+        let changed = false;
+        const segCount =
+            typeof window.getTrackSegments === 'function'
+                ? window.getTrackSegments(track).length
+                : 0;
+        for (let mi = 0; mi < currentMarkers.length; mi++) {
+            const m = currentMarkers[mi];
+            if (!m) continue;
+            const comment = m.comment != null ? String(m.comment) : '';
+            if (
+                isRegionVolumeMarkerComment(comment) ||
+                isRegionPitchMarkerComment(comment)
+            ) {
+                continue;
+            }
+            let ownerSeg = -1;
+            let ownerBounds = null;
+            ownerSeg = findSegmentIndexForMarkerClamp(m, track, segCount, eps);
+            if (ownerSeg >= 0) {
+                ownerBounds = getSegmentRegionTimelineBounds(track.slot, ownerSeg);
+            }
+            if (ownerSeg < 0 || !ownerBounds) continue;
+            const beforeStart = m.type === 'point' ? m.timeSec : m.startSec;
+            const beforeEnd = m.type === 'range' ? m.endSec : beforeStart;
+            const mSpan = markerTimelineSpan(m);
+            const ownerSpan = ownerBounds.endSec - ownerBounds.startSec;
+            const overlap = markerOverlapWithBoundsRange(m, ownerBounds);
+            const boundsEps =
+                typeof window.segmentBoundaryJoinEpsilonSec === 'function'
+                    ? window.segmentBoundaryJoinEpsilonSec()
+                    : eps;
+            if (
+                m.type === 'range' &&
+                mSpan > boundsEps &&
+                overlap / mSpan < 0.5
+            ) {
+                continue;
+            }
+            if (
+                m.type === 'range' &&
+                mSpan > eps &&
+                Math.abs(mSpan - ownerSpan) <= boundsEps * 4
+            ) {
+                applyRegionMarkerBounds(
+                    m,
+                    ownerBounds.startSec,
+                    ownerBounds.endSec,
+                );
+            } else {
+                clampMarkerRangeToTimelineBounds(m, ownerBounds);
+            }
+            const afterStart = m.type === 'point' ? m.timeSec : m.startSec;
+            const afterEnd = m.type === 'range' ? m.endSec : afterStart;
+            if (
+                Math.abs(beforeStart - afterStart) > 1e-9 ||
+                Math.abs(beforeEnd - afterEnd) > 1e-9
+            ) {
+                changed = true;
+            }
+        }
+        if (!changed) return false;
+        persistMarkersAfterChange({ silent: o.silent !== false, skipSessionFlush: !!o.skipSessionFlush });
+        if (typeof window.regionSwapDiagLog === 'function') {
+            window.regionSwapDiagLog('marker/clamp-to-regions', { track: (track.slot | 0) + 1 });
+        }
+        return true;
+    }
+
     window.captureTrackSegmentRegionBoundsMap = captureTrackSegmentRegionBoundsMap;
     window.relocateRegionVolumePitchMarkersAfterLayout =
         relocateRegionVolumePitchMarkersAfterLayout;
     window.syncSegmentVolumePitchAfterRegionLayout = syncSegmentVolumePitchAfterRegionLayout;
     window.rippleMarkersForRemovedTimelineInterval = rippleMarkersForRemovedTimelineInterval;
+    window.relocateUserTimelineMarkersAfterRegionLayout =
+        relocateUserTimelineMarkersAfterRegionLayout;
+    window.clampUserTimelineMarkersToTrackRegions = clampUserTimelineMarkersToTrackRegions;
+
+    /** リージョン入れ替え — 旧所属でペアに紐づく範囲マーカーの comment を交差スワップ */
+    function swapUserTimelineMarkerCommentsForRegionPair(
+        track,
+        segmentIndexA,
+        segmentIndexB,
+        beforeBoundsMap,
+        opt,
+    ) {
+        if (!markerTimelineReady() || !currentMarkers.length) return false;
+        if (
+            !beforeBoundsMap ||
+            !Number.isFinite(segmentIndexA) ||
+            !Number.isFinite(segmentIndexB)
+        ) {
+            return false;
+        }
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const eps = markerOneFrameSec();
+        const segA = segmentIndexA | 0;
+        const segB = segmentIndexB | 0;
+        const userMarkers = collectUserTimelineMarkersSorted();
+        const markersA = [];
+        const markersB = [];
+        const boundsA = beforeBoundsMap[segA];
+        const boundsB = beforeBoundsMap[segB];
+        if (!boundsA || !boundsB) return false;
+
+        for (let mi = 0; mi < userMarkers.length; mi++) {
+            const m = userMarkers[mi];
+            if (!m) continue;
+            if (scoreMarkerSegmentOwnership(m, boundsA, eps) >= eps) markersA.push(m);
+            if (scoreMarkerSegmentOwnership(m, boundsB, eps) >= eps) markersB.push(m);
+        }
+        const n = Math.min(markersA.length, markersB.length);
+        if (n <= 0) return false;
+
+        let changed = false;
+        for (let i = 0; i < n; i++) {
+            const tmp = markersA[i].comment;
+            markersA[i].comment = markersB[i].comment;
+            markersB[i].comment = tmp;
+            changed = true;
+        }
+        if (!changed) return false;
+        persistMarkersAfterChange({
+            silent: o.silent !== false,
+            skipSessionFlush: !!o.skipSessionFlush,
+        });
+        if (typeof window.regionSwapDiagLog === 'function') {
+            window.regionSwapDiagLog('marker/swap-comments', {
+                track: (track.slot | 0) + 1,
+                regionA: segA + 1,
+                regionB: segB + 1,
+                count: n,
+            });
+        }
+        return true;
+    }
+
+    window.swapUserTimelineMarkerCommentsForRegionPair =
+        swapUserTimelineMarkerCommentsForRegionPair;
 
     function completePendingRangeAtCurrentTime(opt) {
         if (!markerTimelineReady() || pendingRangeStartSec == null) return;
@@ -1327,7 +1926,11 @@
             input = ae;
             m = currentMarkers.find((x) => x.id === ae.dataset.markerFor);
             edge = effectiveMarkerTcEdge(m, ae.dataset.markerTcEdge || edge);
-        } else if (activeMarkerId) {
+        } else if (
+            typeof isMarkerPanelInteractionActive === 'function' &&
+            isMarkerPanelInteractionActive() &&
+            activeMarkerId
+        ) {
             m = currentMarkers.find((x) => x.id === activeMarkerId);
             if (m && markerTableBody) {
                 edge = effectiveMarkerTcEdge(m, edge);

@@ -701,7 +701,6 @@
         if (m.type !== 'range') return '—';
         const frames = markerRangeLengthFrames(m);
         const span = Math.max(0, m.endSec - m.startSec);
-        if (span < 1) return frames + 'f';
         const s = span.toFixed(2).replace(/\.?0+$/, '');
         return s + 's / ' + frames + 'f';
     }
@@ -774,6 +773,12 @@
             markersLayoutRefreshTimer = null;
         }
         const run = () => {
+            if (
+                typeof isMarkerWaveformDragActive === 'function' &&
+                isMarkerWaveformDragActive()
+            ) {
+                return;
+            }
             if (typeof ensureMarkersRestoredFromSession === 'function') {
                 ensureMarkersRestoredFromSession();
             }
@@ -917,13 +922,13 @@
         }
     }
 
-    /** セッション復元・インポート後など、表示を既定（表示）に戻す */
+    /** セッション復元・インポート後など、表示を既定（非表示）に戻す */
     function resetMarkersDisplayHidden() {
-        if (!markersDisplayHidden) {
+        if (markersDisplayHidden) {
             updateMarkerHideViewButton();
             return;
         }
-        markersDisplayHidden = false;
+        markersDisplayHidden = true;
         applyMarkersDisplayVisibility();
         updateMarkerHideViewButton();
     }
@@ -1012,13 +1017,17 @@
         if (markersDisplayHidden) {
             hideMarkersVisualLayers();
             clearWaveformMarkerHighlightState();
+            if (typeof cancelTransportExplicitSeekTail === 'function') {
+                cancelTransportExplicitSeekTail();
+            }
             return;
         }
         renderSeekBarMarkers();
         updateMarkerCommentOverlay();
     }
 
-    function setMarkersDisplayHidden(hidden) {
+    function setMarkersDisplayHidden(hidden, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
         const next = !!hidden;
         if (markersDisplayHidden === next) {
             updateMarkerHideViewButton();
@@ -1027,12 +1036,27 @@
         markersDisplayHidden = next;
         applyMarkersDisplayVisibility();
         updateMarkerHideViewButton();
-        writeLog(
-            markersDisplayHidden
-                ? 'Markers: hidden on timeline'
-                : 'Markers: shown on timeline',
-        );
+        if (!o.skipLog) {
+            writeLog(
+                markersDisplayHidden
+                    ? 'Markers: hidden on timeline'
+                    : 'Markers: shown on timeline',
+            );
+        }
+        if (!o.skipPersist && typeof schedulePersistSession === 'function') {
+            schedulePersistSession();
+        }
     }
+
+    function applyMarkersDisplayHiddenFromSession(row) {
+        const hidden =
+            !row ||
+            typeof row !== 'object' ||
+            row.markersDisplayHidden !== false;
+        setMarkersDisplayHidden(hidden, { skipLog: true, skipPersist: true });
+    }
+
+    window.applyMarkersDisplayHiddenFromSession = applyMarkersDisplayHiddenFromSession;
 
     function toggleMarkersDisplayHidden() {
         if (currentMarkers.length === 0) return;

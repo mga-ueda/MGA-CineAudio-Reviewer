@@ -1582,11 +1582,13 @@
 
     function stopPlaybackReturnTransportToHead() {
         isSeeking = false;
-        clearTransportPlaybackStartSec();
+        const returnSec = Number.isFinite(transportPlaybackStartSec)
+            ? transportPlaybackStartSec
+            : 0;
         if (typeof resetTransportPlaybackClock === 'function') {
             resetTransportPlaybackClock();
         } else {
-            transportPlaybackSec = 0;
+            transportPlaybackSec = returnSec;
             transportPlaybackLastTs = 0;
         }
         if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
@@ -1597,11 +1599,11 @@
         if (videoMain) videoMain.pause();
         if (typeof stopAllExtraTrackSources === 'function') stopAllExtraTrackSources();
         if (typeof applyTransportAtSec === 'function') {
-            applyTransportAtSec(0, { markers: true, resumeAfter: false });
+            applyTransportAtSec(returnSec, { markers: true, resumeAfter: false });
         } else {
-            applyTimeToVideo(0);
+            applyTimeToVideo(returnSec);
         }
-        setTransportSec(0);
+        setTransportSec(returnSec);
         updateSeekUiFromVideo();
         if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
     }
@@ -1673,7 +1675,14 @@
                 return true;
             }
             stopPlaybackReturnTransportToHead();
-            writeLog('Playback: end reached (returned to head)');
+            const returnSec = Number.isFinite(transportPlaybackStartSec)
+                ? transportPlaybackStartSec
+                : 0;
+            writeLog(
+                'Playback: end reached (returned to ' +
+                    formatTimecodeForTransport(returnSec) +
+                    ')',
+            );
             return true;
         } finally {
             handlingMasterTransportEnd = false;

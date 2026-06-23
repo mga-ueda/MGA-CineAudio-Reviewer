@@ -1,7 +1,7 @@
 /**
  * ui-helpers.js — UI 補助（トランスポートオプションの glow、レーンステータス文言、シークヒント）。
  */
-    const transportOptGlowClearTimers = { playback: 0, analyze: 0, masterVol: 0, rehearsalMarkOffset: 0 };
+    const transportOptGlowClearTimers = { playback: 0, analyze: 0, masterVol: 0 };
     let videoPanelDriftGlowTimer = 0;
 
     const LANE_STATUS_HIDE_RE =
@@ -45,8 +45,6 @@
             '.transport-bar #metronomeClickToggleWrap.transport-opt-chip, #metronomeClickToggleWrap',
         masterVol:
             '.transport-bar .master-vol-container, #masterVolWrap',
-        rehearsalMarkOffset:
-            '.transport-bar #rehearsalMarkOffsetWrap.transport-opt-chip, #rehearsalMarkOffsetWrap',
     };
 
     function flashVideoPanelDrift() {
@@ -147,17 +145,89 @@
         });
     }
 
+    const MODAL_OVERLAY_IDS = [
+        'appConfirmOverlay',
+        'markerPasteOverlay',
+        'regionBarJumpOverlay',
+        'exportBlockingOverlay',
+    ];
+
     function isModalOverlayOpen() {
-        for (const id of ['appConfirmOverlay', 'markerPasteOverlay', 'exportBlockingOverlay']) {
+        for (const id of MODAL_OVERLAY_IDS) {
             const el = document.getElementById(id);
             if (el && !el.hidden) return true;
         }
         return false;
     }
 
+    function getOpenModalOverlayRoot() {
+        for (const id of MODAL_OVERLAY_IDS) {
+            const el = document.getElementById(id);
+            if (el && !el.hidden) return el;
+        }
+        return null;
+    }
+
+    function getOverlayFocusableElements(root) {
+        if (!root) return [];
+        const nodes = root.querySelectorAll(
+            'button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])',
+        );
+        return Array.from(nodes).filter((el) => {
+            if (el.disabled || el.hidden) return false;
+            if (el.closest('[hidden]')) return false;
+            const style = window.getComputedStyle(el);
+            if (style.visibility === 'hidden' || style.display === 'none') return false;
+            return true;
+        });
+    }
+
+    function handleModalOverlayFocusTrapKeydown(e) {
+        if (!e || e.key !== 'Tab' || e.altKey || e.ctrlKey || e.metaKey) return;
+        const root = getOpenModalOverlayRoot();
+        if (!root) return;
+        const focusable = getOverlayFocusableElements(root);
+        if (focusable.length === 0) return;
+        e.preventDefault();
+        if (focusable.length === 1) {
+            focusable[0].focus();
+            return;
+        }
+        const active = document.activeElement;
+        const idx = focusable.indexOf(active);
+        const nextIdx = e.shiftKey
+            ? idx <= 0
+              ? focusable.length - 1
+              : idx - 1
+            : idx < 0 || idx >= focusable.length - 1
+              ? 0
+              : idx + 1;
+        focusable[nextIdx].focus();
+    }
+
+    function handleModalOverlayFocusTrapFocusin(e) {
+        const root = getOpenModalOverlayRoot();
+        if (!root || !e || !e.target) return;
+        if (root.contains(e.target)) return;
+        const focusable = getOverlayFocusableElements(root);
+        if (focusable.length === 0) return;
+        const active = document.activeElement;
+        const idx = focusable.indexOf(active);
+        const fallback = idx >= 0 ? focusable[idx] : focusable[0];
+        requestAnimationFrame(() => {
+            if (getOpenModalOverlayRoot() !== root) return;
+            fallback.focus();
+        });
+    }
+
+    function initModalOverlayFocusTrap() {
+        document.addEventListener('keydown', handleModalOverlayFocusTrapKeydown, true);
+        document.addEventListener('focusin', handleModalOverlayFocusTrapFocusin, true);
+    }
+
     function isElementInsideHiddenModal(el) {
         if (!el || el.nodeType !== 1 || !el.closest) return false;
-        for (const id of ['appConfirmOverlay', 'markerPasteOverlay', 'exportBlockingOverlay']) {
+        for (const id of MODAL_OVERLAY_IDS) {
             const root = document.getElementById(id);
             if (root && root.hidden && root.contains(el)) return true;
         }
@@ -171,16 +241,14 @@
         if (el.closest('.marker-table__comment')) return true;
         if (el.closest('#markerMemoTextarea')) return true;
         if (el.id === 'markerPasteTextarea') return true;
+        if (el.id === 'regionBarJumpInput') return true;
+        if (el.closest('.musical-track-lane__add-input-wrap')) return true;
+        if (el.closest('.musical-track-lane__segment-input')) return true;
         return false;
     }
 
     function isInsideWaveformDrawingArea(el) {
         return !!(el && el.closest && el.closest('#audioWaveformLanesTracks'));
-    }
-
-    function isMusicalGridEditor(el) {
-        if (!el || el.nodeType !== 1) return false;
-        return el.id === 'musicalGridMeterInput' || el.id === 'musicalGridPhraseInput';
     }
 
     function shouldSkipWaveformFocusRestore(opt) {
@@ -198,7 +266,6 @@
         if (related && isMarkerIntentionalFocusTarget(related)) return true;
         const active = document.activeElement;
         if (active && isMarkerIntentionalFocusTarget(active)) return true;
-        if (isBlur && related && isMusicalGridEditor(related)) return true;
         return false;
     }
 
@@ -274,8 +341,6 @@
                 const related = e.relatedTarget;
                 if (isMarkerIntentionalFocusTarget(t)) {
                     if (related && isMarkerIntentionalFocusTarget(related)) return;
-                } else if (related && isMusicalGridEditor(related)) {
-                    return;
                 }
                 scheduleWaveformFocusRestore({
                     target: t,
@@ -290,6 +355,7 @@
     window.focusWaveformDrawingArea = focusWaveformDrawingArea;
     window.scheduleWaveformFocusRestore = scheduleWaveformFocusRestore;
     window.initWaveformFocusRestore = initWaveformFocusRestore;
+    window.initModalOverlayFocusTrap = initModalOverlayFocusTrap;
 
     window.isSnapSuppressedByAlt = isSnapSuppressedByAlt;
     window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
