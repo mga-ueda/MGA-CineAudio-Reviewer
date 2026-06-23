@@ -2393,7 +2393,6 @@
         .audio-waveform-composite__region-cursor {
             position: absolute;
             top: 0;
-            bottom: 0;
             left: 0;
             transform: translateX(-50%);
             width: 0.5px;

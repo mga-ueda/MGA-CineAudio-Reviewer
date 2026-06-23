@@ -61,32 +61,36 @@
 
     window.findSilentGapElAtPointer = findSilentGapElAtPointer;
 
-    function findPlaybackRegionElAtPointer(clientX, clientY) {
-        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+    function regionTimelineIntervalAtPointer(track, segmentIndex) {
+        return typeof regionOffsetDragTimelineInterval === 'function'
+            ? regionOffsetDragTimelineInterval(track, segmentIndex)
+            : getSegmentRegionOverlayTimelineInterval(track, segmentIndex);
+    }
 
-        const hit = document.elementFromPoint(clientX, clientY);
-        if (hit) {
-            const fromHit = hit.closest('.audio-waveform-lane__playback-region');
-            if (fromHit) {
-                const lane = fromHit.closest('.audio-waveform-lane--extra');
-                const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-                if (m) {
-                    const slot = parseInt(m[1], 10);
+    function playbackRegionElAtTransportSec(track, container, transportSec, clientX, clientY) {
+        if (!container || container.hidden || !Number.isFinite(transportSec)) return null;
+
+        if (typeof collectTrackSilentGaps === 'function') {
+            const gapIndex =
+                typeof resolveSilentGapListIndexAtTransport === 'function'
+                    ? resolveSilentGapListIndexAtTransport(track, transportSec)
+                    : -1;
+            if (gapIndex >= 0) {
+                return null;
+            }
+        }
+
+        if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+            const hit = document.elementFromPoint(clientX, clientY);
+            if (hit) {
+                const fromHit = hit.closest('.audio-waveform-lane__playback-region');
+                const hitLane = fromHit && fromHit.closest('.audio-waveform-lane--extra');
+                const m =
+                    hitLane && hitLane.id ? /^extraAudioLane(\d+)$/.exec(hitLane.id) : null;
+                if (fromHit && m && parseInt(m[1], 10) === track.slot) {
                     const segmentIndex = Number(fromHit.dataset.segmentIndex);
-                    const transportSec = transportSecAtClientX(clientX);
-                    if (
-                        Number.isFinite(segmentIndex) &&
-                        segmentIndex >= 0 &&
-                        Number.isFinite(transportSec)
-                    ) {
-                        const track = { type: 'extra', slot };
-                        const interval =
-                            typeof regionOffsetDragTimelineInterval === 'function'
-                                ? regionOffsetDragTimelineInterval(track, segmentIndex)
-                                : getSegmentRegionOverlayTimelineInterval(
-                                      track,
-                                      segmentIndex,
-                                  );
+                    if (Number.isFinite(segmentIndex) && segmentIndex >= 0) {
+                        const interval = regionTimelineIntervalAtPointer(track, segmentIndex);
                         if (
                             transportSec >= interval.startSec - 0.0005 &&
                             transportSec < interval.endSec - 0.002
@@ -95,9 +99,28 @@
                         }
                     }
                 }
-                return null;
             }
         }
+
+        const segments = getTrackSegments(track);
+        for (let i = 0; i < segments.length; i++) {
+            const interval = regionTimelineIntervalAtPointer(track, i);
+            if (
+                transportSec < interval.startSec - 0.0005 ||
+                transportSec >= interval.endSec - 0.002
+            ) {
+                continue;
+            }
+            const el = container.querySelector(
+                '.audio-waveform-lane__playback-region[data-segment-index="' + i + '"]',
+            );
+            if (el && !el.hidden) return el;
+        }
+        return null;
+    }
+
+    function findPlaybackRegionElAtPointer(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
 
         const slot = extraLaneSlotFromClientY(clientY);
         if (slot < 0) return null;
@@ -119,36 +142,7 @@
         if (!container || container.hidden) return null;
 
         const transportSec = transportSecAtClientX(clientX);
-        if (!Number.isFinite(transportSec)) return null;
-
-        if (typeof collectTrackSilentGaps === 'function') {
-            const gapIndex =
-                typeof resolveSilentGapListIndexAtTransport === 'function'
-                    ? resolveSilentGapListIndexAtTransport(track, transportSec)
-                    : -1;
-            if (gapIndex >= 0) {
-                return null;
-            }
-        }
-
-        const segments = getTrackSegments(track);
-        for (let i = 0; i < segments.length; i++) {
-            const interval =
-                typeof regionOffsetDragTimelineInterval === 'function'
-                    ? regionOffsetDragTimelineInterval(track, i)
-                    : getSegmentRegionOverlayTimelineInterval(track, i);
-            if (
-                transportSec < interval.startSec - 0.0005 ||
-                transportSec >= interval.endSec - 0.002
-            ) {
-                continue;
-            }
-            const el = container.querySelector(
-                '.audio-waveform-lane__playback-region[data-segment-index="' + i + '"]',
-            );
-            if (el && !el.hidden) return el;
-        }
-        return null;
+        return playbackRegionElAtTransportSec(track, container, transportSec, clientX, clientY);
     }
 
     const regionCursorOverlayEl =
@@ -167,7 +161,7 @@
         if (regionCursorOverlayEl) regionCursorOverlayEl.hidden = true;
     }
 
-    function showRegionCursorOverlayAtTransportSec(sec) {
+    function showRegionCursorOverlayAtTransportSec(sec, regionEl) {
         if (!regionCursorOverlayEl || !Number.isFinite(sec)) return;
         const master =
             typeof getMasterTransportDurationSec === 'function'
@@ -182,6 +176,15 @@
                 ? transportSecToTimelineLeftPercent(sec)
                 : (sec / master) * 100;
         regionCursorOverlayEl.style.left = pct + '%';
+        const inner =
+            typeof audioWaveformLanesInner !== 'undefined' ? audioWaveformLanesInner : null;
+        if (inner && regionEl) {
+            const innerRect = inner.getBoundingClientRect();
+            const regionRect = regionEl.getBoundingClientRect();
+            regionCursorOverlayEl.style.top = regionRect.top - innerRect.top + 'px';
+            regionCursorOverlayEl.style.height = regionRect.height + 'px';
+            regionCursorOverlayEl.style.bottom = 'auto';
+        }
         regionCursorOverlayEl.hidden = false;
     }
 
@@ -285,7 +288,7 @@
             }
         }
         if (Number.isFinite(snappedTransportSec)) {
-            showRegionCursorOverlayAtTransportSec(snappedTransportSec);
+            showRegionCursorOverlayAtTransportSec(snappedTransportSec, regionEl);
         } else {
             hideRegionCursorOverlay();
         }
