@@ -33,6 +33,7 @@
     window.canPersistRegionShrink = canPersistRegionShrink;
     window.getRegionPersistEpoch = getRegionPersistEpoch;
     window.swapRegionPersistEpochBetweenSlots = swapRegionPersistEpochBetweenSlots;
+    window.clearTrackSegmentsMemoForSlot = clearTrackSegmentsMemoForSlot;
     window.pruneRegionUndoStackIncompatibleWithCurrentTransport =
         pruneRegionUndoStackIncompatibleWithCurrentTransport;
     window.regionUndoSnapshotDurationScaleCompatible =

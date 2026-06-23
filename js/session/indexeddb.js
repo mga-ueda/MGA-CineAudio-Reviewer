@@ -54,6 +54,23 @@
         }
     }
 
+    function swapStringSlotKeyedObject(obj, aSlot, bSlot) {
+        if (!obj || typeof obj !== 'object' || aSlot === bSlot) return;
+        const keyA = String(aSlot);
+        const keyB = String(bSlot);
+        const tmp = obj[keyA];
+        if (Object.prototype.hasOwnProperty.call(obj, keyB)) {
+            obj[keyA] = obj[keyB];
+        } else {
+            delete obj[keyA];
+        }
+        if (tmp !== undefined) {
+            obj[keyB] = tmp;
+        } else {
+            delete obj[keyB];
+        }
+    }
+
     /** Ex レーン入れ替え後: スロット番号に紐づくリージョン永続化メタデータを追従させる */
     function swapRegionPersistMetadataBetweenExtraTrackSlots(aSlot, bSlot) {
         if (aSlot === bSlot) return;
@@ -61,8 +78,11 @@
         swapSlotKeyedPersistMetadata(regionPersistFloorPayloadBySlot, aSlot, bSlot);
         swapSlotKeyedPersistMetadata(regionPersistEpochSavedBySlot, aSlot, bSlot);
         if (lastSessionRowSnapshot && lastSessionRowSnapshot.__regionPinnedBySlot) {
-            delete lastSessionRowSnapshot.__regionPinnedBySlot[String(aSlot)];
-            delete lastSessionRowSnapshot.__regionPinnedBySlot[String(bSlot)];
+            swapStringSlotKeyedObject(
+                lastSessionRowSnapshot.__regionPinnedBySlot,
+                aSlot,
+                bSlot,
+            );
         }
         if (typeof swapRegionPersistEpochBetweenSlots === 'function') {
             swapRegionPersistEpochBetweenSlots(aSlot, bSlot);

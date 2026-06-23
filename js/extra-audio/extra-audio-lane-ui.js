@@ -344,6 +344,85 @@
         }
     }
 
+    function clearExtraTrackWaveformDerivedCache(tr) {
+        if (!tr) return;
+        tr.viewportPeaks = null;
+        tr.scrubOverviewPeaks = null;
+    }
+
+    function invalidateExtraTrackSlotCachesAfterSwap(aSlot, bSlot) {
+        if (typeof invalidateTrackTimelineSlotsReadCache === 'function') {
+            invalidateTrackTimelineSlotsReadCache();
+        }
+        if (typeof clearTrackSegmentsMemoForSlot === 'function') {
+            clearTrackSegmentsMemoForSlot(aSlot);
+            clearTrackSegmentsMemoForSlot(bSlot);
+        }
+        clearExtraTrackWaveformDerivedCache(extraTracks[aSlot]);
+        clearExtraTrackWaveformDerivedCache(extraTracks[bSlot]);
+    }
+
+    /** 入れ替え後: viewport 高解像度ピークを再構築（クリア直後の粗い概要ピーク描画を防ぐ） */
+    function refreshExtraTrackWaveformsAfterSlotSwap(aSlot, bSlot) {
+        const slots = [];
+        if (
+            aSlot >= 0 &&
+            aSlot < EXTRA_TRACK_COUNT &&
+            typeof extraTrackSlotHasContent === 'function' &&
+            extraTrackSlotHasContent(aSlot)
+        ) {
+            slots.push(aSlot);
+        }
+        if (
+            bSlot >= 0 &&
+            bSlot < EXTRA_TRACK_COUNT &&
+            bSlot !== aSlot &&
+            typeof extraTrackSlotHasContent === 'function' &&
+            extraTrackSlotHasContent(bSlot)
+        ) {
+            slots.push(bSlot);
+        }
+        if (!slots.length) return;
+        for (let i = 0; i < slots.length; i++) {
+            if (typeof rebuildExtraTrackPeaksIfNeeded === 'function') {
+                rebuildExtraTrackPeaksIfNeeded(slots[i]);
+            }
+        }
+        if (typeof invalidateWaveformViewportHiresSpec === 'function') {
+            invalidateWaveformViewportHiresSpec();
+        }
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const opt = { slots };
+                if (typeof applyWaveformViewportPeaksImmediate === 'function') {
+                    applyWaveformViewportPeaksImmediate(opt);
+                }
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+                for (let j = 0; j < slots.length; j++) {
+                    drawExtraTrackWaveform(slots[j]);
+                }
+                if (typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+                    scheduleWaveformHiresRedrawAfterZoom(opt);
+                }
+            });
+        });
+    }
+
+    function refreshExtraTrackMusicalSlotsAfterSlotSwap(slot) {
+        if (!(slot >= 0)) return;
+        if (typeof refreshTrackTimelineMusicalSlots !== 'function') return;
+        const track = { type: 'extra', slot };
+        if (
+            typeof isTrackRegionActive === 'function' &&
+            !isTrackRegionActive(track)
+        ) {
+            return;
+        }
+        refreshTrackTimelineMusicalSlots(track);
+    }
+
     function swapExtraTrackSlots(aSlot, bSlot) {
         if (
             !Number.isInteger(aSlot) ||
@@ -366,8 +445,11 @@
         if (typeof swapRegionPersistMetadataBetweenExtraTrackSlots === 'function') {
             swapRegionPersistMetadataBetweenExtraTrackSlots(aSlot, bSlot);
         }
+        invalidateExtraTrackSlotCachesAfterSwap(aSlot, bSlot);
         applyExtraTrackLaneVisibility(aSlot);
         applyExtraTrackLaneVisibility(bSlot);
+        refreshExtraTrackMusicalSlotsAfterSlotSwap(aSlot);
+        refreshExtraTrackMusicalSlotsAfterSlotSwap(bSlot);
         refreshExtraTrackUi(aSlot);
         refreshExtraTrackUi(bSlot);
         if (typeof refreshTrackLaneControlsUi === 'function') {
@@ -379,6 +461,7 @@
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
+        refreshExtraTrackWaveformsAfterSlotSwap(aSlot, bSlot);
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
