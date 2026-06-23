@@ -1313,7 +1313,11 @@
             redrawAllExtraTrackWaveforms();
         }
 
-        if (!dragging && typeof scheduleWaveformHiresRedrawAfterZoom === 'function') {
+        if (
+            !dragging &&
+            !(opt && opt.skipHiresSchedule) &&
+            typeof scheduleWaveformHiresRedrawAfterZoom === 'function'
+        ) {
             const hiresOpt =
                 typeof slot === 'number' && slot >= 0 ? { slots: [slot] } : undefined;
             scheduleWaveformHiresRedrawAfterZoom(hiresOpt);

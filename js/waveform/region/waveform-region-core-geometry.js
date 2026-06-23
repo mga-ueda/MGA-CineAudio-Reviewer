@@ -1021,7 +1021,8 @@
     }
     /**
      * 平行移動ドラッグで維持する In パッド。
-     * sourceIn トリム／lead pad のみ。regionIn>anchor の配置ずれは 0 扱い（Out 固定バグ防止）。
+     * sourceIn トリム／lead pad／regionTimelineOutSec 付きクロスフェード配置。
+     * それ以外の regionIn>anchor は 0 扱い（Out 固定バグ防止）。
      */
     function resolveParallelRegionOffsetDragInPadSec(
         track,
@@ -1033,12 +1034,16 @@
         if (leadPad > 0.00001) {
             return leadPad;
         }
+        const ri = Number(startRegionIn) || 0;
+        const ca = Number(startAnchor) || 0;
+        const layoutInPad = Math.max(0, ri - ca);
+        if (getRawRegionTimelineOutSec(track, segmentIndex) != null) {
+            return layoutInPad;
+        }
         const raw = getRawSegmentEntry(track, segmentIndex);
         const sourceIn = raw ? Math.max(0, Number(raw.sourceInSec) || 0) : 0;
         if (sourceIn > 0.00001) {
-            const ri = Number(startRegionIn) || 0;
-            const ca = Number(startAnchor) || 0;
-            return Math.max(0, ri - ca);
+            return layoutInPad;
         }
         return 0;
     }

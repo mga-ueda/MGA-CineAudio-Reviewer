@@ -52,9 +52,14 @@
     function finalizeRegionOffsetDragPresentation(members) {
         if (!members || !members.length) return;
         const slots = new Set();
+        const segmentsBySlot = new Map();
         for (let i = 0; i < members.length; i++) {
-            const slot = members[i].slot;
-            if (slot >= 0) slots.add(slot);
+            const m = members[i];
+            const slot = m.slot;
+            if (!(slot >= 0)) continue;
+            slots.add(slot);
+            if (!segmentsBySlot.has(slot)) segmentsBySlot.set(slot, []);
+            segmentsBySlot.get(slot).push(m.segmentIndex);
         }
         for (const slot of slots) {
             const track = { type: 'extra', slot };
@@ -64,9 +69,34 @@
             if (typeof updateTrackRegionOverlays === 'function') {
                 updateTrackRegionOverlays(track);
             }
-            if (typeof redrawAfterRegionChange === 'function') {
-                redrawAfterRegionChange(slot);
+            const affectedSegmentIndices = segmentsBySlot.get(slot) || [];
+            const redrawOpt = {
+                skipHiresSchedule: true,
+            };
+            if (affectedSegmentIndices.length) {
+                redrawOpt.affectedSegmentIndices = affectedSegmentIndices;
             }
+            if (typeof invalidateWaveformViewportPeaksForRegionEdit === 'function') {
+                invalidateWaveformViewportPeaksForRegionEdit({
+                    slot,
+                    clearTrackTiles: true,
+                });
+            }
+            if (typeof refreshExtraTrackViewportPeaksForRegionEdit === 'function') {
+                refreshExtraTrackViewportPeaksForRegionEdit(slot, redrawOpt);
+            }
+            if (typeof redrawAfterRegionChange === 'function') {
+                redrawAfterRegionChange(slot, redrawOpt);
+            } else if (typeof drawExtraTrackWaveform === 'function') {
+                drawExtraTrackWaveform(slot);
+            }
+        }
+        const slotList = Array.from(slots);
+        if (
+            slotList.length &&
+            typeof scheduleWaveformHiresRedrawAfterZoom === 'function'
+        ) {
+            scheduleWaveformHiresRedrawAfterZoom({ slots: slotList });
         }
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
@@ -1199,6 +1229,7 @@
             segmentIndex === 0 &&
             isParallelMove &&
             inPadForApply <= 0.00001 &&
+            getRawRegionTimelineOutSec(track, segmentIndex) == null &&
             typeof setExtraTrackTimelineStartSec === 'function'
         ) {
             const oldTrackT0 = t0;
@@ -1252,6 +1283,7 @@
                 skipUndo: true,
                 skipMusicalRefresh: true,
                 skipPersist: !!(opt && opt.skipPersist),
+                deferRedraw: !!(opt && opt.deferRedraw),
                 affectedSegmentIndices: [segmentIndex],
             });
             if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
@@ -1283,6 +1315,8 @@
         const startRegionInByKey = (opt && opt.startRegionInByKey) || null;
         const startAnchorByKey = (opt && opt.startAnchorByKey) || null;
         const useCurrentBase = !!(opt && opt.useCurrentRegionInBase);
+        const deferGroupRedraw =
+            members.length > 1 && !(opt && opt.geometryOnly);
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
             const track = { type: 'extra', slot: m.slot };
@@ -1305,6 +1339,7 @@
                 forceAudio: !!(opt && opt.forceAudio),
                 skipUndo: !!(opt && opt.skipUndo),
                 geometryOnly: !!(opt && opt.geometryOnly),
+                deferRedraw: deferGroupRedraw,
             });
         }
     }
