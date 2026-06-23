@@ -2646,8 +2646,8 @@
     }
 
     /**
-     * 非対称 in-place — 2 範囲の Tempo/Sig 内容だけ入れ替え、transport 小節境界（perBar 長）は維持。
-     * 短い側は truncate、長い側は expandMeterBarSlice で pad（RE3 meter-in-place 向け）。
+     * 非対称・小節線固定入れ替え — 2 範囲の Tempo/Sig 内容だけ入れ替え、transport 小節境界（perBar 長）は維持。
+     * 小節数が異なるときは短い側を truncate、長い側は expandMeterBarSlice で pad する。
      */
     function swapPerBarTransportRangesInPlace(perBar, startA, lenA, startB, lenB) {
         const sA = startA | 0;
@@ -4189,8 +4189,9 @@
     }
 
     /**
-     * RegionSwap — 指定 transport 小節範囲の Tempo/Sig 内容だけ入れ替え（小節線位置固定）。
-     * fill / meter-in-place（RE3 劇伴型）向け。meterSpec 再構築なし。
+     * RegionSwap — 指定 transport 小節範囲の Tempo/Sig 内容だけ入れ替え（transport 小節線位置固定）。
+     * Rehearsal Fill の非対称入れ替え向け。meterSpec は再構築せず Tempo/Sig トラックのみ更新。
+     * 小節列ごと再構成する swapTempoSignatureForBarRanges とは別経路。
      */
     function swapTempoSignatureForBarRangesInPlace(barStartA, barCountA, barStartB, barCountB, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
@@ -4381,8 +4382,9 @@
     }
 
     /**
-     * RegionSwap — 指定小節範囲の Tempo/Sig をまるごと入れ替える（transport bar index 基準）。
-     * 非対称（6↔2）では perBar 上で exclusive splice（padding/繰り返しなし）。
+     * RegionSwap — 指定 transport 小節範囲を perBar 上で splice 入れ替えし、meterSpec を再構築する。
+     * 非対称（6↔2）では exclusive splice（padding/繰り返しなし）。小節線位置は入れ替えに追随。
+     * 小節線を固定する swapTempoSignatureForBarRangesInPlace とは別経路。
      */
     function swapTempoSignatureForBarRanges(barStartA, barCountA, barStartB, barCountB, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};

@@ -108,18 +108,23 @@
                     </tr>
                     <tr>
                         <td>位置ジャンプ（尺の10分割）</td>
-                        <td><kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー／テンキー）</td>
+                        <td><kbd>0</kbd>〜<kbd>9</kbd>（上段数字キーは <kbd>Shift</kbd> なし / テンキー）</td>
                         <td>尺の0/10〜9/10へ（<kbd>9</kbd>は90%）。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
-                        <td>リージョン内の小節へジャンプ</td>
+                        <td>リージョン内またはリハーサルマーク区間内の小節へジャンプ</td>
+                        <td><kbd>Shift</kbd>+<kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー）/ <kbd>0</kbd>〜<kbd>9</kbd>（テンキー）</td>
+                        <td>Tempo/Sig（<kbd>T</kbd>）ON かつ Audio Track にリージョンがあるとき。現在地がリハーサルマーク区間内ならその区間の小節番号（1始まり）、それ以外はシークバー位置のリージョン内の小節番号へ。連続入力で2桁・3桁（300ms以内）。上段は <kbd>Shift</kbd> 必須。テンキーは条件不成立時は尺の10分割ジャンプ（上記）へ。再生中はシーク後に再生を再開</td>
+                    </tr>
+                    <tr>
+                        <td>リージョン内の小節へジャンプ（ダイアログ）</td>
                         <td><kbd>G</kbd></td>
                         <td>Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、小節番号入力ダイアログを開く（表示されている 1 始まりの番号）。リージョンを 2 つ以上選択している場合はグループ化が優先。再生中はシーク後に再生を再開</td>
                     </tr>
                     <tr>
-                        <td>リハーサル名へジャンプ</td>
+                        <td>リハーサルマーク名へジャンプ</td>
                         <td><kbd>Shift</kbd>+<kbd>A</kbd>〜<kbd>Z</kbd></td>
-                        <td>Tempo/Sig・Rehearsal 欄に有効な定義があり、Audio Track にリージョンがあるとき、リハーサル名 A/B/C… の先頭へ（<kbd>Shift</kbd>+<kbd>A</kbd>=A、<kbd>Shift</kbd>+<kbd>B</kbd>=B …）。Rehearsal 表示（<kbd>R</kbd>）の表示は不要。該当のリハーサル名が無いキーは無効</td>
+                        <td>Tempo/Sig・Rehearsal 欄に有効な定義があり、Audio Track にリージョンがあるとき、リハーサルマーク名の<strong>先頭の英字</strong>と一致する名前へ（例: <kbd>Shift</kbd>+<kbd>I</kbd>=Intro、<kbd>Shift</kbd>+<kbd>A</kbd>=Act 1）。同名が複数あるとき、区間外は時系列で早い方へ、区間内では次の該当へ（繰り返しで行き来）。Rehearsal 表示（<kbd>R</kbd>）の ON / OFF は不要。該当名が無いキーは無効</td>
                     </tr>
                     <tr class="shortcut-table__section">
                         <th scope="colgroup" colspan="3">トランスポート・表示（動画読込後）</th>
@@ -489,7 +494,7 @@
                     <tr>
                         <td>グループ化 / 解除</td>
                         <td><kbd>G</kbd></td>
-                        <td>未グループ: 2つ以上選択（<strong>トラックをまたいで可</strong>）して <kbd>G</kbd> でグループ化（グループ内のいずれかにホバーすると<strong>メンバーすべて黄色枠</strong>・まとめてドラッグ可）。グループ内を選択して <kbd>G</kbd> で解除。グループ化が成立しないときは小節ジャンプ（上記「リージョン内の小節へジャンプ」）</td>
+                        <td>未グループ: 2つ以上選択（<strong>トラックをまたいで可</strong>）して <kbd>G</kbd> でグループ化（グループ内のいずれかにホバーすると<strong>メンバーすべて黄色枠</strong>・まとめてドラッグ可）。グループ内を選択して <kbd>G</kbd> で解除。グループ化が成立しないときは小節ジャンプ（上記「リージョン内の小節へジャンプ（ダイアログ）」）</td>
                     </tr>
                     <tr>
                         <td>入れ替え（Rehearsal 区間並び）</td>
@@ -508,13 +513,13 @@
                     </tr>
                     <tr>
                         <td>リージョン In を 1 拍分手前へ</td>
-                        <td><kbd>Shift</kbd>+<kbd>I</kbd></td>
-                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時のみ。対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。クリップ内容は動かさず In だけ前へ（In ハンドルドラッグと同じ経路）。移動量は参照位置の <strong>Tempo/Sig</strong> 定義に基づく <strong>1 拍</strong>（変拍子の各拍長に追従。Tempo/Sig 未設定時は不可）。隣接リージョンと重なると等パワー・クロスフェード（Fade In / Fade Out 三角で表示）。波形が連続している境界では不可</td>
+                        <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td>
+                        <td>対象は<strong>選択中のリージョン</strong>、またはポインタ下/アクティブトラック上のシークバー位置のリージョン。クリップ内容は動かさず In だけ前へ（In ハンドルドラッグと同じ経路）。移動量は参照位置の <strong>Tempo/Sig</strong> 定義に基づく <strong>1 拍</strong>（変拍子の各拍長に追従。Tempo/Sig 未設定時は不可）。隣接リージョンと重なると等パワー・クロスフェード（Fade In / Fade Out 三角で表示）。波形が連続している境界では不可。Rehearsal 表示（<kbd>R</kbd>）の ON / OFF に関わらず利用可</td>
                     </tr>
                     <tr>
                         <td>リージョン Out を 1 拍分後方へ</td>
-                        <td><kbd>Shift</kbd>+<kbd>O</kbd></td>
-                        <td><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時のみ。対象・移動量・クロスフェード・連続境界の制約は <kbd>Shift</kbd>+<kbd>I</kbd> と同様。クリップ内容は動かさず Out だけ後方へ（Out ハンドルドラッグと同じ経路）</td>
+                        <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd></td>
+                        <td>対象・移動量・クロスフェード・連続境界の制約は <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> と同様。クリップ内容は動かさず Out だけ後方へ（Out ハンドルドラッグと同じ経路）。Rehearsal 表示（<kbd>R</kbd>）の ON / OFF に関わらず利用可</td>
                     </tr>
                     <tr>
                         <td>クリップ開始位置（タイムライン）</td>

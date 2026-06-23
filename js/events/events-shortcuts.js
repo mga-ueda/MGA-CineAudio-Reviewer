@@ -283,6 +283,18 @@
             typeof window.getNumpadSeekDigit === 'function'
                 ? window.getNumpadSeekDigit
                 : () => null;
+        const getRegionBarJumpDigit =
+            typeof window.getRegionBarJumpDigit === 'function'
+                ? window.getRegionBarJumpDigit
+                : typeof window.getShiftSeekDigit === 'function'
+                  ? window.getShiftSeekDigit
+                  : () => null;
+        const isBarJumpShiftHeld =
+            typeof window.isBarJumpShiftHeld === 'function'
+                ? window.isBarJumpShiftHeld
+                : typeof window.isShiftModifierActive === 'function'
+                  ? window.isShiftModifierActive
+                  : (ev) => !!(ev && ev.shiftKey);
         const isTopRowDigitKeyCode =
             typeof window.isTopRowDigitKeyCode === 'function'
                 ? window.isTopRowDigitKeyCode
@@ -321,6 +333,13 @@
                 ['handlePlaybackRegionFadeInKeydown', 'handlePlaybackRegionFadeOutKeydown'],
                 e,
             )
+        ) {
+            return;
+        }
+
+        if (
+            typeof handlePlaybackRegionRehearsalMarkJumpKeydown === 'function' &&
+            handlePlaybackRegionRehearsalMarkJumpKeydown(e)
         ) {
             return;
         }
@@ -383,7 +402,6 @@
                     'handlePlaybackRegionJoinKeydown',
                     'handlePlaybackRegionGroupKeydown',
                     'handlePlaybackRegionSwapKeydown',
-                    'handlePlaybackRegionRehearsalMarkJumpKeydown',
                     'handleRehearsalMarkInsertShortcutKeydown',
                 ],
                 e,
@@ -531,11 +549,29 @@
             return;
         }
 
+        if (getRegionBarJumpDigit(e) != null) {
+            if (callWindowShortcut('handleRegionBarNumberJumpKeydown', e)) {
+                return;
+            }
+            // Shift + 上段数字は小節ジャンプ専用。条件未成立時は % ジャンプへフォールバックしない。
+            if (isTopRowDigitKeyCode(e.code) && isBarJumpShiftHeld(e)) {
+                e.preventDefault();
+                return;
+            }
+        }
+
         const seekDigit = getNumpadSeekDigit(e.code);
-        const decileJump =
+        const topRowDecileJump =
             seekDigit != null &&
-            (isTopRowDigitKeyCode(e.code) || isNumpadDigitKeyCode(e.code));
-        if (decileJump && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            isTopRowDigitKeyCode(e.code) &&
+            !isBarJumpShiftHeld(e);
+        const numpadDecileFallback = seekDigit != null && isNumpadDigitKeyCode(e.code);
+        if (
+            (topRowDecileJump || numpadDecileFallback) &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+        ) {
             if (e.repeat) return;
             if (
                 typeof transportControlsReady !== 'function' ||

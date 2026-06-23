@@ -218,9 +218,9 @@
         },
         regionFadeIn: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: false },
         regionFadeOut: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: false },
-        // Rehearsal 表示 OFF 時 — In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
-        regionInNudge: { code: 'KeyI', ctrl: false, meta: false, alt: false, shift: true, primary: false },
-        regionOutNudge: { code: 'KeyO', ctrl: false, meta: false, alt: false, shift: true, primary: false },
+        // In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
+        regionInNudge: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: true, primary: false },
+        regionOutNudge: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: true, primary: false },
         regionEscape: { code: 'Escape', ctrl: false, alt: false, meta: false },
 
         // ---------- ミックス ----------
@@ -366,7 +366,7 @@
     const INTERNAL_SHORTCUTS = {};
     const SHORTCUTS = Object.freeze({ ...USER_SHORTCUTS, ...INTERNAL_SHORTCUTS });
 
-    // 補助マップ: 0-9（上段数字キー／テンキー）は尺の 0/10〜9/10 へジャンプ（小節ジャンプは G ダイアログ）。
+    // 補助マップ: 上段数字キー（Shift なし）/ テンキーは尺の 0/10〜9/10 へジャンプ。Shift+上段数字・テンキーは小節ジャンプ（G ダイアログも可）。
     const NUMPAD_SEEK_DIGITS = Object.freeze({
         Digit0: 0,
         Digit1: 1,
@@ -470,6 +470,25 @@
             : null;
     }
 
+    /**
+     * リージョン内小節ジャンプ用の数字。
+     * - テンキー: Shift 不要（US では Shift を付与しないため）
+     * - 上段数字キー: Shift 必須（修飾なしは % ジャンプ）
+     */
+    function getRegionBarJumpDigit(event) {
+        if (!event || event.ctrlKey || event.metaKey || event.altKey) return null;
+        const digit = getNumpadSeekDigit(event.code);
+        if (digit == null) return null;
+        if (isNumpadDigitKeyCode(event.code)) return digit;
+        if (isTopRowDigitKeyCode(event.code) && isBarJumpShiftHeld(event)) return digit;
+        return null;
+    }
+
+    /** Shift + 0〜9 — getRegionBarJumpDigit のエイリアス（後方互換） */
+    function getShiftSeekDigit(event) {
+        return getRegionBarJumpDigit(event);
+    }
+
     /** OS の Shift 状態（テンキー等で event.shiftKey が false になる環境向け） */
     let keyboardShiftHeld = false;
     let shiftPhysicalDownCount = 0;
@@ -516,6 +535,17 @@
         syncShiftModifierFromEvent(event);
         if (event.shiftKey) return true;
         return keyboardShiftHeld;
+    }
+
+    function isBarJumpShiftHeld(event) {
+        if (shiftPhysicalDownCount > 0) return true;
+        if (keyboardShiftHeld) return true;
+        if (!event) return false;
+        if (event.shiftKey) return true;
+        if (typeof event.getModifierState === 'function' && event.getModifierState('Shift')) {
+            return true;
+        }
+        return isShiftModifierActive(event);
     }
 
     function resetShiftModifierTracking() {
@@ -870,7 +900,10 @@
     window.matchMixLaneVolumeKey = matchMixLaneVolumeKey;
     window.getUserShortcut = getUserShortcut;
     window.getNumpadSeekDigit = getNumpadSeekDigit;
+    window.getRegionBarJumpDigit = getRegionBarJumpDigit;
+    window.getShiftSeekDigit = getShiftSeekDigit;
     window.isShiftModifierActive = isShiftModifierActive;
+    window.isBarJumpShiftHeld = isBarJumpShiftHeld;
     window.isNumpadDigitKeyCode = isNumpadDigitKeyCode;
     window.isTopRowDigitKeyCode = isTopRowDigitKeyCode;
     window.isShortcutCodeInGroup = isShortcutCodeInGroup;

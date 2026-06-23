@@ -164,9 +164,24 @@
         return [];
     }
 
+    function regionEdgeNudgeKeyLabel(kind) {
+        const name = kind === 'in' ? 'regionInNudge' : 'regionOutNudge';
+        if (
+            typeof window.SHORTCUT_HINTS !== 'undefined' &&
+            window.SHORTCUT_HINTS[name]
+        ) {
+            return window.SHORTCUT_HINTS[name];
+        }
+        if (typeof formatShortcutDef === 'function' && typeof getUserShortcut === 'function') {
+            const def = getUserShortcut(name);
+            if (def) return formatShortcutDef(def);
+        }
+        return kind === 'in' ? 'Alt+Shift+I' : 'Alt+Shift+O';
+    }
+
     function notifyRegionEdgeNudgeMiss(kind, reason) {
         const edgeLabel = kind === 'in' ? 'In' : 'Out';
-        const keyLabel = kind === 'in' ? 'Shift+I' : 'Shift+O';
+        const keyLabel = regionEdgeNudgeKeyLabel(kind);
         const msg =
             'Region ' +
             edgeLabel +
@@ -182,7 +197,7 @@
 
     function notifyRegionEdgeNudgeApplied(kind, count, deltaSec) {
         const edgeLabel = kind === 'in' ? 'In' : 'Out';
-        const keyLabel = kind === 'in' ? 'Shift+I' : 'Shift+O';
+        const keyLabel = regionEdgeNudgeKeyLabel(kind);
         const ms = Math.round(Math.max(0, Number(deltaSec) || 0) * 1000);
         const amountLabel = '1 beat (' + ms + 'ms)';
         if (typeof writeLog === 'function') {
@@ -211,13 +226,7 @@
     }
 
     function nudgeSelectedRegionEdges(kind) {
-        if (!isRegionEdgeKeyboardNudgeEnabled()) {
-            notifyRegionEdgeNudgeMiss(
-                kind,
-                'Rehearsal tint must be OFF',
-            );
-            return false;
-        }
+        if (!isRegionEdgeKeyboardNudgeEnabled()) return false;
         const targets = resolveRegionEdgeNudgeTargets();
         if (!targets.length) {
             notifyRegionEdgeNudgeMiss(

@@ -1386,8 +1386,8 @@
 
     /**
      * 非対称 partial swap 後 — 入れ替え対象外 slot の timeline を live segment 位置で維持。
-     * fill モードでは draw rehearsal 数 > counts 群数のため、counts 区間への ripple は
-     * 無関係ユニット（例: R3）を誤移動させる。
+     * Rehearsal Fill では draw 上のリハーサル数が counts 群数より多いため、counts 区間への ripple は
+     * 入れ替え対象外のリハーサルユニットを誤移動させる。
      */
     function preserveNonSwapSlotTimelinesFromLiveSegments(track, slots, skipSlotIndices) {
         if (!slots || !slots.length || typeof window.getTrackSegments !== 'function') {

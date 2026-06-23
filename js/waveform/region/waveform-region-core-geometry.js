@@ -567,12 +567,9 @@
         );
     }
     function isRegionEdgeKeyboardNudgeEnabled() {
-        return (
-            typeof isRehearsalOffMovableSplitBoundaryEnabled === 'function' &&
-            isRehearsalOffMovableSplitBoundaryEnabled()
-        );
+        return true;
     }
-    /** Shift+I — 左/In 側の境界で波形内容が連続していないときのみ */
+    /** Alt+Shift+I — 左/In 側の境界で波形内容が連続していないときのみ */
     function canNudgeRegionInByKeyboard(track, segmentIndex) {
         if (
             segmentIndex > 0 &&
@@ -583,7 +580,7 @@
         }
         return true;
     }
-    /** Shift+O — 右/Out 側の境界で波形内容が連続していないときのみ */
+    /** Alt+Shift+O — 右/Out 側の境界で波形内容が連続していないときのみ */
     function canNudgeRegionOutByKeyboard(track, segmentIndex) {
         const segments = getTrackSegments(track);
         if (

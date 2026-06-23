@@ -265,21 +265,19 @@
     }
 
     /**
-     * 一致候補のうち transport が到達済みの最後の index（matches 配列上）。未到達は -1。
-     * リージョン In がマークより手前にある場合でも、マーク開始秒基準で判定する。
+     * transport が一致候補マークの範囲 [startSec, endSec) 内にある matches 配列上の index。該当なしは -1。
      */
     function rehearsalMarkMatchIndexAtTransportSec(ranges, matches, transportSec) {
         if (!ranges || !matches || !matches.length || !Number.isFinite(transportSec)) return -1;
         const eps = regionNavStopEpsilonSec();
         const t = Number(transportSec);
-        const firstStart = ranges[matches[0]] && ranges[matches[0]].startSec;
-        if (!Number.isFinite(firstStart) || t + eps < firstStart) return -1;
-        let at = -1;
         for (let i = 0; i < matches.length; i++) {
-            const start = ranges[matches[i]] && ranges[matches[i]].startSec;
-            if (Number.isFinite(start) && t + eps >= start) at = i;
+            const r = ranges[matches[i]];
+            if (!r || !Number.isFinite(r.startSec)) continue;
+            const endSec = Number.isFinite(r.endSec) ? r.endSec : Infinity;
+            if (t >= r.startSec - eps && t < endSec - eps) return i;
         }
-        return at;
+        return -1;
     }
 
     function resolveSegmentIndexForRehearsalMarkRange(track, range, rangeIndex) {
@@ -413,8 +411,8 @@
     /**
      * Shift+英文字 のジャンプ先範囲 index。
      * 先頭文字が一致する候補を時系列順に列挙し、
-     * 現在位置が候補マーク開始秒以降なら次の候補へ（末尾なら先頭へ循環）。
-     * 未到達なら未来方向の最初の候補（先頭より前にいるときは先頭候補）。
+     * 現在位置が候補マーク範囲内なら次の候補へ（末尾なら先頭へ循環）。
+     * 範囲外なら時系列で最も早い候補へ。
      */
     function resolveRehearsalMarkJumpRangeIndex(labelLetter) {
         const ranges = getRehearsalMarkJumpRanges();
@@ -428,27 +426,13 @@
                   ? videoMain.currentTime || 0
                   : 0;
 
-        const matchAt = rehearsalMarkMatchIndexAtTransportSec(ranges, matches, t);
-        if (matchAt >= 0) {
+        const withinIdx = rehearsalMarkMatchIndexAtTransportSec(ranges, matches, t);
+        if (withinIdx >= 0) {
             if (matches.length === 1) return matches[0];
-            return matches[(matchAt + 1) % matches.length];
+            return matches[(withinIdx + 1) % matches.length];
         }
 
-        const eps = regionNavStopEpsilonSec();
-        for (let i = 0; i < matches.length; i++) {
-            const ri = matches[i];
-            const r = ranges[ri];
-            if (r && Number.isFinite(r.startSec) && r.startSec > t + eps) return ri;
-        }
-        const firstR = ranges[matches[0]];
-        if (
-            firstR &&
-            Number.isFinite(firstR.startSec) &&
-            t + eps < firstR.startSec
-        ) {
-            return matches[0];
-        }
-        return -1;
+        return matches[0];
     }
 
     function resolveRegionRehearsalJumpTrack() {

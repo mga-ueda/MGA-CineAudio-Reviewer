@@ -1810,6 +1810,7 @@
     window.getMusicalGridSnapThresholdSec = getMusicalGridBarSnapThresholdSec;
     window.syncRehearsalBoundaryDeferToRegionHandles = syncRehearsalBoundaryDeferToRegionHandles;
     window.handleRegionBarJumpDialogKeydown = handleRegionBarJumpDialogKeydown;
+    window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
     window.openRegionBarJumpDialog = openRegionBarJumpDialog;
     window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;
     window.resolvePlaybackRegionSpanAtSeekbar = resolvePlaybackRegionSpanAtSeekbar;

@@ -89,11 +89,11 @@
         const nudgeInKey =
             typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionInNudge
                 ? window.SHORTCUT_HINTS.regionInNudge
-                : 'Shift+I';
+                : 'Alt+Shift+I';
         const nudgeOutKey =
             typeof window.SHORTCUT_HINTS !== 'undefined' && window.SHORTCUT_HINTS.regionOutNudge
                 ? window.SHORTCUT_HINTS.regionOutNudge
-                : 'Shift+O';
+                : 'Alt+Shift+O';
         if (shouldShowSegmentInHandle(track, segmentIndex)) {
             el.classList.add('audio-waveform-lane__playback-region--edge-in');
             const handleIn = document.createElement('div');
@@ -102,7 +102,7 @@
             handleIn.title =
                 'リージョン ' +
                 (segmentIndex + 1) +
-                ' の In（ドラッグでソース開始位置。Rehearsal 表示（R）OFF 時 ' +
+                ' の In（ドラッグでソース開始位置。' +
                 nudgeInKey +
                 ' で1拍前へ）';
             el.appendChild(handleIn);
@@ -115,7 +115,7 @@
             handleOut.title =
                 'リージョン ' +
                 (segmentIndex + 1) +
-                ' の Out（ドラッグでソース終了位置。Rehearsal 表示（R）OFF 時 ' +
+                ' の Out（ドラッグでソース終了位置。' +
                 nudgeOutKey +
                 ' で1拍後方へ）';
             el.appendChild(handleOut);
