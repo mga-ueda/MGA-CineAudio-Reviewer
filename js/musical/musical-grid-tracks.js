@@ -1848,6 +1848,196 @@
         return segments;
     }
 
+    /** Measure トラック小節番号 — 0.58rem 相当 */
+    const MEASURE_TRACK_LABEL_FONT_PX = 9.3;
+    /** Rehearsal Mark 区間小節番号 — 0.46rem 相当 */
+    const REHEARSAL_MEASURE_LABEL_FONT_PX = 7.4;
+    const MEASURE_LABEL_MIN_PAD_PX = 6;
+    const MEASURE_LABEL_DIGIT_WIDTH_RATIO = 0.62;
+
+    const MEASURE_LABEL_SEGMENT_PAD_PX = 3;
+    const MEASURE_LABEL_MIN_GAP_PX = 1;
+
+    function measureLabelMinWidthPxForBarNumber(barNumber, fontSizePx) {
+        const digits = Math.max(1, String(Math.abs(barNumber | 0)).length);
+        const fontPx = fontSizePx > 0 ? fontSizePx : MEASURE_TRACK_LABEL_FONT_PX;
+        return Math.ceil(digits * fontPx * MEASURE_LABEL_DIGIT_WIDTH_RATIO + MEASURE_LABEL_MIN_PAD_PX);
+    }
+
+    function measureLabelXContentPx(startSec, master) {
+        const pad = MEASURE_LABEL_SEGMENT_PAD_PX;
+        if (typeof timelineSecToContentPx === 'function') {
+            return timelineSecToContentPx(startSec) + pad;
+        }
+        const contentW =
+            typeof masterTimelineWidthCss === 'function' ? masterTimelineWidthCss() : 0;
+        if (contentW > 0 && master > 0) {
+            return (startSec / master) * contentW + pad;
+        }
+        return pad;
+    }
+
+    function sortedMeasureLabelAnchors(anchorBarNumbers) {
+        const raw = anchorBarNumbers && anchorBarNumbers.length ? anchorBarNumbers.slice() : [1];
+        if (raw.indexOf(1) < 0) raw.unshift(1);
+        raw.sort((a, b) => a - b);
+        const out = [];
+        for (let i = 0; i < raw.length; i++) {
+            if (i === 0 || raw[i] !== raw[i - 1]) out.push(raw[i]);
+        }
+        return out;
+    }
+
+    function measureLabelAnchorForBar(barNumber1Based, sortedAnchors) {
+        let anchor = sortedAnchors[0] || 1;
+        for (let i = 0; i < sortedAnchors.length; i++) {
+            if (sortedAnchors[i] <= barNumber1Based) anchor = sortedAnchors[i];
+            else break;
+        }
+        return anchor;
+    }
+
+    /** 直前のアンカー（小節 1 またはリハーサルマーク）から step 間隔。アンカー小節は必ず表示。 */
+    function shouldShowMeasureLabelAtBar(barNumber1Based, displayStep, anchorBarNumbers) {
+        if (!(displayStep > 1)) return true;
+        const n = barNumber1Based | 0;
+        if (n < 1) return false;
+        const anchors = sortedMeasureLabelAnchors(
+            Array.isArray(anchorBarNumbers)
+                ? anchorBarNumbers
+                : anchorBarNumbers != null
+                  ? [anchorBarNumbers]
+                  : [1],
+        );
+        if (anchors.indexOf(n) >= 0) return true;
+        const anchor = measureLabelAnchorForBar(n, anchors);
+        return (n - anchor) % displayStep === 0;
+    }
+
+    function measureLabelAnchorsFromMandatoryBarIndices(mandatoryBarIndices) {
+        const nums = [1];
+        if (mandatoryBarIndices && mandatoryBarIndices.size) {
+            mandatoryBarIndices.forEach((idx) => {
+                const n = (idx | 0) + 1;
+                if (n >= 1) nums.push(n);
+            });
+        }
+        return sortedMeasureLabelAnchors(nums);
+    }
+
+    function visibleMeasureCandidatesForStep(candidates, displayStep, anchorBarNumbers) {
+        if (!candidates || !candidates.length) return [];
+        if (!(displayStep > 1)) return candidates.slice();
+        return candidates.filter((c) =>
+            shouldShowMeasureLabelAtBar(c.barNum, displayStep, anchorBarNumbers),
+        );
+    }
+
+    /** 小節番号間引き — 全部 / 1つ飛ばし(2) / 3つ飛ばし(4) / 7つ飛ばし(8) の 4 段のみ */
+    const MEASURE_LABEL_DISPLAY_STEPS = [1, 2, 4, 8];
+
+    /** 左端 x + 推定幅が次のラベルと重なるか */
+    function measureLabelPositionsWouldOverlap(visibleCandidates, fontSizePx, master) {
+        if (!visibleCandidates || visibleCandidates.length < 2) return false;
+        const sorted = visibleCandidates.slice().sort((a, b) => a.startSec - b.startSec);
+        let prevRight = -Infinity;
+        for (let i = 0; i < sorted.length; i++) {
+            const c = sorted[i];
+            const x = measureLabelXContentPx(c.startSec, master);
+            const w = measureLabelMinWidthPxForBarNumber(c.barNum, fontSizePx);
+            if (x < prevRight + MEASURE_LABEL_MIN_GAP_PX) return true;
+            prevRight = x + w;
+        }
+        return false;
+    }
+
+    /** 重なり時のみ — 最小 step（1 → 2 → 4 → 8）を選ぶ。重ならなければ常に 1（全部表示） */
+    function resolveMeasureLabelDisplayStepByOverlap(candidates, fontSizePx, anchorBarNumbers, master) {
+        if (!candidates || !candidates.length) return 1;
+        for (let si = 0; si < MEASURE_LABEL_DISPLAY_STEPS.length; si++) {
+            const step = MEASURE_LABEL_DISPLAY_STEPS[si];
+            const visible = visibleMeasureCandidatesForStep(candidates, step, anchorBarNumbers);
+            if (!measureLabelPositionsWouldOverlap(visible, fontSizePx, master)) return step;
+        }
+        return MEASURE_LABEL_DISPLAY_STEPS[MEASURE_LABEL_DISPLAY_STEPS.length - 1];
+    }
+
+    function splitMeasureCandidatesByAnchorSegments(candidates, anchorBarNumbers) {
+        const anchors = sortedMeasureLabelAnchors(anchorBarNumbers);
+        const segments = [];
+        for (let ai = 0; ai < anchors.length; ai++) {
+            const anchorBar = anchors[ai];
+            const nextAnchorBar = ai + 1 < anchors.length ? anchors[ai + 1] : Infinity;
+            const segCandidates = [];
+            for (let ci = 0; ci < candidates.length; ci++) {
+                const c = candidates[ci];
+                if (c.barNum >= anchorBar && c.barNum < nextAnchorBar) {
+                    segCandidates.push(c);
+                }
+            }
+            if (segCandidates.length) {
+                segments.push({
+                    anchorBarNumbers: [anchorBar],
+                    candidates: segCandidates,
+                });
+            }
+        }
+        return segments;
+    }
+
+    function filterMeasureBarCandidatesForDisplay(candidates, opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (!candidates || !candidates.length) return [];
+        const master = o.master;
+        const fontSizePx = o.fontSizePx > 0 ? o.fontSizePx : MEASURE_TRACK_LABEL_FONT_PX;
+        const anchorBarNumbers = sortedMeasureLabelAnchors(o.anchorBarNumbers || [1]);
+        if (!(master > 0)) return candidates.slice();
+        const anchorSegments = splitMeasureCandidatesByAnchorSegments(
+            candidates,
+            anchorBarNumbers,
+        );
+        const visible = [];
+        for (let si = 0; si < anchorSegments.length; si++) {
+            const seg = anchorSegments[si];
+            const step = resolveMeasureLabelDisplayStepByOverlap(
+                seg.candidates,
+                fontSizePx,
+                seg.anchorBarNumbers,
+                master,
+            );
+            const segVisible = visibleMeasureCandidatesForStep(
+                seg.candidates,
+                step,
+                seg.anchorBarNumbers,
+            );
+            for (let vi = 0; vi < segVisible.length; vi++) {
+                visible.push(segVisible[vi]);
+            }
+        }
+        visible.sort((a, b) => a.startSec - b.startSec);
+        return visible;
+    }
+
+    function collectRehearsalMarkMandatoryBarIndices(boundaries, master, meterSpec) {
+        const mandatory = new Set();
+        if (
+            !boundaries ||
+            !boundaries.length ||
+            typeof collectRehearsalMarkDrawRanges !== 'function' ||
+            typeof barIndexForBoundarySec !== 'function'
+        ) {
+            return mandatory;
+        }
+        const ranges = collectRehearsalMarkDrawRanges(master, meterSpec);
+        for (let i = 0; i < ranges.length; i++) {
+            const range = ranges[i];
+            if (!range || !range.fromRehearsalEvent) continue;
+            const barIdx = barIndexForBoundarySec(range.startSec, boundaries);
+            if (barIdx >= 0) mandatory.add(barIdx);
+        }
+        return mandatory;
+    }
+
     function collectBarMeasureSegments(meterSpec, durationSec) {
         const segments = [];
         if (!(durationSec > 0) || !meterSpec) return segments;
@@ -1857,13 +2047,37 @@
                 : typeof collectBarBoundarySecs === 'function'
                   ? collectBarBoundarySecs(meterSpec, durationSec)
                   : [];
-        for (let barIndex = 0; barIndex < boundaries.length - 1; barIndex++) {
-            segments.push({
+        const totalBars = boundaries.length - 1;
+        if (totalBars <= 0) return segments;
+        const candidates = [];
+        for (let barIndex = 0; barIndex < totalBars; barIndex++) {
+            candidates.push({
+                barNum: barIndex + 1,
                 barStart: barIndex,
                 barCount: 1,
                 startSec: boundaries[barIndex],
                 endSec: boundaries[barIndex + 1],
-                text: String(barIndex + 1),
+            });
+        }
+        const mandatoryBarIndices = collectRehearsalMarkMandatoryBarIndices(
+            boundaries,
+            durationSec,
+            meterSpec,
+        );
+        const labelAnchors = measureLabelAnchorsFromMandatoryBarIndices(mandatoryBarIndices);
+        const visible = filterMeasureBarCandidatesForDisplay(candidates, {
+            master: durationSec,
+            fontSizePx: MEASURE_TRACK_LABEL_FONT_PX,
+            anchorBarNumbers: labelAnchors,
+        });
+        for (let i = 0; i < visible.length; i++) {
+            const c = visible[i];
+            segments.push({
+                barStart: c.barStart,
+                barCount: c.barCount,
+                startSec: c.startSec,
+                endSec: c.endSec,
+                text: String(c.barNum),
             });
         }
         return segments;
@@ -2020,9 +2234,55 @@
         });
     }
 
+    function drawMeasureTrackNumberLabelsOnCanvas(ctx, h, master, settings, layoutW, xOffset) {
+        if (!ctx || !(master > 0) || !settings || !settings.meterSpec || !(h > 0)) return;
+        const segments = collectBarMeasureSegments(settings.meterSpec, master);
+        if (!segments.length) return;
+        const linePx =
+            typeof timelineSecToContentLinePx === 'function'
+                ? timelineSecToContentLinePx
+                : (sec) => Math.round((sec / master) * layoutW) + 0.5;
+        const visMin = xOffset - 0.5;
+        const visMax = xOffset + layoutW + 0.5;
+        const fontPx = MEASURE_TRACK_LABEL_FONT_PX;
+        const pad = MEASURE_LABEL_SEGMENT_PAD_PX;
+        ctx.save();
+        ctx.font = '600 ' + fontPx + 'px system-ui, "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = '#e8ecf4';
+        const y = h * 0.5;
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const x = linePx(seg.startSec) + pad;
+            if (x < visMin || x > visMax) continue;
+            const label = seg.text || '';
+            if (!label) continue;
+            ctx.strokeText(label, x, y);
+            ctx.fillText(label, x, y);
+        }
+        ctx.restore();
+    }
+
     function renderMusicalTrackSegments(containerEl, field, segments, master, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!containerEl) return;
+        if (field === 'measure') {
+            containerEl.replaceChildren();
+            containerEl.setAttribute('aria-hidden', segments.length ? 'false' : 'true');
+            if (segments.length) {
+                containerEl.setAttribute(
+                    'aria-label',
+                    'Measure ' + segments.map((s) => s.text).join(', '),
+                );
+            } else {
+                containerEl.removeAttribute('aria-label');
+            }
+            return;
+        }
         containerEl.replaceChildren();
         containerEl.setAttribute('aria-hidden', segments.length ? 'false' : 'true');
         const editable = o.editable !== false;
@@ -2107,6 +2367,9 @@
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         }
         ctx.clearRect(0, 0, w, h);
+        const isMeasureCanvas =
+            canvasEl === musicalMeasureGridCanvas ||
+            (canvasEl && canvasEl.id === 'musicalMeasureGridCanvas');
         ctx.save();
         if (xOffset) ctx.translate(-xOffset, 0);
         if (
@@ -2143,6 +2406,9 @@
                 ctx.lineTo(xi, h);
                 ctx.stroke();
             }
+        }
+        if (isMeasureCanvas) {
+            drawMeasureTrackNumberLabelsOnCanvas(ctx, h, master, settings, layoutW, xOffset);
         }
         ctx.restore();
     }
@@ -2227,6 +2493,12 @@
     window.focusMusicalTrackEditInput = focusMusicalTrackEditInput;
     window.isMusicalTrackEditInputActive = isMusicalTrackEditInputActive;
     window.attachMusicalTrackEditBlurHandler = attachMusicalTrackEditBlurHandler;
+    window.measureLabelMinWidthPxForBarNumber = measureLabelMinWidthPxForBarNumber;
+    window.filterMeasureBarCandidatesForDisplay = filterMeasureBarCandidatesForDisplay;
+    window.shouldShowMeasureLabelAtBar = shouldShowMeasureLabelAtBar;
+    window.getRehearsalMeasureLabelFontPx = function getRehearsalMeasureLabelFontPx() {
+        return REHEARSAL_MEASURE_LABEL_FONT_PX;
+    };
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initMusicalGridTracks);

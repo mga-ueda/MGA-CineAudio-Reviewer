@@ -2634,6 +2634,7 @@
             cursor: default;
         }
         .musical-track-lane__segments--measure {
+            z-index: 4;
             pointer-events: none;
         }
         .musical-track-lane__segments--measure .musical-track-lane__segment {
@@ -2641,6 +2642,7 @@
         }
         /* Rehearsal Mark トラック内の区間小節番号（Tempo/Sig/Measure と同じレイヤー） */
         .musical-track-lane__segments--rehearsal-measure {
+            z-index: 4;
             pointer-events: none;
         }
         .musical-track-lane__segments--rehearsal-measure .musical-track-lane__segment--rehearsal-measure {
@@ -2652,9 +2654,9 @@
             text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
             pointer-events: none;
         }
-        /* Rehearsal Mark ラベル — トラック値レイヤーより一段上 */
+        /* Rehearsal Mark ラベル — 区間小節番号より一段上 */
         .musical-track-lane__segments--rehearsal-mark {
-            z-index: 3;
+            z-index: 5;
             pointer-events: none;
         }
         .musical-track-lane__segment--readonly:hover {
@@ -3269,6 +3271,10 @@
         }
         .audio-waveform-lane--musical {
             z-index: 7;
+        }
+        .audio-waveform-lane--rehearsal,
+        .audio-waveform-lane--measure {
+            z-index: 8;
         }
         .audio-waveform-lane:last-child {
             border-bottom: none;

@@ -1033,19 +1033,45 @@
         const boundaries = rehearsalBarBoundaries(meterSpec, master);
         if (!boundaries || boundaries.length < 2) return segments;
         const ranges = collectRehearsalMarkDrawRanges(master, meterSpec);
+        const labelFontPx =
+            typeof getRehearsalMeasureLabelFontPx === 'function'
+                ? getRehearsalMeasureLabelFontPx()
+                : 7.4;
         for (let ri = 0; ri < ranges.length; ri++) {
             const range = ranges[ri];
             if (!range.fromRehearsalEvent) continue;
             const startBarIdx = rehearsalBarIndexForSec(range.startSec, meterSpec, master);
             if (startBarIdx == null) continue;
+            const rangeBarSpans = [];
             for (let bi = startBarIdx; bi < boundaries.length - 1; bi++) {
                 const barStart = boundaries[bi];
                 if (barStart >= range.endSec - 1e-9) break;
-                const barEnd = boundaries[bi + 1];
-                segments.push({
+                rangeBarSpans.push({
                     startSec: barStart,
-                    endSec: barEnd,
-                    text: String(bi - startBarIdx + 1),
+                    endSec: boundaries[bi + 1],
+                    localBarNum: bi - startBarIdx + 1,
+                });
+            }
+            if (!rangeBarSpans.length) continue;
+            const candidates = rangeBarSpans.map((span) => ({
+                barNum: span.localBarNum,
+                startSec: span.startSec,
+                endSec: span.endSec,
+            }));
+            const visible =
+                typeof filterMeasureBarCandidatesForDisplay === 'function'
+                    ? filterMeasureBarCandidatesForDisplay(candidates, {
+                          master,
+                          fontSizePx: labelFontPx,
+                          anchorBarNumbers: [1],
+                      })
+                    : candidates;
+            for (let vi = 0; vi < visible.length; vi++) {
+                const c = visible[vi];
+                segments.push({
+                    startSec: c.startSec,
+                    endSec: c.endSec,
+                    text: String(c.barNum),
                 });
             }
         }
