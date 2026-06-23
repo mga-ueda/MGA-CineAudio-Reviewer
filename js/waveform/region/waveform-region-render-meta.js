@@ -356,6 +356,12 @@
         const overlay = getRehearsalMarksOverlayEl();
         if (!overlay) return;
 
+        overlay.replaceChildren();
+        if (!isMusicalGridRehearsalFillVisibleSafe()) {
+            overlay.hidden = true;
+            return;
+        }
+
         const ranges =
             typeof getRehearsalGroupRangesForRegionRehearsalMarks === 'function'
                 ? getRehearsalGroupRangesForRegionRehearsalMarks()
@@ -364,7 +370,6 @@
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
-        overlay.replaceChildren();
         if (!(master > 0) || !ranges.length) {
             overlay.hidden = true;
             return;
