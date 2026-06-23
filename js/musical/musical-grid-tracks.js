@@ -1855,7 +1855,7 @@
     const MEASURE_LABEL_MIN_PAD_PX = 6;
     const MEASURE_LABEL_DIGIT_WIDTH_RATIO = 0.62;
 
-    const MEASURE_LABEL_SEGMENT_PAD_PX = 3;
+    const MEASURE_LABEL_SEGMENT_PAD_PX = 2;
     const MEASURE_LABEL_MIN_GAP_PX = 1;
 
     function measureLabelMinWidthPxForBarNumber(barNumber, fontSizePx) {
