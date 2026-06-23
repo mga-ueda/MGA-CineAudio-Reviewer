@@ -733,6 +733,12 @@
         return unique;
     }
 
+    function appendVideoEndToSnapStops(stops) {
+        if (typeof appendVideoEndSnapStop === 'function') {
+            appendVideoEndSnapStop(stops);
+        }
+    }
+
     /** 平行移動: T ON → 小節・拍（表示時）・マーカーのみ / T OFF → 他トラック In/Out + マーカー */
     function collectRegionMoveSnapStops(exclude) {
         const raw = [];
@@ -759,8 +765,9 @@
                 raw.push(regionStops[i]);
             }
         }
-        if (markersVisible && typeof collectMarkerVideoEndSnapStops === 'function') {
-            const markerStops = collectMarkerVideoEndSnapStops();
+        appendVideoEndToSnapStops(raw);
+        if (markersVisible && typeof collectMarkerOnlySnapStops === 'function') {
+            const markerStops = collectMarkerOnlySnapStops();
             for (let i = 0; i < markerStops.length; i++) {
                 raw.push(markerStops[i]);
             }
@@ -800,17 +807,18 @@
             }
         }
         const priority = resolveTimelineSnapPriorityMode();
-        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
-            n = snapToNearestStop(n, collectMarkerVideoEndSnapStops(), threshold, opt);
+        if (priority === 'marker' && typeof collectMarkerOnlySnapStops === 'function') {
+            const stops = collectMarkerOnlySnapStops();
+            appendVideoEndToSnapStops(stops);
+            n = snapToNearestStop(n, stops, threshold, opt);
         } else if (priority === 'musical' && typeof collectMusicalGridSnapStops === 'function') {
-            n = snapToNearestStop(n, collectMusicalGridSnapStops(), threshold, opt);
+            const stops = collectMusicalGridSnapStops();
+            appendVideoEndToSnapStops(stops);
+            n = snapToNearestStop(n, stops, threshold, opt);
         } else {
-            n = snapToNearestStop(
-                n,
-                collectRegionSnapStops(exclude, sameSlotOnly),
-                threshold,
-                opt,
-            );
+            const stops = collectRegionSnapStops(exclude, sameSlotOnly);
+            appendVideoEndToSnapStops(stops);
+            n = snapToNearestStop(n, stops, threshold, opt);
         }
         return Math.max(0, n);
     }
@@ -827,9 +835,10 @@
         const threshold = regionSnapThresholdSec();
         const exclude = opt && opt.exclude ? opt.exclude : null;
         const stops = collectRegionSnapStops(exclude, -1);
+        appendVideoEndToSnapStops(stops);
         const priority = resolveTimelineSnapPriorityMode();
-        if (priority === 'marker' && typeof collectMarkerVideoEndSnapStops === 'function') {
-            const markerStops = collectMarkerVideoEndSnapStops();
+        if (priority === 'marker' && typeof collectMarkerOnlySnapStops === 'function') {
+            const markerStops = collectMarkerOnlySnapStops();
             for (let i = 0; i < markerStops.length; i++) {
                 stops.push(markerStops[i]);
             }

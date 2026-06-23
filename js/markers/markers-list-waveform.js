@@ -698,8 +698,8 @@
         }
     }
 
-    /** マーカー In/Out・点・動画終端（リージョン移動スナップ用） */
-    function collectMarkerVideoEndSnapStops(opt) {
+    /** マーカー In/Out・点のみ（動画終端は別途 appendVideoEndSnapStop） */
+    function collectMarkerOnlySnapStops(opt) {
         const excludeId = opt && opt.excludeMarkerId;
         const stops = [];
         if (!markersDisplayHidden) {
@@ -713,6 +713,12 @@
                 }
             }
         }
+        return stops;
+    }
+
+    /** マーカー In/Out・点・動画終端（リージョン移動スナップ用） */
+    function collectMarkerVideoEndSnapStops(opt) {
+        const stops = collectMarkerOnlySnapStops(opt);
         appendVideoEndSnapStop(stops);
         return stops;
     }
@@ -750,6 +756,8 @@
     }
 
     window.snapSecToMarkerInOut = snapSecToMarkerInOut;
+    window.appendVideoEndSnapStop = appendVideoEndSnapStop;
+    window.collectMarkerOnlySnapStops = collectMarkerOnlySnapStops;
     window.collectMarkerVideoEndSnapStops = collectMarkerVideoEndSnapStops;
 
     function collectVisibleRegionSnapStopsForMarkerDrag() {
