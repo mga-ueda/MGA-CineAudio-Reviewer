@@ -1134,7 +1134,10 @@
             PLAYBACK_REGION_MIN_SEC,
             seg.sourceOutSec - seg.sourceInSec,
         );
-        const minRegionIn = getSegmentRegionMoveMinTransportSec(track, segmentIndex);
+        const minRegionIn =
+            typeof regionMoveTimelineMinSec === 'function'
+                ? regionMoveTimelineMinSec(track, segmentIndex, opt)
+                : getSegmentRegionMoveMinTransportSec(track, segmentIndex);
         if (baseRegionIn + delta < minRegionIn - 0.00001) {
             delta = minRegionIn - baseRegionIn;
         }
@@ -1462,7 +1465,7 @@
     window.applyParallelRegionOffsetDragViaTrackTimeline =
         applyParallelRegionOffsetDragViaTrackTimeline;
 
-    /** 平行移動 geometryOnly — ポインタ位置で枠だけ更新（スナップは drop 時） */
+    /** 平行移動 geometryOnly — マグネット適用後の枠だけ更新（drop は preview を確定） */
     function refreshParallelRegionOffsetDragOverlayPreview(track, segmentIndex, previewHeadSec) {
         const head = Number(previewHeadSec) || 0;
         if (typeof setRegionOffsetDragPreviewHeadSec === 'function') {
@@ -1493,11 +1496,42 @@
         if (!state || !state.segments[segmentIndex]) return;
         const proposedHeadSec = Number(sec) || 0;
         if (opt && opt.geometryOnly && isParallelRegionOffsetDragOpt(opt)) {
+            let previewHeadSec = proposedHeadSec;
+            let snapDetail = null;
+            if (!(opt && opt.skipSnap) && typeof snapRegionMoveRegionInSecDetail === 'function') {
+                const snapResult = snapRegionMoveRegionInSecDetail(
+                    proposedHeadSec,
+                    track,
+                    segmentIndex,
+                    {
+                        exclude: { slot: track.slot, segmentIndex },
+                        dragStartRegionIn: opt && opt.dragStartRegionIn,
+                        dragStartAnchor: opt && opt.dragStartAnchor,
+                        commitSnap: false,
+                        lastProposedHeadSec: opt && opt.lastProposedHeadSec,
+                        geometryOnly: true,
+                        parallelRegionOffsetDrag: true,
+                    },
+                );
+                previewHeadSec = snapResult.sec;
+                snapDetail = snapResult.detail;
+            }
             refreshParallelRegionOffsetDragOverlayPreview(
                 track,
                 segmentIndex,
-                proposedHeadSec,
+                previewHeadSec,
             );
+            if (snapDetail) {
+                logRegionMoveSnapDragIfNeeded(
+                    track,
+                    segmentIndex,
+                    proposedHeadSec,
+                    snapDetail,
+                    opt,
+                    getSegmentRegionTimelineIn(track, segmentIndex),
+                    previewHeadSec,
+                );
+            }
             return;
         }
         const headBeforeApply = getSegmentRegionTimelineIn(track, segmentIndex);
@@ -1608,14 +1642,18 @@
                     opt.gestureStartAnchor ?? opt.dragStartAnchor,
             });
         }
+        const moveMinRegionIn =
+            typeof regionMoveTimelineMinSec === 'function'
+                ? regionMoveTimelineMinSec(track, segmentIndex, moveOpt)
+                : getSegmentRegionMoveMinTransportSec(track, segmentIndex);
         if (
             (isParallelRegionOffsetDragOpt(opt)
                 ? currentRegionIn
                 : dragStartRegionIn) +
                 delta <
-            getSegmentRegionMoveMinTransportSec(track, segmentIndex) - 0.00001
+            moveMinRegionIn - 0.00001
         ) {
-            desiredRegionIn = getSegmentRegionMoveMinTransportSec(track, segmentIndex);
+            desiredRegionIn = moveMinRegionIn;
             delta =
                 desiredRegionIn -
                 (isParallelRegionOffsetDragOpt(opt)
@@ -2446,17 +2484,22 @@
             if (regionHandleDragRehearsalBoundary) {
                 finalizeRehearsalBoundaryDragFromRegion(false);
             } else if (
-                regionHandleDragKind === 'out' &&
+                (regionHandleDragKind === 'in' || regionHandleDragKind === 'out') &&
                 regionHandleDragTrack &&
                 regionHandleDragSegmentIndex >= 0
             ) {
-                const transportSec = transportSecFromRegionOutDragDelta(e.clientX);
+                const transportSec =
+                    regionHandleDragKind === 'out'
+                        ? transportSecFromRegionOutDragDelta(e.clientX)
+                        : typeof transportSecFromClientX === 'function'
+                          ? transportSecFromClientX(e.clientX)
+                          : 0;
                 setSegmentHandleFromTransport(
                     regionHandleDragTrack,
                     regionHandleDragSegmentIndex,
-                    'out',
+                    regionHandleDragKind,
                     transportSec,
-                    { finalizeSnap: true },
+                    {},
                 );
             }
             endRegionHandleDrag();

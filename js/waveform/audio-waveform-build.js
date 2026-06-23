@@ -443,12 +443,64 @@
                   : [];
         if (!members.length) return;
 
-        // geometryOnly: ポインタ位置で枠だけ更新。波形はリージョンが重なり始めてから
+        // geometryOnly: ドラッグ中マグネットで枠だけ更新。波形はリージョンが重なり始めてから
         if (opt && opt.geometryOnly) {
+            let previewHeadSec = primaryNextSec;
+            if (
+                !opt.skipSnap &&
+                waveformOffsetDragSegmentIndex >= 0 &&
+                typeof snapRegionMoveRegionInSecDetail === 'function'
+            ) {
+                const primaryKey = regionGroupDragKey(slot, waveformOffsetDragSegmentIndex);
+                const primaryTrack = { type: 'extra', slot };
+                const primaryDragRegionIn =
+                    waveformOffsetDragGroupStartRegionInByKey &&
+                    Number.isFinite(
+                        waveformOffsetDragGroupStartRegionInByKey[primaryKey],
+                    )
+                        ? waveformOffsetDragGroupStartRegionInByKey[primaryKey]
+                        : waveformOffsetDragStartTimelineSec;
+                const primaryDragAnchor =
+                    waveformOffsetDragGroupStartAnchorByKey &&
+                    Number.isFinite(waveformOffsetDragGroupStartAnchorByKey[primaryKey])
+                        ? waveformOffsetDragGroupStartAnchorByKey[primaryKey]
+                        : waveformOffsetDragStartTimelineSec;
+                const snapResult = snapRegionMoveRegionInSecDetail(
+                    primaryNextSec,
+                    primaryTrack,
+                    waveformOffsetDragSegmentIndex,
+                    {
+                        dragStartRegionIn: primaryDragRegionIn,
+                        dragStartAnchor: primaryDragAnchor,
+                        exclude: { slot, segmentIndex: waveformOffsetDragSegmentIndex },
+                        commitSnap: false,
+                        lastProposedHeadSec: opt.lastProposedHeadSec,
+                        geometryOnly: true,
+                        parallelRegionOffsetDrag: true,
+                    },
+                );
+                previewHeadSec = snapResult.sec;
+                if (
+                    snapResult.detail &&
+                    typeof window.regionSnapDiagLogMoveCommit === 'function'
+                ) {
+                    window.regionSnapDiagLogMoveCommit(
+                        primaryTrack,
+                        waveformOffsetDragSegmentIndex,
+                        primaryNextSec,
+                        snapResult.detail,
+                        Object.assign({}, opt || {}, {
+                            phase: 'drag',
+                            headBeforeApply: primaryDragRegionIn,
+                            headAfterApply: previewHeadSec,
+                        }),
+                    );
+                }
+            }
             if (typeof setRegionOffsetDragPreviewHeadSec === 'function') {
-                setRegionOffsetDragPreviewHeadSec(primaryNextSec);
+                setRegionOffsetDragPreviewHeadSec(previewHeadSec);
             } else {
-                waveformOffsetDragPreviewHeadSec = primaryNextSec;
+                waveformOffsetDragPreviewHeadSec = previewHeadSec;
             }
             const slotsDone = new Set();
             for (let gi = 0; gi < members.length; gi++) {
@@ -798,7 +850,6 @@
                           e.clientX,
                           waveformOffsetDragStartClientX,
                       );
-            waveformOffsetDragPreviewHeadSec = next;
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
                     skipPersist: true,
@@ -807,6 +858,7 @@
                 });
                 waveformOffsetDragLastProposedSec = next;
             } else {
+                waveformOffsetDragPreviewHeadSec = next;
                 applyWaveformTimelineStartFromDrag(slot, next, { skipPersist: true });
             }
             if (typeof updateRegionOffsetDragMasterFreeze === 'function') {
@@ -821,7 +873,7 @@
             if (typeof updateRegionOffsetDragMasterFreeze === 'function') {
                 updateRegionOffsetDragMasterFreeze();
             }
-            const next =
+            const rawNext =
                 typeof regionOffsetDragRegionInSecFromClientX === 'function'
                     ? regionOffsetDragRegionInSecFromClientX(e.clientX)
                     : waveformOffsetDragStartTimelineSec +
@@ -829,6 +881,18 @@
                           e.clientX,
                           waveformOffsetDragStartClientX,
                       );
+            if (waveformOffsetDragSegmentIndex >= 0) {
+                applyWaveformGroupSegmentTimelineStartFromDrag(slot, rawNext, {
+                    skipPersist: true,
+                    geometryOnly: true,
+                    lastProposedHeadSec: waveformOffsetDragLastProposedSec,
+                });
+            }
+            const next =
+                waveformOffsetDragSegmentIndex >= 0 &&
+                Number.isFinite(waveformOffsetDragPreviewHeadSec)
+                    ? waveformOffsetDragPreviewHeadSec
+                    : rawNext;
             waveformOffsetDragPreviewHeadSec = next;
             const dragMembers =
                 waveformOffsetDragGroupMembers && waveformOffsetDragGroupMembers.length

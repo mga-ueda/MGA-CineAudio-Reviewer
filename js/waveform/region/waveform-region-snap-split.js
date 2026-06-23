@@ -453,7 +453,31 @@
         return raw.clipId || 'main';
     }
 
-    function regionMoveTimelineMinSec(track, segmentIndex) {
+    function regionMoveTimelineMinSec(track, segmentIndex, opt) {
+        if (
+            segmentIndex === 0 &&
+            typeof isParallelRegionOffsetDragOpt === 'function' &&
+            isParallelRegionOffsetDragOpt(opt) &&
+            typeof resolveParallelRegionOffsetDragInPadSec === 'function'
+        ) {
+            const startRegionIn =
+                opt && Number.isFinite(opt.dragStartRegionIn)
+                    ? opt.dragStartRegionIn
+                    : getSegmentRegionTimelineIn(track, segmentIndex);
+            const startAnchor =
+                opt && Number.isFinite(opt.dragStartAnchor)
+                    ? opt.dragStartAnchor
+                    : getSegmentTimelineStart(track, segmentIndex);
+            const inPad = resolveParallelRegionOffsetDragInPadSec(
+                track,
+                segmentIndex,
+                startRegionIn,
+                startAnchor,
+            );
+            if (inPad <= 0.00001) {
+                return 0;
+            }
+        }
         return typeof getSegmentRegionMoveMinTransportSec === 'function'
             ? getSegmentRegionMoveMinTransportSec(track, segmentIndex)
             : 0;
@@ -461,7 +485,7 @@
 
     function regionMoveSnapOpt(track, segmentIndex, opt) {
         return Object.assign({}, opt || {}, {
-            minTimelineSec: regionMoveTimelineMinSec(track, segmentIndex),
+            minTimelineSec: regionMoveTimelineMinSec(track, segmentIndex, opt),
         });
     }
 
@@ -1028,10 +1052,14 @@
         const instantHeadDelta = raw - currentRegionIn;
         const eps = regionMoveDragDeltaEpsilonSec();
         const directionDelta =
-            opt && opt.geometryOnly && Number.isFinite(opt.lastProposedHeadSec)
-                ? Math.abs(frameHeadDelta) > eps
-                    ? frameHeadDelta
-                    : dragDelta
+            opt && opt.geometryOnly
+                ? Math.abs(instantHeadDelta) > eps
+                    ? instantHeadDelta
+                    : Math.abs(dragDelta) > eps
+                      ? dragDelta
+                      : Math.abs(frameHeadDelta) > eps
+                        ? frameHeadDelta
+                        : dragDelta
                 : Math.abs(instantHeadDelta) > eps
                   ? instantHeadDelta
                   : dragDelta;
@@ -1105,6 +1133,22 @@
             );
             const headReject = rejectReasons.headReject;
             const tailReject = rejectReasons.tailReject;
+            const headDirReject =
+                headReject ||
+                !regionMoveEdgeSnapEligible(
+                    stop,
+                    snapHead,
+                    currentRegionIn,
+                    directionDelta,
+                );
+            const tailDirReject =
+                tailReject ||
+                !regionMoveEdgeSnapEligible(
+                    stop,
+                    snapTail,
+                    currentTail,
+                    directionDelta,
+                );
             const playReject =
                 snapPlaybackStart != null
                     ? regionMoveCommitSnapRejectReasons(
@@ -1113,7 +1157,13 @@
                           snapPlaybackStart,
                           baseRegionIn + leadPad,
                           baseRegionIn + leadPad,
-                      ).headReject
+                      ).headReject ||
+                      !regionMoveEdgeSnapEligible(
+                          stop,
+                          snapPlaybackStart,
+                          baseRegionIn + leadPad,
+                          directionDelta,
+                      )
                     : null;
             if (
                 diagCandidates &&
@@ -1145,7 +1195,7 @@
                 });
             }
             if (
-                !headReject &&
+                !headDirReject &&
                 regionMoveSnapWithinThreshold(dHeadPx, headThPx, tempoGridLock) &&
                 dHeadPx < bestDistPx
             ) {
@@ -1155,7 +1205,7 @@
                 bestStop = stop;
             }
             if (
-                !tailReject &&
+                !tailDirReject &&
                 regionMoveSnapWithinThreshold(dTailPx, tailThPx, tempoGridLock) &&
                 dTailPx < bestDistPx
             ) {
@@ -1198,6 +1248,17 @@
             detail.nearestDistSec = Math.round(nearestDist * 10000) / 10000;
             detail.nearestDistPx = Math.round(nearestDistPx * 100) / 100;
             detail.nearestEdge = nearestEdge;
+        }
+        if (Math.abs(directionDelta) > eps && bestEdge !== 'none') {
+            if (directionDelta > eps && bestRegionIn < raw - eps) {
+                bestRegionIn = proposedHead;
+                bestEdge = 'none';
+                bestStop = null;
+            } else if (directionDelta < -eps && bestRegionIn > raw + eps) {
+                bestRegionIn = proposedHead;
+                bestEdge = 'none';
+                bestStop = null;
+            }
         }
         detail.edge = bestEdge;
         detail.stopSec = bestStop;
