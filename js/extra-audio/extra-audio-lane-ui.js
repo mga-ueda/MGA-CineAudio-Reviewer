@@ -462,6 +462,13 @@
             refreshWaveformCompositeLaneLayout();
         }
         refreshExtraTrackWaveformsAfterSlotSwap(aSlot, bSlot);
+        if (typeof scheduleWaveformRegionOverlayRefresh === 'function') {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    scheduleWaveformRegionOverlayRefresh();
+                });
+            });
+        }
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }

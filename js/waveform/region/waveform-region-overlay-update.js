@@ -214,11 +214,19 @@
         if (typeof collectTrackCrossfadeZones !== 'function') return;
         const zones = collectTrackCrossfadeZones(track);
         const overlayRect = overlayRoot.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
-        if (!(master > 0) || !(overlayRect.width > 0)) return;
+        if (
+            !(master > 0) ||
+            !(overlayRect.width > 0) ||
+            !(containerRect.width > 0) ||
+            !(containerRect.height > 0)
+        ) {
+            return;
+        }
         for (let z = 0; z < zones.length; z++) {
             const zone = zones[z];
             const leftPct =
@@ -237,9 +245,9 @@
                 overlayRoot,
                 {
                     left: x0,
-                    top: overlayRect.top,
+                    top: containerRect.top,
                     width: x1 - x0,
-                    height: overlayRect.height,
+                    height: containerRect.height,
                 },
             );
         }

@@ -626,6 +626,9 @@
             if (typeof syncAllTrackWaveformLoading === 'function') {
                 syncAllTrackWaveformLoading();
             }
+            if (typeof scheduleWaveformRegionOverlayRefresh === 'function') {
+                scheduleWaveformRegionOverlayRefresh();
+            }
         });
     }
 
