@@ -147,7 +147,27 @@
         return 'monitor: (default)';
     }
 
-    function musicalGridVisibilityPrefsForExport(prefs) {
+    function musicalGridVisibilityPrefsForExport(prefs, sessionRow) {
+        if (typeof resolveMusicalGridVisibilityFromProjectSource === 'function') {
+            const projectSrc =
+                sessionRow && typeof sessionRow === 'object'
+                    ? sessionRow
+                    : prefs && typeof prefs === 'object'
+                      ? prefs
+                      : null;
+            if (projectSrc) {
+                const v = resolveMusicalGridVisibilityFromProjectSource(projectSrc);
+                if (
+                    typeof v.gridVisible === 'boolean' &&
+                    typeof v.rehearsalFillVisible === 'boolean'
+                ) {
+                    return {
+                        musicalGridVisible: v.gridVisible,
+                        musicalGridRehearsalFillVisible: v.rehearsalFillVisible,
+                    };
+                }
+            }
+        }
         const p = prefs && typeof prefs === 'object' ? prefs : {};
         let musicalGridVisible = false;
         let musicalGridRehearsalFillVisible = false;
@@ -182,6 +202,13 @@
     }
 
     function applyMusicalGridVisibilityPrefs(p) {
+        if (typeof applyMusicalGridVisibilityFromProjectSource === 'function') {
+            applyMusicalGridVisibilityFromProjectSource(p, {
+                persist: false,
+                skipRegionRefresh: true,
+            });
+            return;
+        }
         const pref = p && typeof p === 'object' ? p : {};
         const importOpt = { silent: true, persist: false, skipRegionRefresh: true, skipSessionPersist: true };
         if (typeof pref.musicalGridVisible === 'boolean' && typeof setMusicalGridVisible === 'function') {
@@ -653,6 +680,8 @@
             v: row.v,
             laneUi: row.laneUi,
             musicalGrid: row.musicalGrid,
+            musicalGridVisible: row.musicalGridVisible,
+            musicalGridRehearsalFillVisible: row.musicalGridRehearsalFillVisible,
             mName: row.mName,
             mLastModified: row.mLastModified,
             markers: row.markers,
@@ -747,7 +776,7 @@
             sessionRow.videoPreviewGamma = getVideoPreviewGammaPersistSnapshot();
         }
         const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
-        const gridVisibility = musicalGridVisibilityPrefsForExport(prefs);
+        const gridVisibility = musicalGridVisibilityPrefsForExport(prefs, sessionRow);
         /* マーカー HIDE 状態はエクスポートしない（表示のオンオフはセッション内のみ） */
         const manifest = {
             format: EXPORT_FORMAT,
@@ -851,6 +880,8 @@
             v: sess.v,
             laneUi: sess.laneUi,
             musicalGrid: sess.musicalGrid,
+            musicalGridVisible: sess.musicalGridVisible,
+            musicalGridRehearsalFillVisible: sess.musicalGridRehearsalFillVisible,
             mName: sess.mName,
             mLastModified: sess.mLastModified,
             markers: sess.markers,
@@ -971,7 +1002,11 @@
                 ? p.musicalGrid
                 : null;
         if (mg && typeof applyMusicalGridPersistSnapshot === 'function') {
-            applyMusicalGridPersistSnapshot(mg);
+            const mgWithoutVisibility =
+                typeof musicalGridPersistSnapWithoutVisibility === 'function'
+                    ? musicalGridPersistSnapWithoutVisibility(mg)
+                    : mg;
+            applyMusicalGridPersistSnapshot(mgWithoutVisibility);
         }
         applyMusicalGridVisibilityPrefs(p);
         if (typeof drawMusicalGridOverlay === 'function') {

@@ -1231,6 +1231,12 @@
         if (typeof getMusicalGridPersistSnapshot === 'function') {
             row.musicalGrid = getMusicalGridPersistSnapshot();
         }
+        if (typeof getMusicalGridVisible === 'function') {
+            row.musicalGridVisible = getMusicalGridVisible();
+        }
+        if (typeof getMusicalGridRehearsalFillVisible === 'function') {
+            row.musicalGridRehearsalFillVisible = getMusicalGridRehearsalFillVisible();
+        }
         if (typeof musicalTrackPersistDiagLog === 'function' && row.musicalGrid) {
             const mg = row.musicalGrid;
             musicalTrackPersistDiagLog('session/save-row', {
@@ -1913,7 +1919,11 @@
                             : null,
                 });
             }
-            applyMusicalGridPersistSnapshot(row.musicalGrid);
+            const mgWithoutVisibility =
+                typeof musicalGridPersistSnapWithoutVisibility === 'function'
+                    ? musicalGridPersistSnapWithoutVisibility(row.musicalGrid)
+                    : row.musicalGrid;
+            applyMusicalGridPersistSnapshot(mgWithoutVisibility);
             if (typeof musicalTrackPersistDiagLog === 'function') {
                 musicalTrackPersistDiagLog('session/apply-row/done', {
                     after:
@@ -1922,6 +1932,12 @@
                             : null,
                 });
             }
+        }
+        if (typeof applyMusicalGridVisibilityFromProjectSource === 'function') {
+            applyMusicalGridVisibilityFromProjectSource(row, {
+                persist: false,
+                skipRegionRefresh: false,
+            });
         }
         if (typeof drawMusicalGridOverlay === 'function') {
             drawMusicalGridOverlay();

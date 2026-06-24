@@ -586,6 +586,47 @@
         setMusicalGridRehearsalFillVisible(!getMusicalGridRehearsalFillVisible());
         return true;
     }
+    function musicalGridPersistSnapWithoutVisibility(snap) {
+        if (!snap || typeof snap !== 'object') return snap;
+        const out = Object.assign({}, snap);
+        delete out.gridVisible;
+        delete out.rehearsalFillVisible;
+        return out;
+    }
+    /** プロジェクト設定（セッション行・Import manifest）から T/R 表示状態を解決。トップレベルキーを優先。 */
+    function resolveMusicalGridVisibilityFromProjectSource(src) {
+        const s = src && typeof src === 'object' ? src : {};
+        const mg = s.musicalGrid && typeof s.musicalGrid === 'object' ? s.musicalGrid : null;
+        let gridVisible;
+        let rehearsalFillVisible;
+        if (typeof s.musicalGridVisible === 'boolean') {
+            gridVisible = s.musicalGridVisible !== false;
+        } else if (mg && typeof mg.gridVisible === 'boolean') {
+            gridVisible = mg.gridVisible !== false;
+        }
+        if (typeof s.musicalGridRehearsalFillVisible === 'boolean') {
+            rehearsalFillVisible = s.musicalGridRehearsalFillVisible !== false;
+        } else if (mg && typeof mg.rehearsalFillVisible === 'boolean') {
+            rehearsalFillVisible = mg.rehearsalFillVisible !== false;
+        }
+        return { gridVisible, rehearsalFillVisible };
+    }
+    function applyMusicalGridVisibilityFromProjectSource(src, opt) {
+        const v = resolveMusicalGridVisibilityFromProjectSource(src);
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const applyOpt = {
+            silent: true,
+            persist: o.persist !== false,
+            skipRegionRefresh: o.skipRegionRefresh !== false,
+            skipSessionPersist: true,
+        };
+        if (typeof v.gridVisible === 'boolean') {
+            setMusicalGridVisible(v.gridVisible, applyOpt);
+        }
+        if (typeof v.rehearsalFillVisible === 'boolean') {
+            setMusicalGridRehearsalFillVisible(v.rehearsalFillVisible, applyOpt);
+        }
+    }
     function applyMusicalGridPersistSnapshot(snap) {
         const s = snap && typeof snap === 'object' ? snap : {};
         if (typeof applyMusicalGridMeterFromPersistSnap === 'function') {

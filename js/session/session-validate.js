@@ -20,6 +20,8 @@
         'v',
         'laneUi',
         'musicalGrid',
+        'musicalGridVisible',
+        'musicalGridRehearsalFillVisible',
         'loopPlayback',
         'mName',
         'mLastModified',
@@ -260,6 +262,16 @@
         if (row.musicalGrid != null) {
             const mgErr = validateMusicalGridSnap(row.musicalGrid, 'musicalGrid');
             if (mgErr) return { valid: false, reason: 'invalid musicalGrid: ' + mgErr };
+        }
+
+        if ('musicalGridVisible' in row && typeof row.musicalGridVisible !== 'boolean') {
+            return { valid: false, reason: 'invalid musicalGridVisible' };
+        }
+        if (
+            'musicalGridRehearsalFillVisible' in row &&
+            typeof row.musicalGridRehearsalFillVisible !== 'boolean'
+        ) {
+            return { valid: false, reason: 'invalid musicalGridRehearsalFillVisible' };
         }
 
         if (Array.isArray(row.extraTracks)) {

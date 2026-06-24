@@ -1701,7 +1701,11 @@
                                   },
                     });
                 }
-                applyMusicalGridPersistSnapshot(prefs.musicalGrid);
+                const mgWithoutVisibility =
+                    typeof musicalGridPersistSnapWithoutVisibility === 'function'
+                        ? musicalGridPersistSnapWithoutVisibility(prefs.musicalGrid)
+                        : prefs.musicalGrid;
+                applyMusicalGridPersistSnapshot(mgWithoutVisibility);
                 if (typeof musicalTrackPersistDiagLog === 'function') {
                     musicalTrackPersistDiagLog('prefs/apply/done', {
                         after:
@@ -1711,6 +1715,7 @@
                     });
                 }
             }
+            /* T/R はユーザー設定のデフォルトのみ。セッション復元時にプロジェクト設定で上書きする。 */
             if (typeof prefs.musicalGridVisible === 'boolean') {
                 musicalGridVisible = prefs.musicalGridVisible;
             }
@@ -1753,6 +1758,11 @@
     window.setMusicalGridRehearsalFillVisible = setMusicalGridRehearsalFillVisible;
     window.toggleMusicalGridRehearsalFillVisible = toggleMusicalGridRehearsalFillVisible;
     window.applyMusicalGridPersistSnapshot = applyMusicalGridPersistSnapshot;
+    window.musicalGridPersistSnapWithoutVisibility = musicalGridPersistSnapWithoutVisibility;
+    window.resolveMusicalGridVisibilityFromProjectSource =
+        resolveMusicalGridVisibilityFromProjectSource;
+    window.applyMusicalGridVisibilityFromProjectSource =
+        applyMusicalGridVisibilityFromProjectSource;
     window.resetMusicalGridToDefaults = resetMusicalGridToDefaults;
     window.drawMusicalGridOverlay = drawMusicalGridOverlay;
     window.drawRehearsalFillOverlay = drawRehearsalFillOverlay;
