@@ -320,6 +320,9 @@
         if (segmentIndex === 0) {
             if (effectiveInPad > 0.00001) {
                 state.regionTimelineInSec = desiredRegionIn;
+                if (isVideoTrackRef(track)) {
+                    raw.regionTimelineInSec = desiredRegionIn;
+                }
                 if (preserveLeadPad) {
                     state.regionLeadPadSec = leadPad;
                 }
@@ -1151,7 +1154,7 @@
         }
         const raw = getRawSegmentEntry(track, segmentIndex);
         const sourceIn = raw ? Math.max(0, Number(raw.sourceInSec) || 0) : 0;
-        if (sourceIn > 0.00001) {
+        if (sourceIn > layoutInPad + 0.00001) {
             return layoutInPad;
         }
         return 0;
@@ -1172,15 +1175,20 @@
             Number.isFinite(regionHandleDragStartRegionIn)
         );
     }
+    /** In ハンドル移動の右端 — ソース終端と regionOut の大きい方（Out 固定・負 anchor 時） */
+    function getSegmentRegionInTransportMaxSec(track, segmentIndex) {
+        const sourceEnd = getSegmentTimelineEnd(track, segmentIndex);
+        const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+        const end = Math.max(sourceEnd, regionOut);
+        return Math.max(0, end - PLAYBACK_REGION_MIN_SEC);
+    }
     function applySegmentRegionInFromTransport(track, segmentIndex, transportSec, opt) {
         const anchor = getSegmentTimelineStart(track, segmentIndex);
         const audioEnd = getSegmentTimelineEnd(track, segmentIndex);
         const t0 = getTrackTimelineStartSec(track);
         const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
-        let regionIn = Math.max(
-            0,
-            Math.min(audioEnd - PLAYBACK_REGION_MIN_SEC, transportSec),
-        );
+        const maxRegionIn = getSegmentRegionInTransportMaxSec(track, segmentIndex);
+        let regionIn = Math.max(0, Math.min(maxRegionIn, transportSec));
         if (segmentIndex === 0) {
             regionIn = Math.max(t0, regionIn);
         }

@@ -1111,7 +1111,10 @@
         }
         const clipDur = getSegmentSourceDurationSec(track, seg);
         const snapOpt = {
-            exclude: { slot: track.slot, segmentIndex },
+            exclude:
+                typeof regionSnapExcludeForTrack === 'function'
+                    ? regionSnapExcludeForTrack(track, segmentIndex)
+                    : { slot: track.slot, segmentIndex },
             skipStopSnap:
                 !!(opt && opt.geometryOnly) && (kind === 'in' || kind === 'out'),
         };
@@ -1458,15 +1461,18 @@
         return units;
     }
 
+    /** 選択リージョンを平行移動し、In 端が targetSec（シークバー）に来るようにする */
     function applyRegionHeadParallelMoveToSec(track, segmentIndex, targetSec, opt) {
         const moveOpt = Object.assign({ parallelRegionOffsetDrag: true, skipUndo: true }, opt || {});
+        const currentRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
+        const delta = targetSec - currentRegionIn;
         if (
             segmentIndex === 0 &&
+            isExtraTrackRef(track) &&
             typeof resolveParallelRegionOffsetDragInPadSec === 'function' &&
             typeof applyParallelRegionOffsetDragViaTrackTimeline === 'function'
         ) {
-            const currentRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
-            const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
             const parallelInPad = resolveParallelRegionOffsetDragInPadSec(
                 track,
                 0,
@@ -1480,7 +1486,8 @@
                 return;
             }
         }
-        setSegmentTimelineStartSec(track, segmentIndex, targetSec, moveOpt);
+        if (Math.abs(delta) < 0.00001) return;
+        moveSegmentClipByTimelineDelta(track, segmentIndex, delta, moveOpt);
     }
 
     function moveSelectedRegionHeadsToSeekbar() {
@@ -1494,6 +1501,22 @@
             return false;
         }
         const units = resolveRegionMoveHeadToSeekbarUnits();
+        const targetSec =
+            typeof transportSecFromSeekbar === 'function' ? transportSecFromSeekbar() : 0;
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Region move to seekbar: begin target=' +
+                    (typeof formatTimecodeForTransport === 'function'
+                        ? formatTimecodeForTransport(targetSec)
+                        : targetSec.toFixed(3) + 's') +
+                    ' units=' +
+                    units.length +
+                    ' selected=' +
+                    (typeof getRegionSelectionCount === 'function'
+                        ? getRegionSelectionCount()
+                        : 0),
+            );
+        }
         if (!units.length) {
             if (typeof writeLog === 'function') {
                 writeLog('Region move to seekbar: select a region first');
@@ -1503,10 +1526,14 @@
             }
             return false;
         }
-        const targetSec =
-            typeof transportSecFromSeekbar === 'function' ? transportSecFromSeekbar() : 0;
         if (!regionUndoPaused) requestRegionUndoCapture();
         let anyChanged = false;
+        const changedMembers = [];
+        const moveOpt = {
+            skipUndo: true,
+            skipSnap: true,
+            parallelRegionOffsetDrag: true,
+        };
         for (let u = 0; u < units.length; u++) {
             const unit = units[u];
             const members = unit.members;
@@ -1524,11 +1551,22 @@
                         : { type: 'extra', slot: m.slot };
                 if (!isTrackRegionActive(track)) continue;
                 const before = getSegmentRegionTimelineIn(track, m.segmentIndex);
-                applyRegionHeadParallelMoveToSec(track, m.segmentIndex, targetSec, {
-                    skipUndo: true,
-                });
+                const beforeAnchor = getSegmentTimelineStart(track, m.segmentIndex);
+                applyRegionHeadParallelMoveToSec(track, m.segmentIndex, targetSec, Object.assign(
+                    {},
+                    moveOpt,
+                    {
+                        dragStartRegionIn: before,
+                        dragStartAnchor: beforeAnchor,
+                        gestureStartRegionIn: before,
+                        gestureStartAnchor: beforeAnchor,
+                    },
+                ));
                 const after = getSegmentRegionTimelineIn(track, m.segmentIndex);
-                if (Math.abs(after - before) > 0.00001) anyChanged = true;
+                if (Math.abs(after - before) > 0.00001) {
+                    anyChanged = true;
+                    changedMembers.push(m);
+                }
                 continue;
             }
             const startRegionInByKey = {};
@@ -1547,37 +1585,11 @@
             const primaryKey = regionGroupMemberKey(primary.slot, primary.segmentIndex);
             const primaryBefore = startRegionInByKey[primaryKey];
             if (!Number.isFinite(primaryBefore)) continue;
-            let snappedNext = targetSec;
-            if (typeof snapRegionMoveRegionInSecDetail === 'function') {
-                const snapResult = snapRegionMoveRegionInSecDetail(
-                    targetSec,
-                    primaryTrack,
-                    primary.segmentIndex,
-                    {
-                        dragStartRegionIn: primaryBefore,
-                        dragStartAnchor: startAnchorByKey[primaryKey],
-                        exclude: { slot: primary.slot, segmentIndex: primary.segmentIndex },
-                        commitSnap: true,
-                    },
-                );
-                snappedNext = snapResult.sec;
-            } else if (typeof snapRegionMoveRegionInSec === 'function') {
-                snappedNext = snapRegionMoveRegionInSec(
-                    targetSec,
-                    primaryTrack,
-                    primary.segmentIndex,
-                    {
-                        dragStartRegionIn: primaryBefore,
-                        dragStartAnchor: startAnchorByKey[primaryKey],
-                        exclude: { slot: primary.slot, segmentIndex: primary.segmentIndex },
-                    },
-                );
-            }
             const primaryCurrent = getSegmentRegionTimelineIn(
                 primaryTrack,
                 primary.segmentIndex,
             );
-            const deltaRaw = snappedNext - primaryCurrent;
+            const deltaRaw = targetSec - primaryCurrent;
             const effectiveDelta =
                 typeof clampRegionGroupMoveDelta === 'function'
                     ? clampRegionGroupMoveDelta(
@@ -1588,20 +1600,36 @@
                       )
                     : deltaRaw;
             if (Math.abs(effectiveDelta) < 0.00001) continue;
-            applyRegionGroupMoveDelta(members, effectiveDelta, {
+            applyRegionGroupMoveDelta(members, effectiveDelta, Object.assign({}, moveOpt, {
                 startRegionInByKey,
                 startAnchorByKey,
                 useCurrentRegionInBase: true,
-                parallelRegionOffsetDrag: true,
-                skipUndo: true,
-            });
+            }));
             anyChanged = true;
+            for (let gi = 0; gi < members.length; gi++) {
+                changedMembers.push(members[gi]);
+            }
         }
         if (!anyChanged) {
+            if (typeof writeLog === 'function') {
+                writeLog(
+                    'Region move to seekbar: no change (target=' +
+                        (typeof formatTimecodeForTransport === 'function'
+                            ? formatTimecodeForTransport(targetSec)
+                            : targetSec.toFixed(3) + 's') +
+                        ')',
+                );
+            }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'Already at limit', 'notice');
             }
             return false;
+        }
+        if (
+            changedMembers.length &&
+            typeof finalizeRegionOffsetDragPresentation === 'function'
+        ) {
+            finalizeRegionOffsetDragPresentation(changedMembers);
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
         if (typeof writeLog === 'function') {
@@ -2825,7 +2853,10 @@
                 : getSegmentRegionTimelineOut(track, segmentIndex);
         if (typeof snapRegionHandleTransportSec === 'function') {
             sec = snapRegionHandleTransportSec(sec, {
-                exclude: { slot: track.slot, segmentIndex },
+                exclude:
+                    typeof regionSnapExcludeForTrack === 'function'
+                        ? regionSnapExcludeForTrack(track, segmentIndex)
+                        : { slot: track.slot, segmentIndex },
                 sameSlotOnly: -1,
             });
         }

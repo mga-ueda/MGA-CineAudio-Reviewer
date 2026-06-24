@@ -325,6 +325,15 @@
         if (e.repeat) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
         e.preventDefault();
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Region move to seekbar: key ' +
+                    (e.code || e.key || '?') +
+                    (e.getModifierState && e.getModifierState('ScrollLock')
+                        ? ' scrollLock=1'
+                        : ''),
+            );
+        }
         if (typeof moveSelectedRegionHeadsToSeekbar === 'function') {
             moveSelectedRegionHeadsToSeekbar();
         }

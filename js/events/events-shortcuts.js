@@ -263,6 +263,14 @@
             ) {
                 return;
             }
+            if (
+                typeof matchUserShortcut === 'function' &&
+                matchUserShortcut(e, 'regionMoveHeadToSeekbar') &&
+                typeof window.handlePlaybackRegionMoveHeadToSeekbarKeydown === 'function' &&
+                window.handlePlaybackRegionMoveHeadToSeekbarKeydown(e)
+            ) {
+                return;
+            }
         },
         true,
     );

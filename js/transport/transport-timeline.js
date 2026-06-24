@@ -694,11 +694,13 @@
             }
         }
         let m = 0;
-        const vd = getVideoTransportDurationSec();
-        if (vd > 0) m = vd;
         if (typeof getVideoTrackTimelineEndSec === 'function') {
             const vet = getVideoTrackTimelineEndSec();
-            if (vet > m) m = vet;
+            if (vet > 0) m = vet;
+        }
+        if (m <= 0) {
+            const vd = getVideoTransportDurationSec();
+            if (vd > 0) m = vd;
         }
         const extraCount = getExtraTrackCount();
         for (let i = 0; i < extraCount; i++) {

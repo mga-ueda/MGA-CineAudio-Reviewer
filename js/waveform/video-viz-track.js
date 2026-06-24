@@ -198,7 +198,7 @@
     /**
      * 映像波形描画パラメータ。
      * ソース 0 を timeline (playbackStart - sourceIn) に置き、clipStart=regionIn / clipEnd=regionOut で
-     * In・Out トリムは左右クリップのみ（波形幅はソース全長固定）。
+     * In・Out トリムは左右クリップ。タイムライン幅はリージョン編集後の実効終端に合わせる。
      */
     function resolveVideoTrackWaveformDrawParams() {
         const ctx = resolveVideoTrackWaveformRegionSegment();
@@ -237,11 +237,20 @@
         } else if (Number.isFinite(seg.regionTimelineOutSec) && seg.regionTimelineOutSec > 0) {
             clipEndSec = seg.regionTimelineOutSec;
         }
+        const sourceSpan = Math.max(0, srcOut - sourceIn);
+        let timelineContentEnd = playbackStart + sourceSpan;
+        if (Number.isFinite(clipEndSec) && clipEndSec > 0) {
+            timelineContentEnd = Math.min(timelineContentEnd, clipEndSec);
+        }
+        const contentDurSec = Math.max(
+            0.01,
+            timelineContentEnd - Math.max(0, timelineStartSec),
+        );
         return {
             timelineStartSec,
             clipStartSec,
             clipEndSec,
-            contentDurSec: waveformSourceOut,
+            contentDurSec,
             sourceInSec: sourceIn,
             sourceOutSec: waveformSourceOut,
             regionInSec: regionIn,
@@ -459,10 +468,12 @@
         return end;
     }
 
-    /** タイムライン上の映像ソース終端（再生 1:1 基準 = playbackStart + span） */
+    /** タイムライン上の映像ソース終端（再生 1:1 基準 = playbackStart + span）。Out トリム時は regionOut を優先。 */
     function getVideoTrackSourceTimelineEndSec() {
         const track = getVideoTrackRef();
         if (typeof isTrackRegionActive === 'function' && isTrackRegionActive(track)) {
+            const regionEnd = getVideoTrackRegionTimelineEndSec();
+            if (regionEnd > 0) return regionEnd;
             const segments =
                 typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
             if (segments.length) {
