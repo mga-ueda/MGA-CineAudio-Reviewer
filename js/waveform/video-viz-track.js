@@ -832,6 +832,111 @@
 
     let videoFilmstripLoadingActive = false;
 
+    /** サムネ生成中の水平モーションブラー上限（stdDeviation X）。E キー入れ替えとは独立した値 */
+    const VIDEO_FILMSTRIP_MOTION_BLUR_MAX = 3;
+
+    let videoFilmstripMotionBlurBlurEl = null;
+
+
+
+    function ensureVideoFilmstripMotionBlurFilter() {
+
+        if (videoFilmstripMotionBlurBlurEl) return;
+
+        const NS = 'http://www.w3.org/2000/svg';
+
+        let root = document.getElementById('videoFilmstripMotionBlurDefs');
+
+        if (!root) {
+
+            root = document.createElementNS(NS, 'svg');
+
+            root.id = 'videoFilmstripMotionBlurDefs';
+
+            root.setAttribute('aria-hidden', 'true');
+
+            root.style.cssText =
+
+                'position:absolute;width:0;height:0;overflow:hidden;pointer-events:none;';
+
+            const filter = document.createElementNS(NS, 'filter');
+
+            filter.id = 'videoFilmstripMotionBlurFilter';
+
+            filter.setAttribute('x', '-30%');
+
+            filter.setAttribute('y', '-10%');
+
+            filter.setAttribute('width', '160%');
+
+            filter.setAttribute('height', '120%');
+
+            filter.setAttribute('color-interpolation-filters', 'sRGB');
+
+            const blur = document.createElementNS(NS, 'feGaussianBlur');
+
+            blur.setAttribute('in', 'SourceGraphic');
+
+            blur.setAttribute('stdDeviation', '0 0');
+
+            filter.appendChild(blur);
+
+            root.appendChild(filter);
+
+            document.body.appendChild(root);
+
+        }
+
+        const blur = root.querySelector('feGaussianBlur');
+
+        if (blur) videoFilmstripMotionBlurBlurEl = blur;
+
+    }
+
+
+
+    function setVideoFilmstripMotionBlur(active) {
+
+        const show = active === true;
+
+        ensureVideoFilmstripMotionBlurFilter();
+
+        if (videoFilmstripMotionBlurBlurEl) {
+
+            videoFilmstripMotionBlurBlurEl.setAttribute(
+
+                'stdDeviation',
+
+                VIDEO_FILMSTRIP_MOTION_BLUR_MAX.toFixed(2) + ' 0',
+
+            );
+
+        }
+
+        const v =
+
+            typeof videoMain !== 'undefined' ? videoMain : document.getElementById('videoMain');
+
+        if (v) {
+
+            v.style.filter = show ? 'url(#videoFilmstripMotionBlurFilter)' : '';
+
+        }
+
+        if (typeof videoVizLane !== 'undefined' && videoVizLane) {
+
+            videoVizLane.classList.toggle('video-viz-lane--filmstrip-loading', show);
+
+        }
+
+        if (!show && typeof applyVideoPreviewGamma === 'function') {
+
+            applyVideoPreviewGamma();
+
+        }
+
+    }
+
 
 
     function isVideoFilmstripLoadingActive() {
@@ -859,6 +964,8 @@
         if (videoFilmstripLoadingActive === show) return;
 
         videoFilmstripLoadingActive = show;
+
+        setVideoFilmstripMotionBlur(show);
 
         const el = document.getElementById('videoFilmstripLoading');
 

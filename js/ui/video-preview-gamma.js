@@ -136,6 +136,12 @@
     function applyVideoPreviewGamma() {
         const v = getVideoEl();
         if (!v) return;
+        if (
+            typeof isVideoFilmstripLoadingActive === 'function' &&
+            isVideoFilmstripLoadingActive()
+        ) {
+            return;
+        }
         if (videoPreviewGamma >= GAMMA_MAX - 1e-6) {
             v.style.filter = '';
             return;
