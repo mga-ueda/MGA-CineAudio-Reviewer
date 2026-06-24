@@ -1813,7 +1813,9 @@
     window.handleRegionBarNumberJumpKeydown = handleRegionBarNumberJumpKeydown;
     window.openRegionBarJumpDialog = openRegionBarJumpDialog;
     window.jumpToRegionLocalBarNumber = jumpToRegionLocalBarNumber;
+    window.jumpToMeasureTrackBarNumber = jumpToMeasureTrackBarNumber;
     window.resolvePlaybackRegionSpanAtSeekbar = resolvePlaybackRegionSpanAtSeekbar;
+    window.secForMeasureTrackBarNumber = secForMeasureTrackBarNumber;
     window.handleMusicalGridRehearsalSplitKeydown = handleMusicalGridRehearsalSplitKeydown;
     window.handleMusicalGridRehearsalDeleteKeydown = handleMusicalGridRehearsalDeleteKeydown;
     window.handleMusicalGridRehearsalJoinKeydown = handleMusicalGridRehearsalJoinKeydown;

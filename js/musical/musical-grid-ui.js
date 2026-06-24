@@ -1745,7 +1745,10 @@
             typeof formatTimecodeForTransport === 'function'
                 ? formatTimecodeForTransport(target)
                 : String(target);
-        const hintTitle = 'Measure ' + (localBar | 0);
+        const hintTitle =
+            o.measureTrackHint && typeof musicalGridSeekToastPrimary === 'function'
+                ? musicalGridSeekToastPrimary(target)
+                : 'Measure ' + (localBar | 0);
         if (
             o.discreteStopNav !== false &&
             typeof applyDiscreteStopNavStep === 'function'
@@ -1757,7 +1760,9 @@
             if (!o.fromRepeat && typeof writeLog === 'function') {
                 writeLog('Measure jump: ' + hintTitle + ' @ ' + hintTc);
             }
-            if (typeof flashSeekHint === 'function') {
+            if (o.measureTrackHint && typeof flashMusicalGridSeekHint === 'function') {
+                flashMusicalGridSeekHint(target, hintTc);
+            } else if (typeof flashSeekHint === 'function') {
                 flashSeekHint(hintTitle, hintTc);
             }
             return true;
@@ -1780,7 +1785,9 @@
         if (typeof writeLog === 'function') {
             writeLog('Measure jump: ' + hintTitle + ' @ ' + hintTc);
         }
-        if (typeof flashSeekHint === 'function') {
+        if (o.measureTrackHint && typeof flashMusicalGridSeekHint === 'function') {
+            flashMusicalGridSeekHint(target, hintTc);
+        } else if (typeof flashSeekHint === 'function') {
             flashSeekHint(hintTitle, hintTc);
         }
         return true;
@@ -1792,6 +1799,57 @@
         }
     }
 
+    /** Measure トラック（collectBarMeasureSegments）と同じタイムライン全体の小節番号 → 小節開始秒 */
+    function secForMeasureTrackBarNumber(measureNumber, meterSpec, master) {
+        const n = measureNumber | 0;
+        if (n < 1 || !(master > 0) || !meterSpec) return null;
+        const boundaries =
+            typeof collectPlaybackAlignedBarBoundarySecs === 'function'
+                ? collectPlaybackAlignedBarBoundarySecs(meterSpec, master)
+                : collectBarBoundarySecs(meterSpec, master);
+        if (!boundaries || boundaries.length < 2) return null;
+        const barIndex = n - 1;
+        if (barIndex < 0 || barIndex >= boundaries.length - 1) return null;
+        return boundaries[barIndex];
+    }
+
+    function jumpToMeasureTrackBarNumber(measureNumber, opt) {
+        if (!getMusicalGridVisible()) return false;
+        const settings = musicalGridDrawSettings();
+        if (!settings || !settings.meterSpec) return false;
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        if (!(master > 0)) return false;
+        const n = measureNumber | 0;
+        const targetSec = secForMeasureTrackBarNumber(n, settings.meterSpec, master);
+        const t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof videoMain !== 'undefined' && videoMain
+                  ? videoMain.currentTime || 0
+                  : 0;
+        if (!Number.isFinite(targetSec)) {
+            regionBarJumpDiagLog('resolve/miss', {
+                measureNumber: n,
+                transportSec: t,
+                reason: 'measure out of timeline range',
+                scope: 'measure-track',
+            });
+            return false;
+        }
+        regionBarJumpDiagLog('resolve/hit', {
+            measureNumber: n,
+            transportSec: t,
+            targetSec,
+            scope: 'measure-track',
+        });
+        const seekOpt = Object.assign({}, opt || {}, { measureTrackHint: true });
+        return seekToRegionLocalBarSec(targetSec, n, seekOpt);
+    }
+
+    /** Shift+数字 / テンキー — 練習番号区間内またはリージョン内のローカル小節番号へ */
     function jumpToRegionLocalBarNumber(localBar, opt) {
         if (!getMusicalGridVisible()) return false;
         const settings = musicalGridDrawSettings();
@@ -1867,6 +1925,21 @@
 
     const REGION_BAR_JUMP_SKIP_LOG_SUFFIX =
         ' — grid off or measure number out of range';
+
+    function logMeasureTrackJumpSkipped(barNum) {
+        regionBarJumpDiagLog('resolve/skipped', {
+            measureNumber: barNum | 0,
+            reason: 'grid off or measure number out of range',
+            scope: 'measure-track',
+        });
+        if (typeof writeLog !== 'function') return;
+        writeLog(
+            'Measure track jump skipped (Measure ' +
+                (barNum | 0) +
+                REGION_BAR_JUMP_SKIP_LOG_SUFFIX +
+                ')',
+        );
+    }
 
     function logRegionBarJumpSkipped(barNum) {
         regionBarJumpDiagLog('resolve/skipped', {
@@ -2023,8 +2096,8 @@
                 typeof isTransportPlaying === 'function'
                     ? isTransportPlaying()
                     : typeof videoMain !== 'undefined' && videoMain && !videoMain.paused;
-            if (!jumpToRegionLocalBarNumber(barNum, { resumeAfterSeek: wasPlaying })) {
-                logRegionBarJumpSkipped(barNum);
+            if (!jumpToMeasureTrackBarNumber(barNum, { resumeAfterSeek: wasPlaying })) {
+                logMeasureTrackJumpSkipped(barNum);
                 if (typeof flashSeekHint === 'function') {
                     flashSeekHint('Measure ' + barNum, 'Unavailable', 'error');
                 }
