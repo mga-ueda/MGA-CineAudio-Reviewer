@@ -119,6 +119,9 @@
                                 <span class="audio-waveform-lane__loading-ellipsis" aria-hidden="true"></span>
                             </span>
                         </div>
+                        <div class="video-frame__gamma-notice" id="videoPreviewGammaNotice" hidden aria-live="polite">
+                            <span class="video-frame__gamma-notice-text" id="videoPreviewGammaNoticeValue">Gamma set to γ 1.00</span>
+                        </div>
                         <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
                         <div class="marker-comment-overlay marker-comment-overlay--video" id="markerCommentOverlayRange" hidden aria-hidden="true"></div>
                     </div>
@@ -645,6 +648,7 @@
     <script src="js/ui/ui-helpers.js"></script>
     <script src="js/musical/mp4-fps.js"></script>
     <script src="js/ui/files-panels.js"></script>
+    <script src="js/ui/video-preview-gamma.js"></script>
     <script src="js/ui/video-load-lock.js"></script>
     <script src="js/waveform/waveform-viewport-diag.js"></script>
     <script src="js/waveform/waveform-peaks.js"></script>

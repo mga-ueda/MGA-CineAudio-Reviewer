@@ -47,6 +47,9 @@
         inferContainerFpsForSide('main');
         reconcileContainerSampleCountForSide('main');
         updatePanelInfoLine();
+        if (typeof applyVideoPreviewGamma === 'function') {
+            applyVideoPreviewGamma();
+        }
         if (typeof applyReviewMixVideoGain === 'function') {
             applyReviewMixVideoGain();
         }

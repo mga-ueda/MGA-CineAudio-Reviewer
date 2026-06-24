@@ -659,6 +659,7 @@
             markerMemo: row.markerMemo,
             playbackRegion: row.playbackRegion,
             mix: row.mix,
+            videoPreviewGamma: row.videoPreviewGamma,
             extraTracks: [],
         };
         if (Array.isArray(row.extraTracks)) {
@@ -736,6 +737,14 @@
             typeof getMixPersistSnapshot === 'function'
         ) {
             sessionRow.mix = getMixPersistSnapshot();
+        }
+        if (
+            sessionRow &&
+            typeof fileMain !== 'undefined' &&
+            fileMain &&
+            typeof getVideoPreviewGammaPersistSnapshot === 'function'
+        ) {
+            sessionRow.videoPreviewGamma = getVideoPreviewGammaPersistSnapshot();
         }
         const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
         const gridVisibility = musicalGridVisibilityPrefsForExport(prefs);
@@ -848,6 +857,7 @@
             markerMemo: sess.markerMemo,
             playbackRegion: sess.playbackRegion,
             mix: sess.mix,
+            videoPreviewGamma: sess.videoPreviewGamma,
             extraTracks: [],
         };
         if (sess.videoBlobKey && blobs[sess.videoBlobKey]) {

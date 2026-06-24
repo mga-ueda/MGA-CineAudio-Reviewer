@@ -170,6 +170,9 @@
         if (typeof rebindVideoMainListeners === 'function') {
             rebindVideoMainListeners(nv);
         }
+        if (typeof applyVideoPreviewGamma === 'function') {
+            applyVideoPreviewGamma();
+        }
         if (savedUrl) {
             nv.src = savedUrl;
             nv.load();

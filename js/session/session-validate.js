@@ -29,6 +29,7 @@
         'markersDisplayHidden',
         'playbackRegion',
         'mix',
+        'videoPreviewGamma',
         'extraTracks',
         'audioOnlySession',
         '__saveStamp',
@@ -275,6 +276,13 @@
 
         if ('markersDisplayHidden' in row && typeof row.markersDisplayHidden !== 'boolean') {
             return { valid: false, reason: 'invalid markersDisplayHidden' };
+        }
+
+        if ('videoPreviewGamma' in row) {
+            const g = row.videoPreviewGamma;
+            if (typeof g !== 'number' || !isFinite(g) || g < 0.52 || g > 1.0) {
+                return { valid: false, reason: 'invalid videoPreviewGamma' };
+            }
         }
 
         return { valid: true, reason: '' };

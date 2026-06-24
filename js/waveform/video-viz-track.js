@@ -629,6 +629,13 @@
             refreshVideoPastEndBlackoutUi();
         }
 
+        if (
+            !show &&
+            typeof notifyVideoPreviewPresentationReady === 'function'
+        ) {
+            notifyVideoPreviewPresentationReady();
+        }
+
     }
 
 

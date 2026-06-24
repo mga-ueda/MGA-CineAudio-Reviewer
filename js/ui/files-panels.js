@@ -196,6 +196,9 @@
         nameMain.textContent = 'Not Loaded';
         setLoaded(panelMain, false);
         resetVideoFrameAspectRatio();
+        if (typeof resetVideoPreviewGamma === 'function') {
+            resetVideoPreviewGamma({ skipPersist: true });
+        }
         if (typeof clearVideoTrackForMediaRevoke === 'function') {
             clearVideoTrackForMediaRevoke();
         }

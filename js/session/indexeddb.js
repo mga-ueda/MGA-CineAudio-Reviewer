@@ -1254,6 +1254,9 @@
             row.mName = fileMain.name;
             row.mLastModified = fileMain.lastModified;
             row.mBlob = fileMain;
+            if (typeof getVideoPreviewGammaPersistSnapshot === 'function') {
+                row.videoPreviewGamma = getVideoPreviewGammaPersistSnapshot();
+            }
             await attachWaveformSessionFieldsToRow(row);
         } else {
             const extra =
@@ -1755,6 +1758,13 @@
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
+        if (typeof fileMain !== 'undefined' && fileMain) {
+            if (typeof applyVideoPreviewGammaFromSession === 'function') {
+                applyVideoPreviewGammaFromSession(row && row.videoPreviewGamma);
+            }
+        } else if (typeof resetVideoPreviewGamma === 'function') {
+            resetVideoPreviewGamma({ skipPersist: true });
+        }
         if (typeof logSessionRestoreRegionRehearsalSnapshot === 'function') {
             requestAnimationFrame(() => {
                 logSessionRestoreRegionRehearsalSnapshot();
