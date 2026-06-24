@@ -1299,6 +1299,15 @@
         const segments = getTrackSegments(track);
         const seg = segments[segmentIndex];
         if (!seg) return 0;
+        if (isVideoTrackRef(track)) {
+            const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+            const clipDur = getSegmentSourceDurationSec(track, seg);
+            const sourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
+            const fullSpan = Math.max(PLAYBACK_REGION_MIN_SEC, clipDur - sourceIn);
+            const sourceBasedOut = playbackStart + fullSpan;
+            const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+            return Math.max(sourceBasedOut, regionOut);
+        }
         const start = getSegmentTimelineStart(track, segmentIndex);
         const span = Math.max(
             PLAYBACK_REGION_MIN_SEC,
@@ -1484,20 +1493,33 @@
         );
     }
 
-    function getPlaybackRegionOverlayElForSegment(track, segmentIndex) {
+    function getPlaybackRegionOverlayElForSegment(track, segmentIndex, clientY) {
+        const selector =
+            '.audio-waveform-lane__playback-region[data-segment-index="' +
+            segmentIndex +
+            '"]';
+        if (isVideoTrackRef(track) && Number.isFinite(clientY)) {
+            if (
+                typeof isPointerOverVideoAudioLane === 'function' &&
+                isPointerOverVideoAudioLane(clientY) &&
+                typeof getVideoAudioPlaybackRegionsContainerEl === 'function'
+            ) {
+                const audioContainer = getVideoAudioPlaybackRegionsContainerEl();
+                if (audioContainer) {
+                    const mirrorEl = audioContainer.querySelector(selector);
+                    if (mirrorEl) return mirrorEl;
+                }
+            }
+        }
         const container = getPlaybackRegionsContainerEl(track);
         if (!container) return null;
-        return container.querySelector(
-            '.audio-waveform-lane__playback-region[data-segment-index="' +
-                segmentIndex +
-                '"]',
-        );
+        return container.querySelector(selector);
     }
 
     /** In/Out リサイズ帯（フェード三角は除外） */
     function isPointerOnRegionInOutResizeEdge(track, segmentIndex, clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
-        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex);
+        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex, clientY);
         if (!regionEl) return false;
         return isPointerOnRegionResizeHandle(regionEl, clientX, clientY);
     }
@@ -1515,7 +1537,7 @@
         if (!transportSecInRegionOffsetDragInterval(track, segmentIndex, transportSec)) {
             return false;
         }
-        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex);
+        const regionEl = getPlaybackRegionOverlayElForSegment(track, segmentIndex, clientY);
         if (!regionEl) return false;
         const regionRect = regionEl.getBoundingClientRect();
         if (!(regionRect.width > 0)) return false;
@@ -1573,27 +1595,8 @@
         return false;
     }
 
-    /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
-    function resolveRegionResizeHandleAtPointer(track, clientX, clientY) {
-        if (!isPlaybackRegionTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-            return null;
-        }
-        const lane = isVideoTrackRef(track)
-            ? videoVizLane
-            : document.getElementById('extraAudioLane' + track.slot);
-        if (!lane || lane.hidden) return null;
-        const laneRect = lane.getBoundingClientRect();
-        if (
-            clientY < laneRect.top ||
-            clientY > laneRect.bottom ||
-            clientX < laneRect.left ||
-            clientX > laneRect.right
-        ) {
-            return null;
-        }
-        const container = getPlaybackRegionsContainerEl(track);
+    function scanRegionResizeHandleInContainer(container, clientX, clientY) {
         if (!container || container.hidden) return null;
-
         const pad = REGION_HANDLE_HIT_PAD_PX;
         let bestFade = null;
         let bestFadeDist = Infinity;
@@ -1674,7 +1677,87 @@
                 }
             }
         }
-        return bestFade || best;
+        return { bestFade, best };
+    }
+
+    function pickCloserRegionResizeHandleHit(current, candidate, clientX, clientY) {
+        if (!candidate) return current;
+        if (!current) return candidate;
+        const candidateIsFade =
+            candidate.kind === 'fade-in' || candidate.kind === 'fade-out';
+        const currentIsFade = current.kind === 'fade-in' || current.kind === 'fade-out';
+        if (candidateIsFade && !currentIsFade) return candidate;
+        if (!candidateIsFade && currentIsFade) return current;
+        const distFor = (hit) => {
+            if (!hit || !hit.regionEl) return Infinity;
+            if (hit.kind === 'fade-in' || hit.kind === 'fade-out') {
+                const fadeEdgeKind = hit.kind === 'fade-in' ? 'in' : 'out';
+                const hitRect = getFadeHandleHitRect(hit.regionEl, fadeEdgeKind);
+                if (!hitRect) return Infinity;
+                const cx = (hitRect.left + hitRect.right) * 0.5;
+                const cy = (hitRect.top + hitRect.bottom) * 0.5;
+                return Math.hypot(clientX - cx, clientY - cy);
+            }
+            const handleEl = hit.regionEl.querySelector(
+                hit.kind === 'in'
+                    ? '.audio-waveform-lane__playback-region__handle--in'
+                    : '.audio-waveform-lane__playback-region__handle--out',
+            );
+            if (!handleEl) return Infinity;
+            const rect = handleEl.getBoundingClientRect();
+            const cx = (rect.left + rect.right) * 0.5;
+            return Math.abs(clientX - cx);
+        };
+        return distFor(candidate) < distFor(current) ? candidate : current;
+    }
+
+    function pointerInLaneRect(lane, clientX, clientY) {
+        if (!lane || lane.hidden) return false;
+        const laneRect = lane.getBoundingClientRect();
+        return (
+            clientY >= laneRect.top &&
+            clientY <= laneRect.bottom &&
+            clientX >= laneRect.left &&
+            clientX <= laneRect.right
+        );
+    }
+
+    /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
+    function resolveRegionResizeHandleAtPointer(track, clientX, clientY) {
+        if (!isPlaybackRegionTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+            return null;
+        }
+        if (isVideoTrackRef(track)) {
+            const contexts =
+                typeof collectVideoPlaybackRegionLaneContexts === 'function'
+                    ? collectVideoPlaybackRegionLaneContexts()
+                    : [];
+            let bestFade = null;
+            let best = null;
+            for (let i = 0; i < contexts.length; i++) {
+                const ctx = contexts[i];
+                if (!pointerInLaneRect(ctx.lane, clientX, clientY)) continue;
+                const scanned = scanRegionResizeHandleInContainer(
+                    ctx.container,
+                    clientX,
+                    clientY,
+                );
+                if (!scanned) continue;
+                bestFade = pickCloserRegionResizeHandleHit(
+                    bestFade,
+                    scanned.bestFade,
+                    clientX,
+                    clientY,
+                );
+                best = pickCloserRegionResizeHandleHit(best, scanned.best, clientX, clientY);
+            }
+            return bestFade || best;
+        }
+        const lane = document.getElementById('extraAudioLane' + track.slot);
+        if (!pointerInLaneRect(lane, clientX, clientY)) return null;
+        const container = getPlaybackRegionsContainerEl(track);
+        const scanned = scanRegionResizeHandleInContainer(container, clientX, clientY);
+        return scanned ? scanned.bestFade || scanned.best : null;
     }
 
     window.getFadeHandleHitRect = getFadeHandleHitRect;

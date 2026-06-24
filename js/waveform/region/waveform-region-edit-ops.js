@@ -555,19 +555,41 @@
         }
 
         const bySlot = {};
+        const hasVideoRegionSelection = segEntries.some((e) => isVideoRegionSplitSlot(e.slot));
         for (let i = 0; i < segEntries.length; i++) {
             const e = segEntries[i];
+            if (isVideoRegionSplitSlot(e.slot)) continue;
             if (!bySlot[e.slot]) bySlot[e.slot] = [];
             if (bySlot[e.slot].indexOf(e.segmentIndex) < 0) {
                 bySlot[e.slot].push(e.segmentIndex);
             }
         }
 
+        if (
+            hasVideoRegionSelection &&
+            typeof resetVideoTrackRegionToFullClip === 'function' &&
+            resetVideoTrackRegionToFullClip({
+                skipUndoCapture: true,
+                silent: true,
+            })
+        ) {
+            const resetMsg = 'Video track reset to full clip';
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(resetMsg);
+            } else if (typeof writeLog === 'function') {
+                writeLog('Video track: region reset to full clip');
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Video', 'Region reset', 'notice');
+            }
+            anyDeleted = true;
+        }
+
         const slotKeys = Object.keys(bySlot);
         for (let s = 0; s < slotKeys.length; s++) {
             const slot = parseInt(slotKeys[s], 10);
-            const track = { type: 'extra', slot };
-            if (!isTrackRegionActive(track)) continue;
+            const track = trackRefFromRegionSplitSlot(slot);
+            if (!track || !isTrackRegionActive(track)) continue;
             noteRegionShrinkPersistIntent(slot);
             const indices = bySlot[slot].sort((a, b) => b - a);
             for (let i = 0; i < indices.length; i++) {

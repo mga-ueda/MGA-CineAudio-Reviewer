@@ -19,6 +19,7 @@
     var regionHandleDragStartAnchorSec = NaN;
     var regionHandleDragStartSourceInSec = NaN;
     var regionHandleDragStartSourceOutSec = NaN;
+    var regionHandleDragStartRegionOutSec = NaN;
     var regionHandleDragDidMove = false;
     var regionHandleDragCaptureEl = null;
     var regionHandleDragDocMove = null;

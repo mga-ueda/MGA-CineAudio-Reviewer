@@ -440,8 +440,8 @@
         const skipKickForVideoPreRoll =
             typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
             videoRegionPlaybackRequiresTransportSync() &&
-            typeof isTransportBeforeVideoRegionIn === 'function' &&
-            isTransportBeforeVideoRegionIn(transportT);
+            typeof isTransportInVideoPreRollHoldZone === 'function' &&
+            isTransportInVideoPreRollHoldZone(transportT);
         if (cap > 0 && transportT < kick * 0.5 && !skipKickForVideoPreRoll) {
             const cur = videoMain.currentTime || 0;
             if (cur < kick * 0.5) {
@@ -480,7 +480,7 @@
         } catch (_) {
             return;
         }
-        await waitForVideoSeekIdle(1500);
+        await waitForVideoSeekIdle(400);
     }
 
     async function tryUnstickPlaybackAtTransport() {
@@ -1097,8 +1097,8 @@
             videoRegionPlaybackRequiresTransportSync();
         const videoPreRollAtStart =
             regionTransportSync &&
-            typeof isTransportBeforeVideoRegionIn === 'function' &&
-            isTransportBeforeVideoRegionIn(startT);
+            typeof isTransportInVideoPreRollHoldZone === 'function' &&
+            isTransportInVideoPreRollHoldZone(startT);
         if (
             typeof applyVideoTimeForTransportSec === 'function' &&
             !(
@@ -1130,7 +1130,7 @@
             try {
                 videoMain.pause();
             } catch (_) {}
-            await prewarmVideoForRegionInEntry();
+            void prewarmVideoForRegionInEntry();
             if (typeof refreshVideoPastEndBlackoutUi === 'function') {
                 refreshVideoPastEndBlackoutUi();
             }
@@ -1639,13 +1639,30 @@
     }
 
     function beginExtraTransportTailIfNeeded() {
+        if (typeof enterPostVideoTransportTail !== 'function') return false;
         if (
-            typeof hasMasterTransportTailBeyondVideo !== 'function' ||
-            !hasMasterTransportTailBeyondVideo()
+            typeof hasMasterTransportTailBeyondVideo === 'function' &&
+            hasMasterTransportTailBeyondVideo()
         ) {
-            return false;
+            return enterPostVideoTransportTail();
         }
-        if (typeof enterPostVideoTransportTail === 'function') {
+        const master =
+            typeof getMasterTransportDurationSec === 'function'
+                ? getMasterTransportDurationSec()
+                : 0;
+        const t =
+            typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
+        const eps =
+            typeof masterTransportTailEpsilonSec === 'function'
+                ? masterTransportTailEpsilonSec()
+                : 0.02;
+        if (
+            master > 0 &&
+            Number.isFinite(t) &&
+            t < master - eps &&
+            typeof extraAudioSourcesActive === 'function' &&
+            extraAudioSourcesActive()
+        ) {
             return enterPostVideoTransportTail();
         }
         return false;

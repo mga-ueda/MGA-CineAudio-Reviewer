@@ -377,10 +377,11 @@
                     ? entrySeg0.regionTimelineInSec
                     : null;
             if (raw0 && Number.isFinite(restoredIn) && restoredIn > 0.0005) {
-                raw0.timelineStartSec = Number.isFinite(entrySeg0?.timelineStartSec)
-                    ? entrySeg0.timelineStartSec
-                    : restoredIn;
+                if (Number.isFinite(entrySeg0?.timelineStartSec)) {
+                    raw0.timelineStartSec = entrySeg0.timelineStartSec;
+                }
                 state.regionTimelineInSec = restoredIn;
+                raw0.regionTimelineInSec = restoredIn;
                 state.headPadSec = Number.isFinite(entry.headPadSec)
                     ? Math.max(0, entry.headPadSec)
                     : Math.max(
@@ -390,7 +391,9 @@
                                   ? getTrackTimelineStartSec(track)
                                   : 0),
                       );
-                delete raw0.regionTimelineInSec;
+                if (typeof reconcileSegmentSourceInWithRegionInTrim === 'function') {
+                    reconcileSegmentSourceInWithRegionInTrim(track, 0);
+                }
             }
             if (!(opt && opt.batchRestore)) {
                 updateTrackRegionOverlays(track);
@@ -400,8 +403,14 @@
                 if (typeof notifyMasterTransportDurationChanged === 'function') {
                     notifyMasterTransportDurationChanged();
                 }
-                if (typeof applyVideoTimeForTransportSec === 'function' && typeof getTransportSec === 'function') {
-                    applyVideoTimeForTransportSec(getTransportSec(), { force: true });
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+                if (
+                    typeof applyVideoTimeForTransportSec === 'function' &&
+                    typeof getTransportSec === 'function'
+                ) {
+                    applyVideoTimeForTransportSec(getTransportSec());
                 }
             }
         }

@@ -792,15 +792,17 @@
             }
             if (
                 !defer &&
-                typeof isPointerOverVideoVizLane === 'function' &&
-                isPointerOverVideoVizLane(clientY)
+                typeof collectVideoPlaybackRegionLaneContexts === 'function'
             ) {
-                const hit = resolveRegionResizeHandleAtPointer(
-                    getVideoTrackRef(),
-                    clientX,
-                    clientY,
-                );
-                defer = !!hit;
+                const contexts = collectVideoPlaybackRegionLaneContexts();
+                for (let vi = 0; vi < contexts.length && !defer; vi++) {
+                    const hit = resolveRegionResizeHandleAtPointer(
+                        contexts[vi].track,
+                        clientX,
+                        clientY,
+                    );
+                    defer = !!hit;
+                }
             }
         }
         syncRehearsalBoundaryDeferToRegionHandles(defer);
@@ -860,26 +862,44 @@
         }
         if (
             !bestHit &&
-            typeof isPointerOverVideoVizLane === 'function' &&
-            isPointerOverVideoVizLane(ev.clientY) &&
-            videoVizLane &&
-            !videoVizLane.hidden
+            typeof collectVideoPlaybackRegionLaneContexts === 'function'
         ) {
-            const laneRect = videoVizLane.getBoundingClientRect();
-            if (
-                ev.clientY >= laneRect.top &&
-                ev.clientY <= laneRect.bottom &&
-                ev.clientX >= laneRect.left &&
-                ev.clientX <= laneRect.right
-            ) {
-                const track = getVideoTrackRef();
+            const contexts = collectVideoPlaybackRegionLaneContexts();
+            for (let vi = 0; vi < contexts.length; vi++) {
+                const ctx = contexts[vi];
+                const laneRect = ctx.lane.getBoundingClientRect();
+                if (
+                    ev.clientY < laneRect.top ||
+                    ev.clientY > laneRect.bottom ||
+                    ev.clientX < laneRect.left ||
+                    ev.clientX > laneRect.right
+                ) {
+                    continue;
+                }
                 const hit = resolveRegionResizeHandleAtPointer(
-                    track,
+                    ctx.track,
                     ev.clientX,
                     ev.clientY,
                 );
-                if (hit) {
-                    bestHit = Object.assign({ track }, hit);
+                if (!hit) continue;
+                const rank =
+                    hit.kind === 'fade-in' || hit.kind === 'fade-out'
+                        ? 0
+                        : hit.kind === 'in' || hit.kind === 'out'
+                          ? 1
+                          : 2;
+                let dist = Infinity;
+                if (hit.regionEl && typeof hit.regionEl.getBoundingClientRect === 'function') {
+                    const r = hit.regionEl.getBoundingClientRect();
+                    dist = Math.hypot(
+                        ev.clientX - (r.left + r.width * 0.5),
+                        ev.clientY - (r.top + r.height * 0.5),
+                    );
+                }
+                if (rank < bestRank || (rank === bestRank && dist < bestDist)) {
+                    bestRank = rank;
+                    bestDist = dist;
+                    bestHit = Object.assign({ track: ctx.track }, hit);
                 }
             }
         }
@@ -1122,7 +1142,31 @@
                 setSplitBoundaryFromTransport(track, splitB, t, opt);
                 return;
             }
-            const timelineStartSeg = getSegmentTimelineStart(track, segmentIndex);
+            const timelineStartSeg = getSegmentPlaybackTimelineStart(track, segmentIndex);
+            if (isVideoTrackRef(track)) {
+                let timelineEnd = Math.max(timelineStartSeg + PLAYBACK_REGION_MIN_SEC, t);
+                timelineEnd = clampSegmentTimelineEnd(track, segmentIndex, timelineEnd);
+                syncRegionOutDragTimelineExtent(track, segmentIndex, timelineEnd);
+                syncSegmentEntryRegionTimelineOutFromHandle(
+                    track,
+                    segmentIndex,
+                    seg,
+                    timelineEnd,
+                );
+                applySegmentsToState(
+                    track,
+                    segments.map((s) =>
+                        normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
+                    ),
+                    {
+                        silent: true,
+                        skipUndo: true,
+                        geometryOnly: !!(opt && opt.geometryOnly),
+                        skipPersist: !!(opt && opt.geometryOnly),
+                    },
+                );
+                return;
+            }
             const maxEnd = maxSegmentTimelineEndSec(track, segmentIndex);
             let timelineEnd = Math.max(
                 timelineStartSeg + PLAYBACK_REGION_MIN_SEC,
@@ -1315,11 +1359,16 @@
                 if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
                     refreshVideoAudioLaneRegionOverlayGeometry(track);
                 }
-                if (typeof drawAudioWaveformCanvas === 'function') {
-                    drawAudioWaveformCanvas();
-                }
-                if (typeof notifyMasterTransportDurationChanged === 'function') {
-                    notifyMasterTransportDurationChanged();
+                const offsetDragActive =
+                    typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+                    isOffsetDragRegionWaveformPreviewActive();
+                if (!offsetDragActive) {
+                    if (typeof drawAudioWaveformCanvas === 'function') {
+                        drawAudioWaveformCanvas();
+                    }
+                    if (typeof notifyMasterTransportDurationChanged === 'function') {
+                        notifyMasterTransportDurationChanged();
+                    }
                 }
             } else if (
                 typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
@@ -1583,11 +1632,16 @@
             if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
                 refreshVideoAudioLaneRegionOverlayGeometry(track);
             }
-            if (typeof drawAudioWaveformCanvas === 'function') {
-                drawAudioWaveformCanvas();
-            }
-            if (typeof notifyMasterTransportDurationChanged === 'function') {
-                notifyMasterTransportDurationChanged();
+            const offsetDragActive =
+                typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+                isOffsetDragRegionWaveformPreviewActive();
+            if (!offsetDragActive) {
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
             }
         } else if (
             typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
@@ -2207,18 +2261,18 @@
             regionOutDragStartOutTransportSec +
             (ratioNow - regionOutDragStartScrubRatio) * regionOutDragStartMasterSec;
         if (regionHandleDragTrack && regionHandleDragSegmentIndex >= 0) {
-            const timelineStart = getSegmentTimelineStart(
+            const playbackStart = getSegmentPlaybackTimelineStart(
                 regionHandleDragTrack,
                 regionHandleDragSegmentIndex,
             );
-            const maxEnd = maxSegmentTimelineEndSec(
-                regionHandleDragTrack,
-                regionHandleDragSegmentIndex,
-            );
-            sec = Math.max(
-                timelineStart + PLAYBACK_REGION_MIN_SEC,
-                Math.min(maxEnd, sec),
-            );
+            sec = Math.max(playbackStart + PLAYBACK_REGION_MIN_SEC, sec);
+            if (!isVideoTrackRef(regionHandleDragTrack)) {
+                const maxEnd = maxSegmentTimelineEndSec(
+                    regionHandleDragTrack,
+                    regionHandleDragSegmentIndex,
+                );
+                sec = Math.min(maxEnd, sec);
+            }
         }
         return sec;
     }
@@ -2269,6 +2323,7 @@
         regionHandleDragStartAnchorSec = NaN;
         regionHandleDragStartSourceInSec = NaN;
         regionHandleDragStartSourceOutSec = NaN;
+        regionHandleDragStartRegionOutSec = NaN;
         regionHandleDragDidMove = false;
         regionHandleDragCaptureEl = null;
         detachRegionHandleDragDocListeners();
@@ -2304,6 +2359,25 @@
                     }
                 }
             } else {
+                if (
+                    isVideoTrackRef(dragTrack) &&
+                    !cancelled &&
+                    didMove &&
+                    (dragKind === 'in' || dragKind === 'out')
+                ) {
+                    if (typeof refreshVideoVizRegionThumbnails === 'function') {
+                        refreshVideoVizRegionThumbnails();
+                    }
+                    if (typeof notifyMasterTransportDurationChanged === 'function') {
+                        notifyMasterTransportDurationChanged();
+                    }
+                    if (
+                        typeof applyVideoTimeForTransportSec === 'function' &&
+                        typeof getTransportSec === 'function'
+                    ) {
+                        applyVideoTimeForTransportSec(getTransportSec(), { force: true });
+                    }
+                }
                 const slot = dragTrack.slot;
                 if (
                     !cancelled &&
@@ -2502,18 +2576,34 @@
             regionHandleDragStartSourceOutSec = startSeg
                 ? Number(startSeg.sourceOutSec) || 0
                 : 0;
+            const inTrimPad =
+                regionHandleDragStartRegionIn - regionHandleDragStartAnchorSec;
+            if (
+                inTrimPad > 0.00001 &&
+                regionHandleDragStartSourceInSec + 0.00001 < inTrimPad
+            ) {
+                regionHandleDragStartSourceInSec = inTrimPad;
+            }
+            regionHandleDragStartRegionOutSec = getSegmentRegionTimelineOut(
+                track,
+                segmentIndex,
+            );
         } else {
             regionHandleDragStartRegionIn = NaN;
             regionHandleDragStartAnchorSec = NaN;
             regionHandleDragStartSourceInSec = NaN;
             regionHandleDragStartSourceOutSec = NaN;
+            regionHandleDragStartRegionOutSec = NaN;
         }
         if (kind === 'out') {
             const scrubW =
                 typeof waveformTimelineScrubWidthCss === 'function'
                     ? waveformTimelineScrubWidthCss()
                     : 0;
-            regionOutDragStartOutTransportSec = getSegmentTimelineEnd(track, segmentIndex);
+            regionOutDragStartOutTransportSec = getSegmentRegionTimelineOut(
+                track,
+                segmentIndex,
+            );
             regionOutDragStartMasterSec =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()
@@ -2536,7 +2626,7 @@
         let sec =
             kind === 'in'
                 ? getSegmentRegionTimelineIn(track, segmentIndex)
-                : getSegmentTimelineEnd(track, segmentIndex);
+                : getSegmentRegionTimelineOut(track, segmentIndex);
         if (typeof snapRegionHandleTransportSec === 'function') {
             sec = snapRegionHandleTransportSec(sec, {
                 exclude: { slot: track.slot, segmentIndex },

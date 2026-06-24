@@ -581,8 +581,7 @@
     }
 
     /** ↔ カーソル判定矩形 */
-    function collectRegionEwCursorHitRectsForTrack(track) {
-        const container = getPlaybackRegionsContainerEl(track);
+    function collectRegionEwCursorHitRectsInContainer(container, laneForSplit) {
         if (!container || container.hidden) return [];
         const pad =
             typeof REGION_HANDLE_HIT_PAD_PX === 'number' ? REGION_HANDLE_HIT_PAD_PX : 4;
@@ -629,8 +628,7 @@
         const splitHandles = container.querySelectorAll(
             '.audio-waveform-lane__playback-region__handle--split',
         );
-        const lane = document.getElementById('extraAudioLane' + track.slot);
-        const laneRect = lane ? lane.getBoundingClientRect() : null;
+        const laneRect = laneForSplit ? laneForSplit.getBoundingClientRect() : null;
         for (let s = 0; s < splitHandles.length; s++) {
             const handleEl = splitHandles[s];
             if (!handleEl || handleEl.hidden) continue;
@@ -661,8 +659,31 @@
         return out;
     }
 
-    function isPointerInRegionEwCursorHitZone(clientX, clientY) {
-        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+    function collectRegionEwCursorHitRectsForTrack(track) {
+        if (isVideoTrackRef(track)) {
+            const contexts =
+                typeof collectVideoPlaybackRegionLaneContexts === 'function'
+                    ? collectVideoPlaybackRegionLaneContexts()
+                    : [];
+            let out = [];
+            for (let i = 0; i < contexts.length; i++) {
+                out = out.concat(
+                    collectRegionEwCursorHitRectsInContainer(
+                        contexts[i].container,
+                        contexts[i].lane,
+                    ),
+                );
+            }
+            return out;
+        }
+        const container = getPlaybackRegionsContainerEl(track);
+        const lane = document.getElementById('extraAudioLane' + track.slot);
+        return collectRegionEwCursorHitRectsInContainer(container, lane);
+    }
+
+    function collectRegionEwCursorHitRectsAtPointer(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return [];
+        const out = [];
         const n = getExtraTrackCount();
         for (let slot = 0; slot < n; slot++) {
             const track = { type: 'extra', slot };
@@ -678,9 +699,36 @@
                 continue;
             }
             const hits = collectRegionEwCursorHitRectsForTrack(track);
-            for (let i = 0; i < hits.length; i++) {
-                if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
+            for (let i = 0; i < hits.length; i++) out.push(hits[i]);
+        }
+        if (typeof collectVideoPlaybackRegionLaneContexts === 'function') {
+            const contexts = collectVideoPlaybackRegionLaneContexts();
+            for (let vi = 0; vi < contexts.length; vi++) {
+                const ctx = contexts[vi];
+                const laneRect = ctx.lane.getBoundingClientRect();
+                if (
+                    clientY < laneRect.top ||
+                    clientY > laneRect.bottom ||
+                    clientX < laneRect.left ||
+                    clientX > laneRect.right
+                ) {
+                    continue;
+                }
+                const hits = collectRegionEwCursorHitRectsInContainer(
+                    ctx.container,
+                    ctx.lane,
+                );
+                for (let i = 0; i < hits.length; i++) out.push(hits[i]);
             }
+        }
+        return out;
+    }
+
+    function isPointerInRegionEwCursorHitZone(clientX, clientY) {
+        if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        const hits = collectRegionEwCursorHitRectsAtPointer(clientX, clientY);
+        for (let i = 0; i < hits.length; i++) {
+            if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
         }
         return false;
     }
@@ -688,25 +736,10 @@
     /** In/Out・フェード用 EW ゾーン（スプリット境界は除く — リージョン平行移動と競合しない） */
     function isPointerInRegionEwCursorHitZoneExcludingSplit(clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
-        const n = getExtraTrackCount();
-        for (let slot = 0; slot < n; slot++) {
-            const track = { type: 'extra', slot };
-            const lane = document.getElementById('extraAudioLane' + track.slot);
-            if (!lane || lane.hidden) continue;
-            const laneRect = lane.getBoundingClientRect();
-            if (
-                clientY < laneRect.top ||
-                clientY > laneRect.bottom ||
-                clientX < laneRect.left ||
-                clientX > laneRect.right
-            ) {
-                continue;
-            }
-            const hits = collectRegionEwCursorHitRectsForTrack(track);
-            for (let i = 0; i < hits.length; i++) {
-                if (hits[i].kind === 'edge-split') continue;
-                if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
-            }
+        const hits = collectRegionEwCursorHitRectsAtPointer(clientX, clientY);
+        for (let i = 0; i < hits.length; i++) {
+            if (hits[i].kind === 'edge-split') continue;
+            if (pointInClientRect(clientX, clientY, hits[i].rect)) return true;
         }
         return false;
     }
@@ -726,17 +759,13 @@
         clearRegionEwCursorPresentation();
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
         let any = false;
-        const n = getExtraTrackCount();
-        for (let slot = 0; slot < n; slot++) {
-            const track = { type: 'extra', slot };
-            const hits = collectRegionEwCursorHitRectsForTrack(track);
-            for (let i = 0; i < hits.length; i++) {
-                const item = hits[i];
-                if (!pointInClientRect(clientX, clientY, item.rect)) continue;
-                any = true;
-                item.regionEl.classList.add('audio-waveform-lane__playback-region--ew-cursor');
-                item.regionEl.style.cursor = 'ew-resize';
-            }
+        const hits = collectRegionEwCursorHitRectsAtPointer(clientX, clientY);
+        for (let i = 0; i < hits.length; i++) {
+            const item = hits[i];
+            if (!pointInClientRect(clientX, clientY, item.rect)) continue;
+            any = true;
+            item.regionEl.classList.add('audio-waveform-lane__playback-region--ew-cursor');
+            item.regionEl.style.cursor = 'ew-resize';
         }
         return any;
     }

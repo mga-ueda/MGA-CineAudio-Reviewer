@@ -53,10 +53,25 @@
         }
         if (!deferRedraw) {
             if (isVideoTrackRef(track)) {
-                if (typeof refreshVideoVizRegionThumbnails === 'function') {
+                const offsetDragActive =
+                    typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+                    isOffsetDragRegionWaveformPreviewActive();
+                const skipHeavyVideoRefreshDuringHandleDrag =
+                    geometryOnly &&
+                    (offsetDragActive ||
+                        (regionHandleDragActive &&
+                            (regionHandleDragKind === 'in' ||
+                                regionHandleDragKind === 'out')));
+                if (
+                    !skipHeavyVideoRefreshDuringHandleDrag &&
+                    typeof refreshVideoVizRegionThumbnails === 'function'
+                ) {
                     refreshVideoVizRegionThumbnails();
                 }
-                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                if (
+                    !skipHeavyVideoRefreshDuringHandleDrag &&
+                    typeof notifyMasterTransportDurationChanged === 'function'
+                ) {
                     notifyMasterTransportDurationChanged();
                 }
             } else {

@@ -1452,6 +1452,14 @@
         if (videoExportAudioInclude && !videoExportAudioInclude.includeVideo) return 0;
         if (!isVideoAudioAudible()) return 0;
         if (!isVideoMixOutputActive()) return 0;
+        const transportSec =
+            typeof getTransportSec === 'function' ? getTransportSec() : NaN;
+        if (
+            typeof isTransportBeforeVideoRegionIn === 'function' &&
+            isTransportBeforeVideoRegionIn(transportSec)
+        ) {
+            return 0;
+        }
         return laneGainLinear(videoMix.volLinear);
     }
 

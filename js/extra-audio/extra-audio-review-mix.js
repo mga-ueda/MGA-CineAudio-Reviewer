@@ -173,10 +173,7 @@
             videoMain.volume = 0;
             return;
         }
-        const g =
-            isVideoMixOutputActive() && isVideoAudioAudible()
-                ? laneGainLinear(videoMix.volLinear)
-                : 0;
+        const g = getVideoTrackEffectiveGain();
         if (g > 0) {
             videoMain.muted = false;
             videoMain.volume = Math.min(1, g);

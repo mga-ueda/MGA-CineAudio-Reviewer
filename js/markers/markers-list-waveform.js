@@ -1383,6 +1383,17 @@
             );
             if (hit) return true;
         }
+        if (typeof collectVideoPlaybackRegionLaneContexts === 'function') {
+            const contexts = collectVideoPlaybackRegionLaneContexts();
+            for (let vi = 0; vi < contexts.length; vi++) {
+                const hit = resolveRegionResizeHandleAtPointer(
+                    contexts[vi].track,
+                    clientX,
+                    clientY,
+                );
+                if (hit) return true;
+            }
+        }
         return false;
     }
 

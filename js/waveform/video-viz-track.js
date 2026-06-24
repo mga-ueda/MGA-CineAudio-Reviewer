@@ -112,28 +112,158 @@
 
 
 
-    function getVideoTrackWaveformTimelineStartSec() {
-
+    /** 映像波形描画 — 適用済みリージョンまたはセッション復元 pending */
+    function resolveVideoTrackWaveformRegionSegment() {
         const track = getVideoTrackRef();
-
-        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) return 0;
-
-        if (typeof getSegmentRegionOverlayTimelineInterval === 'function') {
-
-            const iv = getSegmentRegionOverlayTimelineInterval(track, 0);
-
-            return Number.isFinite(iv.start) ? iv.start : 0;
-
+        if (!track) return null;
+        const regionActive =
+            typeof isTrackRegionActive === 'function' && isTrackRegionActive(track);
+        if (regionActive) {
+            const segments =
+                typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+            const seg = segments[0];
+            if (!seg) return null;
+            return { track, seg, regionActive: true };
         }
-
-        if (typeof getSegmentRegionTimelineIn === 'function') {
-
-            return getSegmentRegionTimelineIn(track, 0);
-
+        const pending =
+            typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
+                ? getPendingPlaybackRegionRestoreVideoEntry()
+                : null;
+        if (!pending || !Array.isArray(pending.segments) || !pending.segments.length) {
+            return null;
         }
+        return { track, seg: pending.segments[0], pendingEntry: pending, regionActive: false };
+    }
 
-        return 0;
+    function isVideoTrackWaveformRegionDrawActive() {
+        return !!resolveVideoTrackWaveformRegionSegment();
+    }
 
+    function resolveRegionInForVideoWaveformDraw(track, seg, regionActive, pendingEntry) {
+        const anchor = regionActive
+            ? typeof getSegmentTimelineStart === 'function'
+                ? getSegmentTimelineStart(track, 0)
+                : 0
+            : Number.isFinite(seg.timelineStartSec)
+              ? seg.timelineStartSec
+              : 0;
+        let regionIn = NaN;
+        if (Number.isFinite(seg.regionTimelineInSec)) {
+            regionIn = seg.regionTimelineInSec;
+        } else if (regionActive && typeof getSegmentRegionTimelineIn === 'function') {
+            regionIn = getSegmentRegionTimelineIn(track, 0);
+        } else if (Number.isFinite(pendingEntry?.regionTimelineInSec)) {
+            regionIn = pendingEntry.regionTimelineInSec;
+        } else {
+            regionIn = anchor;
+        }
+        const sourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
+        if (
+            typeof isRegionInHandleDragActive === 'function' &&
+            isRegionInHandleDragActive() &&
+            Number.isFinite(regionHandleDragStartRegionIn) &&
+            Number.isFinite(regionHandleDragStartSourceInSec)
+        ) {
+            const dragRegionIn =
+                regionHandleDragStartRegionIn +
+                (sourceIn - regionHandleDragStartSourceInSec);
+            if (dragRegionIn > regionIn + 0.00001) {
+                regionIn = dragRegionIn;
+            }
+        }
+        return { anchor, regionIn, sourceIn };
+    }
+
+    /** 再生開始（ソース先頭が鳴り始めるタイムライン位置）。pending 復元時は seg から推定。 */
+    function resolvePlaybackStartForVideoWaveformDraw(
+        track,
+        seg,
+        regionActive,
+        regionIn,
+        anchor,
+    ) {
+        if (regionActive && typeof getSegmentPlaybackTimelineStart === 'function') {
+            return getSegmentPlaybackTimelineStart(track, 0);
+        }
+        if (regionIn > anchor + 0.00001) {
+            return regionIn;
+        }
+        const leadPad = Math.max(0, Number(seg.regionLeadPadSec) || 0);
+        if (leadPad > 0.00001) {
+            return regionIn + leadPad;
+        }
+        return anchor;
+    }
+
+    /**
+     * 映像波形描画パラメータ。
+     * ソース 0 を timeline (playbackStart - sourceIn) に置き、clipStart=regionIn / clipEnd=regionOut で
+     * In・Out トリムは左右クリップのみ（波形幅はソース全長固定）。
+     */
+    function resolveVideoTrackWaveformDrawParams() {
+        const ctx = resolveVideoTrackWaveformRegionSegment();
+        if (!ctx) return null;
+        const { track, seg, pendingEntry, regionActive } = ctx;
+        const { anchor, regionIn, sourceIn } = resolveRegionInForVideoWaveformDraw(
+            track,
+            seg,
+            regionActive,
+            pendingEntry,
+        );
+        const srcOut = Number.isFinite(seg.sourceOutSec) ? seg.sourceOutSec : 0;
+        if (!(srcOut > 0.0005)) return null;
+        const fullSourceDur =
+            typeof getVideoTrackSourceDurationSec === 'function'
+                ? getVideoTrackSourceDurationSec()
+                : 0;
+        const waveformSourceOut =
+            fullSourceDur > 0.0005 ? Math.max(srcOut, fullSourceDur) : srcOut;
+        const playbackStart = resolvePlaybackStartForVideoWaveformDraw(
+            track,
+            seg,
+            regionActive,
+            regionIn,
+            anchor,
+        );
+        const timelineStartSec = Math.max(0, playbackStart - sourceIn);
+        let clipStartSec = null;
+        if (regionIn > timelineStartSec + 0.00001) {
+            clipStartSec = regionIn;
+        }
+        let clipEndSec = null;
+        if (regionActive) {
+            const end = getVideoTrackRegionTimelineEndSec();
+            if (end > 0) clipEndSec = end;
+        } else if (Number.isFinite(seg.regionTimelineOutSec) && seg.regionTimelineOutSec > 0) {
+            clipEndSec = seg.regionTimelineOutSec;
+        }
+        return {
+            timelineStartSec,
+            clipStartSec,
+            clipEndSec,
+            contentDurSec: waveformSourceOut,
+            sourceInSec: sourceIn,
+            sourceOutSec: waveformSourceOut,
+            regionInSec: regionIn,
+            playbackStartSec: playbackStart,
+            anchorSec: anchor,
+        };
+    }
+
+    function getVideoTrackWaveformTimelineStartSec() {
+        const p = resolveVideoTrackWaveformDrawParams();
+        return p ? p.timelineStartSec : 0;
+    }
+
+    function getVideoTrackWaveformTimelineClipStartSec() {
+        const p = resolveVideoTrackWaveformDrawParams();
+        return p && Number.isFinite(p.clipStartSec) ? p.clipStartSec : null;
+    }
+
+    /** 映像音声波形の右端クリップ（リージョン Out）。非リージョン時は null。 */
+    function getVideoTrackWaveformTimelineClipEndSec() {
+        const p = resolveVideoTrackWaveformDrawParams();
+        return p && Number.isFinite(p.clipEndSec) ? p.clipEndSec : null;
     }
 
 
@@ -147,6 +277,33 @@
             : null;
 
     }
+
+    /** 映像トラックのリージョン操作対象レーン（映像 viz / Video Audio ミラー）。表示中のみ。 */
+    function collectVideoPlaybackRegionLaneContexts() {
+        const contexts = [];
+        const track = getVideoTrackRef();
+        if (
+            typeof isVideoVizLaneShown === 'function' &&
+            isVideoVizLaneShown() &&
+            videoVizLane &&
+            !videoVizLane.hidden
+        ) {
+            const container =
+                typeof getPlaybackRegionsContainerEl === 'function'
+                    ? getPlaybackRegionsContainerEl(track)
+                    : videoVizLane.querySelector('.audio-waveform-lane__playback-regions');
+            if (container) contexts.push({ track, lane: videoVizLane, container });
+        }
+        const videoAudioLane =
+            typeof audioWaveformLaneVideo !== 'undefined' ? audioWaveformLaneVideo : null;
+        if (videoAudioLane && !videoAudioLane.hidden) {
+            const container = getVideoAudioPlaybackRegionsContainerEl();
+            if (container) contexts.push({ track, lane: videoAudioLane, container });
+        }
+        return contexts;
+    }
+
+    window.collectVideoPlaybackRegionLaneContexts = collectVideoPlaybackRegionLaneContexts;
 
 
 
@@ -258,6 +415,13 @@
 
         if (typeof renderVideoVizFilmstrip === 'function') renderVideoVizFilmstrip();
 
+        if (
+            !videoTrackFilmstripFrames.length &&
+            typeof scheduleVideoTrackFilmstripBuild === 'function'
+        ) {
+            scheduleVideoTrackFilmstripBuild();
+        }
+
         if (typeof applyVideoTimeForTransportSec === 'function' && typeof getTransportSec === 'function') {
             applyVideoTimeForTransportSec(getTransportSec(), { force: true });
         }
@@ -277,33 +441,61 @@
 
 
 
-    /** タイムライン上の動画コンテンツ終端（リージョン移動後の Out 位置） */
-    function getVideoTrackTransportEndSec() {
-
+    /** リージョン Out ハンドル位置の最大値（In トリム後も Out 固定を反映） */
+    function getVideoTrackRegionTimelineEndSec() {
         const track = getVideoTrackRef();
-
-        if (typeof isTrackRegionActive === 'function' && isTrackRegionActive(track)) {
-
-            if (typeof getTrackTimelineEndSec === 'function') {
-
-                const end = getTrackTimelineEndSec(track);
-
-                if (end > 0) return end;
-
-            }
-
+        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) return 0;
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        if (!segments.length || typeof getSegmentRegionTimelineOut !== 'function') return 0;
+        let end = 0;
+        for (let i = 0; i < segments.length; i++) {
+            end = Math.max(end, getSegmentRegionTimelineOut(track, i));
         }
+        return end;
+    }
+
+    /** タイムライン上の映像ソース終端（再生 1:1 基準 = playbackStart + span） */
+    function getVideoTrackSourceTimelineEndSec() {
+        const track = getVideoTrackRef();
+        if (typeof isTrackRegionActive === 'function' && isTrackRegionActive(track)) {
+            const segments =
+                typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+            if (segments.length) {
+                let end = 0;
+                for (let i = 0; i < segments.length; i++) {
+                    const seg = segments[i];
+                    const span = Math.max(
+                        0,
+                        (Number(seg.sourceOutSec) || 0) - (Number(seg.sourceInSec) || 0),
+                    );
+                    const playbackStart =
+                        typeof getSegmentPlaybackTimelineStart === 'function'
+                            ? getSegmentPlaybackTimelineStart(track, i)
+                            : typeof getSegmentTimelineStart === 'function'
+                              ? getSegmentTimelineStart(track, i)
+                              : 0;
+                    end = Math.max(end, playbackStart + span);
+                }
+                if (end > 0) return end;
+            }
+        }
+        return 0;
+    }
+
+    window.getVideoTrackSourceTimelineEndSec = getVideoTrackSourceTimelineEndSec;
+
+    /** タイムライン上の動画コンテンツ終端（再生・tail 判定。regionOut ではなくソース終端） */
+    function getVideoTrackTransportEndSec() {
+        const sourceEnd = getVideoTrackSourceTimelineEndSec();
+        if (sourceEnd > 0) return sourceEnd;
 
         if (typeof getVideoPlaybackEndSec === 'function') {
-
             const end = getVideoPlaybackEndSec();
-
             if (end > 0) return end;
-
         }
 
         return typeof getVideoTransportDurationSec === 'function' ? getVideoTransportDurationSec() : 0;
-
     }
 
 
@@ -368,7 +560,12 @@
 
     window.toggleVideoLinkedRegionSelection = toggleVideoLinkedRegionSelection;
 
+    window.resolveVideoTrackWaveformRegionSegment = resolveVideoTrackWaveformRegionSegment;
+    window.resolveVideoTrackWaveformDrawParams = resolveVideoTrackWaveformDrawParams;
+    window.isVideoTrackWaveformRegionDrawActive = isVideoTrackWaveformRegionDrawActive;
     window.getVideoTrackWaveformTimelineStartSec = getVideoTrackWaveformTimelineStartSec;
+    window.getVideoTrackWaveformTimelineClipStartSec = getVideoTrackWaveformTimelineClipStartSec;
+    window.getVideoTrackWaveformTimelineClipEndSec = getVideoTrackWaveformTimelineClipEndSec;
 
     window.getVideoAudioPlaybackRegionsContainerEl = getVideoAudioPlaybackRegionsContainerEl;
 
@@ -390,6 +587,24 @@
 
 
 
+    function isVideoFilmstripLoadingActive() {
+
+        return videoFilmstripLoadingActive;
+
+    }
+
+
+
+    window.isVideoFilmstripLoadingActive = isVideoFilmstripLoadingActive;
+
+    /** リージョン平行移動中 — filmstrip 再生成・再描画を抑止（枠だけ追従） */
+    function shouldSkipHeavyVideoVizRefreshDuringOffsetDrag() {
+        return (
+            typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+            isOffsetDragRegionWaveformPreviewActive()
+        );
+    }
+
     function setVideoFilmstripLoadingOverlay(active) {
 
         const show = active === true;
@@ -408,6 +623,10 @@
 
             else el.removeAttribute('aria-busy');
 
+        }
+
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+            refreshVideoPastEndBlackoutUi();
         }
 
     }
@@ -548,17 +767,15 @@
 
 
     function getVideoTrackTimelineEndSec() {
+        const regionEnd = getVideoTrackRegionTimelineEndSec();
+        if (regionEnd > 0) return regionEnd;
 
         const track = getVideoTrackRef();
-
         if (typeof getTrackTimelineEndSec === 'function') {
-
             return getTrackTimelineEndSec(track);
-
         }
 
         return getVideoTrackSourceDurationSec();
-
     }
 
 
@@ -630,6 +847,13 @@
         }
 
         renderVideoVizFilmstrip();
+
+        if (
+            !videoTrackFilmstripFrames.length &&
+            typeof scheduleVideoTrackFilmstripBuild === 'function'
+        ) {
+            scheduleVideoTrackFilmstripBuild();
+        }
 
         return true;
 
@@ -706,7 +930,9 @@
 
         const state = getVideoTrackState().playbackRegions;
 
-        if (state.active && state.segments && state.segments.length) return true;
+        const force = !!(opt && opt.force);
+
+        if (!force && state.active && state.segments && state.segments.length) return true;
 
         const fullDur = getVideoTrackSourceDurationSec();
 
@@ -766,6 +992,16 @@
 
         state.headPadSec = 0;
 
+        delete state.regionTimelineInSec;
+
+        delete state.regionLeadPadSec;
+
+        if (typeof syncTrackRegionHeadStateFromFirstSegment === 'function') {
+
+            syncTrackRegionHeadStateFromFirstSegment(track);
+
+        }
+
         if (!(opt && opt.silent) && typeof writeLog === 'function') {
 
             writeLog('Video track: default region');
@@ -775,6 +1011,66 @@
         return true;
 
     }
+
+
+
+    function resetVideoTrackRegionToFullClip(opt) {
+
+        if (!isVideoVizLaneShown()) return false;
+
+        const track = getVideoTrackRef();
+
+        if (!isTrackRegionActive(track)) return false;
+
+        if (!ensureDefaultVideoTrackRegion(Object.assign({}, opt || {}, { force: true }))) {
+
+            return false;
+
+        }
+
+        if (!(opt && opt.skipOverlay)) {
+
+            if (typeof updateTrackRegionOverlays === 'function') {
+
+                updateTrackRegionOverlays(track);
+
+            }
+
+            syncVideoAudioLaneRegionOverlays(track);
+
+            renderVideoVizFilmstrip();
+
+        }
+
+        if (typeof notifyMasterTransportDurationChanged === 'function') {
+
+            notifyMasterTransportDurationChanged();
+
+        }
+
+        if (typeof updateRangeLoopOverlay === 'function') updateRangeLoopOverlay();
+
+        if (typeof updateAllWaveformPlayheads === 'function') updateAllWaveformPlayheads();
+
+        if (!(opt && opt.skipPersist) && typeof schedulePersistSession === 'function') {
+
+            schedulePersistSession();
+
+        }
+
+        if (typeof syncExtraAudioToTransport === 'function') {
+
+            syncExtraAudioToTransport({ force: true });
+
+        }
+
+        return true;
+
+    }
+
+
+
+    window.resetVideoTrackRegionToFullClip = resetVideoTrackRegionToFullClip;
 
 
 
@@ -1008,6 +1304,8 @@
 
         if (!videoMain || !videoReady || !videoReady()) return false;
 
+        if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return false;
+
         const duration = getVideoTrackSourceDurationSec();
 
         if (!duration) return false;
@@ -1062,6 +1360,10 @@
 
                     renderVideoVizFilmstrip();
 
+                    if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+                        refreshVideoPastEndBlackoutUi();
+                    }
+
                 }
 
             }
@@ -1111,6 +1413,8 @@
 
 
     function scheduleVideoTrackFilmstripBuild(opt) {
+
+        if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return;
 
         ensureVideoFilmstripLoadingOverlay();
 
@@ -1366,6 +1670,25 @@
         return getSegmentRegionTimelineIn(track, 0);
     }
 
+    /** 波形左端 = playbackStart - sourceIn。ここより前だけ preRoll（映像停止）。 */
+    function getVideoRegionPreRollHoldEndSec() {
+        const track = getVideoTrackRef();
+        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) {
+            return 0;
+        }
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        const seg = segments[0];
+        if (!seg) return 0;
+        const playbackStart =
+            typeof getSegmentPlaybackTimelineStart === 'function'
+                ? getSegmentPlaybackTimelineStart(track, 0)
+                : 0;
+        const sourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
+        return Math.max(0, playbackStart - sourceIn);
+    }
+
+    /** 黒画面 — regionIn より前（In トリム非表示区間を含む） */
     function isTransportBeforeVideoRegionIn(transportSec) {
         if (!videoRegionPlaybackRequiresTransportSync()) return false;
         const regionIn = getVideoRegionTimelineInSec();
@@ -1373,6 +1696,16 @@
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return false;
         return t < regionIn - 0.0005;
+    }
+
+    /** preRoll 硬直 — 波形左端より前のみ（In トリム区間は同期進行） */
+    function isTransportInVideoPreRollHoldZone(transportSec) {
+        if (!videoRegionPlaybackRequiresTransportSync()) return false;
+        const holdEnd = getVideoRegionPreRollHoldEndSec();
+        if (!(holdEnd > 0.0005)) return false;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        return t < holdEnd - 0.0005;
     }
 
     /** 単一セグメント — regionIn 以降は transport と映像秒が 1:1 */
@@ -1386,8 +1719,22 @@
     }
 
     window.getVideoRegionTimelineInSec = getVideoRegionTimelineInSec;
+    window.getVideoRegionPreRollHoldEndSec = getVideoRegionPreRollHoldEndSec;
     window.isTransportBeforeVideoRegionIn = isTransportBeforeVideoRegionIn;
+    window.isTransportInVideoPreRollHoldZone = isTransportInVideoPreRollHoldZone;
     window.videoRegionMappingIsOneToOneAfterIn = videoRegionMappingIsOneToOneAfterIn;
+
+    function videoRegionTailSourceSec(track, segmentIndex) {
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        const seg = segments[segmentIndex];
+        if (!seg) return null;
+        const frame =
+            typeof masterFrameSec === 'number' && masterFrameSec > 0 ? masterFrameSec : 1 / 24;
+        const srcIn = Number(seg.sourceInSec) || 0;
+        const srcOut = Number(seg.sourceOutSec) || 0;
+        return Math.max(srcIn, srcOut - frame);
+    }
 
     function videoSecFromVideoTrackRegions(transportSec) {
 
@@ -1399,8 +1746,6 @@
 
             !isTrackRegionActive(track) ||
 
-            typeof mapTransportToSegment !== 'function' ||
-
             typeof segmentSourceSecFromTransport !== 'function'
 
         ) {
@@ -1409,22 +1754,30 @@
 
         }
 
+        const mapForPlayback =
+            typeof mapTransportToSegmentForPlayback === 'function'
+                ? mapTransportToSegmentForPlayback
+                : typeof getExtraTrackPlaybackAtTransport === 'function'
+                  ? getExtraTrackPlaybackAtTransport
+                  : typeof mapTransportToSegment === 'function'
+                    ? mapTransportToSegment
+                    : null;
+        if (!mapForPlayback) return null;
+
         const t = Number(transportSec);
 
         if (!Number.isFinite(t)) return null;
 
-        const hit = mapTransportToSegment(track, t);
+        const mapHit = mapForPlayback(track, t);
 
-        if (hit) {
-
-            const src = segmentSourceSecFromTransport(track, hit.segmentIndex, t);
+        if (mapHit) {
+            const src = segmentSourceSecFromTransport(track, mapHit.segmentIndex, t);
 
             if (typeof window.videoRegionDiagLogPlaybackSync === 'function') {
-                window.videoRegionDiagLogPlaybackSync(t, hit, src);
+                window.videoRegionDiagLogPlaybackSync(t, mapHit, src);
             }
 
             return Number.isFinite(src) ? src : null;
-
         }
 
         const count = typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
@@ -1440,9 +1793,24 @@
                 : 0;
 
         if (t < firstIn - 0.0005) {
-
+            const segments =
+                typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+            const seg = segments[0];
+            if (seg) {
+                const srcIn = Math.max(0, Number(seg.sourceInSec) || 0);
+                const playbackStart =
+                    typeof getSegmentPlaybackTimelineStart === 'function'
+                        ? getSegmentPlaybackTimelineStart(track, 0)
+                        : firstIn;
+                const timelineStart = Math.max(0, playbackStart - srcIn);
+                if (t >= timelineStart - 0.0005) {
+                    return Math.max(0, t - timelineStart);
+                }
+                if (srcIn > 0.0005) {
+                    return srcIn;
+                }
+            }
             return 0;
-
         }
 
         const lastIdx = count - 1;
@@ -1459,26 +1827,17 @@
 
                   : 0;
 
+        const segTimelineEnd =
+            typeof getSegmentTimelineEnd === 'function'
+                ? getSegmentTimelineEnd(track, lastIdx)
+                : regionOut;
+
+        if (t >= segTimelineEnd - 0.0005 && t < regionOut + 0.0005) {
+            return videoRegionTailSourceSec(track, lastIdx);
+        }
+
         if (t >= regionOut - 0.0005) {
-
-            const segments = typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
-
-            const seg = segments[lastIdx];
-
-            if (seg) {
-
-                const frame =
-
-                    typeof masterFrameSec === 'number' && masterFrameSec > 0
-
-                        ? masterFrameSec
-
-                        : 1 / 24;
-
-                return Math.max(Number(seg.sourceInSec) || 0, seg.sourceOutSec - frame);
-
-            }
-
+            return videoRegionTailSourceSec(track, lastIdx);
         }
 
         return null;
@@ -1488,5 +1847,6 @@
 
 
     window.videoSecFromVideoTrackRegions = videoSecFromVideoTrackRegions;
+    window.videoRegionTailSourceSec = videoRegionTailSourceSec;
 
 

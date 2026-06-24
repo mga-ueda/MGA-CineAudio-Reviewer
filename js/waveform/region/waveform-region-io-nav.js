@@ -644,6 +644,7 @@
     window.repositionRegionSwapUnitToTimelineSec = repositionRegionSwapUnitToTimelineSec;
     window.syncTrackHeadPadFromFirstSegment = syncTrackHeadPadFromFirstSegment;
     window.syncTrackRegionHeadStateFromFirstSegment = syncTrackRegionHeadStateFromFirstSegment;
+    window.reconcileSegmentSourceInWithRegionInTrim = reconcileSegmentSourceInWithRegionInTrim;
     window.segmentBoundaryJoinEpsilonSec = function segmentBoundaryJoinEpsilonSec() {
         return SEGMENT_BOUNDARY_JOIN_EPS_SEC;
     };

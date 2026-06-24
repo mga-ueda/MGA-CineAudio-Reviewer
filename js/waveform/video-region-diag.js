@@ -47,6 +47,7 @@
         }
         const track = getVideoTrackRef();
         const segments = getTrackSegments(track);
+        const seg0 = segments[0];
         const regionIn =
             typeof getSegmentRegionTimelineIn === 'function'
                 ? getSegmentRegionTimelineIn(track, 0)
@@ -55,12 +56,28 @@
             segments.length && typeof getSegmentRegionTimelineOut === 'function'
                 ? getSegmentRegionTimelineOut(track, segments.length - 1)
                 : null;
+        const sourceIn = seg0 ? Math.max(0, Number(seg0.sourceInSec) || 0) : null;
+        const sourceOut = seg0 && Number.isFinite(seg0.sourceOutSec) ? seg0.sourceOutSec : null;
+        const videoTransportEnd =
+            typeof getVideoTrackTransportEndSec === 'function'
+                ? getVideoTrackTransportEndSec()
+                : null;
+        const videoContentEnd =
+            typeof getVideoContentEndOnTransportSec === 'function'
+                ? getVideoContentEndOnTransportSec()
+                : null;
         return {
             segCount: segments.length,
             regionIn: roundSec(regionIn),
             regionOut: roundSec(regionOut),
             regionInTc: fmtTc(regionIn),
             regionOutTc: fmtTc(regionOut),
+            sourceIn: roundSec(sourceIn),
+            sourceOut: roundSec(sourceOut),
+            videoTransportEnd: roundSec(videoTransportEnd),
+            videoTransportEndTc: fmtTc(videoTransportEnd),
+            videoContentEnd: roundSec(videoContentEnd),
+            videoContentEndTc: fmtTc(videoContentEnd),
         };
     }
 
@@ -122,8 +139,59 @@
         log('persist/' + stage, detail);
     }
 
+    let lastWaveformDrawKey = '';
+    let lastWaveformDrawAt = 0;
+    const WAVEFORM_DRAW_MIN_MS = 250;
+
+    function videoRegionDiagLogWaveformDraw(params) {
+        if (!enabled()) return;
+        const p = params && typeof params === 'object' ? params : {};
+        const now = performance.now();
+        const key =
+            roundSec(p.timelineStartSec) +
+            '|' +
+            roundSec(p.playbackStartSec) +
+            '|' +
+            roundSec(p.clipStartSec) +
+            '|' +
+            roundSec(p.clipEndSec) +
+            '|' +
+            roundSec(p.sourceInSec) +
+            '|' +
+            roundSec(p.contentDurSec);
+        if (key === lastWaveformDrawKey && now - lastWaveformDrawAt < WAVEFORM_DRAW_MIN_MS) {
+            return;
+        }
+        lastWaveformDrawKey = key;
+        lastWaveformDrawAt = now;
+        log('waveform/draw', {
+            timelineStartSec: roundSec(p.timelineStartSec),
+            playbackStartSec: roundSec(p.playbackStartSec),
+            anchorSec: roundSec(p.anchorSec),
+            clipStartSec: roundSec(p.clipStartSec),
+            clipEndSec: roundSec(p.clipEndSec),
+            contentDurSec: roundSec(p.contentDurSec),
+            sourceInSec: roundSec(p.sourceInSec),
+            sourceOutSec: roundSec(p.sourceOutSec),
+            regionInSec: roundSec(p.regionInSec),
+            regions: summarizeVideoTrackRegions(),
+        });
+    }
+
+    function videoRegionDiagLogVideoPark(transportSec, reason) {
+        if (!enabled()) return;
+        log('video/park', {
+            transportSec: roundSec(transportSec),
+            transportTc: fmtTc(transportSec),
+            reason: reason || null,
+            regions: summarizeVideoTrackRegions(),
+        });
+    }
+
     window.videoRegionDiagLog = videoRegionDiagLog;
     window.videoRegionDiagLogTransportMap = videoRegionDiagLogTransportMap;
     window.videoRegionDiagLogPlaybackSync = videoRegionDiagLogPlaybackSync;
     window.videoRegionDiagLogPersist = videoRegionDiagLogPersist;
+    window.videoRegionDiagLogWaveformDraw = videoRegionDiagLogWaveformDraw;
+    window.videoRegionDiagLogVideoPark = videoRegionDiagLogVideoPark;
 })();

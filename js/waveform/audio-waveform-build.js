@@ -311,7 +311,7 @@
         const sized = syncAudioWaveformCanvasSize();
         if (!sized || !sized.ctx) return;
         const { ctx, wCss, hCss } = sized;
-        const contentDur = getWaveformAudioDurationSec();
+        let contentDur = getWaveformAudioDurationSec();
         const audible =
             typeof isVideoAudioAudible === 'function' ? isVideoAudioAudible() : true;
         const timelineStartSec =
@@ -331,12 +331,60 @@
         const drawOpt = Object.assign({}, sized.drawOpt || {}, {
             timelineStartSec: timelineStartSec > 0 ? timelineStartSec : 0,
         });
+        const waveParams =
+            typeof resolveVideoTrackWaveformDrawParams === 'function'
+                ? resolveVideoTrackWaveformDrawParams()
+                : null;
+        if (waveParams) {
+            if (Number.isFinite(waveParams.clipStartSec) && waveParams.clipStartSec > 0) {
+                drawOpt.timelineClipStartSec = waveParams.clipStartSec;
+            }
+            if (Number.isFinite(waveParams.clipEndSec) && waveParams.clipEndSec > 0) {
+                drawOpt.timelineClipEndSec = waveParams.clipEndSec;
+            }
+            if (typeof window.videoRegionDiagLogWaveformDraw === 'function') {
+                window.videoRegionDiagLogWaveformDraw(waveParams);
+            }
+        } else {
+            const clipEndSec =
+                typeof getVideoTrackWaveformTimelineClipEndSec === 'function'
+                    ? getVideoTrackWaveformTimelineClipEndSec()
+                    : null;
+            if (Number.isFinite(clipEndSec) && clipEndSec > 0) {
+                drawOpt.timelineClipEndSec = clipEndSec;
+            }
+        }
         const useScrubOverview =
             scrubActive &&
             waveformScrubOverviewDrawCommitted &&
             waveformScrubOverviewPeaks &&
             waveformScrubOverviewPeaks.length;
         let peaksForDraw = useScrubOverview ? waveformScrubOverviewPeaks : waveformPeaks;
+        const videoRegionCtx =
+            typeof resolveVideoTrackWaveformRegionSegment === 'function'
+                ? resolveVideoTrackWaveformRegionSegment()
+                : null;
+        if (
+            videoRegionCtx &&
+            typeof slicePeaksForRegion === 'function'
+        ) {
+            const seg = videoRegionCtx.seg;
+            const fullDur = contentDur;
+            const params =
+                typeof resolveVideoTrackWaveformDrawParams === 'function'
+                    ? resolveVideoTrackWaveformDrawParams()
+                    : null;
+            if (seg && fullDur > 0 && params) {
+                const srcOut = params.sourceOutSec;
+                if (srcOut > 0.0005) {
+                    const sliced = slicePeaksForRegion(peaksForDraw, fullDur, 0, srcOut);
+                    if (sliced && sliced.length) {
+                        peaksForDraw = sliced;
+                        contentDur = params.contentDurSec;
+                    }
+                }
+            }
+        }
         if (
             scrubActive &&
             (!peaksForDraw || !peaksForDraw.length) &&
@@ -536,12 +584,6 @@
                 ) {
                     if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
                         refreshVideoAudioLaneRegionOverlayGeometry(memberTrack);
-                    }
-                    if (typeof drawAudioWaveformCanvas === 'function') {
-                        drawAudioWaveformCanvas();
-                    }
-                    if (typeof notifyMasterTransportDurationChanged === 'function') {
-                        notifyMasterTransportDurationChanged();
                     }
                 } else if (
                     typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
@@ -951,11 +993,20 @@
                     : waveformOffsetDragSegmentIndex >= 0
                       ? [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }]
                       : [];
+            const releasedSegmentIndex = waveformOffsetDragSegmentIndex;
+            const releasedTransportSec =
+                releasedSegmentIndex >= 0 &&
+                typeof getSegmentTimelineStartForAltDrag === 'function'
+                    ? getSegmentTimelineStartForAltDrag(slot, releasedSegmentIndex)
+                    : typeof getExtraTrackTimelineStartSec === 'function'
+                      ? getExtraTrackTimelineStartSec(slot)
+                      : 0;
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
                     skipSnap: true,
                     snapDiagClientX: e.clientX,
                 });
+                endWaveformTrackOffsetDrag({ force: true, event: e });
                 if (
                     dragMembers.length &&
                     typeof finalizeRegionOffsetDragPresentation === 'function'
@@ -964,6 +1015,7 @@
                 }
             } else {
                 applyWaveformTimelineStartFromDrag(slot, next);
+                endWaveformTrackOffsetDrag({ force: true, event: e });
             }
             if (typeof endRegionOffsetDragMasterFreeze === 'function') {
                 endRegionOffsetDragMasterFreeze();
@@ -971,20 +1023,11 @@
             if (typeof notifyMasterTransportDurationChanged === 'function') {
                 notifyMasterTransportDurationChanged();
             }
-            const releasedSegmentIndex = waveformOffsetDragSegmentIndex;
-            const t =
-                releasedSegmentIndex >= 0 &&
-                typeof getSegmentTimelineStartForAltDrag === 'function'
-                    ? getSegmentTimelineStartForAltDrag(slot, releasedSegmentIndex)
-                    : typeof getExtraTrackTimelineStartSec === 'function'
-                      ? getExtraTrackTimelineStartSec(slot)
-                      : 0;
-            endWaveformTrackOffsetDrag({ force: true, event: e });
             setHoverPlayheadAtClientX(e.clientX, e.clientY);
             const tc =
                 typeof formatTimecodeForTransport === 'function'
-                    ? formatTimecodeForTransport(t)
-                    : t.toFixed(2) + ' s';
+                    ? formatTimecodeForTransport(releasedTransportSec)
+                    : releasedTransportSec.toFixed(2) + ' s';
             if (releasedSegmentIndex >= 0) {
                 const laneLabel =
                     typeof isVideoLinkedOffsetDragSlot === 'function' &&

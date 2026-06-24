@@ -101,6 +101,22 @@
                 segment: (hit.segmentIndex | 0) + 1,
             });
         }
+        if (typeof window.collectVideoPlaybackRegionLaneContexts === 'function') {
+            const contexts = window.collectVideoPlaybackRegionLaneContexts();
+            for (let vi = 0; vi < contexts.length; vi++) {
+                const hit = window.resolveRegionResizeHandleAtPointer(
+                    contexts[vi].track,
+                    clientX,
+                    clientY,
+                );
+                if (!hit) continue;
+                out.handles.push({
+                    video: vi === 0 ? 'viz' : 'audio',
+                    kind: hit.kind,
+                    segment: (hit.segmentIndex | 0) + 1,
+                });
+            }
+        }
         return out;
     }
 

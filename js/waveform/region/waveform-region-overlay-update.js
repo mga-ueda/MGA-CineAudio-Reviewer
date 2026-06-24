@@ -397,6 +397,13 @@
             if (!container) continue;
             refreshTrackRegionHandleHitDebug(track, container, overlayRoot);
         }
+        if (typeof collectVideoPlaybackRegionLaneContexts === 'function') {
+            const videoContexts = collectVideoPlaybackRegionLaneContexts();
+            for (let vi = 0; vi < videoContexts.length; vi++) {
+                const ctx = videoContexts[vi];
+                refreshTrackRegionHandleHitDebug(ctx.track, ctx.container, overlayRoot);
+            }
+        }
         syncMusicalTrackHitDebugOverlays(overlayRoot);
         syncRehearsalBoundaryHitDebug();
     }
@@ -523,7 +530,11 @@
         if (isVideoTrackRef(track) && typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
             refreshVideoAudioLaneRegionOverlayGeometry(track);
         }
-        if (isVideoTrackRef(track) && typeof drawAudioWaveformCanvas === 'function') {
+        if (
+            isVideoTrackRef(track) &&
+            !offsetDragActive &&
+            typeof drawAudioWaveformCanvas === 'function'
+        ) {
             drawAudioWaveformCanvas();
         }
     }
@@ -723,13 +734,24 @@
             );
         }
         scheduleWaveformRegionOverlayRefresh();
-        if (isVideoTrackRef(track) && typeof refreshVideoVizRegionThumbnails === 'function') {
+        const offsetDragActive =
+            typeof isOffsetDragRegionWaveformPreviewActive === 'function' &&
+            isOffsetDragRegionWaveformPreviewActive();
+        if (
+            isVideoTrackRef(track) &&
+            !offsetDragActive &&
+            typeof refreshVideoVizRegionThumbnails === 'function'
+        ) {
             refreshVideoVizRegionThumbnails();
         }
         if (isVideoTrackRef(track) && typeof syncVideoAudioLaneRegionOverlays === 'function') {
             syncVideoAudioLaneRegionOverlays(track);
         }
-        if (isVideoTrackRef(track) && typeof drawAudioWaveformCanvas === 'function') {
+        if (
+            isVideoTrackRef(track) &&
+            !offsetDragActive &&
+            typeof drawAudioWaveformCanvas === 'function'
+        ) {
             drawAudioWaveformCanvas();
         }
         if (

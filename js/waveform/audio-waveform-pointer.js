@@ -273,10 +273,7 @@
         ) {
             return true;
         }
-        return (
-            typeof isVideoRegionEntrySelected === 'function' &&
-            isVideoRegionEntrySelected(regionHit.segmentIndex)
-        );
+        return true;
     }
 
     function regionOffsetDragScrollRatioFromClientX(clientX, scrubWCss) {
