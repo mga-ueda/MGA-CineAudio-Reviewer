@@ -223,6 +223,9 @@
     window.handlePlaybackRegionFadeOutKeydown = handlePlaybackRegionFadeOutKeydown;
     window.handlePlaybackRegionInNudgeKeydown = handlePlaybackRegionInNudgeKeydown;
     window.handlePlaybackRegionOutNudgeKeydown = handlePlaybackRegionOutNudgeKeydown;
+    window.handlePlaybackRegionMoveHeadToSeekbarKeydown =
+        handlePlaybackRegionMoveHeadToSeekbarKeydown;
+    window.moveSelectedRegionHeadsToSeekbar = moveSelectedRegionHeadsToSeekbar;
     window.beginRegionUndoGesture = beginRegionUndoGesture;
     window.commitRegionUndoGesture = commitRegionUndoGesture;
     window.clearRegionUndoStack = clearRegionUndoStack;

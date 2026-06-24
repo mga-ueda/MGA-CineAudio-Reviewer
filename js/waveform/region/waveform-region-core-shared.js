@@ -26,5 +26,6 @@
     /** @type {{ slot: number, segment: object } | null} */
     let regionSegmentClipboard = null;
     const regionPersistEpochBySlot = {};
+    let regionPersistEpochVideo = 0;
     const regionShrinkPersistIntentUntilBySlot = {};
     const REGION_SHRINK_PERSIST_INTENT_MS = 6000;

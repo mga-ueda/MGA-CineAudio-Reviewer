@@ -100,7 +100,10 @@
         let limitDelta = Infinity;
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
-            const track = { type: 'extra', slot: m.slot };
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                    : { type: 'extra', slot: m.slot };
             const key = regionGroupMemberKey(m.slot, m.segmentIndex);
             const rin = useCurrent
                 ? getSegmentRegionTimelineIn(track, m.segmentIndex)
@@ -708,8 +711,63 @@
         return indices;
     }
 
+    function isRegionSelectionDragSlot(slot) {
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+        ) {
+            return true;
+        }
+        return slot >= 0;
+    }
+
+    function canonicalRegionSelectionDragSlot(slot) {
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+        ) {
+            return typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                : slot;
+        }
+        return slot;
+    }
+
+    function trackRefFromRegionSelectionDragSlot(slot) {
+        if (typeof trackRefFromWaveformOffsetDragSlot === 'function') {
+            return trackRefFromWaveformOffsetDragSlot(slot);
+        }
+        return { type: 'extra', slot };
+    }
+
+    function resolveVideoRegionEnterTargetAtSeekbar() {
+        if (typeof getVideoTrackRef !== 'function') return null;
+        const videoTrack = getVideoTrackRef();
+        if (!isTrackRegionActive(videoTrack)) return null;
+        const segmentIndex = resolveRegionSegmentIndexAtSeekbar(videoTrack);
+        if (segmentIndex < 0) return null;
+        const slot =
+            typeof getTrackOffsetDragSlot === 'function'
+                ? getTrackOffsetDragSlot(videoTrack)
+                : typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                  ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                  : -2;
+        return { slot, track: videoTrack, segmentIndex };
+    }
+
+    function resolveActiveExtraRegionEnterTarget() {
+        const slot = resolveActiveExtraSlotForRegionEnter();
+        if (slot < 0) return null;
+        const track = { type: 'extra', slot };
+        if (!isTrackRegionActive(track)) return null;
+        return { slot, track };
+    }
+
     function setRegionSelectionOnTrack(slot, segmentIndices) {
-        if (!(slot >= 0) || !segmentIndices || !segmentIndices.length) return false;
+        if (!isRegionSelectionDragSlot(slot) || !segmentIndices || !segmentIndices.length) {
+            return false;
+        }
+        slot = canonicalRegionSelectionDragSlot(slot);
         regionSelectionEntries.length = 0;
         for (let i = 0; i < segmentIndices.length; i++) {
             const segmentIndex = segmentIndices[i];
@@ -722,8 +780,10 @@
     }
 
     function addRegionSelectionEntriesForIndex(slot, segmentIndex) {
-        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
-        const track = { type: 'extra', slot };
+        if (!(segmentIndex >= 0)) return;
+        if (!isRegionSelectionDragSlot(slot)) return;
+        slot = canonicalRegionSelectionDragSlot(slot);
+        const track = trackRefFromRegionSelectionDragSlot(slot);
         const gid = getSegmentRegionGroupId(track, segmentIndex);
         if (gid) {
             const members = collectRegionGroupMembers(track, segmentIndex);
@@ -736,7 +796,9 @@
     }
 
     function addRegionSelectionOnTrack(slot, segmentIndices) {
-        if (!(slot >= 0) || !segmentIndices || !segmentIndices.length) return false;
+        if (!isRegionSelectionDragSlot(slot) || !segmentIndices || !segmentIndices.length) {
+            return false;
+        }
         for (let i = 0; i < segmentIndices.length; i++) {
             addRegionSelectionEntriesForIndex(slot, segmentIndices[i]);
         }
@@ -755,14 +817,9 @@
         return hits.length ? hits[0] : -1;
     }
 
-    /** Enter — アクティブ Audio Track でシークバー直下、または範囲ループ区間のリージョンを追加選択 */
+    /** Enter — シークバー直下のリージョン、または範囲ループ区間のリージョンを選択（動画トラック含む） */
     function selectPlaybackRegionsAtActiveTrackEnter(opt) {
         opt = opt || {};
-        const slot = resolveActiveExtraSlotForRegionEnter();
-        if (slot < 0) return false;
-        const track = { type: 'extra', slot };
-        if (!isTrackRegionActive(track)) return false;
-
         const applySelection = opt.additive
             ? addRegionSelectionOnTrack
             : setRegionSelectionOnTrack;
@@ -770,6 +827,18 @@
         const rangeActive =
             typeof isRangeLoopPlaybackActive === 'function' &&
             isRangeLoopPlaybackActive();
+        if (!rangeActive) {
+            const videoTarget = resolveVideoRegionEnterTargetAtSeekbar();
+            if (videoTarget) {
+                return applySelection(videoTarget.slot, [videoTarget.segmentIndex]);
+            }
+        }
+
+        const extraTarget = resolveActiveExtraRegionEnterTarget();
+        if (!extraTarget) return false;
+        const slot = extraTarget.slot;
+        const track = extraTarget.track;
+
         if (rangeActive) {
             const inSec =
                 typeof getRangeLoopInSec === 'function' ? getRangeLoopInSec() : NaN;

@@ -250,6 +250,9 @@
                 if (raw && raw.regionGroupId) {
                     out.regionGroupId = raw.regionGroupId;
                 }
+                if (raw && Number.isFinite(raw.regionTimelineOutSec)) {
+                    out.regionTimelineOutSec = raw.regionTimelineOutSec;
+                }
                 return out;
             }),
         };
@@ -376,21 +379,31 @@
                   : entrySeg0 && Number.isFinite(entrySeg0.regionTimelineInSec)
                     ? entrySeg0.regionTimelineInSec
                     : null;
-            if (raw0 && Number.isFinite(restoredIn) && restoredIn > 0.0005) {
+            if (raw0 && Number.isFinite(restoredIn) && restoredIn >= -0.0005) {
                 if (Number.isFinite(entrySeg0?.timelineStartSec)) {
                     raw0.timelineStartSec = entrySeg0.timelineStartSec;
+                } else if (Number.isFinite(restoredIn)) {
+                    raw0.timelineStartSec = restoredIn;
                 }
                 state.regionTimelineInSec = restoredIn;
                 raw0.regionTimelineInSec = restoredIn;
-                state.headPadSec = Number.isFinite(entry.headPadSec)
-                    ? Math.max(0, entry.headPadSec)
-                    : Math.max(
-                          0,
-                          restoredIn -
-                              (typeof getTrackTimelineStartSec === 'function'
-                                  ? getTrackTimelineStartSec(track)
-                                  : 0),
-                      );
+                const trackT0 =
+                    typeof getTrackTimelineStartSec === 'function'
+                        ? getTrackTimelineStartSec(track)
+                        : 0;
+                const headFromEntry =
+                    Number.isFinite(entry.headPadSec) &&
+                    !(restoredIn <= 0.0005 && entry.headPadSec > restoredIn + 0.0005)
+                        ? Math.max(0, entry.headPadSec)
+                        : Math.max(0, restoredIn - trackT0);
+                state.headPadSec = headFromEntry;
+                if (
+                    entrySeg0 &&
+                    Number.isFinite(entrySeg0.regionTimelineOutSec) &&
+                    entrySeg0.regionTimelineOutSec > 0
+                ) {
+                    raw0.regionTimelineOutSec = entrySeg0.regionTimelineOutSec;
+                }
                 if (typeof reconcileSegmentSourceInWithRegionInTrim === 'function') {
                     reconcileSegmentSourceInWithRegionInTrim(track, 0);
                 }

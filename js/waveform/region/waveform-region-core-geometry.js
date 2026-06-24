@@ -325,11 +325,17 @@
                 }
                 state.headPadSec = Math.max(0, desiredRegionIn - t0);
             } else {
-                delete state.regionTimelineInSec;
                 delete state.regionLeadPadSec;
-                delete raw.regionTimelineInSec;
                 delete raw.regionLeadPadSec;
                 state.headPadSec = Math.max(0, desiredAnchor - t0);
+                if (isVideoTrackRef(track)) {
+                    state.regionTimelineInSec = desiredRegionIn;
+                    raw.regionTimelineInSec = desiredRegionIn;
+                    raw.timelineStartSec = desiredAnchor;
+                } else {
+                    delete state.regionTimelineInSec;
+                    delete raw.regionTimelineInSec;
+                }
             }
             return;
         }

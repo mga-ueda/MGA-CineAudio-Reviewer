@@ -825,7 +825,6 @@
 
         const o = opt && typeof opt === 'object' ? opt : {};
         const pendingVideo =
-            !o.force &&
             typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
                 ? getPendingPlaybackRegionRestoreVideoEntry()
                 : null;

@@ -16,10 +16,18 @@
         regionPersistEpochBySlot[slot] = (regionPersistEpochBySlot[slot] || 0) + 1;
     }
     window.bumpRegionPersistEpoch = bumpRegionPersistEpoch;
+    function bumpVideoRegionPersistEpoch() {
+        regionPersistEpochVideo = (regionPersistEpochVideo || 0) + 1;
+    }
+    window.bumpVideoRegionPersistEpoch = bumpVideoRegionPersistEpoch;
     function getRegionPersistEpoch(slot) {
         if (!(slot >= 0)) return 0;
         return Number(regionPersistEpochBySlot[slot] || 0);
     }
+    function getVideoRegionPersistEpoch() {
+        return Number(regionPersistEpochVideo || 0);
+    }
+    window.getVideoRegionPersistEpoch = getVideoRegionPersistEpoch;
     function swapRegionPersistEpochBetweenSlots(aSlot, bSlot) {
         if (!(aSlot >= 0) || !(bSlot >= 0) || aSlot === bSlot) return;
         const tmp = regionPersistEpochBySlot[aSlot] || 0;
@@ -1149,6 +1157,21 @@
             for (let i = 0; i < count; i++) {
                 if (getSegmentRegionGroupId(t, i) === gid) {
                     members.push({ slot: s, segmentIndex: i });
+                }
+            }
+        }
+        if (typeof getVideoTrackRef === 'function') {
+            const videoTrack = getVideoTrackRef();
+            const videoCount = getSegmentCount(videoTrack);
+            const videoSlot =
+                typeof getTrackOffsetDragSlot === 'function'
+                    ? getTrackOffsetDragSlot(videoTrack)
+                    : typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                      ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                      : -2;
+            for (let vi = 0; vi < videoCount; vi++) {
+                if (getSegmentRegionGroupId(videoTrack, vi) === gid) {
+                    members.push({ slot: videoSlot, segmentIndex: vi });
                 }
             }
         }

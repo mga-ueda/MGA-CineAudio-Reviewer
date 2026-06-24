@@ -354,6 +354,13 @@
         }
 
         if (
+            typeof handlePlaybackRegionMoveHeadToSeekbarKeydown === 'function' &&
+            handlePlaybackRegionMoveHeadToSeekbarKeydown(e)
+        ) {
+            return;
+        }
+
+        if (
             typeof handleMarkerPendingRangeEscapeKeydown === 'function' &&
             handleMarkerPendingRangeEscapeKeydown(e)
         ) {

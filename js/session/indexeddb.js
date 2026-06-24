@@ -25,6 +25,7 @@
     const regionPersistFloorBySlot = {};
     const regionPersistFloorPayloadBySlot = {};
     const regionPersistEpochSavedBySlot = {};
+    let regionPersistEpochVideoSaved = 0;
 
     function shiftSlotKeyedPersistMetadata(obj, clearedSlot, maxSlot) {
         if (!obj || typeof obj !== 'object' || !(clearedSlot >= 0)) return;
@@ -449,11 +450,20 @@
         return null;
     }
 
+    function hasFreshVideoRegionPersistEdit() {
+        const curEpoch =
+            typeof getVideoRegionPersistEpoch === 'function'
+                ? getVideoRegionPersistEpoch()
+                : 0;
+        return curEpoch > regionPersistEpochVideoSaved;
+    }
+
     /** ライブ snapshot に Video が無い／In=0 のとき、直前 IDB 行の Video 平行移動を維持 */
     function mergeVideoPlaybackRegionFromPrevRow(row, prevRow) {
         if (!row || !prevRow || !prevRow.playbackRegion || !prevRow.playbackRegion.video) {
             return;
         }
+        if (hasFreshVideoRegionPersistEdit()) return;
         const prevIn = videoPlaybackRegionInSec(prevRow.playbackRegion.video);
         if (!(Number.isFinite(prevIn) && prevIn > 0.0005)) return;
         const liveVideo =
@@ -1276,6 +1286,7 @@
         for (const slot of Object.keys(regionPersistEpochSavedBySlot)) {
             delete regionPersistEpochSavedBySlot[slot];
         }
+        regionPersistEpochVideoSaved = 0;
     }
 
     /** All Clear 等: 保存セッションを IndexedDB から完全削除 */
@@ -1653,10 +1664,14 @@
     }
 
     function syncRegionPersistEpochSavedFromLiveState() {
-        if (typeof getRegionPersistEpoch !== 'function') return;
-        const n = getExtraTrackCount();
-        for (let slot = 0; slot < n; slot++) {
-            regionPersistEpochSavedBySlot[slot] = getRegionPersistEpoch(slot) || 0;
+        if (typeof getRegionPersistEpoch === 'function') {
+            const n = getExtraTrackCount();
+            for (let slot = 0; slot < n; slot++) {
+                regionPersistEpochSavedBySlot[slot] = getRegionPersistEpoch(slot) || 0;
+            }
+        }
+        if (typeof getVideoRegionPersistEpoch === 'function') {
+            regionPersistEpochVideoSaved = getVideoRegionPersistEpoch() || 0;
         }
     }
 

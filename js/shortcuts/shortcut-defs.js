@@ -221,6 +221,7 @@
         // In/Out を Tempo/Sig の 1 拍ずつ nudge（内容固定）
         regionInNudge: { code: 'KeyI', ctrl: false, meta: false, alt: true, shift: true, primary: false },
         regionOutNudge: { code: 'KeyO', ctrl: false, meta: false, alt: true, shift: true, primary: false },
+        regionMoveHeadToSeekbar: { codes: ['ScrollLock', 'Pause'], ctrl: false, meta: false, alt: false, shift: false, primary: false },
         regionEscape: { code: 'Escape', ctrl: false, alt: false, meta: false },
 
         // ---------- ミックス ----------
@@ -607,6 +608,8 @@
         NumpadAdd: '+',
         NumpadSubtract: '−',
         Escape: 'Esc',
+        ScrollLock: 'Scroll Lock',
+        Pause: 'Pause',
         Enter: 'Enter',
         Period: '.',
         NumpadDecimal: '.',
@@ -702,6 +705,7 @@
             regionFadeOut: formatShortcutDef(s.regionFadeOut),
             regionInNudge: formatShortcutDef(s.regionInNudge),
             regionOutNudge: formatShortcutDef(s.regionOutNudge),
+            regionMoveHeadToSeekbar: formatShortcutDef(s.regionMoveHeadToSeekbar),
         });
     }
 

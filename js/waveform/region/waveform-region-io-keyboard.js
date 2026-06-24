@@ -320,6 +320,17 @@
         return true;
     }
 
+    function handlePlaybackRegionMoveHeadToSeekbarKeydown(e) {
+        if (!matchUserShortcut(e, 'regionMoveHeadToSeekbar')) return false;
+        if (e.repeat) return false;
+        if (!guardRegionShortcutKeydown(e)) return false;
+        e.preventDefault();
+        if (typeof moveSelectedRegionHeadsToSeekbar === 'function') {
+            moveSelectedRegionHeadsToSeekbar();
+        }
+        return true;
+    }
+
     function handlePlaybackRegionEscapeKeydown(e) {
         if (!matchUserShortcut(e, 'regionEscape')) return false;
         if (regionHandleDragActive) {

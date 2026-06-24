@@ -15,6 +15,15 @@
         syncTrackRegionHeadStateFromFirstSegment(track);
         if (isExtraTrackRef(track)) {
             bumpRegionPersistEpoch(track.slot);
+        } else if (
+            isVideoTrackRef(track) &&
+            typeof bumpVideoRegionPersistEpoch === 'function' &&
+            !(
+                typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()
+            )
+        ) {
+            bumpVideoRegionPersistEpoch();
         }
         if (
             !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) &&

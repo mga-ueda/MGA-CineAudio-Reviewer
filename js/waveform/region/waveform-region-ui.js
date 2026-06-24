@@ -1425,6 +1425,202 @@
         }
     }
 
+    function resolveRegionMoveHeadToSeekbarUnits() {
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (!segEntries.length) return [];
+        const units = [];
+        const seenGroups = new Set();
+        const seenSingles = new Set();
+        for (let i = 0; i < segEntries.length; i++) {
+            const e = segEntries[i];
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(e.slot)
+                    : { type: 'extra', slot: e.slot };
+            const gid = getSegmentRegionGroupId(track, e.segmentIndex);
+            if (gid) {
+                if (seenGroups.has(gid)) continue;
+                seenGroups.add(gid);
+                units.push({
+                    members: collectRegionGroupMembers(track, e.segmentIndex),
+                    primary: { slot: e.slot, segmentIndex: e.segmentIndex },
+                });
+            } else {
+                const key = regionGroupMemberKey(e.slot, e.segmentIndex);
+                if (seenSingles.has(key)) continue;
+                seenSingles.add(key);
+                units.push({
+                    members: [{ slot: e.slot, segmentIndex: e.segmentIndex }],
+                    primary: { slot: e.slot, segmentIndex: e.segmentIndex },
+                });
+            }
+        }
+        return units;
+    }
+
+    function applyRegionHeadParallelMoveToSec(track, segmentIndex, targetSec, opt) {
+        const moveOpt = Object.assign({ parallelRegionOffsetDrag: true, skipUndo: true }, opt || {});
+        if (
+            segmentIndex === 0 &&
+            typeof resolveParallelRegionOffsetDragInPadSec === 'function' &&
+            typeof applyParallelRegionOffsetDragViaTrackTimeline === 'function'
+        ) {
+            const currentRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+            const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
+            const parallelInPad = resolveParallelRegionOffsetDragInPadSec(
+                track,
+                0,
+                currentRegionIn,
+                currentAnchor,
+            );
+            if (
+                parallelInPad <= 0.00001 &&
+                applyParallelRegionOffsetDragViaTrackTimeline(track, 0, targetSec, moveOpt)
+            ) {
+                return;
+            }
+        }
+        setSegmentTimelineStartSec(track, segmentIndex, targetSec, moveOpt);
+    }
+
+    function moveSelectedRegionHeadsToSeekbar() {
+        if (
+            typeof isPlaybackRegionOffsetDragForbidden === 'function' &&
+            isPlaybackRegionOffsetDragForbidden()
+        ) {
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Move disabled (Rehearsal fill)', 'notice');
+            }
+            return false;
+        }
+        const units = resolveRegionMoveHeadToSeekbarUnits();
+        if (!units.length) {
+            if (typeof writeLog === 'function') {
+                writeLog('Region move to seekbar: select a region first');
+            }
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Select region', 'notice');
+            }
+            return false;
+        }
+        const targetSec =
+            typeof transportSecFromSeekbar === 'function' ? transportSecFromSeekbar() : 0;
+        if (!regionUndoPaused) requestRegionUndoCapture();
+        let anyChanged = false;
+        for (let u = 0; u < units.length; u++) {
+            const unit = units[u];
+            const members = unit.members;
+            const primary = unit.primary;
+            const primaryTrack =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(primary.slot)
+                    : { type: 'extra', slot: primary.slot };
+            if (!members || !members.length) continue;
+            if (members.length === 1) {
+                const m = members[0];
+                const track =
+                    typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                        ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                        : { type: 'extra', slot: m.slot };
+                if (!isTrackRegionActive(track)) continue;
+                const before = getSegmentRegionTimelineIn(track, m.segmentIndex);
+                applyRegionHeadParallelMoveToSec(track, m.segmentIndex, targetSec, {
+                    skipUndo: true,
+                });
+                const after = getSegmentRegionTimelineIn(track, m.segmentIndex);
+                if (Math.abs(after - before) > 0.00001) anyChanged = true;
+                continue;
+            }
+            const startRegionInByKey = {};
+            const startAnchorByKey = {};
+            for (let gi = 0; gi < members.length; gi++) {
+                const m = members[gi];
+                const mTrack =
+                    typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                        ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                        : { type: 'extra', slot: m.slot };
+                if (!isTrackRegionActive(mTrack)) continue;
+                const key = regionGroupMemberKey(m.slot, m.segmentIndex);
+                startRegionInByKey[key] = getSegmentRegionTimelineIn(mTrack, m.segmentIndex);
+                startAnchorByKey[key] = getSegmentTimelineStart(mTrack, m.segmentIndex);
+            }
+            const primaryKey = regionGroupMemberKey(primary.slot, primary.segmentIndex);
+            const primaryBefore = startRegionInByKey[primaryKey];
+            if (!Number.isFinite(primaryBefore)) continue;
+            let snappedNext = targetSec;
+            if (typeof snapRegionMoveRegionInSecDetail === 'function') {
+                const snapResult = snapRegionMoveRegionInSecDetail(
+                    targetSec,
+                    primaryTrack,
+                    primary.segmentIndex,
+                    {
+                        dragStartRegionIn: primaryBefore,
+                        dragStartAnchor: startAnchorByKey[primaryKey],
+                        exclude: { slot: primary.slot, segmentIndex: primary.segmentIndex },
+                        commitSnap: true,
+                    },
+                );
+                snappedNext = snapResult.sec;
+            } else if (typeof snapRegionMoveRegionInSec === 'function') {
+                snappedNext = snapRegionMoveRegionInSec(
+                    targetSec,
+                    primaryTrack,
+                    primary.segmentIndex,
+                    {
+                        dragStartRegionIn: primaryBefore,
+                        dragStartAnchor: startAnchorByKey[primaryKey],
+                        exclude: { slot: primary.slot, segmentIndex: primary.segmentIndex },
+                    },
+                );
+            }
+            const primaryCurrent = getSegmentRegionTimelineIn(
+                primaryTrack,
+                primary.segmentIndex,
+            );
+            const deltaRaw = snappedNext - primaryCurrent;
+            const effectiveDelta =
+                typeof clampRegionGroupMoveDelta === 'function'
+                    ? clampRegionGroupMoveDelta(
+                          members,
+                          deltaRaw,
+                          startRegionInByKey,
+                          { useCurrentRegionInBase: true },
+                      )
+                    : deltaRaw;
+            if (Math.abs(effectiveDelta) < 0.00001) continue;
+            applyRegionGroupMoveDelta(members, effectiveDelta, {
+                startRegionInByKey,
+                startAnchorByKey,
+                useCurrentRegionInBase: true,
+                parallelRegionOffsetDrag: true,
+                skipUndo: true,
+            });
+            anyChanged = true;
+        }
+        if (!anyChanged) {
+            if (typeof flashSeekHint === 'function') {
+                flashSeekHint('Region', 'Already at limit', 'notice');
+            }
+            return false;
+        }
+        if (typeof schedulePersistSession === 'function') schedulePersistSession();
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Region move to seekbar: ' +
+                    formatTimecodeForTransport(targetSec) +
+                    ' (' +
+                    units.length +
+                    ' unit' +
+                    (units.length === 1 ? '' : 's') +
+                    ')',
+            );
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint('Region', 'Moved to ' + formatTimecodeForTransport(targetSec), 'notice');
+        }
+        return true;
+    }
+
     /** グループ: 全メンバーへ同じ delta を適用（個別スナップでずれないよう skipSnap） */
     function applyRegionGroupMoveDelta(members, delta, opt) {
         if (!members || !members.length || !Number.isFinite(delta)) return;
