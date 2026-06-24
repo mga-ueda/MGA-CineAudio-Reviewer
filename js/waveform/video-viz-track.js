@@ -433,6 +433,10 @@
             });
         }
 
+        if (typeof bumpVideoRegionPersistEpoch === 'function') {
+            bumpVideoRegionPersistEpoch();
+        }
+
         if (typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }

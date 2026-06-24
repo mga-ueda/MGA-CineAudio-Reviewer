@@ -1822,7 +1822,26 @@
 
     window.updateControlsEnabled = updateControlsEnabled;
 
+    let deferSessionPersistUntilVideoRegionReady = false;
+
+    function consumeDeferredVideoRegionPersist() {
+        if (!deferSessionPersistUntilVideoRegionReady) return false;
+        deferSessionPersistUntilVideoRegionReady = false;
+        return true;
+    }
+
+    window.consumeDeferredVideoRegionPersist = consumeDeferredVideoRegionPersist;
+
     function loadVideoFile(f, opt) {
+        const fromSessionRestore = !!(opt && opt.playbackRegion);
+        if (!fromSessionRestore) {
+            if (typeof setPendingPlaybackRegionRestore === 'function') {
+                setPendingPlaybackRegionRestore(null);
+            }
+            if (typeof bumpVideoRegionPersistEpoch === 'function') {
+                bumpVideoRegionPersistEpoch();
+            }
+        }
         if (typeof prepareReviewMixForNewVideoLoad === 'function') {
             prepareReviewMixForNewVideoLoad();
         }
@@ -1934,7 +1953,11 @@
             );
         }
         if (!opt || !opt.skipPersist) {
-            schedulePersistSession();
+            if (!fromSessionRestore) {
+                deferSessionPersistUntilVideoRegionReady = true;
+            } else {
+                schedulePersistSession();
+            }
         }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();

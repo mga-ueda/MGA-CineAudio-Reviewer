@@ -80,6 +80,17 @@
         } else if (typeof refreshVideoVizLaneVisibility === 'function') {
             refreshVideoVizLaneVisibility({ skipInit: true });
         }
+        if (
+            typeof consumeDeferredVideoRegionPersist === 'function' &&
+            consumeDeferredVideoRegionPersist()
+        ) {
+            if (typeof resetVideoTrackRegionToFullClip === 'function') {
+                resetVideoTrackRegionToFullClip({ skipPersist: true });
+            }
+            if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        }
         if (typeof showFirstVideoFrame === 'function') {
             showFirstVideoFrame();
         }

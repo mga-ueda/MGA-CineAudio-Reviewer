@@ -458,16 +458,39 @@
         return curEpoch > regionPersistEpochVideoSaved;
     }
 
-    /** ライブ snapshot に Video が無い／In=0 のとき、直前 IDB 行の Video 平行移動を維持 */
+    function sessionMainVideoFileKey(row) {
+        if (!row || !row.mName) return '';
+        const size = Number(row.mBlob?.size || row.mByteLength || 0);
+        const lm = Number(row.mLastModified || 0);
+        return String(row.mName) + '\0' + lm + '\0' + size;
+    }
+
+    function sessionMainVideoFileChanged(row, prevRow) {
+        if (!row || !prevRow) return false;
+        const cur = sessionMainVideoFileKey(row);
+        const prev = sessionMainVideoFileKey(prevRow);
+        if (!cur || !prev) return false;
+        return cur !== prev;
+    }
+
+    /** ライブ snapshot に Video ブロックが無いときだけ、直前 IDB 行の Video 平行移動を維持 */
     function mergeVideoPlaybackRegionFromPrevRow(row, prevRow) {
         if (!row || !prevRow || !prevRow.playbackRegion || !prevRow.playbackRegion.video) {
             return;
         }
+        if (sessionMainVideoFileChanged(row, prevRow)) return;
         if (hasFreshVideoRegionPersistEdit()) return;
         const prevIn = videoPlaybackRegionInSec(prevRow.playbackRegion.video);
         if (!(Number.isFinite(prevIn) && prevIn > 0.0005)) return;
         const liveVideo =
             row.playbackRegion && row.playbackRegion.video ? row.playbackRegion.video : null;
+        if (
+            liveVideo &&
+            Array.isArray(liveVideo.segments) &&
+            liveVideo.segments.length
+        ) {
+            return;
+        }
         const liveIn = videoPlaybackRegionInSec(liveVideo);
         if (Number.isFinite(liveIn) && liveIn > 0.0005) return;
         if (!row.playbackRegion || typeof row.playbackRegion !== 'object') {
