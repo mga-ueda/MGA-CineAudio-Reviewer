@@ -74,11 +74,13 @@
             );
             if (pitch !== 0) base.pitchSemitones = pitch;
         }
+        if (!isVideoTrackRef(track)) {
         if (seg && Number.isFinite(seg.fadeInSec)) {
             base.fadeInSec = Math.max(0, seg.fadeInSec);
         }
         if (seg && Number.isFinite(seg.fadeOutSec)) {
             base.fadeOutSec = Math.max(0, seg.fadeOutSec);
+        }
         }
         if (seg && seg.regionGroupId) {
             base.regionGroupId = String(seg.regionGroupId);
@@ -109,6 +111,20 @@
         return false;
     }
     function getPlaybackRegionsState(track) {
+        if (isVideoTrackRef(track)) {
+            const st = getVideoTrackState().playbackRegions;
+            if (!st) {
+                getVideoTrackState().playbackRegions = {
+                    active: false,
+                    segments: [],
+                    headPadSec: 0,
+                };
+            }
+            if (!Number.isFinite(getVideoTrackState().playbackRegions.headPadSec)) {
+                getVideoTrackState().playbackRegions.headPadSec = 0;
+            }
+            return getVideoTrackState().playbackRegions;
+        }
         if (!isExtraTrackRef(track)) return null;
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(track.slot) : null;
@@ -1133,6 +1149,15 @@
         }
     }
     function getTrackSourceDurationSec(track) {
+        if (isVideoTrackRef(track)) {
+            if (typeof getVideoTrackSourceDurationSec === 'function') {
+                return getVideoTrackSourceDurationSec();
+            }
+            if (typeof getVideoTransportDurationSec === 'function') {
+                return getVideoTransportDurationSec();
+            }
+            return 0;
+        }
         if (!isExtraTrackRef(track)) return 0;
         if (typeof getExtraTrackMaxClipDurationSec === 'function') {
             const d = getExtraTrackMaxClipDurationSec(track.slot);
@@ -1161,6 +1186,7 @@
         return end;
     }
     function getTrackTimelineStartSec(track) {
+        if (isVideoTrackRef(track)) return 0;
         if (!isExtraTrackRef(track)) return 0;
         if (typeof getExtraTrackTimelineStartSec === 'function') {
             return getExtraTrackTimelineStartSec(track.slot);
@@ -1168,6 +1194,7 @@
         return 0;
     }
     function getPrimaryClipIdForTrack(track) {
+        if (isVideoTrackRef(track)) return 'main';
         if (!isExtraTrackRef(track)) return 'main';
         const tr =
             typeof extraTrackBySlot === 'function' ? extraTrackBySlot(track.slot) : null;
@@ -1177,6 +1204,12 @@
         return 'main';
     }
     function ensureDefaultTrackRegion(track, opt) {
+        if (isVideoTrackRef(track)) {
+            if (typeof ensureDefaultVideoTrackRegion === 'function') {
+                return ensureDefaultVideoTrackRegion(opt);
+            }
+            return false;
+        }
         if (!isExtraTrackRef(track)) return false;
         const state = getPlaybackRegionsState(track);
         if (!state || (state.active && state.segments && state.segments.length)) {
@@ -1330,6 +1363,7 @@
         return getTrackSegments(track).length > 0;
     }
     function isPlaybackRegionActive() {
+        if (isTrackRegionActive(getVideoTrackRef())) return true;
         const n =
             getExtraTrackCount();
         for (let i = 0; i < n; i++) {

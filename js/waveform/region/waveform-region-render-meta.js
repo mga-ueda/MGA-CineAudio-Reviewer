@@ -531,6 +531,12 @@
     }
 
     function refreshAllRegionBoundaryPresentation() {
+        if (typeof isVideoVizLaneShown === 'function' && isVideoVizLaneShown()) {
+            const vTrack = getVideoTrackRef();
+            if (typeof refreshTrackRegionOverlayGeometry === 'function') {
+                refreshTrackRegionOverlayGeometry(vTrack);
+            }
+        }
         const n =
             typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
         for (let slot = 0; slot < n; slot++) {

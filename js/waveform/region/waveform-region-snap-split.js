@@ -56,7 +56,7 @@
     }
 
     function resolvePlaybackRegionSplitPlacement(track, transportSec) {
-        if (!isExtraTrackRef(track)) return null;
+        if (!isPlaybackRegionTrackRef(track)) return null;
         const splitTransport = clampRegionEditTransportSec(track, transportSec);
         if (
             isNearPlaybackRegionUncuttableTransport(
@@ -131,7 +131,7 @@
     window.isPlaybackRegionDragForbidden = isPlaybackRegionOffsetDragForbidden;
 
     function splitPlaybackRegionAtTransportSec(track, transportSec, opt) {
-        if (!isExtraTrackRef(track)) return false;
+        if (!isPlaybackRegionTrackRef(track)) return false;
         const placement = resolvePlaybackRegionSplitPlacement(track, transportSec);
         if (!placement) return false;
 
@@ -163,11 +163,13 @@
             left.pitchSemitones = seg.pitchSemitones;
             right.pitchSemitones = seg.pitchSemitones;
         }
+        if (!isVideoTrackRef(track)) {
         if (Number.isFinite(seg.fadeInSec) && seg.fadeInSec > 0.0005) {
             left.fadeInSec = seg.fadeInSec;
         }
         if (Number.isFinite(seg.fadeOutSec) && seg.fadeOutSec > 0.0005) {
             right.fadeOutSec = seg.fadeOutSec;
+        }
         }
         const next = segments.slice();
         next.splice(splitIndex, 1, left, right);
@@ -176,7 +178,7 @@
             skipUndo: !!(opt && opt.skipUndo),
             affectedSegmentIndices: [splitIndex, splitIndex + 1],
         });
-        if (ok && typeof schedulePersistExtraTrackSlot === 'function') {
+        if (ok && isExtraTrackRef(track) && typeof schedulePersistExtraTrackSlot === 'function') {
             schedulePersistExtraTrackSlot(track.slot);
         }
         if (
@@ -1526,6 +1528,32 @@
 
     function isPointerInRegionParallelMoveBodyAtPointer(clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+        if (
+            typeof isPointerOverVideoVizLane === 'function' &&
+            isPointerOverVideoVizLane(clientY)
+        ) {
+            const track = getVideoTrackRef();
+            const count =
+                typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
+            for (let i = 0; i < count; i++) {
+                if (isPointerInRegionParallelMoveBodyZone(track, i, clientX, clientY)) {
+                    return true;
+                }
+            }
+        }
+        if (
+            typeof isPointerOverVideoAudioLane === 'function' &&
+            isPointerOverVideoAudioLane(clientY)
+        ) {
+            const track = getVideoTrackRef();
+            const count =
+                typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
+            for (let i = 0; i < count; i++) {
+                if (isPointerInRegionParallelMoveBodyZone(track, i, clientX, clientY)) {
+                    return true;
+                }
+            }
+        }
         const slot =
             typeof waveformExtraLaneSlotFromClientY === 'function'
                 ? waveformExtraLaneSlotFromClientY(clientY)
@@ -1547,10 +1575,12 @@
 
     /** 重なり／クロスフェード部でも、DOM 前面のリージョン本体に隠れた In/Out を拾う */
     function resolveRegionResizeHandleAtPointer(track, clientX, clientY) {
-        if (!isExtraTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        if (!isPlaybackRegionTrackRef(track) || !Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             return null;
         }
-        const lane = document.getElementById('extraAudioLane' + track.slot);
+        const lane = isVideoTrackRef(track)
+            ? videoVizLane
+            : document.getElementById('extraAudioLane' + track.slot);
         if (!lane || lane.hidden) return null;
         const laneRect = lane.getBoundingClientRect();
         if (

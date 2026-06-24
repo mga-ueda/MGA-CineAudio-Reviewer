@@ -520,6 +520,12 @@
         }
         refreshTrackFadeTriangleVisibility(track, container);
         scheduleWaveformRegionOverlayRefresh();
+        if (isVideoTrackRef(track) && typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
+            refreshVideoAudioLaneRegionOverlayGeometry(track);
+        }
+        if (isVideoTrackRef(track) && typeof drawAudioWaveformCanvas === 'function') {
+            drawAudioWaveformCanvas();
+        }
     }
 
     let trackRegionOverlayBuildDepth = 0;
@@ -717,6 +723,15 @@
             );
         }
         scheduleWaveformRegionOverlayRefresh();
+        if (isVideoTrackRef(track) && typeof refreshVideoVizRegionThumbnails === 'function') {
+            refreshVideoVizRegionThumbnails();
+        }
+        if (isVideoTrackRef(track) && typeof syncVideoAudioLaneRegionOverlays === 'function') {
+            syncVideoAudioLaneRegionOverlays(track);
+        }
+        if (isVideoTrackRef(track) && typeof drawAudioWaveformCanvas === 'function') {
+            drawAudioWaveformCanvas();
+        }
         if (
             restoreHover &&
             Number.isFinite(hoverClientX) &&

@@ -297,6 +297,9 @@
 
     function getWaveformAudioLaneCount() {
         let count = 0;
+        const videoVizMetaEl =
+            typeof videoVizMeta !== 'undefined' ? videoVizMeta : null;
+        if (videoVizMetaEl && !videoVizMetaEl.hidden) count += 1;
         const videoMeta =
             typeof audioWaveformPanel !== 'undefined' ? audioWaveformPanel : null;
         if (videoMeta && !videoMeta.hidden) count += 1;

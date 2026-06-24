@@ -366,10 +366,22 @@
     }
 
     function handleRegionSelectionPointerDown(ev, regionHit) {
-        if (!ev || !regionHit || !(regionHit.slot >= 0) || !(regionHit.segmentIndex >= 0)) {
+        if (!ev || !regionHit || !(regionHit.segmentIndex >= 0)) {
             return false;
         }
         if (!(ev.ctrlKey || ev.metaKey)) return false;
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(regionHit.slot)
+        ) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (typeof toggleVideoLinkedRegionSelection === 'function') {
+                toggleVideoLinkedRegionSelection(regionHit.segmentIndex);
+            }
+            return true;
+        }
+        if (!(regionHit.slot >= 0)) return false;
         ev.preventDefault();
         ev.stopPropagation();
         toggleRegionSelection(regionHit.slot, regionHit.segmentIndex);

@@ -1940,6 +1940,24 @@
             object-fit: contain;
             display: block;
         }
+        .video-frame__filmstrip-loading {
+            position: absolute;
+            inset: 0;
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            background: rgba(18, 20, 28, 0.32);
+            backdrop-filter: blur(22px) saturate(150%) brightness(0.92);
+            -webkit-backdrop-filter: blur(22px) saturate(150%) brightness(0.92);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-sizing: border-box;
+        }
+        .video-frame__filmstrip-loading[hidden] {
+            display: none !important;
+        }
         .video-frame--past-end {
             background: #000;
         }
@@ -2211,15 +2229,18 @@
             display: grid;
             grid-template-rows:
                 repeat(var(--musical-lane-count, 3), var(--musical-lane-h))
+                repeat(var(--video-viz-lane-count, 0), var(--musical-lane-h))
                 repeat(var(--wave-lane-count, 3), var(--wave-lane-h));
             gap: 0;
             align-content: start;
             height: calc(
                 (var(--musical-lane-count, 3) * var(--musical-lane-h))
+                + (var(--video-viz-lane-count, 0) * var(--musical-lane-h))
                 + (var(--wave-lane-count, 3) * var(--wave-lane-h))
             );
             max-height: calc(
                 (var(--musical-lane-count, 3) * var(--musical-lane-h))
+                + (var(--video-viz-lane-count, 0) * var(--musical-lane-h))
                 + (var(--wave-lane-count, 3) * var(--wave-lane-h))
             );
             box-sizing: border-box;
@@ -2276,11 +2297,13 @@
             --wave-lanes-scrollbar-h: 0px;
             height: calc(
                 (var(--musical-lane-count, 3) * var(--musical-lane-h))
+                + (var(--video-viz-lane-count, 0) * var(--musical-lane-h))
                 + (var(--wave-lane-count, 3) * var(--wave-lane-h))
                 + var(--wave-lanes-scrollbar-h)
             );
             max-height: calc(
                 (var(--musical-lane-count, 3) * var(--musical-lane-h))
+                + (var(--video-viz-lane-count, 0) * var(--musical-lane-h))
                 + (var(--wave-lane-count, 3) * var(--wave-lane-h))
                 + var(--wave-lanes-scrollbar-h)
             );
@@ -2290,6 +2313,7 @@
             display: grid;
             grid-template-rows:
                 repeat(var(--musical-lane-count, 3), var(--musical-lane-h))
+                repeat(var(--video-viz-lane-count, 0), var(--musical-lane-h))
                 repeat(var(--wave-lane-count, 3), var(--wave-lane-h));
             gap: 0;
             align-content: start;
@@ -2820,6 +2844,10 @@
         .audio-waveform-lane--musical[hidden] {
             display: none !important;
         }
+        .audio-waveform-lane-meta--video-viz[hidden],
+        .audio-waveform-lane--video-viz[hidden] {
+            display: none !important;
+        }
         .audio-waveform-composite--musical-tracks-hidden {
             --musical-lane-count: 0 !important;
         }
@@ -3293,12 +3321,91 @@
             height: var(--wave-lane-h);
             min-height: var(--wave-lane-h);
             max-height: var(--wave-lane-h);
-        }
-        .audio-waveform-lane--extra {
             /* 波形とリージョン overlay を同量だけ上げ、下端 border の見切れを防ぐ */
             --playback-lane-bottom-inset: 1px;
         }
+        .audio-waveform-lane-meta--video-viz {
+            height: var(--musical-lane-h);
+            min-height: var(--musical-lane-h);
+            max-height: var(--musical-lane-h);
+            padding: 2px 6px 2px 0;
+            align-items: flex-end;
+            justify-content: center;
+        }
+        .audio-waveform-lane-meta--video-viz .audio-waveform-lane-meta__title {
+            color: #b8c0d0;
+            text-align: right;
+            width: 100%;
+            padding-right: 2px;
+            box-sizing: border-box;
+        }
+        .audio-waveform-lane--video-viz {
+            position: relative;
+            height: var(--musical-lane-h);
+            min-height: var(--musical-lane-h);
+            max-height: var(--musical-lane-h);
+            --playback-lane-bottom-inset: 0;
+        }
+        .audio-waveform-lane--video-viz .video-viz-lane__track,
+        .audio-waveform-lane--video-viz .audio-waveform-lane__track {
+            position: absolute;
+            top: 0;
+            right: 0;
+            left: 0;
+            bottom: var(--playback-lane-bottom-inset);
+            height: auto;
+            z-index: 1;
+            pointer-events: none;
+        }
+        .audio-waveform-lane__playback-region--video-viz {
+            background: rgba(255, 160, 90, 0.06);
+            border-color: rgba(255, 180, 120, 0.35);
+        }
+        .video-viz-lane__filmstrip {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+            border-radius: 2px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .video-viz-lane__filmstrip-cell {
+            flex: 1 1 0;
+            min-width: 0;
+            height: 100%;
+            background-size: cover;
+            background-position: center center;
+            background-repeat: no-repeat;
+            box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.28);
+        }
+        .video-viz-lane__filmstrip-cell:last-child {
+            box-shadow: none;
+        }
+        /* 20px レーン: filmstrip が inset 枠を覆うため ::after で前面に描画 */
+        .audio-waveform-lane__playback-region--video-viz.audio-waveform-lane__playback-region--selected,
+        .audio-waveform-lane__playback-region--video-audio-mirror.audio-waveform-lane__playback-region--selected {
+            z-index: 10;
+            box-shadow: none;
+        }
+        .audio-waveform-lane__playback-region--video-viz.audio-waveform-lane__playback-region--selected::after,
+        .audio-waveform-lane__playback-region--video-audio-mirror.audio-waveform-lane__playback-region--selected::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 3;
+            box-shadow: inset 0 0 0 2px var(--waveform-seek-cyan-border);
+            border-radius: 2px;
+        }
+        .audio-waveform-lane--video-viz.audio-waveform-lane--has-regions {
+            z-index: 5;
+        }
         .audio-waveform-lane--has-regions {
+            z-index: 5;
+        }
+        .audio-waveform-lane--video.audio-waveform-lane--has-regions {
             z-index: 5;
         }
         /* トラック先頭オフセット後の空白など、子がすべて pointer-events:none でもシーク可能に */
@@ -3310,11 +3417,7 @@
             cursor: pointer;
             background: transparent;
         }
-        .audio-waveform-lane--video .audio-waveform-lane__track {
-            position: relative;
-            z-index: 1;
-            pointer-events: none;
-        }
+        .audio-waveform-lane--video .audio-waveform-lane__track,
         .audio-waveform-lane--extra .audio-waveform-lane__track {
             position: absolute;
             top: 0;

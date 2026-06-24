@@ -45,27 +45,29 @@
                 if (ev.button !== 0) return;
                 if (regionHandleDragActive) return;
                 if (ev.ctrlKey || ev.metaKey) {
-                    if (typeof resolveSilentGapSelectionAtPointer === 'function') {
-                        const hit = resolveSilentGapSelectionAtPointer(
-                            ev.clientX,
-                            ev.clientY,
-                        );
-                        if (hit && hit.slot === track.slot) {
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            toggleSilentGapSelection(hit.slot, hit.gapIndex);
-                            return;
-                        }
-                    }
-                    if (typeof findSilentGapElAtPointer === 'function') {
-                        const gapEl = findSilentGapElAtPointer(ev.clientX, ev.clientY);
-                        if (gapEl) {
-                            const gapIndex = Number(gapEl.dataset.silentGapIndex);
-                            if (Number.isFinite(gapIndex) && gapIndex >= 0) {
+                    if (!isVideoTrackRef(track)) {
+                        if (typeof resolveSilentGapSelectionAtPointer === 'function') {
+                            const hit = resolveSilentGapSelectionAtPointer(
+                                ev.clientX,
+                                ev.clientY,
+                            );
+                            if (hit && hit.slot === track.slot) {
                                 ev.preventDefault();
                                 ev.stopPropagation();
-                                toggleSilentGapSelection(track.slot, gapIndex);
+                                toggleSilentGapSelection(hit.slot, hit.gapIndex);
                                 return;
+                            }
+                        }
+                        if (typeof findSilentGapElAtPointer === 'function') {
+                            const gapEl = findSilentGapElAtPointer(ev.clientX, ev.clientY);
+                            if (gapEl) {
+                                const gapIndex = Number(gapEl.dataset.silentGapIndex);
+                                if (Number.isFinite(gapIndex) && gapIndex >= 0) {
+                                    ev.preventDefault();
+                                    ev.stopPropagation();
+                                    toggleSilentGapSelection(track.slot, gapIndex);
+                                    return;
+                                }
                             }
                         }
                     }
@@ -77,7 +79,13 @@
                         if (Number.isFinite(segmentIndex) && segmentIndex >= 0) {
                             ev.preventDefault();
                             ev.stopPropagation();
-                            toggleRegionSelection(track.slot, segmentIndex);
+                            if (isVideoTrackRef(track)) {
+                                if (typeof toggleVideoLinkedRegionSelection === 'function') {
+                                    toggleVideoLinkedRegionSelection(segmentIndex);
+                                }
+                            } else {
+                                toggleRegionSelection(track.slot, segmentIndex);
+                            }
                             return;
                         }
                     }
@@ -244,6 +252,8 @@
     window.refreshAllPlaybackRegionFadeTriangles = refreshAllPlaybackRegionFadeTriangles;
     window.updateTrackRegionOverlay = updateTrackRegionOverlays;
     window.setPendingPlaybackRegionRestore = setPendingPlaybackRegionRestore;
+    window.getPendingPlaybackRegionRestoreVideoEntry =
+        getPendingPlaybackRegionRestoreVideoEntry;
     window.applyPendingPlaybackRegionRestore = applyPendingPlaybackRegionRestore;
     window.applyPlaybackRegionSegmentsRaw = applyPlaybackRegionSegmentsRaw;
     window.finalizePlaybackRegionsForExtraSlot = finalizePlaybackRegionsForExtraSlot;
@@ -252,15 +262,24 @@
     window.resolveTargetExtraSlot = resolveTargetExtraSlot;
     window.resolveRegionSegmentFromPointer = resolveRegionSegmentFromPointer;
     window.getSegmentTimelineStartForAltDrag = function (slot, segmentIndex) {
-        const track = { type: 'extra', slot };
+        const track =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(slot)
+                : { type: 'extra', slot };
         return getSegmentRegionTimelineIn(track, segmentIndex);
     };
     window.getSegmentAnchorForAltDrag = function (slot, segmentIndex) {
-        const track = { type: 'extra', slot };
+        const track =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(slot)
+                : { type: 'extra', slot };
         return getSegmentTimelineStart(track, segmentIndex);
     };
     window.getSegmentRegionInPadForAltDrag = function (slot, segmentIndex) {
-        const track = { type: 'extra', slot };
+        const track =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(slot)
+                : { type: 'extra', slot };
         return getSegmentRegionInPadSec(track, segmentIndex);
     };
     window.resolveParallelRegionOffsetDragInPadSec =

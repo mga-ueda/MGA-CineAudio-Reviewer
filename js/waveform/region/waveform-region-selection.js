@@ -120,9 +120,19 @@
 
     function isRegionEntrySelected(slot, segmentIndex) {
         if (!(segmentIndex >= 0)) return false;
+        const canonicalSlot =
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+                ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                : slot;
         for (let i = 0; i < regionSelectionEntries.length; i++) {
             const e = regionSelectionEntries[i];
-            if (e.slot === slot && e.segmentIndex === segmentIndex) return true;
+            const entrySlot =
+                typeof isVideoLinkedOffsetDragSlot === 'function' &&
+                isVideoLinkedOffsetDragSlot(e.slot)
+                    ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                    : e.slot;
+            if (entrySlot === canonicalSlot && e.segmentIndex === segmentIndex) return true;
         }
         return false;
     }
@@ -166,10 +176,28 @@
         document
             .querySelectorAll('.audio-waveform-lane__playback-region')
             .forEach((el) => {
+                const videoLane = el.closest('.audio-waveform-lane--video-viz');
+                const videoAudioLane = el.closest('.audio-waveform-lane--video');
                 const lane = el.closest('.audio-waveform-lane--extra');
-                const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-                if (!m) return;
-                const slot = parseInt(m[1], 10);
+                let slot = -1;
+                if (videoLane) {
+                    slot =
+                        typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                            ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                            : -2;
+                } else if (
+                    videoAudioLane &&
+                    el.classList.contains('audio-waveform-lane__playback-region--video-audio-mirror')
+                ) {
+                    slot =
+                        typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                            ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                            : -2;
+                } else {
+                    const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                    if (!m) return;
+                    slot = parseInt(m[1], 10);
+                }
                 const segmentIndex = Number(el.dataset.segmentIndex);
                 if (!Number.isFinite(segmentIndex)) return;
                 const selected = isRegionEntrySelected(slot, segmentIndex);
@@ -240,7 +268,15 @@
     }
 
     function addRegionSelectionEntry(slot, segmentIndex) {
-        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
+        if (!(segmentIndex >= 0)) return;
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+        ) {
+            slot = VIDEO_WAVEFORM_OFFSET_DRAG_SLOT;
+        } else if (!(slot >= 0)) {
+            return;
+        }
         if (isRegionEntrySelected(slot, segmentIndex)) return;
         regionSelectionEntries.push({ slot, segmentIndex });
     }
@@ -284,7 +320,20 @@
     }
 
     function toggleRegionSelection(slot, segmentIndex) {
-        if (!(slot >= 0) || !(segmentIndex >= 0)) return;
+        if (!(segmentIndex >= 0)) return;
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+        ) {
+            if (isRegionEntrySelected(VIDEO_WAVEFORM_OFFSET_DRAG_SLOT, segmentIndex)) {
+                removeRegionSelectionEntry(VIDEO_WAVEFORM_OFFSET_DRAG_SLOT, segmentIndex);
+            } else {
+                addRegionSelectionEntry(VIDEO_WAVEFORM_OFFSET_DRAG_SLOT, segmentIndex);
+            }
+            syncRegionSelectionClasses();
+            return;
+        }
+        if (!(slot >= 0)) return;
         const track = { type: 'extra', slot };
         const gid = getSegmentRegionGroupId(track, segmentIndex);
         if (gid) {

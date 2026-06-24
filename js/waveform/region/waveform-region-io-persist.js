@@ -171,38 +171,90 @@
                 );
             }
         }
-        if (typeof setPendingPlaybackRegionRestore === 'function') {
-            setPendingPlaybackRegionRestore(null);
-        }
         if (typeof window.regionRestoreDiagLog === 'function') {
             window.regionRestoreDiagLog('finalizeAll/done', { any });
         }
         return any;
     }
 
-    function getPlaybackRegionPersistSnapshot() {
-        const extras = [];
-        const n =
-            getExtraTrackCount();
-        for (let i = 0; i < n; i++) {
-            const track = { type: 'extra', slot: i };
-            const segments = getTrackSegments(track);
-            if (!segments.length) continue;
-            const headPad = getHeadPadSec(track);
-            const state = getPlaybackRegionsState(track);
-            const regionIn =
-                state && Number.isFinite(state.regionTimelineInSec)
-                    ? state.regionTimelineInSec
-                    : typeof getSegmentRegionTimelineIn === 'function'
-                      ? getSegmentRegionTimelineIn(track, 0)
-                      : undefined;
-            const regionLead =
-                state && Number.isFinite(state.regionLeadPadSec) && state.regionLeadPadSec > 0
-                    ? state.regionLeadPadSec
-                    : typeof getSegmentRegionLeadPadSec === 'function' &&
-                        getSegmentRegionLeadPadSec(track, 0) > 0.00001
-                      ? getSegmentRegionLeadPadSec(track, 0)
-                      : undefined;
+    function buildPlaybackRegionPersistEntryForTrack(track) {
+        if (!isPlaybackRegionTrackRef(track)) return null;
+        const segments = getTrackSegments(track);
+        if (!segments.length) return null;
+        const headPad = getHeadPadSec(track);
+        const state = getPlaybackRegionsState(track);
+        const regionIn =
+            state && Number.isFinite(state.regionTimelineInSec)
+                ? state.regionTimelineInSec
+                : typeof getSegmentRegionTimelineIn === 'function'
+                  ? getSegmentRegionTimelineIn(track, 0)
+                  : undefined;
+        const regionLead =
+            state && Number.isFinite(state.regionLeadPadSec) && state.regionLeadPadSec > 0
+                ? state.regionLeadPadSec
+                : typeof getSegmentRegionLeadPadSec === 'function' &&
+                    getSegmentRegionLeadPadSec(track, 0) > 0.00001
+                  ? getSegmentRegionLeadPadSec(track, 0)
+                  : undefined;
+        const entry = {
+            headPadSec: headPad > 0 ? headPad : undefined,
+            regionTimelineInSec: regionIn,
+            regionLeadPadSec: regionLead,
+            segments: segments.map((seg, segIndex) => {
+                const raw = getRawSegmentEntry(track, segIndex);
+                const out = {
+                    id: seg.id,
+                    clipId: seg.clipId,
+                    sourceInSec: seg.sourceInSec,
+                    sourceOutSec: seg.sourceOutSec,
+                };
+                const timelineStart =
+                    raw && Number.isFinite(raw.timelineStartSec)
+                        ? raw.timelineStartSec
+                        : typeof getSegmentTimelineStart === 'function'
+                          ? getSegmentTimelineStart(track, segIndex)
+                          : undefined;
+                if (Number.isFinite(timelineStart)) {
+                    out.timelineStartSec = timelineStart;
+                }
+                const segRegionIn =
+                    raw && Number.isFinite(raw.regionTimelineInSec)
+                        ? raw.regionTimelineInSec
+                        : typeof getSegmentRegionTimelineIn === 'function'
+                          ? getSegmentRegionTimelineIn(track, segIndex)
+                          : undefined;
+                if (Number.isFinite(segRegionIn)) {
+                    out.regionTimelineInSec = segRegionIn;
+                }
+                const segLeadPad =
+                    typeof getSegmentRegionLeadPadSec === 'function'
+                        ? getSegmentRegionLeadPadSec(track, segIndex)
+                        : raw && Number.isFinite(raw.regionLeadPadSec)
+                          ? raw.regionLeadPadSec
+                          : 0;
+                if (segLeadPad > 0.00001) {
+                    out.regionLeadPadSec = segLeadPad;
+                }
+                if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
+                    out.gainDb = raw.gainDb;
+                }
+                if (raw && Number.isFinite(raw.pitchSemitones) && raw.pitchSemitones !== 0) {
+                    out.pitchSemitones = Math.round(raw.pitchSemitones);
+                }
+                if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
+                    out.fadeInSec = raw.fadeInSec;
+                }
+                if (raw && Number.isFinite(raw.fadeOutSec) && raw.fadeOutSec > 0.0005) {
+                    out.fadeOutSec = raw.fadeOutSec;
+                }
+                if (raw && raw.regionGroupId) {
+                    out.regionGroupId = raw.regionGroupId;
+                }
+                return out;
+            }),
+        };
+        if (isExtraTrackRef(track)) {
+            entry.slot = track.slot;
             let timelineSlots;
             if (typeof window.timelineSlotsPersistSlice === 'function') {
                 try {
@@ -211,71 +263,155 @@
                     timelineSlots = undefined;
                 }
             }
-            extras.push({
-                slot: i,
-                headPadSec: headPad > 0 ? headPad : undefined,
-                regionTimelineInSec: regionIn,
-                regionLeadPadSec: regionLead,
-                timelineSlots,
-                segments: segments.map((seg, segIndex) => {
-                    const raw = getRawSegmentEntry(track, segIndex);
-                    const entry = {
-                        id: seg.id,
-                        clipId: seg.clipId,
-                        sourceInSec: seg.sourceInSec,
-                        sourceOutSec: seg.sourceOutSec,
-                    };
-                    const timelineStart =
-                        raw && Number.isFinite(raw.timelineStartSec)
-                            ? raw.timelineStartSec
-                            : typeof getSegmentTimelineStart === 'function'
-                              ? getSegmentTimelineStart(track, segIndex)
-                              : undefined;
-                    if (Number.isFinite(timelineStart)) {
-                        entry.timelineStartSec = timelineStart;
-                    }
-                    const segRegionIn =
-                        raw && Number.isFinite(raw.regionTimelineInSec)
-                            ? raw.regionTimelineInSec
-                            : typeof getSegmentRegionTimelineIn === 'function'
-                              ? getSegmentRegionTimelineIn(track, segIndex)
-                              : undefined;
-                    if (Number.isFinite(segRegionIn)) {
-                        entry.regionTimelineInSec = segRegionIn;
-                    }
-                    const segLeadPad =
-                        typeof getSegmentRegionLeadPadSec === 'function'
-                            ? getSegmentRegionLeadPadSec(track, segIndex)
-                            : raw && Number.isFinite(raw.regionLeadPadSec)
-                              ? raw.regionLeadPadSec
-                              : 0;
-                    if (segLeadPad > 0.00001) {
-                        entry.regionLeadPadSec = segLeadPad;
-                    }
-                    if (raw && Number.isFinite(raw.gainDb) && Math.abs(raw.gainDb) > 0.0005) {
-                        entry.gainDb = raw.gainDb;
-                    }
-                    if (
-                        raw &&
-                        Number.isFinite(raw.pitchSemitones) &&
-                        raw.pitchSemitones !== 0
-                    ) {
-                        entry.pitchSemitones = Math.round(raw.pitchSemitones);
-                    }
-                    if (raw && Number.isFinite(raw.fadeInSec) && raw.fadeInSec > 0.0005) {
-                        entry.fadeInSec = raw.fadeInSec;
-                    }
-                    if (raw && Number.isFinite(raw.fadeOutSec) && raw.fadeOutSec > 0.0005) {
-                        entry.fadeOutSec = raw.fadeOutSec;
-                    }
-                    if (raw && raw.regionGroupId) {
-                        entry.regionGroupId = raw.regionGroupId;
-                    }
-                    return entry;
-                }),
+            if (timelineSlots) entry.timelineSlots = timelineSlots;
+        }
+        return entry;
+    }
+
+    function getPlaybackRegionPersistSnapshot() {
+        const extras = [];
+        const n =
+            getExtraTrackCount();
+        for (let i = 0; i < n; i++) {
+            const track = { type: 'extra', slot: i };
+            const entry = buildPlaybackRegionPersistEntryForTrack(track);
+            if (entry) extras.push(entry);
+        }
+        let video = null;
+        if (typeof getVideoTrackRef === 'function') {
+            const videoEntry = buildPlaybackRegionPersistEntryForTrack(getVideoTrackRef());
+            if (videoEntry) video = videoEntry;
+        }
+        if (typeof window.videoRegionDiagLogPersist === 'function') {
+            window.videoRegionDiagLogPersist('save', {
+                extraCount: extras.length,
+                hasVideo: !!video,
+                videoRegionIn: video && Number.isFinite(video.regionTimelineInSec)
+                    ? video.regionTimelineInSec
+                    : video &&
+                        video.segments &&
+                        video.segments[0] &&
+                        Number.isFinite(video.segments[0].regionTimelineInSec)
+                      ? video.segments[0].regionTimelineInSec
+                      : undefined,
             });
         }
-        return extras.length ? { extra: extras } : null;
+        if (!extras.length && !video) return null;
+        const out = {};
+        if (extras.length) out.extra = extras;
+        if (video) out.video = video;
+        return out;
+    }
+
+    function restoreVideoPlaybackRegionFromPersistEntry(entry, opt) {
+        if (
+            !entry ||
+            !Array.isArray(entry.segments) ||
+            !entry.segments.length ||
+            typeof getVideoTrackRef !== 'function'
+        ) {
+            return { ok: false, deferred: false };
+        }
+        const videoLoaded =
+            (typeof getVideoTrackSourceDurationSec === 'function' &&
+                getVideoTrackSourceDurationSec() > 0) ||
+            (typeof videoReady === 'function' && videoReady());
+        if (!videoLoaded) {
+            if (typeof window.videoRegionDiagLogPersist === 'function') {
+                window.videoRegionDiagLogPersist('restore/deferred', {
+                    segCount: entry.segments.length,
+                });
+            }
+            return { ok: false, deferred: true };
+        }
+        const track = getVideoTrackRef();
+        const segOpt = Object.assign(
+            {
+                silent: true,
+                skipUndo: true,
+                deferRedraw: !!(opt && opt.batchRestore),
+                skipMusicalRefresh: !!(opt && opt.batchRestore),
+                skipOverlay: !!(opt && opt.batchRestore),
+            },
+            opt || {},
+        );
+        const ok = setTrackSegments(track, entry.segments, segOpt);
+        if (!ok) {
+            if (typeof writeLog === 'function') {
+                writeLog('Session: video region restore setTrackSegments failed');
+            }
+            return { ok: false, deferred: false };
+        }
+        const state = getPlaybackRegionsState(track);
+        if (state) {
+            const entrySeg0 = entry.segments[0];
+            const raw0 = state.segments[0];
+            if (Number.isFinite(entry.headPadSec)) {
+                state.headPadSec = Math.max(0, entry.headPadSec);
+            }
+            if (raw0 && entrySeg0 && Number.isFinite(entrySeg0.timelineStartSec)) {
+                raw0.timelineStartSec = entrySeg0.timelineStartSec;
+            }
+            if (Number.isFinite(entry.regionTimelineInSec)) {
+                state.regionTimelineInSec = entry.regionTimelineInSec;
+                if (raw0) raw0.regionTimelineInSec = entry.regionTimelineInSec;
+            } else if (raw0 && Number.isFinite(raw0.regionTimelineInSec)) {
+                state.regionTimelineInSec = raw0.regionTimelineInSec;
+            }
+            if (
+                Number.isFinite(entry.regionLeadPadSec) &&
+                entry.regionLeadPadSec > 0 &&
+                raw0
+            ) {
+                state.regionLeadPadSec = Math.max(0, entry.regionLeadPadSec);
+                raw0.regionLeadPadSec = Math.max(0, entry.regionLeadPadSec);
+            }
+            if (typeof syncTrackRegionHeadStateFromFirstSegment === 'function') {
+                syncTrackRegionHeadStateFromFirstSegment(track);
+            }
+            const restoredIn = Number.isFinite(entry.regionTimelineInSec)
+                ? entry.regionTimelineInSec
+                : entrySeg0 && Number.isFinite(entrySeg0.timelineStartSec)
+                  ? entrySeg0.timelineStartSec
+                  : entrySeg0 && Number.isFinite(entrySeg0.regionTimelineInSec)
+                    ? entrySeg0.regionTimelineInSec
+                    : null;
+            if (raw0 && Number.isFinite(restoredIn) && restoredIn > 0.0005) {
+                raw0.timelineStartSec = Number.isFinite(entrySeg0?.timelineStartSec)
+                    ? entrySeg0.timelineStartSec
+                    : restoredIn;
+                state.regionTimelineInSec = restoredIn;
+                state.headPadSec = Number.isFinite(entry.headPadSec)
+                    ? Math.max(0, entry.headPadSec)
+                    : Math.max(
+                          0,
+                          restoredIn -
+                              (typeof getTrackTimelineStartSec === 'function'
+                                  ? getTrackTimelineStartSec(track)
+                                  : 0),
+                      );
+                delete raw0.regionTimelineInSec;
+            }
+            if (!(opt && opt.batchRestore)) {
+                updateTrackRegionOverlays(track);
+                if (typeof syncVideoTrackRegionsPresentation === 'function') {
+                    syncVideoTrackRegionsPresentation();
+                }
+                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
+                if (typeof applyVideoTimeForTransportSec === 'function' && typeof getTransportSec === 'function') {
+                    applyVideoTimeForTransportSec(getTransportSec(), { force: true });
+                }
+            }
+        }
+        if (typeof window.videoRegionDiagLogPersist === 'function') {
+            window.videoRegionDiagLogPersist('restore/applied', {
+                segCount: entry.segments.length,
+                regionTimelineInSec: entry.regionTimelineInSec,
+            });
+        }
+        return { ok: true, deferred: false };
     }
 
     function restorePlaybackRegionFromPersist(data, opt) {
@@ -375,6 +511,11 @@
                 }
             }
         }
+        if (data.video && typeof data.video === 'object') {
+            const videoResult = restoreVideoPlaybackRegionFromPersistEntry(data.video, opt);
+            if (videoResult.deferred) restoreDeferred = true;
+            else if (!videoResult.ok) restoreFailed = true;
+        }
         if (
             Number.isFinite(data.inSec) &&
             Number.isFinite(data.outSec) &&
@@ -404,10 +545,51 @@
             data && typeof data === 'object' ? data : null;
     }
 
+    function getPendingPlaybackRegionRestoreVideoEntry() {
+        if (
+            !pendingPlaybackRegionRestore ||
+            !pendingPlaybackRegionRestore.video ||
+            typeof pendingPlaybackRegionRestore.video !== 'object'
+        ) {
+            return null;
+        }
+        return pendingPlaybackRegionRestore.video;
+    }
+
+    window.getPendingPlaybackRegionRestoreVideoEntry =
+        getPendingPlaybackRegionRestoreVideoEntry;
+
     function applyPendingPlaybackRegionRestore() {
         if (!pendingPlaybackRegionRestore) return false;
         const data = pendingPlaybackRegionRestore;
         const ok = restorePlaybackRegionFromPersist(data, { silent: true });
+        if (ok && data.video && typeof writeLog === 'function') {
+            let inSec = Number.isFinite(data.video.regionTimelineInSec)
+                ? data.video.regionTimelineInSec
+                : null;
+            if (inSec == null && data.video.segments && data.video.segments[0]) {
+                const s0 = data.video.segments[0];
+                if (Number.isFinite(s0.regionTimelineInSec)) inSec = s0.regionTimelineInSec;
+                else if (Number.isFinite(s0.timelineStartSec)) inSec = s0.timelineStartSec;
+            }
+            if (Number.isFinite(inSec) && inSec > 0.0005) {
+                writeLog('Session: video region restored (in=' + inSec.toFixed(2) + 's)');
+            }
+        }
+        if (!ok && data.video && typeof writeLog === 'function') {
+            let inSec = Number.isFinite(data.video.regionTimelineInSec)
+                ? data.video.regionTimelineInSec
+                : null;
+            if (inSec == null && data.video.segments && data.video.segments[0]) {
+                const s0 = data.video.segments[0];
+                if (Number.isFinite(s0.regionTimelineInSec)) inSec = s0.regionTimelineInSec;
+                else if (Number.isFinite(s0.timelineStartSec)) inSec = s0.timelineStartSec;
+            }
+            writeLog(
+                'Session: video region restore deferred or failed' +
+                    (Number.isFinite(inSec) ? ' (in=' + inSec.toFixed(2) + 's)' : ''),
+            );
+        }
         if (ok) pendingPlaybackRegionRestore = null;
         return ok;
     }

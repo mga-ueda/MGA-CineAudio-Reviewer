@@ -2,6 +2,11 @@
  * waveform-region-overlay-elements.js — リージョン overlay DOM 要素の構築・配置
  */
     function getPlaybackRegionsContainerEl(track) {
+        if (isVideoTrackRef(track)) {
+            return videoVizLane
+                ? videoVizLane.querySelector('.audio-waveform-lane__playback-regions')
+                : null;
+        }
         if (!isExtraTrackRef(track)) return null;
         const lane = document.getElementById('extraAudioLane' + track.slot);
         if (!lane) return null;
@@ -9,8 +14,10 @@
     }
 
     function syncExtraLaneRegionsClassForTrack(track) {
-        if (!isExtraTrackRef(track)) return;
-        const lane = document.getElementById('extraAudioLane' + track.slot);
+        if (!isPlaybackRegionTrackRef(track)) return;
+        const lane = isVideoTrackRef(track)
+            ? videoVizLane
+            : document.getElementById('extraAudioLane' + track.slot);
         if (!lane) return;
         const hasRegions = isTrackRegionActive(track);
         const hadRegions = lane.classList.contains('audio-waveform-lane--has-regions');
@@ -76,13 +83,25 @@
         el.hidden = false;
     }
 
-    function buildRegionOverlayEl(track, segmentIndex, seg, slotsOpt) {
+    function buildRegionOverlayEl(track, segmentIndex, seg, slotsOpt, buildOpt) {
         const el = document.createElement('div');
         el.className = 'audio-waveform-lane__playback-region';
+        const videoAudioMirror = !!(buildOpt && buildOpt.videoAudioMirror);
+        if (isVideoTrackRef(track)) {
+            if (videoAudioMirror) {
+                el.classList.add('audio-waveform-lane__playback-region--video-audio-mirror');
+            } else {
+                el.classList.add('audio-waveform-lane__playback-region--video-viz');
+            }
+        }
         if (getSegmentRegionGroupId(track, segmentIndex)) {
             el.classList.add('audio-waveform-lane__playback-region--grouped');
         }
-        if (isRegionEntrySelected(track.slot, segmentIndex)) {
+        const selected = isVideoTrackRef(track)
+            ? typeof isVideoRegionEntrySelected === 'function' &&
+              isVideoRegionEntrySelected(segmentIndex)
+            : isRegionEntrySelected(track.slot, segmentIndex);
+        if (selected) {
             el.classList.add('audio-waveform-lane__playback-region--selected');
         }
         el.dataset.segmentIndex = String(segmentIndex);
@@ -120,6 +139,7 @@
                 ' で1拍後方へ）';
             el.appendChild(handleOut);
         }
+        if (!isVideoTrackRef(track)) {
         const fadeCurve = document.createElement('div');
         fadeCurve.className = 'audio-waveform-lane__playback-region__fade-curve';
         fadeCurve.setAttribute('aria-hidden', 'true');
@@ -199,6 +219,14 @@
         pitchLabel.hidden = !pitchText;
         pitchLabel.setAttribute('aria-hidden', pitchText ? 'false' : 'true');
         el.appendChild(pitchLabel);
+        }
+        if (isVideoTrackRef(track) && !videoAudioMirror) {
+            const filmstrip = document.createElement('div');
+            filmstrip.className = 'video-viz-lane__filmstrip';
+            filmstrip.setAttribute('aria-hidden', 'true');
+            filmstrip.hidden = true;
+            el.insertBefore(filmstrip, el.firstChild);
+        }
         const cursorLine = document.createElement('div');
         cursorLine.className = 'audio-waveform-lane__playback-region__cursor-line';
         cursorLine.setAttribute('aria-hidden', 'true');

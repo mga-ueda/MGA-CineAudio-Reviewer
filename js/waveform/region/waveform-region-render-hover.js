@@ -84,10 +84,7 @@
             const hit = document.elementFromPoint(clientX, clientY);
             if (hit) {
                 const fromHit = hit.closest('.audio-waveform-lane__playback-region');
-                const hitLane = fromHit && fromHit.closest('.audio-waveform-lane--extra');
-                const m =
-                    hitLane && hitLane.id ? /^extraAudioLane(\d+)$/.exec(hitLane.id) : null;
-                if (fromHit && m && parseInt(m[1], 10) === track.slot) {
+                if (fromHit) {
                     const segmentIndex = Number(fromHit.dataset.segmentIndex);
                     if (Number.isFinite(segmentIndex) && segmentIndex >= 0) {
                         const interval = regionTimelineIntervalAtPointer(track, segmentIndex);
@@ -95,7 +92,17 @@
                             transportSec >= interval.startSec - 0.0005 &&
                             transportSec < interval.endSec - 0.002
                         ) {
-                            return fromHit;
+                            if (isVideoTrackRef(track)) {
+                                return fromHit;
+                            }
+                            const hitLane = fromHit.closest('.audio-waveform-lane--extra');
+                            const m =
+                                hitLane && hitLane.id
+                                    ? /^extraAudioLane(\d+)$/.exec(hitLane.id)
+                                    : null;
+                            if (fromHit && m && parseInt(m[1], 10) === track.slot) {
+                                return fromHit;
+                            }
                         }
                     }
                 }
@@ -121,6 +128,70 @@
 
     function findPlaybackRegionElAtPointer(clientX, clientY) {
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+        if (
+            typeof isPointerOverVideoVizLane === 'function' &&
+            isPointerOverVideoVizLane(clientY)
+        ) {
+            const lane = videoVizLane;
+            if (lane && !lane.hidden) {
+                const laneRect = lane.getBoundingClientRect();
+                if (
+                    clientX >= laneRect.left &&
+                    clientX <= laneRect.right &&
+                    clientY >= laneRect.top &&
+                    clientY <= laneRect.bottom
+                ) {
+                    const track = getVideoTrackRef();
+                    const container = getPlaybackRegionsContainerEl(track);
+                    if (container && !container.hidden) {
+                        const transportSec = transportSecAtClientX(clientX);
+                        const hit = playbackRegionElAtTransportSec(
+                            track,
+                            container,
+                            transportSec,
+                            clientX,
+                            clientY,
+                        );
+                        if (hit) return hit;
+                    }
+                }
+            }
+        }
+
+        if (
+            typeof isPointerOverVideoAudioLane === 'function' &&
+            isPointerOverVideoAudioLane(clientY)
+        ) {
+            const lane =
+                typeof audioWaveformLaneVideo !== 'undefined' ? audioWaveformLaneVideo : null;
+            if (lane && !lane.hidden) {
+                const laneRect = lane.getBoundingClientRect();
+                if (
+                    clientX >= laneRect.left &&
+                    clientX <= laneRect.right &&
+                    clientY >= laneRect.top &&
+                    clientY <= laneRect.bottom
+                ) {
+                    const track = getVideoTrackRef();
+                    const container =
+                        typeof getVideoAudioPlaybackRegionsContainerEl === 'function'
+                            ? getVideoAudioPlaybackRegionsContainerEl()
+                            : null;
+                    if (container && !container.hidden) {
+                        const transportSec = transportSecAtClientX(clientX);
+                        const hit = playbackRegionElAtTransportSec(
+                            track,
+                            container,
+                            transportSec,
+                            clientX,
+                            clientY,
+                        );
+                        if (hit) return hit;
+                    }
+                }
+            }
+        }
 
         const slot = extraLaneSlotFromClientY(clientY);
         if (slot < 0) return null;

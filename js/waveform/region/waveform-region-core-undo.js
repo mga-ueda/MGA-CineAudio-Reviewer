@@ -1054,9 +1054,12 @@
         regionUndoDragSnap = null;
     }
     function trackKey(track) {
-        return track && track.type === 'extra' ? 'extra:' + track.slot : '';
+        if (track && track.type === 'extra') return 'extra:' + track.slot;
+        if (track && track.type === 'video') return 'video';
+        return '';
     }
     function parseTrackKey(key) {
+        if (key === 'video') return { type: 'video' };
         const m = /^extra:(\d+)$/.exec(key);
         if (m) return { type: 'extra', slot: parseInt(m[1], 10) };
         return null;
@@ -1064,6 +1067,14 @@
     function isExtraTrackRef(track) {
         return !!(track && track.type === 'extra' && Number.isFinite(track.slot));
     }
+    function isVideoTrackRef(track) {
+        return !!(track && track.type === 'video');
+    }
+    function isPlaybackRegionTrackRef(track) {
+        return isExtraTrackRef(track) || isVideoTrackRef(track);
+    }
+    window.isVideoTrackRef = isVideoTrackRef;
+    window.isPlaybackRegionTrackRef = isPlaybackRegionTrackRef;
     function isSessionRestoreBusy() {
         return (
             (typeof isSessionRestoreInProgress === 'function' &&
@@ -1117,9 +1128,18 @@
     }
     /** 同一 groupId のリージョンを全 Ex トラックから列挙 */
     function collectRegionGroupMembers(track, segmentIndex) {
+        const memberSlot = isVideoTrackRef(track)
+            ? typeof getTrackOffsetDragSlot === 'function'
+                ? getTrackOffsetDragSlot(track)
+                : typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                  ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                  : -2
+            : isExtraTrackRef(track)
+              ? track.slot
+              : -1;
         const gid = getSegmentRegionGroupId(track, segmentIndex);
         if (!gid) {
-            return [{ slot: track.slot, segmentIndex }];
+            return [{ slot: memberSlot, segmentIndex }];
         }
         const members = [];
         const n = getExtraTrackCount();
@@ -1134,7 +1154,7 @@
         }
         return members.length
             ? members
-            : [{ slot: track.slot, segmentIndex }];
+            : [{ slot: memberSlot, segmentIndex }];
     }
     function collectRegionGroupMemberIndices(track, segmentIndex) {
         return collectRegionGroupMembers(track, segmentIndex)

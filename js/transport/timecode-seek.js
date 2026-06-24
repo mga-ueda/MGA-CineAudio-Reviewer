@@ -426,6 +426,7 @@
             releaseStuckEnded();
         }
         if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
+        if (typeof clearVideoPreRollHold === 'function') clearVideoPreRollHold();
         const didSeek = applyTimeToVideoIfNeeded(transportT);
         if (didSeek || videoMain.seeking) {
             await waitForVideoSeekIdle(3000);
@@ -436,21 +437,50 @@
         const cap =
             typeof getPlaybackCapSec === 'function' ? getPlaybackCapSec(videoMain) : 0;
         const kick = playbackKickSec();
-        if (cap > 0 && transportT < kick * 0.5) {
+        const skipKickForVideoPreRoll =
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync() &&
+            typeof isTransportBeforeVideoRegionIn === 'function' &&
+            isTransportBeforeVideoRegionIn(transportT);
+        if (cap > 0 && transportT < kick * 0.5 && !skipKickForVideoPreRoll) {
             const cur = videoMain.currentTime || 0;
             if (cur < kick * 0.5) {
-                const savedAudio = transportPlaybackSec;
-                videoMain.currentTime = kick;
-                await waitForVideoSeekIdle(3000);
-                if (typeof applyVideoTimeForTransportSec === 'function') {
-                    applyVideoTimeForTransportSec(transportT, { force: true });
-                } else {
-                    videoMain.currentTime = transportT;
+                const nearTarget =
+                    typeof isVideoTimeNearTransportTarget === 'function' &&
+                    isVideoTimeNearTransportTarget(transportT);
+                if (!nearTarget || videoMain.readyState < 3) {
+                    const savedAudio = transportPlaybackSec;
+                    videoMain.currentTime = kick;
+                    await waitForVideoSeekIdle(3000);
+                    if (typeof applyVideoTimeForTransportSec === 'function') {
+                        applyVideoTimeForTransportSec(transportT, { force: true });
+                    } else {
+                        videoMain.currentTime = transportT;
+                    }
+                    transportPlaybackSec = savedAudio;
+                    setTransportSec(savedAudio);
                 }
-                transportPlaybackSec = savedAudio;
-                setTransportSec(savedAudio);
             }
         }
+    }
+
+    async function prewarmVideoForRegionInEntry() {
+        if (!(typeof videoReady === 'function' && videoReady())) return;
+        const regionIn =
+            typeof getVideoRegionTimelineInSec === 'function'
+                ? getVideoRegionTimelineInSec()
+                : 0;
+        if (!(regionIn > 0.0005) || typeof videoSecForTransportSec !== 'function') return;
+        const entrySec = videoSecForTransportSec(regionIn);
+        if (!Number.isFinite(entrySec)) return;
+        const cur = videoMain.currentTime || 0;
+        if (Math.abs(cur - entrySec) <= 0.001 && videoMain.readyState >= 3) return;
+        try {
+            videoMain.currentTime = entrySec;
+        } catch (_) {
+            return;
+        }
+        await waitForVideoSeekIdle(1500);
     }
 
     async function tryUnstickPlaybackAtTransport() {
@@ -1062,6 +1092,13 @@
         transportPlaybackSec = startT;
         transportPlaybackLastTs = performance.now();
         setTransportSec(startT);
+        const regionTransportSync =
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync();
+        const videoPreRollAtStart =
+            regionTransportSync &&
+            typeof isTransportBeforeVideoRegionIn === 'function' &&
+            isTransportBeforeVideoRegionIn(startT);
         if (
             typeof applyVideoTimeForTransportSec === 'function' &&
             !(
@@ -1071,23 +1108,38 @@
         ) {
             applyVideoTimeForTransportSec(startT, { force: true });
         }
+        if (!videoPreRollAtStart) {
+            const playPromise = videoMain.play();
+            if (playPromise && typeof playPromise.then === 'function') {
+                await playPromise;
+            }
+            if (playGen != null && playGen !== transportPlayGeneration) return false;
+            if (videoMain.paused) {
+                throw new Error('video remains paused after play()');
+            }
+            if (!(await waitUntilVideoPlaying(60))) {
+                throw new Error('video stuck while starting playback');
+            }
+        }
         setPlayingUi(true);
         if (!rafId) rafId = requestAnimationFrame(tick);
         if (syncExtras) {
             syncExtras({ force: true });
         }
-        const playPromise = videoMain.play();
-        if (playPromise && typeof playPromise.then === 'function') {
-            await playPromise;
+        if (videoPreRollAtStart) {
+            try {
+                videoMain.pause();
+            } catch (_) {}
+            await prewarmVideoForRegionInEntry();
+            if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+                refreshVideoPastEndBlackoutUi();
+            }
         }
-        if (playGen != null && playGen !== transportPlayGeneration) return false;
-        if (videoMain.paused) {
-            throw new Error('video remains paused after play()');
-        }
-        if (!(await waitUntilVideoPlaying(60))) {
-            throw new Error('video stuck while starting playback');
-        }
-        if (!(await waitUntilVideoTimeAdvances(2500))) {
+        if (
+            !regionTransportSync &&
+            !videoPreRollAtStart &&
+            !(await waitUntilVideoTimeAdvances(2500))
+        ) {
             const vd =
                 typeof getVideoPlaybackEndSec === 'function'
                     ? getVideoPlaybackEndSec()
@@ -1128,6 +1180,17 @@
                 return true;
             }
             throw new Error('playback time did not advance');
+        }
+        if (
+            regionTransportSync &&
+            !videoPreRollAtStart &&
+            typeof applyVideoTimeForTransportSec === 'function' &&
+            !(
+                typeof isVideoTimeNearTransportTarget === 'function' &&
+                isVideoTimeNearTransportTarget(getTransportSec())
+            )
+        ) {
+            applyVideoTimeForTransportSec(getTransportSec(), { force: true });
         }
         pendingRestoreTime = null;
         transportPlaybackSec =
@@ -1465,20 +1528,30 @@
                 typeof isVideoParkedForTransportTail === 'function' &&
                 isVideoParkedForTransportTail();
             const vdEnd =
-                typeof getVideoPlaybackEndSec === 'function'
-                    ? getVideoPlaybackEndSec()
-                    : typeof getVideoTransportDurationSec === 'function'
-                      ? getVideoTransportDurationSec()
-                      : getDuration(videoMain);
+                typeof getVideoContentEndOnTransportSec === 'function'
+                    ? getVideoContentEndOnTransportSec()
+                    : typeof getVideoPlaybackEndSec === 'function'
+                      ? getVideoPlaybackEndSec()
+                      : typeof getVideoTransportDurationSec === 'function'
+                        ? getVideoTransportDurationSec()
+                        : getDuration(videoMain);
             const pastVideoEnd = vdEnd > 0 && t >= vdEnd - 0.02;
             const rangeLoopBlocksVideo =
                 typeof shouldApplyVideoTimeDuringRangeLoopTick === 'function' &&
                 !shouldApplyVideoTimeDuringRangeLoopTick(t);
-            const videoRolling = !videoMain.paused && !videoMain.ended && !videoMain.seeking;
+            const regionTransportSync =
+                typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+                videoRegionPlaybackRequiresTransportSync();
+            const videoRolling =
+                !regionTransportSync &&
+                !videoMain.paused &&
+                !videoMain.ended &&
+                !videoMain.seeking;
             const mayApplyVideo =
                 typeof applyVideoTimeForTransportSec === 'function' &&
                 (inTailPark ||
                     pastVideoEnd ||
+                    regionTransportSync ||
                     !videoRolling ||
                     !rangeLoopBlocksVideo);
             if (mayApplyVideo) {
@@ -1593,6 +1666,7 @@
         }
         if (typeof clearTransportTailPlayback === 'function') clearTransportTailPlayback();
         if (typeof clearVideoParkedForTail === 'function') clearVideoParkedForTail();
+        if (typeof clearVideoPreRollHold === 'function') clearVideoPreRollHold();
         if (typeof clearSeekPlaybackTrail === 'function') clearSeekPlaybackTrail();
         setPlayingUi(false);
         stopRaf();
@@ -1757,6 +1831,9 @@
         if (typeof beginVideoLoadLock === 'function') {
             beginVideoLoadLock(f && f.name ? f.name : '');
         }
+        if (typeof ensureVideoFilmstripLoadingOverlay === 'function') {
+            ensureVideoFilmstripLoadingOverlay();
+        }
         videoMain.src = urlMain;
         videoMain.load();
         if (typeof resetTransportPlaybackClock === 'function') {
@@ -1787,6 +1864,12 @@
         if (typeof resetAudioWaveformForNewVideo === 'function') {
             resetAudioWaveformForNewVideo({ skipScheduleBuild: true });
         }
+        if (typeof initVideoTrackForNewVideo === 'function') {
+            initVideoTrackForNewVideo();
+        }
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
         void refreshContainerFpsForCurrentFiles()
             .then(() => {
                 if (typeof notifyVideoAudioLoadSettledIfNoVideoAudio === 'function') {
@@ -1808,6 +1891,12 @@
                 }
                 if (typeof refreshVideoAudioLaneVisibility === 'function') {
                     refreshVideoAudioLaneVisibility();
+                }
+                if (typeof refreshVideoVizLaneVisibility === 'function') {
+                    refreshVideoVizLaneVisibility({ skipInit: true });
+                }
+                if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
+                    scheduleVideoTrackFilmstripBuild();
                 }
             })
             .catch(() => {

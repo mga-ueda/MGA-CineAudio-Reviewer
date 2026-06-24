@@ -145,6 +145,13 @@
      * モジュール: js/markers/marker-pointer-diag.js
      * 有効化の目安: T ON 時にマーカーが動かない・リージョン境界が動かない・操作帯と MARKERS が競合する。
      *
+     * --- VIDEO_REGION ---
+     * [VideoRegion] — Video 映像トラックのリージョン平行移動・再生マッピング・セッション保存/復元。
+     * モジュール: js/waveform/video-region-diag.js、js/waveform/video-viz-track.js、js/transport/transport-timeline.js
+     * 主な内容: transport/map（videoSecForTransportSec）、playback/sync（mapTransportToSegment）、
+     *           persist/save・persist/restore、regionTransportSync 判定。
+     * 有効化の目安: 平行移動後に再生が冒頭から流れる・F5 後に位置が戻る・赤線と映像がずれる。
+     *
      * --- REGION_HANDLE_HIT_DEBUG ---
      * 操作帯デバッグ描画 — リージョン（Fade/In/Out/Split/クロスフェード/Rehearsal）と
      * Musical トラック（Rehearsal 枠/文字、Tempo/Sig ドラッグ・編集）の当たり判定を色分け表示。
@@ -166,6 +173,7 @@
             REGION_BAR_JUMP: false,
             GRID_ALIGN: false,
             MARKER_POINTER: false,
+            VIDEO_REGION: false,
         },
         /** 波形 overlay — 操作帯デバッグ描画（リージョン + Musical トラック） */
         REGION_HANDLE_HIT_DEBUG: false,

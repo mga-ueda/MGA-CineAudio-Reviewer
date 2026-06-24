@@ -490,6 +490,9 @@
             );
         }
         syncMusicalTrackLanesDomVisibility();
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
         const regionDragForbidden = getMusicalGridRehearsalFillVisible();
         const lanes =
             typeof getWaveformLanesEl === 'function' ? getWaveformLanesEl() : null;

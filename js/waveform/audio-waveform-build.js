@@ -314,6 +314,10 @@
         const contentDur = getWaveformAudioDurationSec();
         const audible =
             typeof isVideoAudioAudible === 'function' ? isVideoAudioAudible() : true;
+        const timelineStartSec =
+            typeof getVideoTrackWaveformTimelineStartSec === 'function'
+                ? getVideoTrackWaveformTimelineStartSec()
+                : 0;
         const grad =
             typeof timelineWaveformFillGradient === 'function'
                 ? timelineWaveformFillGradient(ctx, hCss, 'video', audible)
@@ -324,7 +328,9 @@
                       g.addColorStop(1, 'rgba(255, 255, 255, 0.42)');
                       return g;
                   })();
-        const drawOpt = Object.assign({}, sized.drawOpt || {});
+        const drawOpt = Object.assign({}, sized.drawOpt || {}, {
+            timelineStartSec: timelineStartSec > 0 ? timelineStartSec : 0,
+        });
         const useScrubOverview =
             scrubActive &&
             waveformScrubOverviewDrawCommitted &&
@@ -383,7 +389,10 @@
     let waveformOffsetDragSegmentIndex = -1;
 
     function applyWaveformSegmentTimelineStartFromDrag(slot, segmentIndex, sec, opt) {
-        const track = { type: 'extra', slot };
+        const track =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(slot)
+                : { type: 'extra', slot };
         const dragOpt = Object.assign(
             {
                 skipPersist: true,
@@ -431,7 +440,11 @@
     }
 
     function regionGroupDragKey(slot, segmentIndex) {
-        return slot + ':' + segmentIndex;
+        const normalizedSlot =
+            typeof normalizeVideoLinkedOffsetDragSlot === 'function'
+                ? normalizeVideoLinkedOffsetDragSlot(slot)
+                : slot;
+        return normalizedSlot + ':' + segmentIndex;
     }
 
     function applyWaveformGroupSegmentTimelineStartFromDrag(slot, primaryNextSec, opt) {
@@ -452,7 +465,10 @@
                 typeof snapRegionMoveRegionInSecDetail === 'function'
             ) {
                 const primaryKey = regionGroupDragKey(slot, waveformOffsetDragSegmentIndex);
-                const primaryTrack = { type: 'extra', slot };
+                const primaryTrack =
+                    typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                        ? trackRefFromWaveformOffsetDragSlot(slot)
+                        : { type: 'extra', slot };
                 const primaryDragRegionIn =
                     waveformOffsetDragGroupStartRegionInByKey &&
                     Number.isFinite(
@@ -507,10 +523,27 @@
                 const memberSlot = members[gi].slot;
                 if (slotsDone.has(memberSlot)) continue;
                 slotsDone.add(memberSlot);
+                const memberTrack =
+                    typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                        ? trackRefFromWaveformOffsetDragSlot(memberSlot)
+                        : { type: 'extra', slot: memberSlot };
                 if (typeof refreshTrackRegionOverlayGeometry === 'function') {
-                    refreshTrackRegionOverlayGeometry({ type: 'extra', slot: memberSlot });
+                    refreshTrackRegionOverlayGeometry(memberTrack);
                 }
                 if (
+                    typeof isVideoLinkedOffsetDragSlot === 'function' &&
+                    isVideoLinkedOffsetDragSlot(memberSlot)
+                ) {
+                    if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
+                        refreshVideoAudioLaneRegionOverlayGeometry(memberTrack);
+                    }
+                    if (typeof drawAudioWaveformCanvas === 'function') {
+                        drawAudioWaveformCanvas();
+                    }
+                    if (typeof notifyMasterTransportDurationChanged === 'function') {
+                        notifyMasterTransportDurationChanged();
+                    }
+                } else if (
                     typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
                     shouldRedrawWaveformDuringOffsetDrag(memberSlot) &&
                     typeof redrawAfterRegionChange === 'function'
@@ -540,7 +573,10 @@
             Number.isFinite(waveformOffsetDragGroupStartTimelineByKey[primaryKey])
                 ? waveformOffsetDragGroupStartTimelineByKey[primaryKey]
                 : waveformOffsetDragStartTimelineSec;
-        const primaryTrack = { type: 'extra', slot };
+        const primaryTrack =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(slot)
+                : { type: 'extra', slot };
         const primaryDragRegionIn =
             waveformOffsetDragGroupStartRegionInByKey &&
             Number.isFinite(waveformOffsetDragGroupStartRegionInByKey[primaryKey])
@@ -702,7 +738,10 @@
                 ? waveformOffsetDragStartPointerRatio * waveformOffsetDragStartScrubW
                 : NaN;
         if (waveformOffsetDragSegmentIndex >= 0) {
-            const track = { type: 'extra', slot };
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(slot)
+                    : { type: 'extra', slot };
             waveformOffsetDragGroupMembers =
                 typeof collectRegionGroupMembers === 'function'
                     ? collectRegionGroupMembers(track, waveformOffsetDragSegmentIndex)
@@ -726,7 +765,9 @@
                     waveformOffsetDragGroupStartTimelineByKey[key];
                 if (typeof getSegmentRegionTimelineInterval === 'function') {
                     const spanIv = getSegmentRegionTimelineInterval(
-                        { type: 'extra', slot: m.slot },
+                        typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                            ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                            : { type: 'extra', slot: m.slot },
                         m.segmentIndex,
                     );
                     waveformOffsetDragGroupStartRegionSpanByKey[key] = Math.max(
@@ -826,15 +867,25 @@
             }
         }
         if (waveformOffsetDragSegmentIndex >= 0) {
+            const laneLabel =
+                typeof isVideoWaveformOffsetDragSlot === 'function' &&
+                isVideoWaveformOffsetDragSlot(slot)
+                    ? 'Video'
+                    : 'Ex ' + (slot + 1);
             writeLog(
                 'Waveform: drag region ' +
                     (waveformOffsetDragSegmentIndex + 1) +
-                    ' start (Ex ' +
-                    (slot + 1) +
+                    ' start (' +
+                    laneLabel +
                     ')',
             );
         } else {
-            writeLog('Waveform: drag track offset start (Ex ' + (slot + 1) + ')');
+            const laneLabel =
+                typeof isVideoWaveformOffsetDragSlot === 'function' &&
+                isVideoWaveformOffsetDragSlot(slot)
+                    ? 'Video'
+                    : 'Ex ' + (slot + 1);
+            writeLog('Waveform: drag track offset start (' + laneLabel + ')');
         }
 
         waveformOffsetDragDocMove = (e) => {
@@ -935,9 +986,14 @@
                     ? formatTimecodeForTransport(t)
                     : t.toFixed(2) + ' s';
             if (releasedSegmentIndex >= 0) {
+                const laneLabel =
+                    typeof isVideoLinkedOffsetDragSlot === 'function' &&
+                    isVideoLinkedOffsetDragSlot(slot)
+                        ? 'Video'
+                        : 'Ex ' + (slot + 1);
                 writeLog(
-                    'Waveform: Ex ' +
-                        (slot + 1) +
+                    'Waveform: ' +
+                        laneLabel +
                         ' region ' +
                         (releasedSegmentIndex + 1) +
                         ' at ' +

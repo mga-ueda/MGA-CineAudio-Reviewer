@@ -56,6 +56,15 @@
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
             const slot = m.slot;
+            if (
+                typeof isVideoLinkedOffsetDragSlot === 'function' &&
+                isVideoLinkedOffsetDragSlot(slot)
+            ) {
+                if (typeof finalizeVideoLinkedOffsetDragPresentation === 'function') {
+                    finalizeVideoLinkedOffsetDragPresentation();
+                }
+                continue;
+            }
             if (!(slot >= 0)) continue;
             slots.add(slot);
             if (!segmentsBySlot.has(slot)) segmentsBySlot.set(slot, []);
@@ -781,6 +790,18 @@
                 );
                 defer = !!hit;
             }
+            if (
+                !defer &&
+                typeof isPointerOverVideoVizLane === 'function' &&
+                isPointerOverVideoVizLane(clientY)
+            ) {
+                const hit = resolveRegionResizeHandleAtPointer(
+                    getVideoTrackRef(),
+                    clientX,
+                    clientY,
+                );
+                defer = !!hit;
+            }
         }
         syncRehearsalBoundaryDeferToRegionHandles(defer);
     }
@@ -835,6 +856,31 @@
                 bestRank = rank;
                 bestDist = dist;
                 bestHit = Object.assign({ track }, hit);
+            }
+        }
+        if (
+            !bestHit &&
+            typeof isPointerOverVideoVizLane === 'function' &&
+            isPointerOverVideoVizLane(ev.clientY) &&
+            videoVizLane &&
+            !videoVizLane.hidden
+        ) {
+            const laneRect = videoVizLane.getBoundingClientRect();
+            if (
+                ev.clientY >= laneRect.top &&
+                ev.clientY <= laneRect.bottom &&
+                ev.clientX >= laneRect.left &&
+                ev.clientX <= laneRect.right
+            ) {
+                const track = getVideoTrackRef();
+                const hit = resolveRegionResizeHandleAtPointer(
+                    track,
+                    ev.clientX,
+                    ev.clientY,
+                );
+                if (hit) {
+                    bestHit = Object.assign({ track }, hit);
+                }
             }
         }
         if (!bestHit) return false;
@@ -1230,6 +1276,7 @@
             isParallelMove &&
             inPadForApply <= 0.00001 &&
             getRawRegionTimelineOutSec(track, segmentIndex) == null &&
+            isExtraTrackRef(track) &&
             typeof setExtraTrackTimelineStartSec === 'function'
         ) {
             const oldTrackT0 = t0;
@@ -1260,11 +1307,21 @@
             shiftSegmentRegionTimelineOutByDelta(track, segmentIndex, delta);
         }
         if (geometryOnly) {
-            if (typeof bumpRegionPersistEpoch === 'function') {
+            if (isExtraTrackRef(track) && typeof bumpRegionPersistEpoch === 'function') {
                 bumpRegionPersistEpoch(track.slot);
             }
             refreshTrackRegionOverlayGeometry(track);
-            if (
+            if (isVideoTrackRef(track)) {
+                if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
+                    refreshVideoAudioLaneRegionOverlayGeometry(track);
+                }
+                if (typeof drawAudioWaveformCanvas === 'function') {
+                    drawAudioWaveformCanvas();
+                }
+                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
+            } else if (
                 typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
                 shouldRedrawWaveformDuringOffsetDrag(track.slot)
             ) {
@@ -1304,8 +1361,18 @@
                     applyReviewMixCrossfadeGainsIfNeeded();
                 }
             }
-        } else if (typeof syncExtraAudioToTransport === 'function') {
+        } else if (
+            !isVideoTrackRef(track) &&
+            typeof syncExtraAudioToTransport === 'function'
+        ) {
             syncExtraAudioToTransport({ force: !!(opt && opt.forceAudio) });
+        } else if (isVideoTrackRef(track)) {
+            if (typeof applyVideoTimeForTransportSec === 'function' && typeof getTransportSec === 'function') {
+                applyVideoTimeForTransportSec(getTransportSec(), { force: true });
+            }
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
         }
     }
 
@@ -1319,7 +1386,10 @@
             members.length > 1 && !(opt && opt.geometryOnly);
         for (let i = 0; i < members.length; i++) {
             const m = members[i];
-            const track = { type: 'extra', slot: m.slot };
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                    : { type: 'extra', slot: m.slot };
             const key = regionGroupMemberKey(m.slot, m.segmentIndex);
             const dragStartRegionIn = useCurrentBase
                 ? getSegmentRegionTimelineIn(track, m.segmentIndex)
@@ -1509,7 +1579,17 @@
             waveformOffsetDragPreviewHeadSec = head;
         }
         refreshTrackRegionOverlayGeometry(track);
-        if (
+        if (isVideoTrackRef(track)) {
+            if (typeof refreshVideoAudioLaneRegionOverlayGeometry === 'function') {
+                refreshVideoAudioLaneRegionOverlayGeometry(track);
+            }
+            if (typeof drawAudioWaveformCanvas === 'function') {
+                drawAudioWaveformCanvas();
+            }
+            if (typeof notifyMasterTransportDurationChanged === 'function') {
+                notifyMasterTransportDurationChanged();
+            }
+        } else if (
             typeof shouldRedrawWaveformDuringOffsetDrag === 'function' &&
             shouldRedrawWaveformDuringOffsetDrag(track.slot) &&
             typeof redrawAfterRegionChange === 'function'
@@ -1523,7 +1603,7 @@
     }
 
     function setSegmentTimelineStartSec(track, segmentIndex, sec, opt) {
-        if (!isExtraTrackRef(track)) return;
+        if (!isPlaybackRegionTrackRef(track)) return;
         if (!(opt && opt.skipUndo) && !regionUndoPaused) {
             requestRegionUndoCapture();
         }
@@ -1792,11 +1872,32 @@
         if (typeof findPlaybackRegionElAtPointer === 'function') {
             regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
             if (regionEl) {
+                const videoLane = regionEl.closest('.audio-waveform-lane--video-viz');
                 const lane = regionEl.closest('.audio-waveform-lane--extra');
-                const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-                if (m) {
-                    slot = parseInt(m[1], 10);
+                if (videoLane) {
+                    slot =
+                        typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                            ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                            : -2;
                     segmentIndex = Number(regionEl.dataset.segmentIndex);
+                } else if (
+                    regionEl.classList.contains(
+                        'audio-waveform-lane__playback-region--video-audio-mirror',
+                    ) ||
+                    (regionEl.closest('.audio-waveform-lane--video') &&
+                        !regionEl.closest('.audio-waveform-lane--video-viz'))
+                ) {
+                    slot =
+                        typeof VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                            ? VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT
+                            : -3;
+                    segmentIndex = Number(regionEl.dataset.segmentIndex);
+                } else {
+                    const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                    if (m) {
+                        slot = parseInt(m[1], 10);
+                        segmentIndex = Number(regionEl.dataset.segmentIndex);
+                    }
                 }
             }
         }
@@ -1808,22 +1909,65 @@
                 }
                 regionEl = hit.closest('.audio-waveform-lane__playback-region');
                 if (regionEl) {
+                    const videoLane = regionEl.closest('.audio-waveform-lane--video-viz');
                     const lane = regionEl.closest('.audio-waveform-lane--extra');
-                    const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
-                    if (m) {
-                        slot = parseInt(m[1], 10);
+                    if (videoLane) {
+                        slot =
+                            typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                                ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                                : -2;
                         segmentIndex = Number(regionEl.dataset.segmentIndex);
+                    } else if (
+                        regionEl.classList.contains(
+                            'audio-waveform-lane__playback-region--video-audio-mirror',
+                        ) ||
+                        (regionEl.closest('.audio-waveform-lane--video') &&
+                            !regionEl.closest('.audio-waveform-lane--video-viz'))
+                    ) {
+                        slot =
+                            typeof VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                                ? VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT
+                                : -3;
+                        segmentIndex = Number(regionEl.dataset.segmentIndex);
+                    } else {
+                        const m = lane && lane.id ? /^extraAudioLane(\d+)$/.exec(lane.id) : null;
+                        if (m) {
+                            slot = parseInt(m[1], 10);
+                            segmentIndex = Number(regionEl.dataset.segmentIndex);
+                        }
                     }
                 }
             }
         }
 
+        if (slot < 0 && typeof isPointerOverVideoAudioLane === 'function') {
+            if (isPointerOverVideoAudioLane(clientY)) {
+                slot =
+                    typeof VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                        ? VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT
+                        : -3;
+            }
+        }
+        if (slot < 0 && typeof isPointerOverVideoVizLane === 'function') {
+            if (isPointerOverVideoVizLane(clientY)) {
+                slot =
+                    typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                        ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                        : -2;
+            }
+        }
         if (slot < 0 && typeof waveformExtraLaneSlotFromClientY === 'function') {
             slot = waveformExtraLaneSlotFromClientY(clientY);
         }
         if (slot < 0) return null;
 
-        const track = { type: 'extra', slot };
+        const track =
+            slot === -2 ||
+            slot === -3 ||
+            (typeof isVideoLinkedOffsetDragSlot === 'function' &&
+                isVideoLinkedOffsetDragSlot(slot))
+                ? getVideoTrackRef()
+                : { type: 'extra', slot };
         const count = getSegmentCount(track);
         if (count < 1) return null;
 

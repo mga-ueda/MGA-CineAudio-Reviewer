@@ -113,6 +113,12 @@
                     <div class="video-frame" id="frameMain">
                         <p class="file-drop-empty-hint" id="videoDropEmptyHint">MEDIA OFFLINE</p>
                         <video id="videoMain" playsinline preload="auto"></video>
+                        <div class="video-frame__filmstrip-loading" id="videoFilmstripLoading" hidden aria-live="polite">
+                            <span class="audio-waveform-lane__loading-box">
+                                <span class="audio-waveform-lane__loading-label">Generating thumbnails</span>
+                                <span class="audio-waveform-lane__loading-ellipsis" aria-hidden="true"></span>
+                            </span>
+                        </div>
                         <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
                         <div class="marker-comment-overlay marker-comment-overlay--video" id="markerCommentOverlayRange" hidden aria-hidden="true"></div>
                     </div>
@@ -224,6 +230,9 @@
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--musical" id="musicalMeasureMeta">
                     <span class="audio-waveform-lane-meta__title">Measure</span>
                 </div>
+                <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video-viz" id="videoVizMeta" hidden>
+                    <span class="audio-waveform-lane-meta__title">Video</span>
+                </div>
                 <div class="audio-waveform-lane-meta audio-waveform-lane-meta--video" id="audioWaveformPanel">
                     <div class="audio-waveform-lane-meta__row">
                         <span class="audio-waveform-lane-meta__title" id="audioWaveformTitle">Video Audio</span>
@@ -289,6 +298,12 @@
                         <div class="musical-track-lane__segments musical-track-lane__segments--measure" id="musicalMeasureSegments" aria-hidden="true"></div>
                     </div>
                 </div>
+                <div class="audio-waveform-lane audio-waveform-lane--video-viz" id="videoVizLane" hidden>
+                    <div class="audio-waveform-lane__track video-viz-lane__track" id="videoVizTrack">
+                        <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
+                    </div>
+                    <div class="audio-waveform-lane__playback-regions" data-track="video" hidden aria-hidden="true"></div>
+                </div>
                 <div class="audio-waveform-lane audio-waveform-lane--video" id="audioWaveformLaneVideo">
                     <div class="audio-waveform-lane__track" id="audioWaveformTrack">
                         <div class="audio-waveform-lane__track-bg" aria-hidden="true"></div>
@@ -299,6 +314,7 @@
                     <div class="audio-waveform-lane__loading" id="audioWaveformTrackLoading" hidden aria-live="polite">
                         <span class="audio-waveform-lane__loading-box">Now Loading</span>
                     </div>
+                    <div class="audio-waveform-lane__playback-regions" data-track="video" hidden aria-hidden="true"></div>
                 </div>
                 <div id="extraLaneTracksMount"></div>
                 <div
@@ -652,6 +668,7 @@
     <script src="js/waveform/region/waveform-region-segment-copy.js"></script>
     <script src="js/waveform/region/waveform-region-core-shared.js"></script>
     <script src="js/waveform/region/waveform-region-core-undo.js"></script>
+    <script src="js/waveform/video-viz-track.js"></script>
     <script src="js/waveform/region/waveform-region-core-timeline.js"></script>
     <script src="js/waveform/region/waveform-region-core-geometry.js"></script>
     <script src="js/waveform/region/waveform-region-selection.js"></script>
@@ -677,6 +694,7 @@
     <script src="js/waveform/region/waveform-region-io-nav.js"></script>
     <script src="js/waveform/region-restore-diag.js"></script>
     <script src="js/waveform/region-snap-diag.js"></script>
+    <script src="js/waveform/video-region-diag.js"></script>
     <script src="js/export/video-analyzer-diag.js"></script>
     <script src="js/waveform/region/waveform-region-swap-anim.js"></script>
     <script src="js/waveform/region/waveform-region-ui.js"></script>

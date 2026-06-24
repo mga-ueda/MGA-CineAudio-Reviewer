@@ -17,6 +17,8 @@
     let transportSessionPlaying = false;
     let transportTailPlaybackActive = false;
     let videoParkedForTransportTail = false;
+    /** Video リージョン In より前 — 暗転中は映像要素を pause して毎 tick シークしない */
+    let videoPreRollHoldActive = false;
     /** 映像 currentTime の自動補正。false が既定（Playback Drift は表示のみ、補正は行わない）。 */
     const VIDEO_DRIFT_AUTO_CORRECT_ENABLED = false;
     /** 通常再生中に currentTime を直す閾値（これ未満は映像の自然再生に任せる）。 */
@@ -362,9 +364,18 @@
         return meta;
     }
 
+    /** タイムライン上の動画終端（リージョン平行移動を反映）。 */
+    function getVideoContentEndOnTransportSec() {
+        if (typeof getVideoTrackTransportEndSec === 'function') {
+            const end = getVideoTrackTransportEndSec();
+            if (end > 0) return end;
+        }
+        return getVideoPlaybackEndSec();
+    }
+
     function hasMasterTransportTailBeyondVideo() {
         const master = getMasterTransportDurationSec();
-        const vd = getVideoPlaybackEndSec();
+        const vd = getVideoContentEndOnTransportSec();
         const eps = masterTransportTailEpsilonSec();
         return master > vd + eps;
     }
@@ -394,7 +405,7 @@
 
     function shouldStartMasterTransportTailPlayback(t) {
         if (!hasMasterTransportTailBeyondVideo()) return false;
-        const vd = getVideoPlaybackEndSec();
+        const vd = getVideoContentEndOnTransportSec();
         const master = getMasterTransportDurationSec();
         const eps = masterTransportTailEpsilonSec();
         let x = Number(t);
@@ -414,7 +425,7 @@
             );
         }
         if (!hasMasterTransportTailBeyondVideo()) return false;
-        const vd = getVideoPlaybackEndSec();
+        const vd = getVideoContentEndOnTransportSec();
         const eps = masterTransportTailEpsilonSec();
         const barT =
             typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
@@ -463,7 +474,7 @@
     /** トランスポートが動画終端（終了フレーム）を過ぎたら映像を非表示。 */
     function shouldBlackoutVideoForTransport(transportSec) {
         if (typeof videoReady === 'function' && !videoReady()) return false;
-        const vd = getVideoPlaybackEndSec();
+        const vd = getVideoContentEndOnTransportSec();
         if (!(vd > 0)) return false;
         let t = Number(transportSec);
         if (!Number.isFinite(t)) return false;
@@ -475,6 +486,12 @@
     function shouldBlackoutVideoPicture(transportSec) {
         if (typeof videoReady === 'function' && !videoReady()) return false;
         if (transportTailPlaybackActive || videoParkedForTransportTail) return true;
+        if (
+            typeof isTransportBeforeVideoRegionIn === 'function' &&
+            isTransportBeforeVideoRegionIn(transportSec)
+        ) {
+            return true;
+        }
         return shouldBlackoutVideoForTransport(transportSec);
     }
 
@@ -572,7 +589,7 @@
         if (!hasMasterTransportTailBeyondVideo()) return false;
         transportTailPlaybackActive = true;
         if (typeof pendingRestoreTime !== 'undefined') pendingRestoreTime = null;
-        const vd = getVideoPlaybackEndSec();
+        const vd = getVideoContentEndOnTransportSec();
         let tailT =
             typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
         if (typeof handoffReviewMixToTransportTail === 'function') {
@@ -668,6 +685,10 @@
         let m = 0;
         const vd = getVideoTransportDurationSec();
         if (vd > 0) m = vd;
+        if (typeof getVideoTrackTimelineEndSec === 'function') {
+            const vet = getVideoTrackTimelineEndSec();
+            if (vet > m) m = vet;
+        }
         const extraCount = getExtraTrackCount();
         for (let i = 0; i < extraCount; i++) {
             const ed = getExtraTrackDurationSec(i);
@@ -696,7 +717,25 @@
     /** トランスポート位置に対応する映像 currentTime。 */
     function videoSecForTransportSec(audioSec) {
         const x = clampTransportSec(audioSec);
-        const vd = getVideoPlaybackEndSec();
+        if (typeof videoSecFromVideoTrackRegions === 'function') {
+            const mapped = videoSecFromVideoTrackRegions(x);
+            if (Number.isFinite(mapped)) {
+                const vd = getVideoTransportDurationSec();
+                if (vd > 0) {
+                    return Math.max(0, Math.min(mapped, Math.max(0, vd - masterFrameSec)));
+                }
+                return Math.max(0, mapped);
+            }
+            const track = typeof getVideoTrackRef === 'function' ? getVideoTrackRef() : null;
+            if (
+                track &&
+                typeof isTrackRegionActive === 'function' &&
+                isTrackRegionActive(track)
+            ) {
+                return 0;
+            }
+        }
+        const vd = getVideoContentEndOnTransportSec();
         if (!vd) return 0;
         if (x >= vd - 0.0005) return Math.max(0, vd - masterFrameSec);
         return Math.max(0, Math.min(x, Math.max(0, vd - masterFrameSec)));
@@ -714,15 +753,28 @@
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
 
+    function clearVideoPreRollHold() {
+        videoPreRollHoldActive = false;
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
+    }
+
+    window.clearVideoPreRollHold = clearVideoPreRollHold;
+
     function isVideoParkedForTransportTail() {
         return videoParkedForTransportTail;
     }
 
     function parkVideoAtTransportTail() {
         if (!videoMain || !videoReady()) return;
-        const vd = getVideoPlaybackEndSec();
-        if (!vd) return;
-        const park = Math.max(0, vd - masterFrameSec);
+        const transportEnd = getVideoContentEndOnTransportSec();
+        if (!(transportEnd > 0)) return;
+        let park = Math.max(0, transportEnd - masterFrameSec);
+        if (typeof videoSecForTransportSec === 'function') {
+            const mapped = videoSecForTransportSec(Math.max(0, transportEnd - masterFrameSec));
+            if (Number.isFinite(mapped)) {
+                park = mapped;
+            }
+        }
         const cur = videoMain.currentTime || 0;
         if (videoParkedForTransportTail && Math.abs(cur - park) < 0.03) return;
         if (Math.abs(cur - park) > 0.02 || !videoMain.ended) {
@@ -738,8 +790,8 @@
         if (!videoReady()) return false;
         const force = !!(opt && opt.force);
         const x = clampTransportSec(audioSec);
-        const vd = getVideoPlaybackEndSec();
-        if (vd > 0 && x >= vd - 0.0005) {
+        const effectiveEnd = getVideoContentEndOnTransportSec();
+        if (effectiveEnd > 0 && x >= effectiveEnd - 0.0005) {
             parkVideoAtTransportTail();
             return false;
         }
@@ -752,8 +804,12 @@
         const drift = Math.abs(cur - target);
         const playing =
             typeof isTransportPlaying === 'function' && isTransportPlaying();
+        const regionTransportSync =
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync();
         const steadyNativePlayback =
             !force &&
+            !regionTransportSync &&
             playing &&
             !videoMain.seeking &&
             !videoMain.paused &&
@@ -776,26 +832,88 @@
             }
             return false;
         }
+        const beforeRegionIn =
+            regionTransportSync &&
+            typeof isTransportBeforeVideoRegionIn === 'function' &&
+            isTransportBeforeVideoRegionIn(x);
+        const oneToOneAfterIn =
+            regionTransportSync &&
+            typeof videoRegionMappingIsOneToOneAfterIn === 'function' &&
+            videoRegionMappingIsOneToOneAfterIn();
+
         if (playing) {
             const signed = sampleVideoDriftForPlayback(x, { force: !!force });
             if (signed != null) {
                 refreshVideoDriftMonitorFromSample(x, signed);
             }
         }
-        const needs =
-            force ||
-            videoMain.ended ||
-            !Number.isFinite(cur) ||
-            (VIDEO_DRIFT_AUTO_CORRECT_ENABLED && drift > 0.001);
+
+        let needs = false;
+        let justExitedPreRoll = false;
+        if (beforeRegionIn) {
+            videoPreRollHoldActive = true;
+            if (playing && !videoMain.paused) {
+                try {
+                    videoMain.pause();
+                } catch (_) {}
+            }
+            needs =
+                force ||
+                videoMain.ended ||
+                !Number.isFinite(cur) ||
+                drift > 0.02;
+        } else {
+            justExitedPreRoll = videoPreRollHoldActive;
+            if (videoPreRollHoldActive) {
+                videoPreRollHoldActive = false;
+            }
+            if (regionTransportSync && oneToOneAfterIn && playing && !force) {
+                needs =
+                    justExitedPreRoll ||
+                    videoMain.ended ||
+                    !Number.isFinite(cur) ||
+                    drift > VIDEO_STEADY_FOLLOW_DRIFT_SEC;
+            } else {
+                needs =
+                    force ||
+                    justExitedPreRoll ||
+                    videoMain.ended ||
+                    !Number.isFinite(cur) ||
+                    (regionTransportSync && drift > 0.03) ||
+                    (VIDEO_DRIFT_AUTO_CORRECT_ENABLED && drift > 0.001);
+            }
+        }
+
         if (needs) {
             try {
                 videoMain.currentTime = target;
             } catch (_) {}
         }
-        if (playing && videoMain.paused && !videoMain.ended) {
-            if (target > 0.001) {
+        if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+            refreshVideoPastEndBlackoutUi();
+        }
+        if (typeof window.videoRegionDiagLogTransportMap === 'function') {
+            window.videoRegionDiagLogTransportMap(x, target, {
+                force,
+                regionTransportSync,
+                beforeRegionIn,
+                oneToOneAfterIn,
+                preRollHold: videoPreRollHoldActive,
+                justExitedPreRoll,
+                playing,
+                drift,
+                applied: needs,
+            });
+        }
+        if (playing && !beforeRegionIn && videoMain.paused && !videoMain.ended) {
+            const startPlay = () => {
                 const p = videoMain.play();
                 if (p && typeof p.catch === 'function') p.catch(() => {});
+            };
+            if (needs && videoMain.seeking) {
+                videoMain.addEventListener('seeked', startPlay, { once: true });
+            } else {
+                startPlay();
             }
         }
         return needs;
@@ -923,7 +1041,7 @@
         transportPlaybackSec = x;
         transportPlaybackLastTs = performance.now();
         if (!scrubbing && hasMasterTransportTailBeyondVideo()) {
-            const vd = getVideoPlaybackEndSec();
+            const vd = getVideoContentEndOnTransportSec();
             const eps = masterTransportTailEpsilonSec();
             const playing =
                 typeof isTransportPlaying === 'function' && isTransportPlaying();
@@ -942,6 +1060,7 @@
         if (typeof setTransportSec === 'function') setTransportSec(x);
         /* 動画終端以降へシークしても映像はパーク位置のまま（上記仕様コメント参照）。 */
         if (!keyboardLite) {
+            if (typeof clearVideoPreRollHold === 'function') clearVideoPreRollHold();
             const videoTimeApplied = applyVideoTimeForTransportSec(x, { force: true });
             if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
             if (typeof updateTimecodeOverlay === 'function') updateTimecodeOverlay();
@@ -1042,6 +1161,7 @@
         transportPlaybackLastTs = 0;
         clearTransportTailPlayback();
         clearVideoParkedForTail();
+        clearVideoPreRollHold();
     }
 
     /** 一時停止時: 壁時計外挿を止め、シークバー位置で凍結 */
@@ -1214,10 +1334,8 @@
     }
 
     function getVideoTimelineEndSecForWaveform() {
-        if (typeof getVideoPlaybackEndSec === 'function') {
-            const end = getVideoPlaybackEndSec();
-            if (end > 0) return end;
-        }
+        const end = getVideoContentEndOnTransportSec();
+        if (end > 0) return end;
         return getVideoTransportDurationSec();
     }
 

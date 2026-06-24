@@ -2,7 +2,7 @@
  * waveform-region-segment-state.js — セグメント状態の適用・クリア
  */
     function applySegmentsToState(track, segments, opt) {
-        if (!isExtraTrackRef(track)) return false;
+        if (!isPlaybackRegionTrackRef(track)) return false;
         if (!segments.length) return false;
         if (!(opt && opt.skipUndo) && !regionUndoPaused) {
             requestRegionUndoCapture();
@@ -13,7 +13,9 @@
         state.segments = segments;
         state.active = true;
         syncTrackRegionHeadStateFromFirstSegment(track);
-        bumpRegionPersistEpoch(track.slot);
+        if (isExtraTrackRef(track)) {
+            bumpRegionPersistEpoch(track.slot);
+        }
         if (
             !(typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress()) &&
             !(opt && opt.keepPendingRestore)
@@ -50,18 +52,32 @@
             redrawOpt.affectedSegmentIndices = opt.affectedSegmentIndices;
         }
         if (!deferRedraw) {
-            redrawAfterRegionChange(track.slot, redrawOpt);
+            if (isVideoTrackRef(track)) {
+                if (typeof refreshVideoVizRegionThumbnails === 'function') {
+                    refreshVideoVizRegionThumbnails();
+                }
+                if (typeof notifyMasterTransportDurationChanged === 'function') {
+                    notifyMasterTransportDurationChanged();
+                }
+            } else {
+                redrawAfterRegionChange(track.slot, redrawOpt);
+            }
         }
 
         if (!(opt && opt.silent)) {
-            writeLog(
-                'Ex ' +
-                    (track.slot + 1) +
-                    ' split: ' +
-                    segments.length +
-                    ' region(s)',
-            );
-            flashSeekHint('Ex ' + (track.slot + 1), segments.length + ' regions', 'notice');
+            if (isVideoTrackRef(track)) {
+                writeLog('Video split: ' + segments.length + ' region(s)');
+                flashSeekHint('Video', segments.length + ' regions', 'notice');
+            } else {
+                writeLog(
+                    'Ex ' +
+                        (track.slot + 1) +
+                        ' split: ' +
+                        segments.length +
+                        ' region(s)',
+                );
+                flashSeekHint('Ex ' + (track.slot + 1), segments.length + ' regions', 'notice');
+            }
         }
         if (
             !(opt && opt.skipPersist) &&
@@ -74,6 +90,7 @@
             !geometryOnly &&
             !deferRedraw &&
             !(opt && opt.skipSyncTransport) &&
+            isExtraTrackRef(track) &&
             typeof syncExtraAudioToTransport === 'function'
         ) {
             syncExtraAudioToTransport({ force: true });
@@ -82,7 +99,7 @@
     }
 
     function setTrackSegments(track, segments, opt) {
-        if (!isExtraTrackRef(track)) return false;
+        if (!isPlaybackRegionTrackRef(track)) return false;
         const collapsed = Array.isArray(segments) ? segments : [];
         const normalized = [];
         for (const seg of collapsed) {

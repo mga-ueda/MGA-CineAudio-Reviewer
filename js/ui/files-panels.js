@@ -196,6 +196,9 @@
         nameMain.textContent = 'Not Loaded';
         setLoaded(panelMain, false);
         resetVideoFrameAspectRatio();
+        if (typeof clearVideoTrackForMediaRevoke === 'function') {
+            clearVideoTrackForMediaRevoke();
+        }
     }
 
     /** Unload video only; markers and waveform lanes (incl. extra tracks) stay. */
@@ -224,13 +227,13 @@
 
     function revokeAll() {
         revokeVideoMediaCore();
+        if (typeof dismissVideoAudioLane === 'function') {
+            dismissVideoAudioLane();
+        }
         if (typeof clearMarkersForRevoke === 'function') clearMarkersForRevoke();
         if (typeof clearAudioWaveform === 'function') clearAudioWaveform();
         if (typeof clearAllExtraTracks === 'function') clearAllExtraTracks();
         if (typeof resetVideoMix === 'function') resetVideoMix();
-        if (typeof dismissVideoAudioLane === 'function') {
-            dismissVideoAudioLane();
-        }
         if (typeof refreshExportMediaOptionsUi === 'function') {
             refreshExportMediaOptionsUi();
         }
@@ -409,6 +412,12 @@
             if (typeof updateControlsEnabled === 'function') updateControlsEnabled();
             if (typeof refreshExportMediaOptionsUi === 'function') {
                 refreshExportMediaOptionsUi();
+            }
+            if (typeof refreshVideoVizLaneVisibility === 'function') {
+                refreshVideoVizLaneVisibility();
+            }
+            if (typeof refreshWaveformCompositeLaneLayout === 'function') {
+                refreshWaveformCompositeLaneLayout();
             }
             updateSessionAllClearButton();
         });

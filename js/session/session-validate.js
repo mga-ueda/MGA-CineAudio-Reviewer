@@ -138,6 +138,19 @@
                 }
             }
         }
+        if ('video' in playbackRegion) {
+            const video = playbackRegion.video;
+            if (video == null || typeof video !== 'object') {
+                return pathPrefix + '.video (not an object)';
+            }
+            if ('segments' in video) {
+                const segErr = validateRegionSegmentList(
+                    video.segments,
+                    pathPrefix + '.video.segments',
+                );
+                if (segErr) return segErr;
+            }
+        }
         return null;
     }
 

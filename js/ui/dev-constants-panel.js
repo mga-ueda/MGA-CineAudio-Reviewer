@@ -16,6 +16,7 @@
         'REGION_BAR_JUMP',
         'GRID_ALIGN',
         'MARKER_POINTER',
+        'VIDEO_REGION',
     ];
 
     const DEBUG_LOG_META = {
@@ -87,6 +88,12 @@
             tag: 'MrkPtr',
             desc:
                 '波形 capture — リージョン In/Out/Fade vs MARKERS ドラッグ vs シークの採否、resolve 成否、ドラッグ適用秒。T ON で動かない調査用。',
+        },
+        VIDEO_REGION: {
+            label: 'Video 映像リージョン',
+            tag: '[VideoRegion]',
+            desc:
+                'Video トラック平行移動・transport→映像秒マッピング・セッション保存/復元。冒頭から再生・F5 後に位置が戻る調査用。',
         },
     };
 

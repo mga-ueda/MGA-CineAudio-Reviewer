@@ -86,3 +86,6 @@
     const musicalTempoSegments = document.getElementById('musicalTempoSegments');
     const musicalSignatureSegments = document.getElementById('musicalSignatureSegments');
     const musicalMeasureSegments = document.getElementById('musicalMeasureSegments');
+    const videoVizMeta = document.getElementById('videoVizMeta');
+    const videoVizLane = document.getElementById('videoVizLane');
+    const videoVizTrack = document.getElementById('videoVizTrack');

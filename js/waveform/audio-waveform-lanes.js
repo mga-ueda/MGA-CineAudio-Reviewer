@@ -244,7 +244,7 @@
     }
 
     function countVisibleWaveformLanes() {
-        const metas = [audioWaveformPanel];
+        const metas = [videoVizMeta, audioWaveformPanel];
         for (let i = 0; i < extraTrackSlotCount(); i++) {
             metas.push(document.getElementById('extraAudioMeta' + i));
         }
@@ -360,6 +360,9 @@
         if (typeof refreshWaveformCompositeLaneLayout === 'function') {
             refreshWaveformCompositeLaneLayout();
         }
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
     }
 
     /**
@@ -400,6 +403,11 @@
             document.getElementById('musicalMeasureMeta'),
             document.getElementById('musicalMeasureLane'),
             showMusical,
+        );
+        assignRow(
+            videoVizMeta,
+            videoVizLane,
+            !!(videoVizMeta && !videoVizMeta.hidden),
         );
         assignRow(
             audioWaveformPanel,
@@ -483,6 +491,23 @@
     function getWaveformLaneHeightCss() {
         return Math.max(1, Math.round(WAVEFORM_LANE_HEIGHT_BASE_PX * waveformLaneHeightScale));
     }
+
+    function getMusicalLaneHeightCss() {
+        const composite =
+            typeof audioWaveformComposite !== 'undefined' && audioWaveformComposite
+                ? audioWaveformComposite
+                : document.getElementById('audioWaveformComposite');
+        if (composite) {
+            const raw = getComputedStyle(composite).getPropertyValue('--musical-lane-h').trim();
+            if (raw.endsWith('px')) {
+                const n = parseFloat(raw);
+                if (n > 0) return n;
+            }
+        }
+        return 20;
+    }
+
+    window.getMusicalLaneHeightCss = getMusicalLaneHeightCss;
 
     function resolveWaveformTrackHeightCss() {
         return getWaveformLaneHeightCss();
@@ -571,17 +596,27 @@
             syncWaveformLanesViewportWidthCss();
         }
         ensureLaneScrubHitLayers();
-        const metas = [audioWaveformPanel];
+        const metas = [videoVizMeta, audioWaveformPanel];
         for (let i = 0; i < extraTrackSlotCount(); i++) {
             metas.push(document.getElementById('extraAudioMeta' + i));
         }
-        let count = 0;
+        let videoVizCount = 0;
+        let waveCount = 0;
         for (let i = 0; i < metas.length; i++) {
-            if (metas[i] && !metas[i].hidden) count += 1;
+            const meta = metas[i];
+            if (!meta || meta.hidden) continue;
+            if (meta === videoVizMeta) {
+                if (typeof isVideoVizLaneShown === 'function' && !isVideoVizLaneShown()) continue;
+                videoVizCount += 1;
+            } else {
+                waveCount += 1;
+            }
         }
-        const laneCount = Math.max(1, count);
+        waveCount = Math.max(1, waveCount);
+        const laneCount = videoVizCount + waveCount;
         lastWaveformCompositeLaneCount = laneCount;
-        composite.style.setProperty('--wave-lane-count', String(laneCount));
+        composite.style.setProperty('--video-viz-lane-count', String(videoVizCount));
+        composite.style.setProperty('--wave-lane-count', String(waveCount));
         composite.style.setProperty(
             '--musical-lane-count',
             String(typeof getMusicalTrackLaneCount === 'function' ? getMusicalTrackLaneCount() : 3),
@@ -591,8 +626,12 @@
 
         requestAnimationFrame(() => {
             const laneH = getWaveformLaneHeightCss();
-            const audioLaneH = laneCount * laneH;
-            const laneIds = ['audioWaveformLaneVideo'];
+            const musicalLaneH =
+                typeof getMusicalLaneHeightCss === 'function'
+                    ? getMusicalLaneHeightCss()
+                    : 20;
+            const audioLaneH = videoVizCount * musicalLaneH + waveCount * laneH;
+            const laneIds = ['videoVizLane', 'audioWaveformLaneVideo'];
             for (let i = 0; i < extraTrackSlotCount(); i++) {
                 laneIds.push('extraAudioLane' + i);
             }

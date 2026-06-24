@@ -61,6 +61,22 @@
         ) {
             applyPendingPlaybackRegionRestore();
         }
+        if (typeof ensureVideoFilmstripLoadingOverlay === 'function') {
+            ensureVideoFilmstripLoadingOverlay();
+        }
+        if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
+            scheduleVideoTrackFilmstripBuild();
+        }
+        if (typeof syncVideoTrackRegionsPresentation === 'function') {
+            const restoreBusy =
+                typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress();
+            if (!restoreBusy) {
+                syncVideoTrackRegionsPresentation();
+            }
+        } else if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
         if (typeof showFirstVideoFrame === 'function') {
             showFirstVideoFrame();
         }
@@ -76,6 +92,9 @@
             typeof refreshVideoAudioLaneVisibility === 'function'
         ) {
             refreshVideoAudioLaneVisibility();
+        }
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility();
         }
         if (typeof kickMainVideoWaveformBuild === 'function') {
             kickMainVideoWaveformBuild({ allowSettle: false });

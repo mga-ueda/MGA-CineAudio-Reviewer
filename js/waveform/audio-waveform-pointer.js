@@ -245,11 +245,37 @@
     window.ensureDefaultActiveMixExtraSlot = ensureDefaultActiveMixExtraSlot;
 
     function canDragWaveformTrackTimelineStart(slot) {
+        if (
+            typeof isVideoLinkedOffsetDragSlot === 'function' &&
+            isVideoLinkedOffsetDragSlot(slot)
+        ) {
+            const track =
+                typeof getVideoTrackRef === 'function' ? getVideoTrackRef() : null;
+            return (
+                !!track &&
+                typeof isTrackRegionActive === 'function' &&
+                isTrackRegionActive(track)
+            );
+        }
         return (
             slot >= 0 &&
             typeof isExtraTrackLoaded === 'function' &&
             isExtraTrackLoaded(slot) &&
             typeof setExtraTrackTimelineStartSec === 'function'
+        );
+    }
+
+    function isVideoLinkedRegionOffsetDragAllowed(regionHit) {
+        if (!regionHit || !(regionHit.segmentIndex >= 0)) return false;
+        if (
+            typeof isVideoLinkedOffsetDragSlot !== 'function' ||
+            !isVideoLinkedOffsetDragSlot(regionHit.slot)
+        ) {
+            return true;
+        }
+        return (
+            typeof isVideoRegionEntrySelected === 'function' &&
+            isVideoRegionEntrySelected(regionHit.segmentIndex)
         );
     }
 
@@ -717,10 +743,13 @@
             return;
         }
 
-        const regionHit =
-            typeof resolveRegionSegmentFromPointer === 'function'
-                ? resolveRegionSegmentFromPointer(ev.clientX, ev.clientY)
-                : null;
+        let regionHit = null;
+        if (typeof resolveVideoLinkedRegionHitFromPointer === 'function') {
+            regionHit = resolveVideoLinkedRegionHitFromPointer(ev.clientX, ev.clientY);
+        }
+        if (!regionHit && typeof resolveRegionSegmentFromPointer === 'function') {
+            regionHit = resolveRegionSegmentFromPointer(ev.clientX, ev.clientY);
+        }
 
         // Ctrl/Cmd+クリックは shouldSkipWaveformPointerGesture で弾かれるため、先に選択を処理する
         // 無音スロットをリージョンより先 — 長尺リージョンのタイムライン跨ぎで誤ヒットしないよう
@@ -747,10 +776,6 @@
         ) {
             cancelWaveformPointerGesture();
             return;
-        }
-
-        if (!(ev.ctrlKey || ev.metaKey) && typeof clearRegionSelection === 'function') {
-            clearRegionSelection();
         }
 
         if (shouldSkipWaveformPointerGesture(ev)) {
@@ -788,12 +813,21 @@
             !onSplitHandle &&
             regionHit &&
             canDragWaveformTrackTimelineStart(regionHit.slot) &&
+            isVideoLinkedRegionOffsetDragAllowed(regionHit) &&
             !(
                 typeof isPlaybackRegionOffsetDragForbidden === 'function' &&
                 isPlaybackRegionOffsetDragForbidden()
             )
                 ? regionHit
                 : null;
+
+        if (
+            !(ev.ctrlKey || ev.metaKey) &&
+            !waveformPointerGestureRegionHit &&
+            typeof clearRegionSelection === 'function'
+        ) {
+            clearRegionSelection();
+        }
 
         captureWaveformPointerScrubWasPlaying();
 

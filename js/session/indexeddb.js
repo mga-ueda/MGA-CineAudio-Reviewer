@@ -203,6 +203,20 @@
         row.playbackRegion.extra.push(entry);
     }
 
+    function upsertPlaybackRegionVideoFromSnapshot(row) {
+        if (!row || typeof getPlaybackRegionPersistSnapshot !== 'function') return false;
+        const snap = getPlaybackRegionPersistSnapshot();
+        if (!snap || !snap.video || typeof snap.video !== 'object') return false;
+        if (!row.playbackRegion || typeof row.playbackRegion !== 'object') {
+            row.playbackRegion = { extra: [] };
+        }
+        if (!Array.isArray(row.playbackRegion.extra)) {
+            row.playbackRegion.extra = [];
+        }
+        row.playbackRegion.video = deepCloneForPersist(snap.video);
+        return true;
+    }
+
     function hasFreshRegionPersistEdit(slot) {
         if (!(slot >= 0)) return false;
         const curEpoch =
@@ -397,13 +411,64 @@
             .map((s) => Number(s))
             .filter((n) => Number.isFinite(n))
             .sort((a, b) => a - b);
-        if (!slots.length) return 'none';
-        return slots
-            .map((slot) => {
-                const c = counts[slot];
-                return 'Ex' + (slot + 1) + ' ' + c.entry + '/' + c.playback;
-            })
-            .join(' ');
+        const parts = slots.map((slot) => {
+            const c = counts[slot];
+            return 'Ex' + (slot + 1) + ' ' + c.entry + '/' + c.playback;
+        });
+        if (row && row.playbackRegion && row.playbackRegion.video) {
+            const v = row.playbackRegion.video;
+            let inSec = Number.isFinite(v.regionTimelineInSec) ? v.regionTimelineInSec : null;
+            if (inSec == null && v.segments && v.segments[0]) {
+                const s0 = v.segments[0];
+                if (Number.isFinite(s0.regionTimelineInSec)) inSec = s0.regionTimelineInSec;
+                else if (Number.isFinite(s0.timelineStartSec)) inSec = s0.timelineStartSec;
+            }
+            parts.push(
+                'Video' +
+                    (Array.isArray(v.segments) ? ' ' + v.segments.length + 'seg' : '') +
+                    (Number.isFinite(inSec) && inSec > 0.0005
+                        ? ' in=' + inSec.toFixed(2) + 's'
+                        : ''),
+            );
+        }
+        if (!parts.length) return 'none';
+        return parts.join(' ');
+    }
+
+    function videoPlaybackRegionInSec(entry) {
+        if (!entry || typeof entry !== 'object') return null;
+        if (Number.isFinite(entry.regionTimelineInSec)) return entry.regionTimelineInSec;
+        if (entry.segments && entry.segments[0]) {
+            const s0 = entry.segments[0];
+            if (Number.isFinite(s0.regionTimelineInSec)) return s0.regionTimelineInSec;
+            if (Number.isFinite(s0.timelineStartSec)) return s0.timelineStartSec;
+        }
+        if (Number.isFinite(entry.headPadSec) && entry.headPadSec > 0.0005) {
+            return entry.headPadSec;
+        }
+        return null;
+    }
+
+    /** ライブ snapshot に Video が無い／In=0 のとき、直前 IDB 行の Video 平行移動を維持 */
+    function mergeVideoPlaybackRegionFromPrevRow(row, prevRow) {
+        if (!row || !prevRow || !prevRow.playbackRegion || !prevRow.playbackRegion.video) {
+            return;
+        }
+        const prevIn = videoPlaybackRegionInSec(prevRow.playbackRegion.video);
+        if (!(Number.isFinite(prevIn) && prevIn > 0.0005)) return;
+        const liveVideo =
+            row.playbackRegion && row.playbackRegion.video ? row.playbackRegion.video : null;
+        const liveIn = videoPlaybackRegionInSec(liveVideo);
+        if (Number.isFinite(liveIn) && liveIn > 0.0005) return;
+        if (!row.playbackRegion || typeof row.playbackRegion !== 'object') {
+            row.playbackRegion = { extra: [] };
+        }
+        if (!Array.isArray(row.playbackRegion.extra)) {
+            row.playbackRegion.extra = Array.isArray(prevRow.playbackRegion.extra)
+                ? deepCloneForPersist(prevRow.playbackRegion.extra)
+                : [];
+        }
+        row.playbackRegion.video = deepCloneForPersist(prevRow.playbackRegion.video);
     }
 
     function getPinnedRegionBySlot(row, slot) {
@@ -779,9 +844,20 @@
         row.extraTracks = normalizeExtraTracksEntriesBySlot(
             snapshot.map((e) => deepCloneForPersist(e)),
         );
-        const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
-        if (playbackRegion) row.playbackRegion = playbackRegion;
-        else delete row.playbackRegion;
+        if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            const snap = getPlaybackRegionPersistSnapshot();
+            if (snap) {
+                row.playbackRegion = deepCloneForPersist(snap);
+            } else {
+                const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
+                if (playbackRegion) row.playbackRegion = playbackRegion;
+                else delete row.playbackRegion;
+            }
+        } else {
+            const playbackRegion = buildPlaybackRegionFromExtraTrackEntries(row.extraTracks);
+            if (playbackRegion) row.playbackRegion = playbackRegion;
+            else delete row.playbackRegion;
+        }
         if (Array.isArray(row.extraTracks)) {
             for (let i = 0; i < row.extraTracks.length; i++) {
                 const e = row.extraTracks[i];
@@ -877,6 +953,7 @@
         attachMarkersDisplayHiddenToRow(row);
         let persistedRegionSegments = 0;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
+            upsertPlaybackRegionVideoFromSnapshot(row);
             const playbackRegion = getPlaybackRegionPersistSnapshot();
             if (playbackRegion && Array.isArray(playbackRegion.extra)) {
                 const hit = playbackRegion.extra.find(
@@ -1244,6 +1321,7 @@
         }
         writeLog('Session: persist prev ' + formatRegionCountsForLog(prevRow));
         keepPreviousRegionsWhenNoNewRegionEdit(row, prevRow);
+        mergeVideoPlaybackRegionFromPrevRow(row, prevRow);
         protectRegionShrinkOnPersist(row, prevRow);
         enforceRegionPersistFloor(row);
         if (Array.isArray(row.extraTracks)) {
@@ -1635,6 +1713,9 @@
         }
         if (typeof applyPendingPlaybackRegionRestore === 'function') {
             applyPendingPlaybackRegionRestore();
+        }
+        if (typeof syncVideoTrackRegionsPresentation === 'function') {
+            syncVideoTrackRegionsPresentation({ force: true });
         }
         syncRegionPersistEpochSavedFromLiveState();
         if (typeof syncSeekMax === 'function') syncSeekMax();
