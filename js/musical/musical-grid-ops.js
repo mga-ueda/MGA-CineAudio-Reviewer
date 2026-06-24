@@ -863,7 +863,6 @@
         if (e.repeat) return false;
         if (!getMusicalGridVisible()) return false;
         if (
-            getMusicalGridRehearsalFillVisible() &&
             typeof window.joinPlaybackRegionAtPointer === 'function' &&
             window.joinPlaybackRegionAtPointer()
         ) {

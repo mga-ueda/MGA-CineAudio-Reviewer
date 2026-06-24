@@ -374,10 +374,14 @@
                 typeof resolveVideoTrackWaveformDrawParams === 'function'
                     ? resolveVideoTrackWaveformDrawParams()
                     : null;
-            if (seg && fullDur > 0 && params) {
+            const useVideoSegmentWaveformDraw =
+                typeof shouldDrawVideoTrackMultiSegmentWaveform === 'function' &&
+                shouldDrawVideoTrackMultiSegmentWaveform();
+            if (seg && fullDur > 0 && params && !params.multiSegment && !useVideoSegmentWaveformDraw) {
+                const srcIn = Number.isFinite(params.sourceInSec) ? params.sourceInSec : 0;
                 const srcOut = params.sourceOutSec;
                 if (srcOut > 0.0005) {
-                    const sliced = slicePeaksForRegion(peaksForDraw, fullDur, 0, srcOut);
+                    const sliced = slicePeaksForRegion(peaksForDraw, fullDur, srcIn, srcOut);
                     if (sliced && sliced.length) {
                         peaksForDraw = sliced;
                         contentDur = params.contentDurSec;
@@ -392,6 +396,22 @@
             waveformScrubOverviewPeaks.length
         ) {
             peaksForDraw = waveformScrubOverviewPeaks;
+        }
+        if (
+            typeof shouldDrawVideoTrackMultiSegmentWaveform === 'function' &&
+            shouldDrawVideoTrackMultiSegmentWaveform() &&
+            typeof drawVideoTrackMultiSegmentWaveform === 'function' &&
+            drawVideoTrackMultiSegmentWaveform(
+                ctx,
+                peaksForDraw,
+                wCss,
+                hCss,
+                contentDur,
+                grad,
+                drawOpt,
+            )
+        ) {
+            return;
         }
         if (!useScrubOverview && waveformViewportPeaks) {
             drawOpt.viewportPeaks = waveformViewportPeaks;

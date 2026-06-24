@@ -14,7 +14,6 @@
     function handlePlaybackRegionSplitKeydown(e) {
         if (!isPlaybackRegionSplitKeyEvent(e)) return false;
         if (e.repeat) return false;
-        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         const nowMs =
             Number.isFinite(e && e.timeStamp) && e.timeStamp >= 0
                 ? e.timeStamp

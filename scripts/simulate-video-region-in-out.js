@@ -179,4 +179,204 @@ assert(
 );
 console.log('OK gate transitions:', gateTransitions.map((tr) => `${tr.t}s→${tr.action}`).join(', '));
 
+console.log('\n=== 9. スプリット後半 + シークバー移動 + In 左ドラッグ（carlog_20260625075239） ===');
+// 再現: split @ 33.319 → 前半削除 → Pause で regionIn=21.6809 に移動 → In 左ドラッグ
+const t0 = 0;
+const splitSourceIn = 33.3191;
+const postSplitSourceOut = 60.6667;
+const movedRegionIn = 21.6809;
+const movedRegionOut = 49.0284;
+const sourceSpan = postSplitSourceOut - splitSourceIn;
+
+function simulateExtendSegmentAnchorLeftSeg0(state, seg, newRegionIn, audioEnd) {
+    const newAnchor = newRegionIn;
+    const newDur = audioEnd - newAnchor;
+    seg.sourceInSec = Math.max(0, seg.sourceOutSec - newDur);
+    state.headPadSec = Math.max(0, newAnchor - t0);
+    delete state.regionLeadPadSec;
+    delete seg.regionLeadPadSec;
+    delete seg.timelineStartSec;
+    if (state.headPadSec > 0.00001) {
+        state.regionTimelineInSec = newAnchor;
+        seg.regionTimelineInSec = newAnchor;
+    } else {
+        delete state.regionTimelineInSec;
+        delete seg.regionTimelineInSec;
+    }
+}
+
+function simulateSyncTrackRegionHeadStateFromFirstSegment(state, raw) {
+    let anchor = Number.isFinite(raw.timelineStartSec)
+        ? raw.timelineStartSec
+        : t0 + Math.max(0, Number(state.headPadSec) || 0);
+    delete state.regionLeadPadSec;
+    delete raw.regionLeadPadSec;
+    if (
+        Number.isFinite(raw.regionTimelineInSec) &&
+        raw.regionTimelineInSec >= anchor - 0.00001
+    ) {
+        const regionIn = Math.max(0, raw.regionTimelineInSec);
+        raw.regionTimelineInSec = regionIn;
+        state.regionTimelineInSec = regionIn;
+    } else {
+        delete state.regionTimelineInSec;
+        delete raw.regionTimelineInSec;
+    }
+    const regionIn = Number.isFinite(state.regionTimelineInSec)
+        ? state.regionTimelineInSec
+        : anchor;
+    state.headPadSec = Math.max(0, regionIn - t0);
+    return regionIn;
+}
+
+function simulateLegacySyncZeroHeadPad(state, raw) {
+    let anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+    delete state.regionTimelineInSec;
+    delete raw.regionTimelineInSec;
+    const regionIn = anchor;
+    state.headPadSec = Math.max(0, regionIn - t0);
+    return regionIn;
+}
+
+function getAnchor(state) {
+    return t0 + (Number(state.headPadSec) || 0);
+}
+
+// 移動後の初期状態（sourceIn は split 点のまま）
+const stateAfterMove = { headPadSec: movedRegionIn - t0, regionTimelineInSec: movedRegionIn };
+const segAfterMove = {
+    sourceInSec: splitSourceIn,
+    sourceOutSec: postSplitSourceOut,
+    regionTimelineOutSec: movedRegionOut,
+};
+const audioEndAfterMove = movedRegionIn + sourceSpan;
+
+// 旧バグ: extend 後 legacy sync が headPadSec=0 に戻す → 次フレーム sourceIn スパイク
+const jitterState = { headPadSec: movedRegionIn - t0, regionTimelineInSec: movedRegionIn };
+const jitterSeg = {
+    sourceInSec: splitSourceIn,
+    sourceOutSec: postSplitSourceOut,
+    regionTimelineOutSec: movedRegionOut,
+};
+simulateExtendSegmentAnchorLeftSeg0(jitterState, jitterSeg, 21.5532, audioEndAfterMove);
+const legacyRegionIn = simulateLegacySyncZeroHeadPad(jitterState, jitterSeg);
+assert(Math.abs(getAnchor(jitterState)) < 0.001, `legacy sync zeroes headPad, got ${getAnchor(jitterState)}`);
+assert(Math.abs(legacyRegionIn) < 0.001, `legacy sync zeroes regionIn`);
+const spikedSourceIn = splitSourceIn + (21.5532 - legacyRegionIn);
+assert(
+    Math.abs(spikedSourceIn - 54.8723) < 0.05,
+    `sourceIn spike after collapse expected ~54.87, got ${spikedSourceIn}`,
+);
+console.log(
+    'OK legacy jitter reproduce: regionIn=',
+    legacyRegionIn.toFixed(4),
+    '→ spiked sourceIn≈',
+    spikedSourceIn.toFixed(4),
+);
+
+// 修正後 sync — headPadSec 維持
+const fixedSyncState = { headPadSec: movedRegionIn - t0, regionTimelineInSec: movedRegionIn };
+const fixedSyncSeg = {
+    sourceInSec: splitSourceIn,
+    sourceOutSec: postSplitSourceOut,
+    regionTimelineOutSec: movedRegionOut,
+};
+simulateExtendSegmentAnchorLeftSeg0(fixedSyncState, fixedSyncSeg, 21.5532, audioEndAfterMove);
+const fixedSyncRegionIn = simulateSyncTrackRegionHeadStateFromFirstSegment(
+    fixedSyncState,
+    fixedSyncSeg,
+);
+assert(
+    Math.abs(getAnchor(fixedSyncState) - 21.5532) < 0.001,
+    `fixed sync anchor should stay 21.5532, got ${getAnchor(fixedSyncState)}`,
+);
+assert(
+    Math.abs(fixedSyncSeg.sourceInSec - 33.1914) < 0.05,
+    `fixed sync sourceIn expected ~33.19, got ${fixedSyncSeg.sourceInSec}`,
+);
+console.log(
+    'OK fixed sync: anchor=',
+    getAnchor(fixedSyncState).toFixed(4),
+    'sourceIn=',
+    fixedSyncSeg.sourceInSec.toFixed(4),
+);
+
+// 旧バグ再現（seg.regionTimelineInSec 残存）— 参考
+const buggyState = { ...stateAfterMove };
+const buggySeg = { ...segAfterMove, regionTimelineInSec: 21.766 };
+simulateExtendSegmentAnchorLeftSeg0(buggyState, buggySeg, 20.0, audioEndAfterMove);
+// 旧実装相当 — seg.regionTimelineInSec を残す
+buggySeg.regionTimelineInSec = 21.766;
+const buggyRegionIn = simulateSyncTrackRegionHeadStateFromFirstSegment(buggyState, buggySeg);
+assert(
+    Math.abs(getAnchor(buggyState) - 21.766) < 0.001,
+    `buggy anchor should revert to 21.766, got ${getAnchor(buggyState)}`,
+);
+assert(
+    Math.abs(buggySeg.sourceInSec - 31.638) < 0.05,
+    `buggy sourceIn shifted without anchor move: ${buggySeg.sourceInSec}`,
+);
+console.log(
+    'OK buggy reproduce: anchor=',
+    getAnchor(buggyState).toFixed(4),
+    'regionIn=',
+    buggyRegionIn.toFixed(4),
+    'sourceIn=',
+    buggySeg.sourceInSec.toFixed(4),
+);
+
+// 修正後: seg.regionTimelineInSec も削除
+const fixedState = { ...stateAfterMove };
+const fixedSeg = { ...segAfterMove, regionTimelineInSec: 21.766 };
+simulateExtendSegmentAnchorLeftSeg0(fixedState, fixedSeg, 20.0, audioEndAfterMove);
+const fixedRegionIn = simulateSyncTrackRegionHeadStateFromFirstSegment(fixedState, fixedSeg);
+assert(
+    Math.abs(getAnchor(fixedState) - 20.0) < 0.001,
+    `fixed anchor should be 20.0, got ${getAnchor(fixedState)}`,
+);
+assert(
+    Math.abs(fixedRegionIn - 20.0) < 0.001,
+    `fixed regionIn should be 20.0, got ${fixedRegionIn}`,
+);
+assert(
+    Math.abs(fixedSeg.sourceInSec - 31.638) < 0.05,
+    `fixed sourceIn expected ~31.638, got ${fixedSeg.sourceInSec}`,
+);
+const sourceTimelineOffset = fixedSeg.sourceInSec - fixedRegionIn;
+assert(
+    Math.abs(sourceTimelineOffset - 11.638) < 0.05,
+    `sourceIn-regionIn offset should stay ~11.638, got ${sourceTimelineOffset}`,
+);
+assert(
+    Math.abs(getAnchor(fixedState) - fixedRegionIn) < 0.001,
+    `anchor should match regionIn after extend`,
+);
+console.log(
+    'OK fixed extend: anchor=',
+    getAnchor(fixedState).toFixed(4),
+    'regionIn=',
+    fixedRegionIn.toFixed(4),
+    'sourceIn=',
+    fixedSeg.sourceInSec.toFixed(4),
+    'offset=',
+    sourceTimelineOffset.toFixed(4),
+);
+
+// 連続左ドラッグ（18s まで）
+let dragState = { headPadSec: movedRegionIn - t0, regionTimelineInSec: movedRegionIn };
+let dragSeg = {
+    sourceInSec: splitSourceIn,
+    sourceOutSec: postSplitSourceOut,
+    regionTimelineOutSec: movedRegionOut,
+};
+for (const targetIn of [19.0, 18.0]) {
+    simulateExtendSegmentAnchorLeftSeg0(dragState, dragSeg, targetIn, audioEndAfterMove);
+    const ri = simulateSyncTrackRegionHeadStateFromFirstSegment(dragState, dragSeg);
+    assert(Math.abs(getAnchor(dragState) - targetIn) < 0.001, `anchor at ${targetIn}`);
+    assert(Math.abs(ri - targetIn) < 0.001, `regionIn at ${targetIn}`);
+    const offset = dragSeg.sourceInSec - ri;
+    assert(Math.abs(offset - 11.638) < 0.05, `offset drift at ${targetIn}: ${offset}`);
+}
+console.log('OK sequential left drag to 18s');
+
 console.log('\nAll simulations passed.');

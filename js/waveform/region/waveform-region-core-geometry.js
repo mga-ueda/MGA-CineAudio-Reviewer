@@ -413,7 +413,9 @@
         }
         const t0 = getTrackTimelineStartSec(track);
         const raw = state.segments[0];
-        let anchor = Number.isFinite(raw.timelineStartSec) ? raw.timelineStartSec : t0;
+        let anchor = Number.isFinite(raw.timelineStartSec)
+            ? raw.timelineStartSec
+            : t0 + Math.max(0, Number(state.headPadSec) || 0);
         const sourceIn = Math.max(0, Number(raw.sourceInSec) || 0);
         let lead = resolveRawSegmentLeadPadSec(raw, anchor);
 
@@ -862,8 +864,16 @@
         seg.sourceInSec = Math.max(0, seg.sourceOutSec - newDur);
         if (segmentIndex === 0) {
             state.headPadSec = Math.max(0, newAnchor - t0);
-            delete state.regionTimelineInSec;
             delete state.regionLeadPadSec;
+            delete seg.regionLeadPadSec;
+            delete seg.timelineStartSec;
+            if (state.headPadSec > 0.00001) {
+                state.regionTimelineInSec = newAnchor;
+                seg.regionTimelineInSec = newAnchor;
+            } else {
+                delete state.regionTimelineInSec;
+                delete seg.regionTimelineInSec;
+            }
         } else {
             seg.timelineStartSec = newAnchor;
             delete seg.regionTimelineInSec;
@@ -916,7 +926,7 @@
             delete seg.regionLeadPadSec;
         }
     }
-    /** In/Out ドラッグ — 開始時の regionIn / sourceIn 基準で絶対位置を適用 */
+    /** In/Out ドラッグ — 現在の regionIn 基準で増分適用（Out は開始時固定） */
     function applySegmentRegionInFromDragAbsolute(track, segmentIndex, targetRegionIn, opt) {
         const t0 = getTrackTimelineStartSec(track);
         let regionIn = targetRegionIn;
@@ -925,12 +935,10 @@
         }
         regionIn = clampSegmentTimelineStart(track, segmentIndex, regionIn);
 
-        const anchor = Number.isFinite(regionHandleDragStartAnchorSec)
+        const dragStartAnchor = Number.isFinite(regionHandleDragStartAnchorSec)
             ? regionHandleDragStartAnchorSec
             : getSegmentTimelineStart(track, segmentIndex);
-        const startRegionIn = Number.isFinite(regionHandleDragStartRegionIn)
-            ? regionHandleDragStartRegionIn
-            : getSegmentRegionTimelineIn(track, segmentIndex);
+        const currentAnchor = getSegmentTimelineStart(track, segmentIndex);
         const startSourceIn = Number.isFinite(regionHandleDragStartSourceInSec)
             ? regionHandleDragStartSourceInSec
             : 0;
@@ -940,9 +948,10 @@
         const startRegionOutSec = Number.isFinite(regionHandleDragStartRegionOutSec)
             ? regionHandleDragStartRegionOutSec
             : null;
-        const audioEnd = anchor + Math.max(0, startSourceOut - startSourceIn);
+        const audioEnd =
+            dragStartAnchor + Math.max(0, startSourceOut - startSourceIn);
 
-        if (regionIn < anchor - 0.00001) {
+        if (regionIn < currentAnchor - 0.00001) {
             if (
                 segmentIndex > 0 &&
                 typeof isSegmentBoundaryJoined === 'function' &&
@@ -955,7 +964,19 @@
             return;
         }
 
-        const delta = regionIn - startRegionIn;
+        const prevRegionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+        const dragFloorIn = Math.min(
+            Number.isFinite(regionHandleDragStartRegionIn)
+                ? regionHandleDragStartRegionIn
+                : prevRegionIn,
+            dragStartAnchor,
+        );
+        const deltaSign = regionIn - prevRegionIn;
+        const safePrevRegionIn =
+            deltaSign > 0.00001 && prevRegionIn + 0.00001 < dragFloorIn
+                ? dragFloorIn
+                : prevRegionIn;
+        const delta = regionIn - safePrevRegionIn;
         if (Math.abs(delta) < 0.00001) return;
 
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
@@ -965,23 +986,24 @@
 
         let newSourceIn;
         let effectiveRegionIn;
+        const curSourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
         if (delta > 0) {
             const maxTrim = Math.max(
                 0,
-                startSourceOut - startSourceIn - PLAYBACK_REGION_MIN_SEC,
+                startSourceOut - curSourceIn - PLAYBACK_REGION_MIN_SEC,
             );
             const appliedDelta = Math.min(delta, maxTrim);
             if (appliedDelta <= 0.00001) return;
             newSourceIn = Math.min(
                 startSourceOut - PLAYBACK_REGION_MIN_SEC,
-                startSourceIn + appliedDelta,
+                curSourceIn + appliedDelta,
             );
-            effectiveRegionIn = startRegionIn + appliedDelta;
+            effectiveRegionIn = safePrevRegionIn + appliedDelta;
         } else {
-            const appliedDelta = Math.min(-delta, startSourceIn);
+            const appliedDelta = Math.min(-delta, curSourceIn);
             if (appliedDelta <= 0.00001) return;
-            newSourceIn = startSourceIn - appliedDelta;
-            effectiveRegionIn = startRegionIn - appliedDelta;
+            newSourceIn = Math.max(0, curSourceIn - appliedDelta);
+            effectiveRegionIn = safePrevRegionIn - appliedDelta;
         }
 
         seg.sourceInSec = newSourceIn;
@@ -995,7 +1017,7 @@
             track,
             segmentIndex,
             effectiveRegionIn,
-            anchor,
+            currentAnchor,
             state,
             seg,
         );
@@ -1005,7 +1027,8 @@
         } else {
             delete seg.regionTimelineOutSec;
             const timelineEndSec =
-                anchor + Math.max(PLAYBACK_REGION_MIN_SEC, startSourceOut - newSourceIn);
+                currentAnchor +
+                Math.max(PLAYBACK_REGION_MIN_SEC, startSourceOut - newSourceIn);
             syncSegmentEntryRegionTimelineOutFromHandle(
                 track,
                 segmentIndex,

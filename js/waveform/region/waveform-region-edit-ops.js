@@ -225,6 +225,34 @@
                 state.active = false;
                 state.segments = [];
             }
+            if (isVideoTrackRef(track)) {
+                if (
+                    typeof ensureDefaultVideoTrackRegion === 'function' &&
+                    ensureDefaultVideoTrackRegion({ silent: true, force: true })
+                ) {
+                    const resetMsg = 'Video track reset to full clip';
+                    if (typeof logRegionAction === 'function') {
+                        logRegionAction(resetMsg);
+                    } else {
+                        writeLog('Video track: region reset to full clip');
+                    }
+                    if (typeof flashSeekHint === 'function') {
+                        flashSeekHint('Video', 'Region reset', 'notice');
+                    }
+                    updateTrackRegionOverlays(track);
+                    if (typeof notifyMasterTransportDurationChanged === 'function') {
+                        notifyMasterTransportDurationChanged();
+                    }
+                    if (typeof schedulePersistSession === 'function') {
+                        schedulePersistSession();
+                    }
+                    if (typeof syncExtraAudioToTransport === 'function') {
+                        syncExtraAudioToTransport({ force: true });
+                    }
+                    return true;
+                }
+                return false;
+            }
             if (ensureDefaultTrackRegion(track, { silent: true })) {
                 const resetMsg = formatExTrack(track.slot) + ' reset to full clip';
                 if (typeof logRegionAction === 'function') {
@@ -257,16 +285,29 @@
             }
             return true;
         }
-        applySegmentsToState(track, segments, { skipUndo: true });
-        const deleteMsg =
-            formatExTrack(track.slot) +
-            ' R' +
-            (segmentIndex + 1) +
-            ' deleted (' +
-            segments.length +
-            ' left)';
+        applySegmentsToState(track, segments, { skipUndo: true, silent: true });
+        const deleteMsg = isVideoTrackRef(track)
+            ? 'Video R' +
+              (segmentIndex + 1) +
+              ' deleted (' +
+              segments.length +
+              ' left)'
+            : formatExTrack(track.slot) +
+              ' R' +
+              (segmentIndex + 1) +
+              ' deleted (' +
+              segments.length +
+              ' left)';
         if (typeof logRegionAction === 'function') {
             logRegionAction(deleteMsg);
+        } else if (isVideoTrackRef(track)) {
+            writeLog(
+                'Video: region ' +
+                    (segmentIndex + 1) +
+                    ' deleted (' +
+                    segments.length +
+                    ' left)',
+            );
         } else {
             writeLog(
                 'Ex ' +
@@ -279,7 +320,11 @@
             );
         }
         if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Ex ' + (track.slot + 1), 'Region deleted', 'notice');
+            flashSeekHint(
+                isVideoTrackRef(track) ? 'Video' : 'Ex ' + (track.slot + 1),
+                'Region deleted',
+                'notice',
+            );
         }
         return true;
     }
@@ -555,34 +600,17 @@
         }
 
         const bySlot = {};
-        const hasVideoRegionSelection = segEntries.some((e) => isVideoRegionSplitSlot(e.slot));
         for (let i = 0; i < segEntries.length; i++) {
             const e = segEntries[i];
-            if (isVideoRegionSplitSlot(e.slot)) continue;
-            if (!bySlot[e.slot]) bySlot[e.slot] = [];
-            if (bySlot[e.slot].indexOf(e.segmentIndex) < 0) {
-                bySlot[e.slot].push(e.segmentIndex);
+            const slotKey = isVideoRegionSplitSlot(e.slot)
+                ? typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                    ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                    : -2
+                : e.slot;
+            if (!bySlot[slotKey]) bySlot[slotKey] = [];
+            if (bySlot[slotKey].indexOf(e.segmentIndex) < 0) {
+                bySlot[slotKey].push(e.segmentIndex);
             }
-        }
-
-        if (
-            hasVideoRegionSelection &&
-            typeof resetVideoTrackRegionToFullClip === 'function' &&
-            resetVideoTrackRegionToFullClip({
-                skipUndoCapture: true,
-                silent: true,
-            })
-        ) {
-            const resetMsg = 'Video track reset to full clip';
-            if (typeof logRegionAction === 'function') {
-                logRegionAction(resetMsg);
-            } else if (typeof writeLog === 'function') {
-                writeLog('Video track: region reset to full clip');
-            }
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Video', 'Region reset', 'notice');
-            }
-            anyDeleted = true;
         }
 
         const slotKeys = Object.keys(bySlot);
@@ -630,11 +658,19 @@
         const regionEl = findPlaybackRegionElAtPointer(clientX, clientY);
         if (regionEl) {
             const slot = extraSlotFromPlaybackRegionEl(regionEl);
-            if (isVideoRegionSplitSlot(slot) && isVideoVizLaneShown()) return slot;
+            if (isVideoRegionSplitSlot(slot)) return slot;
             if (slot >= 0 && isExtraSlotUsableForRegion(slot)) return slot;
         }
         if (typeof isPointerOverVideoVizLane === 'function' && isPointerOverVideoVizLane(clientY)) {
             return -2;
+        }
+        if (
+            typeof isPointerOverVideoAudioLane === 'function' &&
+            isPointerOverVideoAudioLane(clientY)
+        ) {
+            return typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                : -2;
         }
         const targetSlot = resolveTargetExtraSlot();
         if (targetSlot >= 0) return targetSlot;
@@ -651,7 +687,7 @@
     function resolveSplitTargetPlaybackRegionTrack() {
         const slot = resolveSplitTargetExtraSlot();
         if (isVideoRegionSplitSlot(slot)) {
-            return isVideoVizLaneShown() ? getVideoTrackRef() : null;
+            return getVideoTrackRef();
         }
         if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
             return { type: 'extra', slot };
@@ -694,6 +730,15 @@
         if (Number.isFinite(clientY) && typeof isPointerOverVideoVizLane === 'function') {
             if (isPointerOverVideoVizLane(clientY)) return -2;
         }
+        if (
+            Number.isFinite(clientY) &&
+            typeof isPointerOverVideoAudioLane === 'function' &&
+            isPointerOverVideoAudioLane(clientY)
+        ) {
+            return typeof VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                ? VIDEO_AUDIO_WAVEFORM_OFFSET_DRAG_SLOT
+                : -3;
+        }
         if (Number.isFinite(clientY) && typeof extraLaneSlotFromClientY === 'function') {
             const laneSlot = extraLaneSlotFromClientY(clientY);
             if (laneSlot >= 0) return laneSlot;
@@ -708,16 +753,17 @@
 
     function getRegionSplitTargetTransportSec(track, clientX, clientY, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
+        const seekbarSec = transportSecFromSeekbar();
         let pointerSec = null;
         if (Number.isFinite(clientX)) {
             let canUsePointer = false;
             if (o.pointerOverAnyExLane) {
                 const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
-                canUsePointer = laneSlot >= 0 || laneSlot === -2;
+                canUsePointer = laneSlot >= 0 || isVideoRegionSplitSlot(laneSlot);
             } else {
                 const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
                 canUsePointer =
-                    (isVideoTrackRef(track) && laneSlot === -2) ||
+                    (isVideoTrackRef(track) && isVideoRegionSplitSlot(laneSlot)) ||
                     laneSlot === track.slot ||
                     (!Number.isFinite(clientY) &&
                         !!findPlaybackRegionElAtPointer(clientX, clientY));
@@ -726,56 +772,78 @@
                 pointerSec = transportSecAtClientX(clientX);
             }
         }
-        if (Number.isFinite(pointerSec)) {
-            const thresholdSec = regionSnapThresholdSec();
-            const altSuppressed =
-                typeof isSnapSuppressedByAlt === 'function'
-                    ? isSnapSuppressedByAlt()
-                    : false;
-            const markersShownOnWaveform =
-                typeof audioWaveformMarkers !== 'undefined' &&
-                audioWaveformMarkers &&
-                !audioWaveformMarkers.hidden;
-            let snapped = pointerSec;
+        const alignSec = Math.max(
+            typeof regionSnapThresholdSec === 'function' ? regionSnapThresholdSec() : 0.25,
+            0.25,
+        );
+        let rawSec = seekbarSec;
+        let source = 'seekbar';
+        if (Number.isFinite(pointerSec) && Number.isFinite(seekbarSec)) {
+            if (Math.abs(pointerSec - seekbarSec) <= alignSec) {
+                rawSec = pointerSec;
+                source = 'pointer';
+            }
+        } else if (Number.isFinite(pointerSec) && !Number.isFinite(seekbarSec)) {
+            rawSec = pointerSec;
+            source = 'pointer';
+        }
+        const thresholdSec = regionSnapThresholdSec();
+        const altSuppressed =
+            typeof isSnapSuppressedByAlt === 'function'
+                ? isSnapSuppressedByAlt()
+                : false;
+        const markersShownOnWaveform =
+            typeof audioWaveformMarkers !== 'undefined' &&
+            audioWaveformMarkers &&
+            !audioWaveformMarkers.hidden;
+        let snapped = rawSec;
+        if (Number.isFinite(rawSec)) {
             if (markersShownOnWaveform) {
                 if (typeof snapSecToMarkerInOut === 'function') {
-                    snapped = snapSecToMarkerInOut(pointerSec, {
+                    snapped = snapSecToMarkerInOut(rawSec, {
                         thresholdSec,
                         altKey: altSuppressed,
                     });
                 }
             } else if (typeof snapRegionTransportSec === 'function') {
-                snapped = snapRegionTransportSec(pointerSec, {
+                snapped = snapRegionTransportSec(rawSec, {
                     sameSlotOnly: -1,
                     altKey: altSuppressed,
                 });
             }
-            let clampTrack = track;
-            if (o.pointerOverAnyExLane) {
-                const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
-                if (laneSlot >= 0) {
-                    clampTrack = { type: 'extra', slot: laneSlot };
-                }
+        }
+        let clampTrack = track;
+        if (source === 'pointer' && o.pointerOverAnyExLane) {
+            const laneSlot = resolveRegionSplitPointerLaneSlot(clientX, clientY);
+            if (laneSlot >= 0) {
+                clampTrack = { type: 'extra', slot: laneSlot };
             }
-            const clamped = clampRegionEditTransportSec(clampTrack, snapped);
+        }
+        const clamped = clampRegionEditTransportSec(clampTrack, snapped);
+        if (source === 'pointer') {
             writeLog(
                 'Playback region split target: pointer sec=' +
                     pointerSec.toFixed(3) +
+                    ' seekbar=' +
+                    (Number.isFinite(seekbarSec) ? seekbarSec.toFixed(3) : '?') +
                     ' snapped=' +
                     snapped.toFixed(3) +
                     ' final=' +
                     clamped.toFixed(3),
             );
-            return clamped;
+        } else {
+            writeLog(
+                'Playback region split target: seekbar sec=' +
+                    (Number.isFinite(seekbarSec) ? seekbarSec.toFixed(3) : '?') +
+                    (Number.isFinite(pointerSec)
+                        ? ' pointer=' + pointerSec.toFixed(3)
+                        : '') +
+                    ' snapped=' +
+                    snapped.toFixed(3) +
+                    ' final=' +
+                    clamped.toFixed(3),
+            );
         }
-        const seekbarSec = transportSecFromSeekbar();
-        const clamped = clampRegionEditTransportSec(track, seekbarSec);
-        writeLog(
-            'Playback region split target: seekbar sec=' +
-                seekbarSec.toFixed(3) +
-                ' final=' +
-                clamped.toFixed(3),
-        );
         return clamped;
     }
 
@@ -829,19 +897,38 @@
             selectedBySlot.get(t.slot).add(t.segmentIndex);
         }
 
-        const refTrack = { type: 'extra', slot: targets[0].slot };
+        const firstSlot = targets[0].slot;
+        const refTrack =
+            typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                ? trackRefFromWaveformOffsetDragSlot(firstSlot)
+                : isVideoRegionSplitSlot(firstSlot)
+                  ? getVideoTrackRef()
+                  : { type: 'extra', slot: firstSlot };
         const splitTransport = getRegionSplitTargetTransportSec(
             refTrack,
             clientX,
             clientY,
-            { pointerOverAnyExLane: true },
+            isVideoRegionSplitSlot(firstSlot) ? {} : { pointerOverAnyExLane: true },
         );
 
         if (!regionUndoPaused) requestRegionUndoCapture();
         let successCount = 0;
+        let videoSplit = false;
         const slotKeys = Array.from(selectedBySlot.keys()).sort((a, b) => a - b);
         for (let s = 0; s < slotKeys.length; s++) {
             const slot = slotKeys[s];
+            if (isVideoRegionSplitSlot(slot)) {
+                const track = getVideoTrackRef();
+                if (!isTrackRegionActive(track)) continue;
+                const hit = mapTransportToSegment(track, splitTransport);
+                const selectedIndices = selectedBySlot.get(slot);
+                if (!hit || !selectedIndices.has(hit.segmentIndex)) continue;
+                if (trySplitTrackAtTransportSec(track, splitTransport, { skipUndo: true })) {
+                    successCount++;
+                    videoSplit = true;
+                }
+                continue;
+            }
             const track = { type: 'extra', slot };
             if (!isExtraSlotUsableForRegion(slot) || !isTrackRegionActive(track)) continue;
 
@@ -882,7 +969,11 @@
             writeLog('Playback region split at ' + splitTransport.toFixed(3) + 's (' + successCount + ' track(s))');
         }
         if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Region', 'Split', 'notice');
+            flashSeekHint(
+                videoSplit && successCount === 1 ? 'Video' : 'Region',
+                'Split',
+                'notice',
+            );
         }
         return true;
     }

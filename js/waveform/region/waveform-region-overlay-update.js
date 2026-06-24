@@ -434,6 +434,75 @@
         );
     })();
 
+    function countTrackRegionSplitHandles(track) {
+        const segments = getTrackSegments(track);
+        let count = 0;
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (
+                isSegmentMovableSplitBoundary(track, b) ||
+                isSegmentBoundaryJoined(track, b)
+            ) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    function appendTrackRegionSplitHandlesToContainer(track, container) {
+        if (!container || !isPlaybackRegionTrackRef(track)) return;
+        const segments = getTrackSegments(track);
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (
+                !isSegmentMovableSplitBoundary(track, b) &&
+                !isSegmentBoundaryJoined(track, b)
+            ) {
+                continue;
+            }
+            const splitEl = buildSplitHandleEl(b);
+            positionSplitHandleEl(splitEl, track, b);
+            container.appendChild(splitEl);
+        }
+    }
+
+    function refreshTrackRegionSplitHandlesInContainer(track, container) {
+        if (!container) return false;
+        const segments = getTrackSegments(track);
+        const splitHandles = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region__handle--split',
+        );
+        if (splitHandles.length !== countTrackRegionSplitHandles(track)) {
+            return false;
+        }
+        const activeSplitBoundaryIndex =
+            isSplitBoundaryRegionDragActive() &&
+            Number.isFinite(regionHandleDragBoundaryIndex)
+                ? regionHandleDragBoundaryIndex
+                : -1;
+        for (let h = 0; h < splitHandles.length; h++) {
+            const el = splitHandles[h];
+            const b = Number(el.dataset.boundaryIndex);
+            if (!Number.isFinite(b) || b < 0 || b >= segments.length - 1) {
+                el.hidden = true;
+                continue;
+            }
+            const showSplitHandle =
+                b === activeSplitBoundaryIndex ||
+                isSegmentMovableSplitBoundary(track, b) ||
+                isSegmentBoundaryJoined(track, b);
+            if (showSplitHandle) {
+                positionSplitHandleEl(el, track, b);
+            } else {
+                el.hidden = true;
+            }
+        }
+        return true;
+    }
+
+    window.appendTrackRegionSplitHandlesToContainer = appendTrackRegionSplitHandlesToContainer;
+    window.refreshTrackRegionSplitHandlesInContainer =
+        refreshTrackRegionSplitHandlesInContainer;
+    window.countTrackRegionSplitHandles = countTrackRegionSplitHandles;
+
     function refreshTrackRegionOverlayGeometry(track) {
         const container = getPlaybackRegionsContainerEl(track);
         if (!container) return;
@@ -445,7 +514,13 @@
         const regionEls = container.querySelectorAll(
             '.audio-waveform-lane__playback-region',
         );
-        if (regionEls.length !== segments.length) {
+        const splitHandles = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region__handle--split',
+        );
+        if (
+            regionEls.length !== segments.length ||
+            splitHandles.length !== countTrackRegionSplitHandles(track)
+        ) {
             updateTrackRegionOverlays(track);
             return;
         }
@@ -461,9 +536,6 @@
                 !!(offsetDragSegmentIndices && offsetDragSegmentIndices.has(i)),
             );
         }
-        const splitHandles = container.querySelectorAll(
-            '.audio-waveform-lane__playback-region__handle--split',
-        );
         const activeSplitBoundaryIndex =
             isSplitBoundaryRegionDragActive() &&
             Number.isFinite(regionHandleDragBoundaryIndex)
@@ -706,17 +778,7 @@
         diagRun(
             'overlay/splitHandles',
             () => {
-                for (let b = 0; b < segments.length - 1; b++) {
-                    if (
-                        !isSegmentMovableSplitBoundary(track, b) &&
-                        !isSegmentBoundaryJoined(track, b)
-                    ) {
-                        continue;
-                    }
-                    const splitEl = buildSplitHandleEl(b);
-                    positionSplitHandleEl(splitEl, track, b);
-                    container.appendChild(splitEl);
-                }
+                appendTrackRegionSplitHandlesToContainer(track, container);
             },
             diagEx,
             diagSilent,

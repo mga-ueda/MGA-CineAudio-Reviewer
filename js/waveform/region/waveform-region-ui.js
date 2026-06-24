@@ -3157,11 +3157,21 @@
         return boundaryIndex;
     }
 
+    function playbackRegionTrackFromSplitSlot(slot) {
+        if (typeof isVideoRegionSplitSlot === 'function' && isVideoRegionSplitSlot(slot)) {
+            return getVideoTrackRef();
+        }
+        if (slot >= 0 && isExtraSlotUsableForRegion(slot)) {
+            return { type: 'extra', slot };
+        }
+        return null;
+    }
+
     function joinPlaybackRegionAtPointer(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         const selBlockReason = resolveRegionSelectionJoinBlockReason();
         if (selBlockReason) {
-            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
+            if (!o.silent) {
                 notifyCannotBondFromSelection(selBlockReason);
             }
             return false;
@@ -3170,40 +3180,38 @@
         let slot = resolveSplitTargetExtraSlot();
         if (slot < 0 && selSpan) slot = selSpan.slot;
         if (slot < 0) {
-            if (!o.silent && !suppressInvalidRegionOpNoticeForVideoAudio()) {
+            if (!o.silent) {
                 writeLog(
-                    'Playback region: hover an Ex lane (1–' +
-                        getExtraTrackCount() +
-                        '), or select consecutive regions, then press B',
+                    'Playback region: hover a Video or Ex lane, or select consecutive regions, then press B',
                 );
                 if (typeof flashSeekHint === 'function') {
-                    flashSeekHint('Region', 'Hover Ex lane or select regions', 'notice');
+                    flashSeekHint('Region', 'Hover Video/Ex lane or select regions', 'notice');
                 }
             }
             return false;
         }
-        if (!isExtraSlotUsableForRegion(slot)) {
-            if (selSpan && isExtraSlotUsableForRegion(selSpan.slot)) {
-                slot = selSpan.slot;
-            } else {
-                if (!o.silent) {
-                    writeLog('Playback region: load an extra audio track first');
+        const track = playbackRegionTrackFromSplitSlot(slot);
+        if (!track || !isTrackRegionActive(track)) {
+            if (selSpan) {
+                const selTrack = playbackRegionTrackFromSplitSlot(selSpan.slot);
+                if (selTrack && isTrackRegionActive(selTrack)) {
+                    return joinConsecutiveRegionSpanAt(selTrack, selSpan.lo, selSpan.hi, o);
                 }
-                return false;
             }
+            if (!o.silent) {
+                writeLog('Playback region: load a video or extra audio track first');
+            }
+            return false;
         }
-        const track = { type: 'extra', slot };
-        if (selSpan && isExtraSlotUsableForRegion(selSpan.slot)) {
-            const selTrack = { type: 'extra', slot: selSpan.slot };
-            if (isTrackRegionActive(selTrack)) {
+        if (selSpan) {
+            const selTrack = playbackRegionTrackFromSplitSlot(selSpan.slot);
+            if (selTrack && isTrackRegionActive(selTrack)) {
                 return joinConsecutiveRegionSpanAt(selTrack, selSpan.lo, selSpan.hi, o);
             }
         }
-        if (isTrackRegionActive(track)) {
-            const boundaryIndex = resolveJoinableBoundaryAtPointerOrSeek(track);
-            if (boundaryIndex >= 0) {
-                return joinSegmentBoundaryAt(track, boundaryIndex, o);
-            }
+        const boundaryIndex = resolveJoinableBoundaryAtPointerOrSeek(track);
+        if (boundaryIndex >= 0) {
+            return joinSegmentBoundaryAt(track, boundaryIndex, o);
         }
         if (isTrackRegionActive(track)) {
             const blockedBoundaryIndex = resolveBlockedBoundaryAtPointerOrSeek(track);
@@ -3227,7 +3235,6 @@
 
     function handlePlaybackRegionJoinKeydown(e) {
         if (!matchUserShortcut(e, 'regionJoin')) return false;
-        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         const ok = joinPlaybackRegionAtPointer();
         if (ok) e.stopPropagation();

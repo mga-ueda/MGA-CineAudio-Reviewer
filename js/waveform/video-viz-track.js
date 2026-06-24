@@ -112,6 +112,25 @@
 
 
 
+    function isVideoRegionHandleDragWaveformPreviewActive() {
+        return !!(
+            typeof regionHandleDragActive !== 'undefined' &&
+            regionHandleDragActive &&
+            (regionHandleDragKind === 'in' || regionHandleDragKind === 'out') &&
+            regionHandleDragTrack &&
+            typeof isVideoTrackRef === 'function' &&
+            isVideoTrackRef(regionHandleDragTrack) &&
+            regionHandleDragSegmentIndex >= 0
+        );
+    }
+
+    function resolveVideoTrackWaveformDrawSegmentIndex(track, segments) {
+        if (isVideoRegionHandleDragWaveformPreviewActive()) {
+            return Math.min(regionHandleDragSegmentIndex, segments.length - 1);
+        }
+        return 0;
+    }
+
     /** 映像波形描画 — 適用済みリージョンまたはセッション復元 pending */
     function resolveVideoTrackWaveformRegionSegment() {
         const track = getVideoTrackRef();
@@ -121,9 +140,10 @@
         if (regionActive) {
             const segments =
                 typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
-            const seg = segments[0];
+            const segmentIndex = resolveVideoTrackWaveformDrawSegmentIndex(track, segments);
+            const seg = segments[segmentIndex];
             if (!seg) return null;
-            return { track, seg, regionActive: true };
+            return { track, seg, segmentIndex, regionActive: true };
         }
         const pending =
             typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
@@ -139,36 +159,51 @@
         return !!resolveVideoTrackWaveformRegionSegment();
     }
 
-    function resolveRegionInForVideoWaveformDraw(track, seg, regionActive, pendingEntry) {
-        const anchor = regionActive
+    function resolveRegionInForVideoWaveformDraw(
+        track,
+        seg,
+        segmentIndex,
+        regionActive,
+        pendingEntry,
+    ) {
+        const si = segmentIndex >= 0 ? segmentIndex : 0;
+        let anchor = regionActive
             ? typeof getSegmentTimelineStart === 'function'
-                ? getSegmentTimelineStart(track, 0)
+                ? getSegmentTimelineStart(track, si)
                 : 0
             : Number.isFinite(seg.timelineStartSec)
               ? seg.timelineStartSec
               : 0;
         let regionIn = NaN;
-        if (Number.isFinite(seg.regionTimelineInSec)) {
+        if (regionActive && typeof getSegmentRegionTimelineIn === 'function') {
+            regionIn = getSegmentRegionTimelineIn(track, si);
+        } else if (Number.isFinite(seg.regionTimelineInSec)) {
             regionIn = seg.regionTimelineInSec;
-        } else if (regionActive && typeof getSegmentRegionTimelineIn === 'function') {
-            regionIn = getSegmentRegionTimelineIn(track, 0);
         } else if (Number.isFinite(pendingEntry?.regionTimelineInSec)) {
             regionIn = pendingEntry.regionTimelineInSec;
         } else {
             regionIn = anchor;
         }
-        const sourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
+        let sourceIn = Math.max(0, Number(seg.sourceInSec) || 0);
         if (
-            typeof isRegionInHandleDragActive === 'function' &&
-            isRegionInHandleDragActive() &&
-            Number.isFinite(regionHandleDragStartRegionIn) &&
-            Number.isFinite(regionHandleDragStartSourceInSec)
+            isVideoRegionHandleDragWaveformPreviewActive() &&
+            typeof getTrackSegments === 'function'
         ) {
-            const dragRegionIn =
-                regionHandleDragStartRegionIn +
-                (sourceIn - regionHandleDragStartSourceInSec);
-            if (dragRegionIn > regionIn + 0.00001) {
-                regionIn = dragRegionIn;
+            const dragSegIdx = resolveVideoTrackWaveformDrawSegmentIndex(
+                track,
+                getTrackSegments(track),
+            );
+            if (dragSegIdx >= 0) {
+                if (typeof getSegmentRegionTimelineIn === 'function') {
+                    regionIn = getSegmentRegionTimelineIn(track, dragSegIdx);
+                }
+                if (typeof getSegmentTimelineStart === 'function') {
+                    anchor = getSegmentTimelineStart(track, dragSegIdx);
+                }
+                const dragSeg = getTrackSegments(track)[dragSegIdx];
+                if (dragSeg) {
+                    sourceIn = Math.max(0, Number(dragSeg.sourceInSec) || 0);
+                }
             }
         }
         return { anchor, regionIn, sourceIn };
@@ -178,12 +213,27 @@
     function resolvePlaybackStartForVideoWaveformDraw(
         track,
         seg,
+        segmentIndex,
         regionActive,
         regionIn,
         anchor,
     ) {
+        const si = segmentIndex >= 0 ? segmentIndex : 0;
+        if (
+            isVideoRegionHandleDragWaveformPreviewActive() &&
+            typeof getSegmentPlaybackTimelineStart === 'function' &&
+            typeof getTrackSegments === 'function'
+        ) {
+            const dragSegIdx = resolveVideoTrackWaveformDrawSegmentIndex(
+                track,
+                getTrackSegments(track),
+            );
+            if (dragSegIdx >= 0) {
+                return getSegmentPlaybackTimelineStart(track, dragSegIdx);
+            }
+        }
         if (regionActive && typeof getSegmentPlaybackTimelineStart === 'function') {
-            return getSegmentPlaybackTimelineStart(track, 0);
+            return getSegmentPlaybackTimelineStart(track, si);
         }
         if (regionIn > anchor + 0.00001) {
             return regionIn;
@@ -204,13 +254,26 @@
         const ctx = resolveVideoTrackWaveformRegionSegment();
         if (!ctx) return null;
         const { track, seg, pendingEntry, regionActive } = ctx;
+        const segmentIndex = ctx.segmentIndex >= 0 ? ctx.segmentIndex : 0;
+        const segments =
+            regionActive && typeof getTrackSegments === 'function'
+                ? getTrackSegments(track)
+                : [seg];
+        const segCount = segments.length;
+        const firstSeg = segments[0] || seg;
+        const lastSeg = segments[segments.length - 1] || seg;
+        const chainSourceIn = Math.max(0, Number(firstSeg.sourceInSec) || 0);
+        const chainSourceOut = Number.isFinite(lastSeg.sourceOutSec)
+            ? lastSeg.sourceOutSec
+            : Number(seg.sourceOutSec) || 0;
         const { anchor, regionIn, sourceIn } = resolveRegionInForVideoWaveformDraw(
             track,
             seg,
+            segmentIndex,
             regionActive,
             pendingEntry,
         );
-        const srcOut = Number.isFinite(seg.sourceOutSec) ? seg.sourceOutSec : 0;
+        const srcOut = segCount > 1 ? chainSourceOut : Number.isFinite(seg.sourceOutSec) ? seg.sourceOutSec : 0;
         if (!(srcOut > 0.0005)) return null;
         const fullSourceDur =
             typeof getVideoTrackSourceDurationSec === 'function'
@@ -220,15 +283,25 @@
             fullSourceDur > 0.0005 ? Math.max(srcOut, fullSourceDur) : srcOut;
         const playbackStart = resolvePlaybackStartForVideoWaveformDraw(
             track,
-            seg,
+            segCount > 1 ? firstSeg : seg,
+            segCount > 1 ? 0 : segmentIndex,
             regionActive,
-            regionIn,
-            anchor,
+            segCount > 1 && typeof getSegmentRegionTimelineIn === 'function'
+                ? getSegmentRegionTimelineIn(track, 0)
+                : regionIn,
+            segCount > 1 && typeof getSegmentTimelineStart === 'function'
+                ? getSegmentTimelineStart(track, 0)
+                : anchor,
         );
-        const timelineStartSec = Math.max(0, playbackStart - sourceIn);
+        const effectiveSourceIn = segCount > 1 ? chainSourceIn : sourceIn;
+        const timelineStartSec = Math.max(0, playbackStart - effectiveSourceIn);
         let clipStartSec = null;
-        if (regionIn > timelineStartSec + 0.00001) {
-            clipStartSec = regionIn;
+        const clipRegionIn =
+            segCount > 1 && typeof getSegmentRegionTimelineIn === 'function'
+                ? getSegmentRegionTimelineIn(track, 0)
+                : regionIn;
+        if (clipRegionIn > timelineStartSec + 0.00001) {
+            clipStartSec = clipRegionIn;
         }
         let clipEndSec = null;
         if (regionActive) {
@@ -237,9 +310,14 @@
         } else if (Number.isFinite(seg.regionTimelineOutSec) && seg.regionTimelineOutSec > 0) {
             clipEndSec = seg.regionTimelineOutSec;
         }
-        const sourceSpan = Math.max(0, srcOut - sourceIn);
+        const sourceSpan = Math.max(0, srcOut - effectiveSourceIn);
         let timelineContentEnd = playbackStart + sourceSpan;
-        if (Number.isFinite(clipEndSec) && clipEndSec > 0) {
+        if (regionActive && segCount > 1) {
+            const trackEnd = getVideoTrackRegionTimelineEndSec();
+            if (trackEnd > timelineStartSec) {
+                timelineContentEnd = trackEnd;
+            }
+        } else if (Number.isFinite(clipEndSec) && clipEndSec > 0) {
             timelineContentEnd = Math.min(timelineContentEnd, clipEndSec);
         }
         const contentDurSec = Math.max(
@@ -251,12 +329,128 @@
             clipStartSec,
             clipEndSec,
             contentDurSec,
-            sourceInSec: sourceIn,
+            sourceInSec: effectiveSourceIn,
             sourceOutSec: waveformSourceOut,
-            regionInSec: regionIn,
+            regionInSec: clipRegionIn,
             playbackStartSec: playbackStart,
             anchorSec: anchor,
+            multiSegment: segCount > 1,
         };
+    }
+
+    /** 複数セグメント — 各セグメントの sourceIn/Out とタイムライン位置で波形を描画 */
+    function drawVideoTrackMultiSegmentWaveform(ctx, peaks, wCss, hCss, fullSourceDur, grad, drawOpt) {
+        const track = getVideoTrackRef();
+        if (!track || !peaks || !peaks.length || !(fullSourceDur > 0.0005)) return false;
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        const handleDragPreview = isVideoRegionHandleDragWaveformPreviewActive();
+        if (segments.length < 2 && !handleDragPreview) return false;
+
+        const peaksSourceDur =
+            typeof getVideoTrackSourceDurationSec === 'function'
+                ? getVideoTrackSourceDurationSec()
+                : fullSourceDur;
+        const sliceDur = peaksSourceDur > 0.0005 ? peaksSourceDur : fullSourceDur;
+
+        const o = drawOpt && typeof drawOpt === 'object' ? drawOpt : {};
+        const layoutW =
+            typeof resolveTimelineLayoutW === 'function'
+                ? resolveTimelineLayoutW(wCss, o)
+                : wCss;
+        const xOffset = Number.isFinite(o.timelineXOffset) ? o.timelineXOffset : 0;
+        const mid = hCss * 0.5;
+        const vScale =
+            typeof getWaveformVerticalZoom === 'function' ? getWaveformVerticalZoom() : 1;
+        const scale = Number.isFinite(vScale) ? vScale : 1;
+
+        ctx.clearRect(0, 0, wCss, hCss);
+        ctx.fillStyle =
+            typeof TIMELINE_LANE_TRACK_BG !== 'undefined'
+                ? TIMELINE_LANE_TRACK_BG
+                : '#161820';
+        ctx.fillRect(0, 0, wCss, hCss);
+
+        ctx.save();
+        if (xOffset) ctx.translate(-xOffset, 0);
+        ctx.fillStyle = grad || '#ffffff';
+
+        for (let i = 0; i < segments.length; i++) {
+            const seg = segments[i];
+            const srcIn = Math.max(0, Number(seg.sourceInSec) || 0);
+            const srcOut = Number(seg.sourceOutSec) || 0;
+            if (!(srcOut > srcIn + 0.0005)) continue;
+            const segPeaks =
+                typeof slicePeaksForRegion === 'function'
+                    ? slicePeaksForRegion(peaks, sliceDur, srcIn, srcOut)
+                    : null;
+            if (!segPeaks || !segPeaks.length) continue;
+
+            const segT0 =
+                typeof getSegmentTimelineStartForWaveformDraw === 'function'
+                    ? getSegmentTimelineStartForWaveformDraw(track, i)
+                    : typeof getSegmentTimelineStart === 'function'
+                      ? getSegmentTimelineStart(track, i)
+                      : 0;
+            const playbackStart =
+                typeof getSegmentPlaybackTimelineStart === 'function'
+                    ? getSegmentPlaybackTimelineStart(track, i)
+                    : segT0;
+            const barOrigin = playbackStart;
+            const segContentDur = srcOut - srcIn;
+            const contentW =
+                typeof masterTimelineContentWidth === 'function'
+                    ? masterTimelineContentWidth(layoutW, segContentDur)
+                    : layoutW;
+            const drawW = contentW > 0 ? contentW : layoutW;
+            const barW = drawW / segPeaks.length;
+            const hideBefore =
+                typeof getSegmentWaveformHideBeforeTimeline === 'function'
+                    ? getSegmentWaveformHideBeforeTimeline(track, i)
+                    : segT0;
+            const hideAfter =
+                typeof getSegmentRegionTimelineOut === 'function'
+                    ? getSegmentRegionTimelineOut(track, i)
+                    : Infinity;
+
+            for (let p = 0; p < segPeaks.length; p++) {
+                const barTransport =
+                    barOrigin + ((p + 0.5) / segPeaks.length) * segContentDur;
+                if (barTransport < hideBefore - 0.0005) continue;
+                if (barTransport > hideAfter + 0.0005) continue;
+                const pk = segPeaks[p];
+                if (!pk) continue;
+                const x =
+                    typeof masterTimelineContentWidth === 'function'
+                        ? masterTimelineContentWidth(layoutW, barTransport) - barW * 0.5
+                        : p * barW;
+                const top = mid - Math.max(0.5, pk.max * scale * (mid - 2));
+                const bot = mid - Math.min(-0.5, pk.min * scale * (mid - 2));
+                ctx.fillRect(x, top, Math.max(1, barW), bot - top);
+            }
+        }
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(xOffset, mid);
+        ctx.lineTo(xOffset + wCss, mid);
+        ctx.stroke();
+        ctx.restore();
+        return true;
+    }
+
+    function shouldDrawVideoTrackMultiSegmentWaveform() {
+        const track = getVideoTrackRef();
+        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) {
+            return false;
+        }
+        if (isVideoRegionHandleDragWaveformPreviewActive()) {
+            return true;
+        }
+        const segments =
+            typeof getTrackSegments === 'function' ? getTrackSegments(track) : [];
+        return segments.length > 1;
     }
 
     function getVideoTrackWaveformTimelineStartSec() {
@@ -364,6 +558,18 @@
 
         }
 
+        if (typeof appendTrackRegionSplitHandlesToContainer === 'function') {
+            appendTrackRegionSplitHandlesToContainer(track, container);
+        }
+
+        if (typeof syncRegionSelectionClasses === 'function') {
+            syncRegionSelectionClasses();
+        }
+
+        if (typeof scheduleWaveformRegionOverlayRefresh === 'function') {
+            scheduleWaveformRegionOverlayRefresh();
+        }
+
         if (typeof audioWaveformLaneVideo !== 'undefined' && audioWaveformLaneVideo) {
 
             audioWaveformLaneVideo.classList.toggle(
@@ -394,7 +600,19 @@
 
         const regionEls = container.querySelectorAll('.audio-waveform-lane__playback-region');
 
-        if (regionEls.length !== segments.length) {
+        const splitHandles = container.querySelectorAll(
+            '.audio-waveform-lane__playback-region__handle--split',
+        );
+
+        const expectedSplitHandles =
+            typeof countTrackRegionSplitHandles === 'function'
+                ? countTrackRegionSplitHandles(track)
+                : Math.max(0, segments.length - 1);
+
+        if (
+            regionEls.length !== segments.length ||
+            splitHandles.length !== expectedSplitHandles
+        ) {
 
             syncVideoAudioLaneRegionOverlays(track);
 
@@ -410,6 +628,18 @@
 
             }
 
+        }
+
+        if (
+            typeof refreshTrackRegionSplitHandlesInContainer === 'function' &&
+            !refreshTrackRegionSplitHandlesInContainer(track, container)
+        ) {
+            syncVideoAudioLaneRegionOverlays(track);
+            return;
+        }
+
+        if (typeof scheduleWaveformRegionOverlayRefresh === 'function') {
+            scheduleWaveformRegionOverlayRefresh();
         }
 
     }
@@ -577,6 +807,8 @@
 
     window.resolveVideoTrackWaveformRegionSegment = resolveVideoTrackWaveformRegionSegment;
     window.resolveVideoTrackWaveformDrawParams = resolveVideoTrackWaveformDrawParams;
+    window.drawVideoTrackMultiSegmentWaveform = drawVideoTrackMultiSegmentWaveform;
+    window.shouldDrawVideoTrackMultiSegmentWaveform = shouldDrawVideoTrackMultiSegmentWaveform;
     window.isVideoTrackWaveformRegionDrawActive = isVideoTrackWaveformRegionDrawActive;
     window.getVideoTrackWaveformTimelineStartSec = getVideoTrackWaveformTimelineStartSec;
     window.getVideoTrackWaveformTimelineClipStartSec = getVideoTrackWaveformTimelineClipStartSec;

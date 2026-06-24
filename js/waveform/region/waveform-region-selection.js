@@ -430,15 +430,22 @@
         const out = [];
         for (let i = 0; i < segEntries.length; i++) {
             const e = segEntries[i];
-            const track = { type: 'extra', slot: e.slot };
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(e.slot)
+                    : { type: 'extra', slot: e.slot };
+            if (!track) continue;
             const members = collectRegionGroupMembers(track, e.segmentIndex);
             for (let j = 0; j < members.length; j++) {
                 const m = members[j];
                 const key = regionGroupMemberKey(m.slot, m.segmentIndex);
                 if (seen.has(key)) continue;
                 seen.add(key);
-                const mTrack = { type: 'extra', slot: m.slot };
-                if (!isTrackRegionActive(mTrack)) continue;
+                const mTrack =
+                    typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                        ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                        : { type: 'extra', slot: m.slot };
+                if (!mTrack || !isTrackRegionActive(mTrack)) continue;
                 out.push({ slot: m.slot, segmentIndex: m.segmentIndex });
             }
         }

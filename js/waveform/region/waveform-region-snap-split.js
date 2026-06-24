@@ -170,6 +170,30 @@
         if (Number.isFinite(seg.fadeOutSec) && seg.fadeOutSec > 0.0005) {
             right.fadeOutSec = seg.fadeOutSec;
         }
+        } else {
+            const origRegionOut = getSegmentRegionTimelineOut(track, splitIndex);
+            if (origRegionOut > splitTimelineSec + PLAYBACK_REGION_MIN_SEC) {
+                right.regionTimelineOutSec = origRegionOut;
+            }
+            const raw =
+                typeof getRawSegmentEntry === 'function'
+                    ? getRawSegmentEntry(track, splitIndex)
+                    : null;
+            if (raw && splitIndex > 0 && Number.isFinite(raw.regionTimelineInSec)) {
+                if (raw.regionTimelineInSec < splitTimelineSec - 0.00001) {
+                    left.regionTimelineInSec = raw.regionTimelineInSec;
+                } else {
+                    right.regionTimelineInSec = raw.regionTimelineInSec;
+                }
+            }
+            if (
+                raw &&
+                splitIndex > 0 &&
+                Number.isFinite(raw.regionLeadPadSec) &&
+                raw.regionLeadPadSec > 0.00001
+            ) {
+                left.regionLeadPadSec = raw.regionLeadPadSec;
+            }
         }
         const next = segments.slice();
         next.splice(splitIndex, 1, left, right);

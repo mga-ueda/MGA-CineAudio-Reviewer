@@ -662,6 +662,14 @@
         if (!matchUserShortcut(e, 'regionSplit')) return false;
         if (e.repeat) return false;
         if (!getMusicalGridVisible()) return false;
+        if (
+            typeof splitPlaybackRegionAtTargetSec === 'function' &&
+            splitPlaybackRegionAtTargetSec()
+        ) {
+            e.preventDefault();
+            e.stopPropagation();
+            return true;
+        }
         splitRehearsalAtWaveformPointer();
         e.preventDefault();
         e.stopPropagation();
