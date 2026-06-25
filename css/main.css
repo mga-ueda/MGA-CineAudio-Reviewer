@@ -1532,6 +1532,11 @@
             background: linear-gradient(180deg, var(--marker-orange-pale) 0%, var(--marker-orange) 100%);
             box-shadow: none;
         }
+        .seek-bar-marker--point.seek-bar-marker--timeline-unified-selected,
+        .seek-bar-marker--range.seek-bar-marker--timeline-unified-selected {
+            outline: 1px solid var(--marker-orange);
+            outline-offset: 1px;
+        }
         .seek-bar-marker__feedback {
             position: absolute;
             max-width: calc(6.5rem * var(--wave-lane-font-scale, 1));
@@ -2799,6 +2804,23 @@
                 0 0 0 1px rgba(255, 255, 255, 0.85),
                 0 0 0 2px rgba(0, 0, 0, 0.55),
                 0 1px 4px rgba(0, 0, 0, 0.35);
+        }
+        .musical-track-lane__segment--timeline-unified-selected
+            .musical-track-lane__segment-value:not(
+                .musical-track-lane__segment-value--rehearsal-mark
+            ) {
+            border-width: var(--waveform-selection-border-width);
+            border-color: var(--waveform-seek-cyan-border);
+            background: rgba(0, 232, 255, 0.12);
+            box-shadow: none;
+        }
+        .musical-track-lane__segment--rehearsal.musical-track-lane__segment--timeline-unified-selected
+            .musical-track-lane__segment-value--rehearsal-mark.rehearsal-mark__text {
+            border-width: var(--waveform-selection-border-width);
+            border-color: var(--waveform-seek-cyan-border);
+            background: rgba(0, 232, 255, 0.15);
+            color: #f4f0e8;
+            box-shadow: none;
         }
         .musical-track-lane__segment--selected
             .musical-track-lane__segment-value:not(

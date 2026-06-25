@@ -60,6 +60,9 @@
         if (opt && Array.isArray(opt.affectedSegmentIndices) && opt.affectedSegmentIndices.length) {
             redrawOpt.affectedSegmentIndices = opt.affectedSegmentIndices;
         }
+        if (opt && opt.skipHiresSchedule) {
+            redrawOpt.skipHiresSchedule = true;
+        }
         if (!deferRedraw) {
             if (isVideoTrackRef(track)) {
                 const offsetDragActive =

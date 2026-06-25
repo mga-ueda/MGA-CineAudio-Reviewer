@@ -432,6 +432,7 @@
             !setTrackSegments(track, segments, {
                 silent: true,
                 skipUndo: !!(opt && opt.skipUndo),
+                skipHiresSchedule: !!(opt && opt.skipHiresSchedule),
             })
         ) {
             writeLog('Playback region: join not applied');
@@ -1022,6 +1023,32 @@
             if (!isSegmentBoundaryEligibleForResolve(track, b, joinableOnly)) continue;
             const dist = segmentBoundaryPointerHitDistanceSec(track, b, t);
             if (dist <= hitSec && dist < bestDist) {
+                bestDist = dist;
+                bestB = b;
+            }
+        }
+        return bestB;
+    }
+
+    /** リハーサルマーク追従 — 小節線 sec 付近のセグメント境界（ポインタ幅ではなく frame 精度） */
+    function resolveSegmentBoundaryIndexAtBarLineSec(track, transportSec, joinableOnly) {
+        if (!isExtraTrackRef(track)) return -1;
+        const segments = getTrackSegments(track);
+        if (segments.length < 2) return -1;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return -1;
+        const eps =
+            typeof transportBoundaryEpsilonSec === 'function'
+                ? transportBoundaryEpsilonSec()
+                : 1e-4;
+        let bestB = -1;
+        let bestDist = Infinity;
+        for (let b = 0; b < segments.length - 1; b++) {
+            if (!isSegmentBoundaryEligibleForResolve(track, b, joinableOnly)) continue;
+            const leftEnd = getSegmentTimelineEnd(track, b);
+            const rightStart = getSegmentTimelineStart(track, b + 1);
+            const dist = Math.min(Math.abs(t - leftEnd), Math.abs(t - rightStart));
+            if (dist <= eps && dist < bestDist) {
                 bestDist = dist;
                 bestB = b;
             }
@@ -3386,7 +3413,7 @@
         for (let slot = 0; slot < n; slot++) {
             const track = { type: 'extra', slot };
             if (!isTrackRegionActive(track)) continue;
-            const boundaryIndex = resolveSegmentBoundaryIndexAtTransport(track, t, true);
+            const boundaryIndex = resolveSegmentBoundaryIndexAtBarLineSec(track, t, true);
             if (boundaryIndex < 0) continue;
             if (
                 joinSegmentBoundaryAt(track, boundaryIndex, {
@@ -3394,6 +3421,7 @@
                     silent: true,
                     skipRehearsalRelayout: true,
                     skipClearSelection: true,
+                    skipHiresSchedule: !!(o && o.skipHiresSchedule),
                 })
             ) {
                 count++;
@@ -3415,6 +3443,50 @@
 
     function finishExtraTrackRegionsAfterRehearsalSync() {
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
+
+        const affectedSlots = [];
+        const n = typeof getExtraTrackCount === 'function' ? getExtraTrackCount() : 0;
+        for (let slot = 0; slot < n; slot++) {
+            if (typeof isExtraSlotUsableForRegion === 'function' && !isExtraSlotUsableForRegion(slot)) {
+                continue;
+            }
+            const track = { type: 'extra', slot };
+            if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) {
+                continue;
+            }
+            affectedSlots.push(slot);
+            if (typeof refreshTrackTimelineMusicalSlots === 'function') {
+                refreshTrackTimelineMusicalSlots(track, { preserveStored: false });
+            }
+            if (typeof updateTrackRegionOverlays === 'function') {
+                updateTrackRegionOverlays(track);
+            }
+            if (typeof invalidateWaveformViewportPeaksForRegionEdit === 'function') {
+                invalidateWaveformViewportPeaksForRegionEdit({ slot, clearTrackTiles: true });
+            }
+            let refreshed = false;
+            if (typeof refreshExtraTrackViewportPeaksForRegionEdit === 'function') {
+                refreshed = refreshExtraTrackViewportPeaksForRegionEdit(slot, {
+                    segmentStructureChanged: true,
+                });
+            }
+            if (!refreshed && typeof redrawAfterRegionChange === 'function') {
+                redrawAfterRegionChange(slot, {
+                    segmentStructureChanged: true,
+                    silent: true,
+                    skipHiresSchedule: true,
+                });
+            } else if (typeof drawExtraTrackWaveform === 'function') {
+                drawExtraTrackWaveform(slot);
+            }
+        }
+        if (
+            affectedSlots.length &&
+            typeof scheduleWaveformHiresRedrawAfterZoom === 'function'
+        ) {
+            scheduleWaveformHiresRedrawAfterZoom({ slots: affectedSlots });
+        }
+
         if (typeof syncExtraAudioToTransport === 'function') {
             syncExtraAudioToTransport({ force: true });
         }
@@ -3449,25 +3521,22 @@
             requestRegionUndoCapture();
         }
 
+        const syncOpt = {
+            skipUndo: true,
+            silent: true,
+            skipHiresSchedule: true,
+        };
         let bonded = 0;
         let split = 0;
         for (let i = 0; i < bondSecs.length; i++) {
-            bonded += bondAllExtraTrackRegionsAtBarLine(bondSecs[i], {
-                skipUndo: true,
-                silent: true,
-            });
+            bonded += bondAllExtraTrackRegionsAtBarLine(bondSecs[i], syncOpt);
         }
         for (let i = 0; i < splitSecs.length; i++) {
             if (typeof window.splitAllExtraTrackRegionsAtBarLine === 'function') {
-                split += window.splitAllExtraTrackRegionsAtBarLine(splitSecs[i], {
-                    skipUndo: true,
-                    silent: true,
-                });
+                split += window.splitAllExtraTrackRegionsAtBarLine(splitSecs[i], syncOpt);
             }
         }
-        if (bonded > 0 || split > 0) {
-            finishExtraTrackRegionsAfterRehearsalSync();
-        }
+        finishExtraTrackRegionsAfterRehearsalSync();
         return { bonded, split };
     }
 

@@ -416,6 +416,11 @@
         if (typeof setRehearsalMarkTrackEvents === 'function') {
             setRehearsalMarkTrackEvents(events, meterSpec, durationSec);
         }
+        finalizeRehearsalMarkTrackPresentation();
+    }
+
+    /** setRehearsalMarkTrackEvents 後 — prefs / グリッド / リージョンラベル（ドラッグ確定と同順） */
+    function finalizeRehearsalMarkTrackPresentation() {
         if (typeof writePrefs === 'function') {
             writePrefs();
         }
@@ -459,6 +464,48 @@
         }
     }
 
+    /** リハーサルマーク敷設 — 指定小節線で Ex トラックのリージョンを分割 */
+    function syncExtraTrackRegionsForRehearsalMarkInsert(splitSec, opt) {
+        if (typeof window.syncExtraTrackRegionsForRehearsalMarkChange !== 'function') return;
+        if (!Number.isFinite(splitSec)) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        window.syncExtraTrackRegionsForRehearsalMarkChange({
+            splitAtSec: splitSec,
+            silent: o.silent !== false,
+        });
+    }
+
+    /** リハーサルマーク移動 — 旧位置で結合、新位置で切り直し */
+    function syncExtraTrackRegionsForRehearsalMarkRelocate(oldSec, newSec, opt) {
+        if (typeof window.syncExtraTrackRegionsForRehearsalMarkChange !== 'function') return;
+        if (!Number.isFinite(oldSec) && !Number.isFinite(newSec)) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const sync = { silent: o.silent !== false };
+        if (Number.isFinite(oldSec)) sync.bondAtSec = oldSec;
+        if (Number.isFinite(newSec)) sync.splitAtSec = newSec;
+        window.syncExtraTrackRegionsForRehearsalMarkChange(sync);
+    }
+
+    function syncExtraTrackRegionsForRehearsalMarkRelocateBatch(pairs, opt) {
+        if (typeof window.syncExtraTrackRegionsForRehearsalMarkChange !== 'function') return;
+        if (!pairs || !pairs.length) return;
+        const bondAtSecs = [];
+        const splitAtSecs = [];
+        for (let i = 0; i < pairs.length; i++) {
+            const p = pairs[i];
+            if (!p) continue;
+            if (Number.isFinite(p.oldSec)) bondAtSecs.push(p.oldSec);
+            if (Number.isFinite(p.newSec)) splitAtSecs.push(p.newSec);
+        }
+        if (!bondAtSecs.length && !splitAtSecs.length) return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        window.syncExtraTrackRegionsForRehearsalMarkChange({
+            silent: o.silent !== false,
+            bondAtSecs: bondAtSecs,
+            splitAtSecs: splitAtSecs,
+        });
+    }
+
     function selectRehearsalTrackEvent(eventIndex) {
         selectedRehearsalEventIndex = eventIndex | 0;
         if (typeof selectMusicalTrackEvent === 'function') {
@@ -481,11 +528,15 @@
         for (let i = 0; i < nodes.length; i++) {
             nodes[i].classList.remove('musical-track-lane__segment--selected');
         }
-        if (selectedRehearsalEventIndex < 0) return;
-        const el = musicalRehearsalSegments.querySelector(
-            '[data-event-index="' + selectedRehearsalEventIndex + '"]',
-        );
-        if (el) el.classList.add('musical-track-lane__segment--selected');
+        if (selectedRehearsalEventIndex >= 0) {
+            const el = musicalRehearsalSegments.querySelector(
+                '[data-event-index="' + selectedRehearsalEventIndex + '"]',
+            );
+            if (el) el.classList.add('musical-track-lane__segment--selected');
+        }
+        if (typeof window.resyncTimelineUnifiedMusicalSelectUi === 'function') {
+            window.resyncTimelineUnifiedMusicalSelectUi();
+        }
     }
 
     function cancelRehearsalTrackEdit() {
@@ -677,11 +728,8 @@
             });
         }
         persistRehearsalMarkTrackEvents(events, meterSpec, durationSec);
-        if (
-            isNew &&
-            typeof syncExtraTrackRegionsForRehearsalMarkChange === 'function'
-        ) {
-            syncExtraTrackRegionsForRehearsalMarkChange({ splitAtSec: sec, silent: true });
+        if (isNew) {
+            syncExtraTrackRegionsForRehearsalMarkInsert(sec, { silent: true });
         }
         cancelRehearsalTrackEdit();
         refreshRehearsalTrack();
@@ -708,8 +756,8 @@
         const deletedSec = events[eventIndex].sec;
         events.splice(eventIndex, 1);
         persistRehearsalMarkTrackEvents(events, meterSpec, durationSec);
-        if (typeof syncExtraTrackRegionsForRehearsalMarkChange === 'function') {
-            syncExtraTrackRegionsForRehearsalMarkChange({
+        if (typeof window.syncExtraTrackRegionsForRehearsalMarkChange === 'function') {
+            window.syncExtraTrackRegionsForRehearsalMarkChange({
                 bondAtSec: deletedSec,
                 silent: true,
             });
@@ -953,6 +1001,12 @@
 
     function onRehearsalMarkValuePointerDown(ev, eventIndex) {
         if (ev.button !== 0) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'rehearsal', eventIndex)
+        ) {
+            return;
+        }
         if (rehearsalPointerState || rehearsalBoundaryDragActive) return;
         const master = rehearsalMasterDurationSec();
         if (!(master > 0)) return;
@@ -1019,15 +1073,11 @@
                         const movedNewSec =
                             idx >= 0 && idx < list.length ? list[idx].sec : NaN;
                         persistRehearsalMarkTrackEvents(list, meterNow, masterNow);
-                        if (
-                            typeof syncExtraTrackRegionsForRehearsalMarkChange === 'function'
-                        ) {
-                            syncExtraTrackRegionsForRehearsalMarkChange({
-                                bondAtSec: rehearsalBoundaryDragStartSec,
-                                splitAtSec: movedNewSec,
-                                silent: true,
-                            });
-                        }
+                        syncExtraTrackRegionsForRehearsalMarkRelocate(
+                            rehearsalBoundaryDragStartSec,
+                            movedNewSec,
+                            { silent: true },
+                        );
                         if (typeof commitMusicalTrackUndoGesture === 'function') {
                             commitMusicalTrackUndoGesture();
                         }
@@ -1067,6 +1117,12 @@
     function onRehearsalSegmentPointerDown(ev, eventIndex) {
         if (ev.button !== 0) return;
         if (ev.target.closest('.musical-track-lane__segment-value--rehearsal-mark')) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'rehearsal', eventIndex)
+        ) {
+            return;
+        }
         ev.stopPropagation();
         selectRehearsalTrackEvent(eventIndex);
     }
@@ -1309,9 +1365,7 @@
             shiftRehearsalMarkLabelsAfterDuplicate(events, eventIndex);
         }
         persistRehearsalMarkTrackEvents(events, meterSpec, master);
-        if (typeof syncExtraTrackRegionsForRehearsalMarkChange === 'function') {
-            syncExtraTrackRegionsForRehearsalMarkChange({ splitAtSec: snapped, silent: true });
-        }
+        syncExtraTrackRegionsForRehearsalMarkInsert(snapped, { silent: true });
         refreshRehearsalTrack();
         if (eventIndex >= 0) {
             selectRehearsalTrackEvent(eventIndex);
@@ -2436,12 +2490,18 @@
     window.collectRehearsalMarkDrawRanges = collectRehearsalMarkDrawRanges;
     window.ensureDefaultRehearsalMarkForRehearsalTint = ensureDefaultRehearsalMarkForRehearsalTint;
     window.drawRehearsalMarkFills = drawRehearsalMarkFills;
+    window.persistRehearsalMarkTrackEvents = persistRehearsalMarkTrackEvents;
+    window.finalizeRehearsalMarkTrackPresentation = finalizeRehearsalMarkTrackPresentation;
     window.refreshRehearsalTrack = refreshRehearsalTrack;
     window.initRehearsalTrack = initRehearsalTrack;
     window.isRehearsalBoundaryDragActive = isRehearsalBoundaryDragActive;
     window.handleRehearsalTrackDeleteKeydown = handleRehearsalTrackDeleteKeydown;
     window.handleRehearsalMarkInsertShortcutKeydown = handleRehearsalMarkInsertShortcutKeydown;
     window.insertRehearsalMarkAtSec = insertRehearsalMarkAtSec;
+    window.syncExtraTrackRegionsForRehearsalMarkInsert = syncExtraTrackRegionsForRehearsalMarkInsert;
+    window.syncExtraTrackRegionsForRehearsalMarkRelocate = syncExtraTrackRegionsForRehearsalMarkRelocate;
+    window.syncExtraTrackRegionsForRehearsalMarkRelocateBatch =
+        syncExtraTrackRegionsForRehearsalMarkRelocateBatch;
     window.removeRehearsalMarkAtTransportHead = removeRehearsalMarkAtTransportHead;
     window.deleteSelectedRehearsalTrackEvent = deleteSelectedRehearsalTrackEvent;
     window.clearRehearsalTrackSelection = clearRehearsalTrackSelection;

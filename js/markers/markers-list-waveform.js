@@ -1607,6 +1607,22 @@
         if (!ev || ev.button !== 0 || !dragTarget || !dragTarget.m) return false;
         const m = dragTarget.m;
         const edge = dragTarget.edge;
+        if (ev.ctrlKey || ev.metaKey) {
+            let edgeNorm = edge;
+            if (edge === 'start') edgeNorm = 'in';
+            else if (edge === 'end') edgeNorm = 'out';
+            else if (edge === 'move') edgeNorm = 'in';
+            else if (m.type !== 'range') edgeNorm = 'point';
+            if (
+                typeof window.handleTimelineCtrlMultiMarkerPointerDown === 'function' &&
+                window.handleTimelineCtrlMultiMarkerPointerDown(ev, m.id, edgeNorm)
+            ) {
+                return true;
+            }
+        }
+        if (typeof window.clearTimelineCtrlMultiSelection === 'function') {
+            window.clearTimelineCtrlMultiSelection();
+        }
         const bandEl = dragTarget.bandEl || null;
         if (
             edge === 'move' &&
@@ -1829,6 +1845,150 @@
     }
 
     window.handleMarkerDeleteKeydown = handleMarkerDeleteKeydown;
+
+    function resolveMarkerTimelineSelectEdge(m, transportSec) {
+        if (!m) return 'in';
+        const eps = markerNavStopEpsilonSec();
+        const t = Number(transportSec);
+        if (m.type !== 'range') return 'point';
+        if (Math.abs(m.startSec - t) <= eps) return 'in';
+        if (markerHasOutTc(m) && Math.abs(m.endSec - t) <= eps) return 'out';
+        if (markerHasOutTc(m) && t > m.startSec + eps && t < m.endSec - eps) return 'in';
+        return 'in';
+    }
+
+    function resolveMarkerTimelineSelectAtSec(transportSec) {
+        if (!markerTimelineReady()) return null;
+        const id = markerIdForTransportSec(transportSec);
+        if (!id) return null;
+        const m = currentMarkers.find((x) => x.id === id);
+        if (!m) return null;
+        return {
+            markerId: id,
+            edge: resolveMarkerTimelineSelectEdge(m, transportSec),
+        };
+    }
+
+    function markerStopIndexForSelection(markerId, edge) {
+        const stops = buildMarkerNavStops();
+        const m = currentMarkers.find((x) => x.id === markerId);
+        if (!m || !stops.length) return -1;
+        const eps = markerNavStopEpsilonSec();
+        let sec;
+        if (m.type === 'range') {
+            if (edge === 'out' && markerHasOutTc(m)) sec = m.endSec;
+            else sec = m.startSec;
+        } else {
+            sec = m.timeSec;
+        }
+        for (let i = 0; i < stops.length; i++) {
+            if (stops[i].marker.id !== markerId) continue;
+            const stopEdge = stops[i].edge === 'start' ? 'in' : stops[i].edge === 'end' ? 'out' : 'point';
+            if (stopEdge === edge || (edge === 'in' && stopEdge === 'point')) {
+                if (Math.abs(stops[i].sec - sec) <= eps) return i;
+            }
+        }
+        for (let i = 0; i < stops.length; i++) {
+            if (stops[i].marker.id === markerId) {
+                if (Math.abs(stops[i].sec - sec) <= eps) return i;
+            }
+        }
+        return -1;
+    }
+
+    function moveMarkerTimelineSelectionByDir(markerId, edge, dir) {
+        if (!markerTimelineReady() || !Number.isFinite(dir) || dir === 0) return false;
+        const stops = buildMarkerNavStops();
+        if (!stops.length) return false;
+        const idx = markerStopIndexForSelection(markerId, edge || 'in');
+        if (idx < 0) return false;
+        const nextIdx = idx + dir;
+        if (nextIdx < 0 || nextIdx >= stops.length) return false;
+        const stop = stops[nextIdx];
+        const seekEdge = stop.edge === 'start' ? 'in' : stop.edge === 'end' ? 'out' : 'in';
+        if (
+            !applyMarkerTcEdit(stop.marker.id, seekEdge, stop.sec, {
+                skipMarkerList: false,
+            })
+        ) {
+            return false;
+        }
+        renderSeekBarMarkers();
+        if (typeof logMarkerAction === 'function') {
+            logMarkerAction('moved marker (keyboard)');
+        }
+        return true;
+    }
+
+    function collectMarkerTimelineSelectAllTargets() {
+        if (!markerTimelineReady()) return [];
+        const stops = buildMarkerNavStops();
+        const out = [];
+        for (let i = 0; i < stops.length; i++) {
+            const stop = stops[i];
+            const edge =
+                stop.edge === 'start' ? 'in' : stop.edge === 'end' ? 'out' : 'point';
+            out.push({ markerId: stop.marker.id, edge: edge });
+        }
+        return out;
+    }
+
+    function collectMarkerTimelineSelectionTargetsForActiveMarker() {
+        if (!markerTimelineReady() || !activeMarkerId) return [];
+        const m = currentMarkers.find((x) => x.id === activeMarkerId);
+        if (!m) return [];
+        if (m.type === 'range') {
+            const out = [{ markerId: m.id, edge: 'in' }];
+            if (markerHasOutTc(m)) out.push({ markerId: m.id, edge: 'out' });
+            return out;
+        }
+        return [{ markerId: m.id, edge: 'point' }];
+    }
+
+    function markerSecForTimelineTarget(markerId, edge) {
+        const m = currentMarkers.find((x) => x.id === markerId);
+        if (!m) return NaN;
+        if (m.type === 'range') {
+            if (edge === 'out' && markerHasOutTc(m)) return Number(m.endSec);
+            return Number(m.startSec);
+        }
+        return Number(m.timeSec);
+    }
+
+    function moveAllMarkerTimelineSelectionsByDir(targets, dir) {
+        if (!markerTimelineReady() || !targets || !targets.length || !Number.isFinite(dir) || dir === 0) {
+            return false;
+        }
+        const order = targets
+            .slice()
+            .map((t) => ({
+                markerId: t.markerId,
+                edge: t.edge || 'in',
+                sec: markerSecForTimelineTarget(t.markerId, t.edge || 'in'),
+            }))
+            .sort((a, b) => {
+                const as = Number.isFinite(a.sec) ? a.sec : 0;
+                const bs = Number.isFinite(b.sec) ? b.sec : 0;
+                return dir > 0 ? bs - as : as - bs;
+            });
+        let changed = false;
+        for (let i = 0; i < order.length; i++) {
+            if (moveMarkerTimelineSelectionByDir(order[i].markerId, order[i].edge, dir)) {
+                changed = true;
+            }
+        }
+        if (changed && typeof logMarkerAction === 'function') {
+            logMarkerAction('moved all marker stops (keyboard)');
+        }
+        return changed;
+    }
+
+    window.resolveMarkerTimelineSelectAtSec = resolveMarkerTimelineSelectAtSec;
+    window.moveMarkerTimelineSelectionByDir = moveMarkerTimelineSelectionByDir;
+    window.collectMarkerTimelineSelectAllTargets = collectMarkerTimelineSelectAllTargets;
+    window.collectMarkerTimelineSelectionTargetsForActiveMarker =
+        collectMarkerTimelineSelectionTargetsForActiveMarker;
+    window.moveAllMarkerTimelineSelectionsByDir = moveAllMarkerTimelineSelectionsByDir;
 
     function jumpToAdjacentMarker(dir, opt) {
         const n = currentMarkers.length;

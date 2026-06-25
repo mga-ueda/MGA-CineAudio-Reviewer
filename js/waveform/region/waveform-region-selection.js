@@ -300,6 +300,9 @@
     }
 
     function toggleSilentGapSelection(slot, gapIndex) {
+        if (typeof window.dismissTimelineUnifiedSelectAll === 'function') {
+            window.dismissTimelineUnifiedSelectAll();
+        }
         if (!(slot >= 0) || !(gapIndex >= 0)) return false;
         const track = { type: 'extra', slot };
         const gaps = collectTrackSilentGaps(track);
@@ -338,6 +341,9 @@
     }
 
     function toggleRegionSelection(slot, segmentIndex) {
+        if (typeof window.dismissTimelineUnifiedSelectAll === 'function') {
+            window.dismissTimelineUnifiedSelectAll();
+        }
         if (!(segmentIndex >= 0)) return;
         if (
             typeof isVideoLinkedOffsetDragSlot === 'function' &&

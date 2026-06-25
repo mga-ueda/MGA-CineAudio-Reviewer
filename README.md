@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.23 |
+| **バージョン** | v0.24 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,13 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.24 - 2026年6月26日
+
+- Tempo/Sig（T）ON かつ Rehearsal 表示（R）OFF 時、Ctrl+Shift+A で Video/Audio リージョン・Tempo/Signature（先頭除く）・Rehearsal Mark・マーカー停止点を一括選択。Ctrl+クリックで種類をまたいだ追加選択。Tempo/Signature/Rehearsal Mark は Rehearsal 表示 ON でも選択・←/→ 小節移動可（T ON 時）。リージョンの小節移動は R OFF 時のみ。Esc で選択解除。
+- Tempo/Signature 移動先重複時は移動側優先（先頭 index 0 は削除不可のため値マージ）。Undo/Redo は Musical Grid とリージョン対象（マーカーは非対象）。
+- Import Review とセッション復元時にリージョン選択が残留する不具合を修正。
+- 使い方・ショートカット一覧を更新。
 
 ### v0.23 - 2026年6月25日
 

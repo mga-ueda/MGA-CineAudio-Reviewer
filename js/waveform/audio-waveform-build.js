@@ -1757,6 +1757,12 @@
             ) {
                 return;
             }
+            if (
+                typeof window.handleTimelineSelectionMoveKeydown === 'function' &&
+                window.handleTimelineSelectionMoveKeydown(ev)
+            ) {
+                return;
+            }
             const master =
                 typeof getMasterTransportDurationSec === 'function'
                     ? getMasterTransportDurationSec()

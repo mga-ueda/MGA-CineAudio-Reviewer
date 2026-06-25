@@ -250,6 +250,15 @@
             }
             if (
                 typeof matchUserShortcut === 'function' &&
+                matchUserShortcut(e, 'timelineSelectAtSeekbar') &&
+                typeof window.handleTimelineSelectAtSeekbarKeydown === 'function' &&
+                window.handleTimelineSelectAtSeekbarKeydown(e)
+            ) {
+                scheduleClearDocumentTextSelectionAfterRegionSelectAll();
+                return;
+            }
+            if (
+                typeof matchUserShortcut === 'function' &&
                 matchUserShortcut(e, 'regionSelectAll') &&
                 typeof window.handlePlaybackRegionSelectAllKeydown === 'function' &&
                 window.handlePlaybackRegionSelectAllKeydown(e)
@@ -376,6 +385,13 @@
         }
 
         if (typeof handleRangeLoopEscapeKeydown === 'function' && handleRangeLoopEscapeKeydown(e)) {
+            return;
+        }
+
+        if (
+            typeof handleTimelineSelectionEscapeKeydown === 'function' &&
+            handleTimelineSelectionEscapeKeydown(e)
+        ) {
             return;
         }
 
@@ -700,6 +716,13 @@
         }
 
         if (handleTransportSeekPageExtremeKeydown(e)) {
+            return;
+        }
+
+        if (
+            typeof window.handleTimelineSelectionMoveKeydown === 'function' &&
+            window.handleTimelineSelectionMoveKeydown(e)
+        ) {
             return;
         }
 

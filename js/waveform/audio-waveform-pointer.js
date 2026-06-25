@@ -824,6 +824,9 @@
             typeof clearRegionSelection === 'function'
         ) {
             clearRegionSelection();
+            if (typeof window.clearTimelineCtrlMultiSelection === 'function') {
+                window.clearTimelineCtrlMultiSelection();
+            }
         }
 
         captureWaveformPointerScrubWasPlaying();

@@ -1,10 +1,24 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.23';
+    const APP_VERSION = '0.24';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.24',
+            date: '2026年6月26日',
+            items: [
+                'Tempo/Sig（T）ON かつ Rehearsal 表示（R）OFF 時、Ctrl+Shift+A で Video/Audio リージョン・Tempo/Signature（先頭除く）・Rehearsal Mark・マーカー停止点を一括選択。Ctrl+クリックで種類をまたいだ追加選択。Tempo/Signature/Rehearsal Mark は Rehearsal 表示 ON でも選択・←/→ 小節移動可（T ON 時）。リージョンの小節移動は R OFF 時のみ。Esc で選択解除。',
+                'Tempo/Signature 移動先重複時は移動側優先（先頭 index 0 は削除不可のため値マージ）。Undo/Redo は Musical Grid とリージョン対象（マーカーは非対象）。',
+                'リハーサルマークの ←/→ 小節移動でも、敷設・ドラッグ移動と同様にリージョンを切り直すよう統一。',
+                'リハーサルマーク追従のリージョン切り直し後に Ex トラック波形の高解像度 peaks を再構築し、荒く表示される不具合を修正。',
+                '←/→ 小節移動時に同期 refreshRehearsalTrack で波形 peaks 更新が乱れる不具合を修正（ドラッグ移動と同じ persist 経路に統一）。',
+                'waveform-region-ui.js の構文エラーによりリハーサルマーク移動時のリージョン切り直しが無効化されていた問題を修正。',
+                'Import Review とセッション復元時にリージョン選択が残留する不具合を修正。',
+                '使い方・ショートカット一覧を更新。',
+            ],
+        },
         {
             version: '0.23',
             date: '2026年6月25日',

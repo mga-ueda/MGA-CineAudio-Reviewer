@@ -1547,6 +1547,10 @@
         if (isRehearsalBarLineAtTimelineStart(transportSec)) return 0;
         const t = Number(transportSec);
         if (!Number.isFinite(t)) return 0;
+        let splitSec = t;
+        if (typeof snapSecToMusicalGridBar === 'function') {
+            splitSec = snapSecToMusicalGridBar(t);
+        }
         const o = opt && typeof opt === 'object' ? opt : {};
         let count = 0;
         const n = getExtraTrackCount();
@@ -1555,7 +1559,11 @@
             const track = { type: 'extra', slot };
             if (!isTrackRegionActive(track)) continue;
             if (!(getTrackSourceDurationSec(track) > PLAYBACK_REGION_MIN_SEC)) continue;
-            if (trySplitTrackAtTransportSec(track, t, { skipUndo: true, silent: true })) {
+            if (trySplitTrackAtTransportSec(track, splitSec, {
+                skipUndo: true,
+                silent: true,
+                skipHiresSchedule: !!(o && o.skipHiresSchedule),
+            })) {
                 count++;
             }
         }

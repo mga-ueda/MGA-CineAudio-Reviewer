@@ -208,6 +208,7 @@
         regionCopy: { code: 'KeyC', primary: true, shift: false, alt: false },
         regionPaste: { code: 'KeyV', primary: true, shift: false, alt: false },
         regionSelectAll: { code: 'KeyA', primary: true, shift: false, alt: false },
+        timelineSelectAtSeekbar: { code: 'KeyA', primary: true, shift: true, alt: false },
         regionSelectAtSeekbar: {
             keys: ['Enter'],
             ctrl: false,

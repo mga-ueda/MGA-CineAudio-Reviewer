@@ -484,12 +484,22 @@
                     <tr>
                         <td>複数選択</td>
                         <td><kbd>Ctrl</kbd>+クリック（リージョンまたは無音スロット上）</td>
-                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
+                        <td>複数リージョンを選択（もう一度クリックで解除）。<strong>アクティブトラック以外</strong>の Video Track / Audio Track も追加選択可。Tempo / Signature / Rehearsal Mark・マーカー停止点も <kbd>Ctrl</kbd>+クリックで追加選択可（種類をまたいで選択した状態で <kbd>←</kbd>/<kbd>→</kbd> 小節/停止点移動）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でまとめて結合も可。<strong>グループ内は1つ選ぶとメンバーすべて選択</strong></td>
                     </tr>
                     <tr>
                         <td>全選択（対象トラック）</td>
                         <td><kbd>Ctrl</kbd>+<kbd>A</kbd></td>
                         <td>対象 Audio Track（アクティブ/ポインタ下）の<strong>全リージョン</strong>を選択。他トラックの選択は解除。無音スロットは含まない。入力欄フォーカス中は無効</td>
+                    </tr>
+                    <tr>
+                        <td>タイムライン全選択</td>
+                        <td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td>
+                        <td><strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> かつ <strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時のみ。Video Track / すべての Audio Track のリージョン、Tempo / Signature（先頭 index 0 除く）、Rehearsal Mark、マーカー停止点（表示中のみ）を一括選択。条件を満たさないときは赤トースト（英語）。入力欄フォーカス中は無効</td>
+                    </tr>
+                    <tr>
+                        <td>タイムライン選択の小節移動</td>
+                        <td><kbd>←</kbd>/<kbd>→</kbd></td>
+                        <td>リージョン・Tempo / Signature / Rehearsal Mark・マーカーが選択されているとき（修飾キーなし）。<strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> かつ <strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> 時はリージョンを小節線単位で前後移動（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> の全選択時はまとめて移動）。<strong>Tempo / Signature / Rehearsal Mark</strong> は <strong>Rehearsal 表示 ON でも</strong>選択・<kbd>←</kbd>/<kbd>→</kbd> 小節移動可（<strong>Tempo/Sig ON</strong> 時）。<kbd>Ctrl</kbd>+クリックで種類をまたいで追加選択した組み合わせも対象。マーカーは停止点単位（Tempo/Sig OFF でも選択中なら移動可）。Tempo/Signature 移動先が既存と重なるときは移動側を優先（先頭 index 0 は削除不可のため値マージ）。Musical Grid とリージョンは Undo/Redo 対象（マーカーは非対象）。1フレームシークとは別</td>
                     </tr>
                     <tr>
                         <td>追加選択（シークバー/範囲ループ）</td>
@@ -661,22 +671,27 @@
                         <td>Shift 長押しプレビュー中・右ドラッグ中・範囲ループ再生中</td>
                     </tr>
                     <tr>
-                        <td>3. 再生リージョン</td>
+                        <td>3. タイムライン全選択の解除</td>
+                        <td><kbd>Esc</kbd></td>
+                        <td>タイムライン全選択中</td>
+                    </tr>
+                    <tr>
+                        <td>4. 再生リージョン</td>
                         <td><kbd>Esc</kbd></td>
                         <td>ハンドル操作中はドラッグ取消。リージョン・無音スロットの複数選択中は選択解除。それ以外はポインタ下の Audio Track、またはすべての Audio Track のリージョン解除</td>
                     </tr>
                     <tr>
-                        <td>4. マーカー TC 欄の編集取消</td>
+                        <td>5. マーカー TC 欄の編集取消</td>
                         <td><kbd>Esc</kbd></td>
                         <td>In/Out 欄を編集中</td>
                     </tr>
                     <tr>
-                        <td>5. マーカー選択解除</td>
+                        <td>6. マーカー選択解除</td>
                         <td><kbd>Esc</kbd></td>
                         <td>マーカー選択中・コメント欄編集中・マーカーパネル内フォーカス時</td>
                     </tr>
                     <tr>
-                        <td>6. 確認ダイアログの閉じる</td>
+                        <td>7. 確認ダイアログの閉じる</td>
                         <td><kbd>Esc</kbd></td>
                         <td>All Clear 等の確認オーバーレイ表示中</td>
                     </tr>

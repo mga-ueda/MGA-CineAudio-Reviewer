@@ -177,6 +177,9 @@
     }
 
     function selectTrackEvent(field, eventIndex) {
+        if (typeof window.clearTimelineCtrlMultiSelection === 'function') {
+            window.clearTimelineCtrlMultiSelection();
+        }
         selectedTrackEvent = { field: field, eventIndex: eventIndex | 0 };
         if (typeof syncRehearsalSelectionFromMusicalTrack === 'function') {
             syncRehearsalSelectionFromMusicalTrack(field, eventIndex);
@@ -204,18 +207,23 @@
         mark(musicalTempoSegments);
         mark(musicalSignatureSegments);
         mark(musicalRehearsalSegments);
-        if (!selectedTrackEvent) return;
-        const container =
-            selectedTrackEvent.field === 'tempo'
-                ? musicalTempoSegments
-                : selectedTrackEvent.field === 'rehearsal'
-                  ? musicalRehearsalSegments
-                  : musicalSignatureSegments;
-        if (!container) return;
-        const el = container.querySelector(
-            '[data-event-index="' + selectedTrackEvent.eventIndex + '"]',
-        );
-        if (el) el.classList.add('musical-track-lane__segment--selected');
+        if (selectedTrackEvent) {
+            const container =
+                selectedTrackEvent.field === 'tempo'
+                    ? musicalTempoSegments
+                    : selectedTrackEvent.field === 'rehearsal'
+                      ? musicalRehearsalSegments
+                      : musicalSignatureSegments;
+            if (container) {
+                const el = container.querySelector(
+                    '[data-event-index="' + selectedTrackEvent.eventIndex + '"]',
+                );
+                if (el) el.classList.add('musical-track-lane__segment--selected');
+            }
+        }
+        if (typeof window.resyncTimelineUnifiedMusicalSelectUi === 'function') {
+            window.resyncTimelineUnifiedMusicalSelectUi();
+        }
     }
 
     function deleteTempoEventAtIndex(eventIndex, meterSpec, durationSec, opt) {
@@ -954,6 +962,12 @@
     function onSignatureSegmentValuePointerDown(ev, eventIndex, segment) {
         if (ev.button !== 0) return;
         if (!segment || eventIndex < 1) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'signature', eventIndex)
+        ) {
+            return;
+        }
         if (sigValuePointerState || sigBoundaryDragActive) return;
         const settings =
             typeof musicalGridDrawSettings === 'function' ? musicalGridDrawSettings() : null;
@@ -1076,6 +1090,12 @@
     function onSignatureSegmentPointerDown(ev, eventIndex) {
         if (ev.button !== 0) return;
         if (ev.target.closest('.musical-track-lane__segment-value--draggable')) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'signature', eventIndex)
+        ) {
+            return;
+        }
         ev.stopPropagation();
         selectTrackEvent('signature', eventIndex);
     }
@@ -1575,6 +1595,12 @@
     function onTempoSegmentValuePointerDown(ev, eventIndex, segment) {
         if (ev.button !== 0) return;
         if (!segment || eventIndex < 1) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'tempo', eventIndex)
+        ) {
+            return;
+        }
         if (tempoValuePointerState || tempoBoundaryDragActive) return;
         const settings =
             typeof musicalGridDrawSettings === 'function' ? musicalGridDrawSettings() : null;
@@ -1666,6 +1692,12 @@
     function onTempoSegmentPointerDown(ev, eventIndex) {
         if (ev.button !== 0) return;
         if (ev.target.closest('.musical-track-lane__segment-value--draggable')) return;
+        if (
+            typeof window.handleTimelineCtrlMultiMusicalPointerDown === 'function' &&
+            window.handleTimelineCtrlMultiMusicalPointerDown(ev, 'tempo', eventIndex)
+        ) {
+            return;
+        }
         ev.stopPropagation();
         selectTrackEvent('tempo', eventIndex);
     }
@@ -2515,6 +2547,14 @@
     window.handleMusicalTrackRedoKeydown = handleMusicalTrackRedoKeydown;
     window.handleMusicalTrackDeleteKeydown = handleMusicalTrackDeleteKeydown;
     window.selectMusicalTrackEvent = selectTrackEvent;
+    window.getSelectedMusicalTrackEvent = function getSelectedMusicalTrackEvent() {
+        if (!selectedTrackEvent) return null;
+        return {
+            field: selectedTrackEvent.field,
+            eventIndex: selectedTrackEvent.eventIndex,
+        };
+    };
+    window.clearMusicalTrackEventSelection = clearTrackEventSelection;
     window.requestMusicalTrackUndoCapture = requestMusicalTrackUndoCapture;
     window.captureMusicalTrackUndoSnapshot = captureMusicalTrackUndoSnapshot;
     window.dispatchMusicalTrackHistoryStep = dispatchMusicalTrackHistoryStep;
