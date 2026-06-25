@@ -1,46 +1,8 @@
 /**
- * events-lifecycle.js — ページライフサイクル（Alt スナップ修飾・pagehide・永続化トリガ）。
+ * events-lifecycle.js — ページライフサイクル（pagehide・永続化トリガ）。
+ * Alt スナップ修飾は ui-helpers.js の initAltSnapModifierSync が担当。
  */
-    document.addEventListener(
-        'keydown',
-        (e) => {
-            if (
-                typeof isGlobalShortcutBlockedForTextInput === 'function' &&
-                isGlobalShortcutBlockedForTextInput(e)
-            ) {
-                return;
-            }
-            if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
-                setAltKeySnapSuppressed(true);
-                if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
-                    window.refreshPlaybackRegionHoverCursorLine();
-                }
-            }
-        },
-        true,
-    );
-    document.addEventListener(
-        'keyup',
-        (e) => {
-            if (
-                typeof isGlobalShortcutBlockedForTextInput === 'function' &&
-                isGlobalShortcutBlockedForTextInput(e)
-            ) {
-                return;
-            }
-            if (matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true }) && typeof setAltKeySnapSuppressed === 'function') {
-                setAltKeySnapSuppressed(false);
-                if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
-                    window.refreshPlaybackRegionHoverCursorLine();
-                }
-            }
-        },
-        true,
-    );
     window.addEventListener('blur', () => {
-        if (typeof setAltKeySnapSuppressed === 'function') {
-            setAltKeySnapSuppressed(false);
-        }
         if (typeof flushKeyboardTransportScrubIfActive === 'function') {
             flushKeyboardTransportScrubIfActive({ immediate: true });
         }

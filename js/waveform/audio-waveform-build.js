@@ -750,9 +750,6 @@
         ) {
             return;
         }
-        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-            syncSnapSuppressionFromPointerEvent(ev);
-        }
         isSeeking = false;
         if (typeof cancelWaveformPointerGesture === 'function') {
             cancelWaveformPointerGesture();
@@ -952,9 +949,6 @@
 
         waveformOffsetDragDocMove = (e) => {
             if (!waveformOffsetDragActive || e.pointerId !== waveformOffsetDragPointerId) return;
-            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                syncSnapSuppressionFromPointerEvent(e);
-            }
             const next =
                 typeof regionOffsetDragRegionInSecFromClientX === 'function'
                     ? regionOffsetDragRegionInSecFromClientX(e.clientX)

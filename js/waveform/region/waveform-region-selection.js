@@ -252,7 +252,6 @@
             updatePlaybackRegionHoverFromPointer(
                 lastRegionHoverClientX,
                 lastRegionHoverClientY,
-                false,
             );
         }
     }

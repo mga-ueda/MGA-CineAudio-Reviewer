@@ -442,9 +442,6 @@
 
     function onTcOverlayPointerMove(ev) {
         if (!tcOverlayDragState || ev.pointerId !== tcOverlayDragState.pointerId) return;
-        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-            syncSnapSuppressionFromPointerEvent(ev);
-        }
         const suppressSnap =
             typeof isSnapSuppressedByAlt === 'function' && isSnapSuppressedByAlt();
         const st = tcOverlayDragState;

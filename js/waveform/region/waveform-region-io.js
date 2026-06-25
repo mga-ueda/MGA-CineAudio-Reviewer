@@ -24,7 +24,7 @@
                     updatePlaybackRegionHoverFromPointer(null, null);
                     return;
                 }
-                updatePlaybackRegionHoverFromPointer(x, y, ev.altKey);
+                updatePlaybackRegionHoverFromPointer(x, y);
             });
         };
         document.addEventListener('pointermove', onPointerMove, { passive: true });

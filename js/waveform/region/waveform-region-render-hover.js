@@ -264,7 +264,7 @@
         hideRegionCursorOverlay();
     }
 
-    function updateRegionCursorLine(regionEl, clientX, clientY, altKey) {
+    function updateRegionCursorLine(regionEl, clientX, clientY) {
         const lanes = getWaveformLanesEl();
         if (
             lanes &&
@@ -319,6 +319,8 @@
             outTransport = getSegmentTimelineEnd(track, segmentIndex);
         }
 
+        const altSuppressed =
+            typeof isSnapSuppressedByAlt === 'function' ? isSnapSuppressedByAlt() : false;
         let tRaw = transportSecAtClientX(clientX);
         let snappedTransportSec = tRaw;
         if (
@@ -343,7 +345,7 @@
                     ) {
                         snappedTransportSec = snapSecToMarkerInOut(tRaw, {
                             thresholdSec,
-                            altKey: !!altKey,
+                            altKey: altSuppressed,
                         });
                     }
                 } else {
@@ -351,7 +353,7 @@
                     if (typeof snapRegionTransportSec === 'function' && Number.isFinite(tRaw)) {
                         snappedTransportSec = snapRegionTransportSec(tRaw, {
                             sameSlotOnly: -1,
-                            altKey: !!altKey,
+                            altKey: altSuppressed,
                         });
                     }
                 }
@@ -800,7 +802,7 @@
     window.isPointerInRegionEwCursorHitZoneExcludingSplit =
         isPointerInRegionEwCursorHitZoneExcludingSplit;
 
-    function updatePlaybackRegionHoverFromPointer(clientX, clientY, altKey) {
+    function updatePlaybackRegionHoverFromPointer(clientX, clientY) {
         updateRegionResizeHandleCursorFromPointer(clientX, clientY);
         if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
             setHoveredPlaybackRegion(null);
@@ -813,7 +815,7 @@
         lastRegionHoverClientX = clientX;
         lastRegionHoverClientY = clientY;
         if (region) {
-            updateRegionCursorLine(region, clientX, clientY, altKey);
+            updateRegionCursorLine(region, clientX, clientY);
         }
     }
 
@@ -824,7 +826,6 @@
             hoveredPlaybackRegionEl,
             lastRegionHoverClientX,
             lastRegionHoverClientY,
-            false,
         );
     }
 

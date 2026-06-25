@@ -2693,9 +2693,6 @@
     function onSplitHandlePointerDown(ev, track, boundaryIndex, captureElOpt, opt) {
         if (regionHandleDragActive) return;
         if (ev.button !== 0) return;
-        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-            syncSnapSuppressionFromPointerEvent(ev);
-        }
         if (typeof haltTransportForSessionMutation === 'function') {
             haltTransportForSessionMutation({
                 silent: true,
@@ -2752,9 +2749,6 @@
         let splitBoundaryPrepared = false;
         regionHandleDragDocMove = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
-            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                syncSnapSuppressionFromPointerEvent(e);
-            }
             e.preventDefault();
             if (
                 Number.isFinite(regionHandleDragStartClientX) &&
@@ -2938,9 +2932,6 @@
     }
 
     function onRegionHandlePointerDown(ev, track, segmentIndex, kind, opt) {
-        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-            syncSnapSuppressionFromPointerEvent(ev);
-        }
         const segments = getTrackSegments(track);
         if (!segments[segmentIndex]) return;
         if (ev.button !== 0) return;
@@ -2980,9 +2971,6 @@
 
         regionHandleDragDocMove = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
-            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                syncSnapSuppressionFromPointerEvent(e);
-            }
             e.preventDefault();
             if (
                 Number.isFinite(regionHandleDragStartClientX) &&

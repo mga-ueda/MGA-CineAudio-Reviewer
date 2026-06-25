@@ -821,7 +821,7 @@
             Number.isFinite(hoverClientX) &&
             Number.isFinite(hoverClientY)
         ) {
-            updatePlaybackRegionHoverFromPointer(hoverClientX, hoverClientY, false);
+            updatePlaybackRegionHoverFromPointer(hoverClientX, hoverClientY);
         }
         if (
             !lightweight &&

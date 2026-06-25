@@ -1630,9 +1630,6 @@
         ) {
             return true;
         }
-        if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-            syncSnapSuppressionFromPointerEvent(ev);
-        }
         cancelMarkerWaveformClickSeek();
         ev.preventDefault();
         ev.stopPropagation();
@@ -1690,9 +1687,6 @@
 
         markerDragState.onMove = (e) => {
             if (!markerDragState || e.pointerId !== markerDragState.pointerId) return;
-            if (typeof syncSnapSuppressionFromPointerEvent === 'function') {
-                syncSnapSuppressionFromPointerEvent(e);
-            }
             if (Math.abs(e.clientX - markerDragState.startX) >= 4) {
                 if (!markerDragState.moved) {
                     markerDragState.moved = true;

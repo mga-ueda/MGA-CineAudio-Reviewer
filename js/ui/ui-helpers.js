@@ -85,6 +85,21 @@
 
     let altKeySnapSuppressed = false;
 
+    function readAltModifierFromEvent(ev) {
+        if (!ev) return false;
+        if (ev.altKey) return true;
+        if (typeof ev.getModifierState === 'function') {
+            return ev.getModifierState('Alt');
+        }
+        return false;
+    }
+
+    function notifyAltSnapSuppressionChanged() {
+        if (typeof window.refreshPlaybackRegionHoverCursorLine === 'function') {
+            window.refreshPlaybackRegionHoverCursorLine();
+        }
+    }
+
     /** Alt 押下中はタイムライン／マーカー／リージョン等のスナップを無効化 */
     function isSnapSuppressedByAlt(opt) {
         if (opt && opt.altKey) return true;
@@ -93,17 +108,82 @@
     }
 
     function setAltKeySnapSuppressed(v) {
-        altKeySnapSuppressed = !!v;
+        const next = !!v;
+        if (altKeySnapSuppressed === next) return;
+        altKeySnapSuppressed = next;
+        notifyAltSnapSuppressionChanged();
     }
 
-    function syncSnapSuppressionFromPointerEvent(ev) {
+    function syncAltSnapSuppressionFromEvent(ev) {
         if (!ev) return;
-        if (typeof ev.getModifierState === 'function') {
-            altKeySnapSuppressed = ev.getModifierState('Alt');
-        } else if ('altKey' in ev) {
-            altKeySnapSuppressed = !!ev.altKey;
-        }
+        setAltKeySnapSuppressed(readAltModifierFromEvent(ev));
     }
+
+    /** @deprecated syncAltSnapSuppressionFromEvent を使用（後方互換） */
+    function syncSnapSuppressionFromPointerEvent(ev) {
+        syncAltSnapSuppressionFromEvent(ev);
+    }
+
+    function initAltSnapModifierSync() {
+        if (initAltSnapModifierSync._bound) return;
+        initAltSnapModifierSync._bound = true;
+
+        document.addEventListener(
+            'pointerdown',
+            (e) => {
+                syncAltSnapSuppressionFromEvent(e);
+            },
+            true,
+        );
+        document.addEventListener(
+            'pointermove',
+            (e) => {
+                syncAltSnapSuppressionFromEvent(e);
+            },
+            true,
+        );
+        document.addEventListener(
+            'keydown',
+            (e) => {
+                if (
+                    typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+                    isGlobalShortcutBlockedForTextInput(e)
+                ) {
+                    return;
+                }
+                if (
+                    typeof matchUserShortcut === 'function' &&
+                    matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true })
+                ) {
+                    setAltKeySnapSuppressed(true);
+                }
+            },
+            true,
+        );
+        document.addEventListener(
+            'keyup',
+            (e) => {
+                if (
+                    typeof isGlobalShortcutBlockedForTextInput === 'function' &&
+                    isGlobalShortcutBlockedForTextInput(e)
+                ) {
+                    return;
+                }
+                if (
+                    typeof matchUserShortcut === 'function' &&
+                    matchUserShortcut(e, 'altSnapModifier', { allowRepeat: true })
+                ) {
+                    setAltKeySnapSuppressed(false);
+                }
+            },
+            true,
+        );
+        window.addEventListener('blur', () => {
+            setAltKeySnapSuppressed(false);
+        });
+    }
+
+    initAltSnapModifierSync();
 
     /** 明示シーク後のトランスポート UI（タイムコード・プレイヘッド・ループ／マーカーオーバーレイ） */
     function syncTransportSeekUi(t, opt) {
@@ -359,7 +439,9 @@
 
     window.isSnapSuppressedByAlt = isSnapSuppressedByAlt;
     window.setAltKeySnapSuppressed = setAltKeySnapSuppressed;
+    window.syncAltSnapSuppressionFromEvent = syncAltSnapSuppressionFromEvent;
     window.syncSnapSuppressionFromPointerEvent = syncSnapSuppressionFromPointerEvent;
+    window.initAltSnapModifierSync = initAltSnapModifierSync;
     window.syncTransportSeekUi = syncTransportSeekUi;
 
     function scrollAppDocFoldIntoView(fold) {
