@@ -3568,7 +3568,9 @@
             letter-spacing: 0.02em;
             color: rgba(255, 244, 220, 0.95);
             -webkit-text-fill-color: rgba(255, 244, 220, 0.95);
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
+            -webkit-text-stroke: 1px rgba(0, 0, 0, 0.95);
+            paint-order: stroke fill;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.92), 0 1px 3px rgba(0, 0, 0, 0.85);
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
@@ -3663,31 +3665,23 @@
             letter-spacing: 0.02em;
             color: rgba(255, 244, 220, 0.95);
             -webkit-text-fill-color: rgba(255, 244, 220, 0.95);
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.9), 0 1px 2px rgba(0, 0, 0, 0.8);
+            -webkit-text-stroke: 1px rgba(0, 0, 0, 0.95);
+            paint-order: stroke fill;
+            text-shadow: 0 0 4px rgba(0, 0, 0, 0.92), 0 1px 3px rgba(0, 0, 0, 0.85);
             pointer-events: none;
             user-select: none;
             -webkit-user-select: none;
             white-space: nowrap;
         }
-        /* Rehearsal 着色 ON — リハーサル名・Key・音量（Key↔音量は固定、レーン縮小時は全体を収める） */
+        /* Rehearsal 着色 ON — リハーサル名・Key・音量（レーン縦拡大時は wave-lane-h に追従） */
         .audio-waveform-composite--rehearsal-fill {
-            --region-rehearsal-label-reserve: min(
-                1rem,
-                max(0.55rem, calc(var(--wave-lane-label-h, 92px) * 0.36))
+            --region-rehearsal-label-step-mark-key: max(
+                calc(0.64rem * var(--wave-lane-font-scale, 1)),
+                calc(var(--wave-lane-h, 92px) * 0.19)
             );
-            --region-rehearsal-label-step-mark-key: min(
-                0.65rem,
-                max(
-                    0.32rem,
-                    calc((var(--wave-lane-label-h, 92px) - var(--region-rehearsal-label-reserve)) * 0.42)
-                )
-            );
-            --region-rehearsal-label-step-key-gain: min(
-                0.48rem,
-                max(
-                    0.28rem,
-                    calc((var(--wave-lane-label-h, 92px) - var(--region-rehearsal-label-reserve)) * 0.33)
-                )
+            --region-rehearsal-label-step-key-gain: max(
+                calc(0.54rem * var(--wave-lane-font-scale, 1)),
+                calc(var(--wave-lane-h, 92px) * 0.16)
             );
         }
         .audio-waveform-composite--rehearsal-fill .audio-waveform-lane__playback-region__index {
@@ -5288,6 +5282,7 @@
             font-weight: 600;
             letter-spacing: 0.07em;
             color: rgba(32, 34, 44, 0.85);
+            white-space: pre-line;
         }
         .seek-flash-overlay__secondary[hidden] {
             display: none !important;

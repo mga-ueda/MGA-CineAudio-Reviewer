@@ -280,14 +280,29 @@
         writeLog(line);
     }
 
+    function formatRangeLoopToastSecondary(inSec, outSec) {
+        const inTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(inSec)
+                : String(inSec);
+        const outTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(outSec)
+                : String(outSec);
+        const durationSec = Math.max(0, outSec - inSec);
+        const durationTc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(durationSec)
+                : String(durationSec);
+        return inTc + ' – ' + outTc + '\n' + durationTc;
+    }
+
     function flashRangeLoopShiftArrowHint(inSec, outSec, fromRepeat) {
         if (fromRepeat) return;
         if (typeof flashSeekHint !== 'function') return;
         flashSeekHint(
             'Range loop',
-            formatTimecodeForTransport(inSec) +
-                ' – ' +
-                formatTimecodeForTransport(outSec),
+            formatRangeLoopToastSecondary(inSec, outSec),
             'notice',
         );
     }
