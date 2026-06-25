@@ -2557,7 +2557,7 @@
             --musical-lane-tempo-accent: rgba(90, 210, 120, 0.45);
             --musical-lane-tempo-accent-strong: rgba(90, 210, 120, 0.9);
             --musical-lane-signature-tint: rgba(90, 200, 255, 0.085);
-            --musical-lane-measure-tint: rgba(170, 185, 220, 0.08);
+            --musical-lane-measure-tint: rgba(178, 192, 228, 0.11);
             --wave-sidebar-w: 176px;
             --track-lane-fader-track-h: 8px;
             --track-lane-meter-h: var(--track-lane-fader-track-h);
@@ -2621,33 +2621,31 @@
             min-height: var(--musical-lane-h);
             max-height: var(--musical-lane-h);
         }
-        .audio-waveform-lane--rehearsal .audio-waveform-lane__track-bg {
-            background-color: #161820;
-            background-image: linear-gradient(
-                var(--musical-lane-rehearsal-tint),
-                var(--musical-lane-rehearsal-tint)
-            );
-        }
-        .audio-waveform-lane--tempo .audio-waveform-lane__track-bg {
-            background-color: #161820;
-            background-image: linear-gradient(
-                var(--musical-lane-tempo-tint),
-                var(--musical-lane-tempo-tint)
-            );
-        }
-        .audio-waveform-lane--signature .audio-waveform-lane__track-bg {
-            background-color: #161820;
-            background-image: linear-gradient(
-                var(--musical-lane-signature-tint),
-                var(--musical-lane-signature-tint)
-            );
-        }
+        .audio-waveform-lane--rehearsal .audio-waveform-lane__track-bg,
+        .audio-waveform-lane--tempo .audio-waveform-lane__track-bg,
+        .audio-waveform-lane--signature .audio-waveform-lane__track-bg,
         .audio-waveform-lane--measure .audio-waveform-lane__track-bg {
             background-color: #161820;
-            background-image: linear-gradient(
-                var(--musical-lane-measure-tint),
-                var(--musical-lane-measure-tint)
-            );
+        }
+        /* 各 Musical トラック識別 tint — grid-canvas 内の赤青着色 (z1) より 1 段前面（半透明） */
+        .audio-waveform-lane--musical .audio-waveform-lane__track::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            pointer-events: none;
+        }
+        .audio-waveform-lane--rehearsal .audio-waveform-lane__track::after {
+            background: var(--musical-lane-rehearsal-tint);
+        }
+        .audio-waveform-lane--tempo .audio-waveform-lane__track::after {
+            background: var(--musical-lane-tempo-tint);
+        }
+        .audio-waveform-lane--signature .audio-waveform-lane__track::after {
+            background: var(--musical-lane-signature-tint);
+        }
+        .audio-waveform-lane--measure .audio-waveform-lane__track::after {
+            background: var(--musical-lane-measure-tint);
         }
         .audio-waveform-lane--musical .audio-waveform-lane__track,
         .musical-track-lane__track {
@@ -2663,13 +2661,14 @@
             height: 100%;
             pointer-events: none;
             display: block;
+            /* 赤青着色・小節/拍グリッド — 識別 tint (::after z2) より背面 */
             z-index: 1;
         }
-        /* Rehearsal 着色 (grid-canvas 内) の上 — Tempo/Sig/Measure 等の文字 */
+        /* 識別 tint (::after z2) の上 — Tempo/Sig/Measure 等の文字 */
         .musical-track-lane__segments {
             position: absolute;
             inset: 0;
-            z-index: 2;
+            z-index: 3;
             pointer-events: none;
         }
         .musical-track-lane__segment {
@@ -2698,7 +2697,7 @@
             cursor: default;
         }
         .musical-track-lane__segments--measure {
-            z-index: 4;
+            z-index: 5;
             pointer-events: none;
         }
         .musical-track-lane__segments--measure .musical-track-lane__segment {
@@ -2706,7 +2705,7 @@
         }
         /* Rehearsal Mark トラック内の区間小節番号（Tempo/Sig/Measure と同じレイヤー） */
         .musical-track-lane__segments--rehearsal-measure {
-            z-index: 4;
+            z-index: 5;
             pointer-events: none;
         }
         .musical-track-lane__segments--rehearsal-measure .musical-track-lane__segment--rehearsal-measure {
@@ -2720,7 +2719,7 @@
         }
         /* Rehearsal Mark ラベル — 区間小節番号より一段上 */
         .musical-track-lane__segments--rehearsal-mark {
-            z-index: 5;
+            z-index: 6;
             pointer-events: none;
         }
         .musical-track-lane__segment--readonly:hover {
@@ -3357,7 +3356,10 @@
         .audio-waveform-lane--musical {
             z-index: 7;
         }
+        /* Rehearsal Mark / Tempo / Signature / Measure — 赤青着色 (5) より 1 段前面 */
         .audio-waveform-lane--rehearsal,
+        .audio-waveform-lane--tempo,
+        .audio-waveform-lane--signature,
         .audio-waveform-lane--measure {
             z-index: 8;
         }
