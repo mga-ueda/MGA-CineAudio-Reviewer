@@ -1190,7 +1190,10 @@
     }
 
     function isSplitBoundaryRegionDragActive() {
-        return !!(regionHandleDragActive && regionHandleDragSplitBoundary);
+        return !!(
+            regionHandleDragActive &&
+            (regionHandleDragSplitBoundary || regionHandleDragKind === 'split')
+        );
     }
 
     /** リージョン平行移動ドラッグ中（overlay 専用処理用） */

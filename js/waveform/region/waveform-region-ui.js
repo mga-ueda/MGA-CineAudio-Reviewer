@@ -307,6 +307,7 @@
         right.timelineStartSec = leftStart + (sourceSplit - leftIn);
         delete left.regionTimelineInSec;
         delete left.regionLeadPadSec;
+        delete left.regionTimelineOutSec;
         delete left.fadeOutSec;
         delete right.regionTimelineInSec;
         delete right.regionLeadPadSec;
@@ -316,7 +317,7 @@
             normalizeSegmentEntry(s, track, getSegmentSourceDurationSec(track, s)),
         );
         applySegmentsToState(track, normalized, {
-            silent: !!(opt && opt.silent),
+            silent: !!(opt && opt.silent) || !!(opt && opt.geometryOnly),
             skipUndo: true,
             geometryOnly: !!(opt && opt.geometryOnly),
             skipPersist: !!(opt && opt.geometryOnly),
