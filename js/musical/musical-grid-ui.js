@@ -793,7 +793,7 @@
             tempoTrackEvents: [],
             signatureTrackEvents: [],
             rehearsalMarkTrackEvents: [],
-            gridVisible: false,
+            gridVisible: true,
             rehearsalFillVisible: false,
         });
         if (typeof clearRehearsalMarkTrackEventsOverride === 'function') {
@@ -802,7 +802,7 @@
         if (typeof applyRehearsalMarkTrackEventsFromPersist === 'function') {
             applyRehearsalMarkTrackEventsFromPersist([], 0);
         }
-        setMusicalGridVisible(false, {
+        setMusicalGridVisible(true, {
             silent: !!o.silent,
             persist: false,
             skipRegionRefresh: !!o.skipRegionRefresh,

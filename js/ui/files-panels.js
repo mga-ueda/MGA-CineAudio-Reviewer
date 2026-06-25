@@ -388,7 +388,7 @@
                 window.resetMusicalGridToDefaults({ silent: true, skipRegionRefresh: true });
             } else {
                 if (typeof window.setMusicalGridVisible === 'function') {
-                    window.setMusicalGridVisible(false, {
+                    window.setMusicalGridVisible(true, {
                         silent: true,
                         skipRegionRefresh: true,
                     });

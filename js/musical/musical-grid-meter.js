@@ -9,7 +9,7 @@
     /** Tempo / Signature トラックから合成されるランタイム拍子定義（唯一の計算用モデル） */
     let committedMeterSpec = null;
     let musicalGridRehearsalText = '';
-    let musicalGridVisible = false;
+    let musicalGridVisible = true;
     let musicalGridRehearsalFillVisible = false;
     let musicalGridPosCache = null;
     let musicalGridNavStopsCache = null;

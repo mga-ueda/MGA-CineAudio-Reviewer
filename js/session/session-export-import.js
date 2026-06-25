@@ -169,7 +169,7 @@
             }
         }
         const p = prefs && typeof prefs === 'object' ? prefs : {};
-        let musicalGridVisible = false;
+        let musicalGridVisible = true;
         let musicalGridRehearsalFillVisible = false;
         if (typeof getMusicalGridVisible === 'function') {
             musicalGridVisible = getMusicalGridVisible();
