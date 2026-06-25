@@ -1209,6 +1209,9 @@
         if (typeof syncAllRehearsalMarksOverlayPlacement === 'function') {
             syncAllRehearsalMarksOverlayPlacement();
         }
+        if (typeof scheduleVideoVizFilmstripRender === 'function') {
+            scheduleVideoVizFilmstripRender({ force: true });
+        }
         scheduleWaveformVisualRefresh({ sync: true });
     }
 

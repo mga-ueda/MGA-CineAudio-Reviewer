@@ -609,6 +609,13 @@
         ) {
             drawAudioWaveformCanvas();
         }
+        if (
+            isVideoTrackRef(track) &&
+            !offsetDragActive &&
+            typeof scheduleVideoVizFilmstripRender === 'function'
+        ) {
+            scheduleVideoVizFilmstripRender();
+        }
     }
 
     let trackRegionOverlayBuildDepth = 0;

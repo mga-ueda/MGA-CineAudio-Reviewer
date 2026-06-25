@@ -101,6 +101,11 @@
         return parts.join(' ');
     }
 
+    /** filmstrip サムネイル img 用（モーションブラーは含めない） */
+    function getVideoPreviewGammaFilterCss() {
+        return buildVideoPreviewFilterString(false);
+    }
+
     /** 一時停止中 video への SVG filter が環境によって描画されない問題への対処 */
     function setVideoFilterWithRepaint(v, filterStr) {
         if (!v) return;
@@ -212,6 +217,9 @@
             typeof isVideoFilmstripLoadingActive === 'function' &&
             isVideoFilmstripLoadingActive();
         setVideoFilterWithRepaint(v, buildVideoPreviewFilterString(includeMotionBlur));
+        if (typeof window.refreshVideoFilmstripGammaFilters === 'function') {
+            window.refreshVideoFilmstripGammaFilters();
+        }
         if (!o.skipRepaintSchedule && isVideoPreviewGammaNonDefault() && !includeMotionBlur) {
             scheduleVideoPreviewGammaFilterRepaint(v);
         }
@@ -410,6 +418,7 @@
     window.getVideoPreviewGamma = function getVideoPreviewGamma() {
         return videoPreviewGamma;
     };
+    window.getVideoPreviewGammaFilterCss = getVideoPreviewGammaFilterCss;
 
     bindVideoPreviewGammaWheel();
     bindVideoPreviewGammaVideoListeners(getVideoEl());

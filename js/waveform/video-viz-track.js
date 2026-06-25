@@ -852,6 +852,10 @@
 
     let videoFilmstripLoadingActive = false;
 
+    let videoVizFilmstripRenderRaf = 0;
+
+    let videoVizFilmstripLayoutRetryRaf = 0;
+
     /** サムネ生成中の水平モーションブラー上限（stdDeviation X）。E キー入れ替えとは独立した値 */
     const VIDEO_FILMSTRIP_MOTION_BLUR_MAX = 3;
 
@@ -1079,6 +1083,15 @@
         videoTrackFilmstripBuildQueued = false;
 
         videoTrackFilmstripBuildInFlight = false;
+
+        if (videoVizFilmstripRenderRaf) {
+            cancelAnimationFrame(videoVizFilmstripRenderRaf);
+            videoVizFilmstripRenderRaf = 0;
+        }
+        if (videoVizFilmstripLayoutRetryRaf) {
+            cancelAnimationFrame(videoVizFilmstripLayoutRetryRaf);
+            videoVizFilmstripLayoutRetryRaf = 0;
+        }
 
         if (videoTrackFilmstripDecodeRetryListener && videoMain) {
 
@@ -2462,6 +2475,166 @@
 
 
 
+    function getFilmstripTimelineZoom() {
+        return typeof getWaveformTimelineZoom === 'function' ? getWaveformTimelineZoom() : 1;
+    }
+
+    /** ズーム・リージョン幅・キャプチャ枚数が変わったときだけ DOM を組み直す */
+    function computeRegionFilmstripLayoutSignature(
+        sourceInSec,
+        sourceOutSec,
+        regionW,
+        laneH,
+        settled,
+        sourceFrameCount,
+    ) {
+        const zoom = getFilmstripTimelineZoom();
+        const { naturalThumbW } = getFilmstripThumbMetrics(laneH, regionW);
+        const cellCount = settled
+            ? Math.max(1, Math.ceil(regionW / naturalThumbW))
+            : Math.max(0, sourceFrameCount | 0);
+        return [
+            settled ? '1' : '0',
+            (Number(sourceInSec) || 0).toFixed(3),
+            (Number(sourceOutSec) || 0).toFixed(3),
+            regionW | 0,
+            laneH | 0,
+            zoom.toFixed(3),
+            sourceFrameCount | 0,
+            cellCount | 0,
+        ].join(':');
+    }
+
+    function regionFilmstripLayoutPending(regionEl) {
+        return regionEl && regionEl.dataset.filmstripLayoutPending === '1';
+    }
+
+    function anyVideoRegionFilmstripLayoutPending() {
+        const track = getVideoTrackRef();
+        const container =
+            typeof getPlaybackRegionsContainerEl === 'function'
+                ? getPlaybackRegionsContainerEl(track)
+                : null;
+        if (!container) return false;
+        const regions = container.querySelectorAll('.audio-waveform-lane__playback-region');
+        for (let i = 0; i < regions.length; i++) {
+            if (regionFilmstripLayoutPending(regions[i])) return true;
+        }
+        return false;
+    }
+
+    function videoVizFilmstripPresentationNeedsUpdate() {
+        if (
+            typeof isVideoVizLaneShown !== 'function' ||
+            !isVideoVizLaneShown() ||
+            shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()
+        ) {
+            return false;
+        }
+        const track = getVideoTrackRef();
+        const container =
+            typeof getPlaybackRegionsContainerEl === 'function'
+                ? getPlaybackRegionsContainerEl(track)
+                : null;
+        if (!container) return false;
+        const state = getVideoTrackState().playbackRegions;
+        const segments = state.segments || [];
+        const regions = container.querySelectorAll('.audio-waveform-lane__playback-region');
+        const settled = !videoTrackFilmstripBuildInFlight;
+        for (let i = 0; i < regions.length; i++) {
+            const idx = parseInt(regions[i].dataset.segmentIndex, 10);
+            const seg = segments[idx];
+            if (!seg) continue;
+            const regionEl = regions[i];
+            const regionW = Math.max(0, regionEl.clientWidth | 0);
+            const laneH = Math.max(0, regionEl.clientHeight | 0);
+            if (regionW < 1 || laneH < 1) return true;
+            const inSec = Number.isFinite(seg.sourceInSec) ? seg.sourceInSec : 0;
+            const outSec = Number.isFinite(seg.sourceOutSec) ? seg.sourceOutSec : inSec;
+            const frames = videoTrackFilmstripFrames.filter(
+                (f) => f.sourceSec >= inSec - 0.05 && f.sourceSec <= outSec + 0.05,
+            );
+            const sig = computeRegionFilmstripLayoutSignature(
+                inSec,
+                outSec,
+                regionW,
+                laneH,
+                settled,
+                frames.length,
+            );
+            if (regionEl.dataset.filmstripLayoutSig !== sig) return true;
+            const filmstrip = regionEl.querySelector('.video-viz-lane__filmstrip');
+            if (!filmstrip || filmstrip.hidden) {
+                if (frames.length > 0) return true;
+            }
+        }
+        return anyVideoRegionFilmstripLayoutPending();
+    }
+
+    function scheduleVideoVizFilmstripRender(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return;
+        if (videoVizFilmstripRenderRaf) {
+            cancelAnimationFrame(videoVizFilmstripRenderRaf);
+            videoVizFilmstripRenderRaf = 0;
+        }
+        const run = () => {
+            videoVizFilmstripRenderRaf = 0;
+            if (!o.force && !videoVizFilmstripPresentationNeedsUpdate()) return;
+            renderVideoVizFilmstrip();
+            if (anyVideoRegionFilmstripLayoutPending()) {
+                if (videoVizFilmstripLayoutRetryRaf) {
+                    cancelAnimationFrame(videoVizFilmstripLayoutRetryRaf);
+                }
+                videoVizFilmstripLayoutRetryRaf = requestAnimationFrame(() => {
+                    videoVizFilmstripLayoutRetryRaf = 0;
+                    if (videoVizFilmstripPresentationNeedsUpdate()) {
+                        renderVideoVizFilmstrip();
+                    }
+                });
+            }
+        };
+        if (o.sync) {
+            run();
+            return;
+        }
+        videoVizFilmstripRenderRaf = requestAnimationFrame(() => {
+            videoVizFilmstripRenderRaf = requestAnimationFrame(run);
+        });
+    }
+
+    window.scheduleVideoVizFilmstripRender = scheduleVideoVizFilmstripRender;
+
+    function getFilmstripThumbGammaFilterCss() {
+        if (typeof getVideoPreviewGammaFilterCss === 'function') {
+            return getVideoPreviewGammaFilterCss();
+        }
+        return '';
+    }
+
+    function syncFilmstripCellImageGammaFilter(img) {
+        if (!img) return;
+        const filter = getFilmstripThumbGammaFilterCss();
+        img.style.filter = filter || '';
+    }
+
+    function refreshVideoFilmstripGammaFilters() {
+        if (
+            typeof isVideoVizLaneShown !== 'function' ||
+            !isVideoVizLaneShown() ||
+            !videoVizLane ||
+            videoVizLane.hidden
+        ) {
+            return;
+        }
+        const imgs = videoVizLane.querySelectorAll('.video-viz-lane__filmstrip-cell__img');
+        for (let i = 0; i < imgs.length; i++) {
+            syncFilmstripCellImageGammaFilter(imgs[i]);
+        }
+    }
+
+    window.refreshVideoFilmstripGammaFilters = refreshVideoFilmstripGammaFilters;
+
     function applyFilmstripCellFrame(cell, dataUrl, layout) {
 
         const leftPx = layout && Number.isFinite(layout.leftPx) ? layout.leftPx : 0;
@@ -2500,6 +2673,8 @@
 
         }
 
+        syncFilmstripCellImageGammaFilter(img);
+
     }
 
 
@@ -2534,13 +2709,30 @@
 
         const laneH = Math.max(1, regionEl.clientHeight | 0);
 
+        const settled = !videoTrackFilmstripBuildInFlight;
+
+        const layoutSig = computeRegionFilmstripLayoutSignature(
+            inSec,
+            outSec,
+            regionW,
+            laneH,
+            settled,
+            frames.length,
+        );
+
         if (regionW < 1 || laneH < 1) {
 
             filmstrip.hidden = true;
 
+            regionEl.dataset.filmstripLayoutPending = '1';
+
+            delete regionEl.dataset.filmstripLayoutSig;
+
             return;
 
         }
+
+        delete regionEl.dataset.filmstripLayoutPending;
 
         const placements = planFilmstripLayout(
 
@@ -2554,7 +2746,7 @@
 
             laneH,
 
-            !videoTrackFilmstripBuildInFlight,
+            settled,
 
         );
 
@@ -2563,6 +2755,8 @@
         if (!placements.length) {
 
             filmstrip.textContent = '';
+
+            regionEl.dataset.filmstripLayoutSig = layoutSig;
 
             return;
 
@@ -2612,7 +2806,13 @@
 
             }
 
-            if (unchanged) return;
+            if (unchanged) {
+
+                regionEl.dataset.filmstripLayoutSig = layoutSig;
+
+                return;
+
+            }
 
         }
 
@@ -2629,6 +2829,8 @@
             filmstrip.appendChild(cell);
 
         }
+
+        regionEl.dataset.filmstripLayoutSig = layoutSig;
 
     }
 
@@ -2678,7 +2880,17 @@
 
 
 
-    function refreshVideoVizRegionThumbnails() {
+    function refreshVideoVizRegionThumbnails(opt) {
+
+        const o = opt && typeof opt === 'object' ? opt : {};
+
+        if (o.deferLayout) {
+
+            scheduleVideoVizFilmstripRender(o);
+
+            return;
+
+        }
 
         renderVideoVizFilmstrip();
 
