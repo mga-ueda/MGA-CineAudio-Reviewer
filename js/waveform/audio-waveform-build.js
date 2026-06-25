@@ -1014,13 +1014,6 @@
                       ? [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }]
                       : [];
             const releasedSegmentIndex = waveformOffsetDragSegmentIndex;
-            const releasedTransportSec =
-                releasedSegmentIndex >= 0 &&
-                typeof getSegmentTimelineStartForAltDrag === 'function'
-                    ? getSegmentTimelineStartForAltDrag(slot, releasedSegmentIndex)
-                    : typeof getExtraTrackTimelineStartSec === 'function'
-                      ? getExtraTrackTimelineStartSec(slot)
-                      : 0;
             if (waveformOffsetDragSegmentIndex >= 0) {
                 applyWaveformGroupSegmentTimelineStartFromDrag(slot, next, {
                     skipSnap: true,
@@ -1037,6 +1030,13 @@
                 applyWaveformTimelineStartFromDrag(slot, next);
                 endWaveformTrackOffsetDrag({ force: true, event: e });
             }
+            const releasedTransportSec =
+                releasedSegmentIndex >= 0 &&
+                typeof getSegmentTimelineStartForAltDrag === 'function'
+                    ? getSegmentTimelineStartForAltDrag(slot, releasedSegmentIndex)
+                    : typeof getExtraTrackTimelineStartSec === 'function'
+                      ? getExtraTrackTimelineStartSec(slot)
+                      : 0;
             if (typeof endRegionOffsetDragMasterFreeze === 'function') {
                 endRegionOffsetDragMasterFreeze();
             }

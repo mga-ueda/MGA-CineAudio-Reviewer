@@ -320,11 +320,10 @@
         if (segmentIndex === 0) {
             if (effectiveInPad > 0.00001) {
                 state.regionTimelineInSec = desiredRegionIn;
-                if (isVideoTrackRef(track)) {
-                    raw.regionTimelineInSec = desiredRegionIn;
-                }
+                raw.regionTimelineInSec = desiredRegionIn;
                 if (preserveLeadPad) {
                     state.regionLeadPadSec = leadPad;
+                    raw.regionLeadPadSec = leadPad;
                 }
                 state.headPadSec = Math.max(0, desiredRegionIn - t0);
             } else {
@@ -364,7 +363,9 @@
         if (lead <= 0.00001) return 0;
         const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
         const anchor = getSegmentTimelineStart(track, segmentIndex);
-        if (regionIn > anchor + 0.00001) {
+        // In トリムで lead pad を超えて右に進んだときだけ無効化。
+        // regionIn=0 / anchor=-lead の iXML 先頭 pad 配置では regionIn>anchor でも pad は有効。
+        if (regionIn - anchor > lead + 0.00001) {
             return 0;
         }
         return lead;
@@ -447,7 +448,9 @@
             raw.regionLeadPadSec = lead;
             const regionIn = Number.isFinite(raw.regionTimelineInSec)
                 ? raw.regionTimelineInSec
-                : anchor - lead;
+                : Number.isFinite(state.regionTimelineInSec)
+                  ? state.regionTimelineInSec
+                  : anchor - lead;
             raw.regionTimelineInSec = regionIn;
             state.regionLeadPadSec = lead;
             state.regionTimelineInSec = regionIn;
