@@ -916,10 +916,26 @@
             return Math.max(0, n);
         }
         if (opt && opt.skipStopSnap) {
-            const transportOnly = [];
-            appendTransportSnapStop(transportOnly);
-            if (transportOnly.length) {
-                n = snapToNearestStop(n, transportOnly, regionSnapThresholdSec(), opt);
+            const snapStops = [];
+            appendTransportSnapStop(snapStops);
+            appendVideoEndToSnapStops(snapStops);
+            const priority = resolveTimelineSnapPriorityMode();
+            if (priority === 'marker' && typeof collectMarkerOnlySnapStops === 'function') {
+                const markerStops = collectMarkerOnlySnapStops();
+                for (let i = 0; i < markerStops.length; i++) {
+                    snapStops.push(markerStops[i]);
+                }
+            } else if (
+                priority === 'musical' &&
+                typeof collectMusicalGridSnapStops === 'function'
+            ) {
+                const gridStops = collectMusicalGridSnapStops();
+                for (let i = 0; i < gridStops.length; i++) {
+                    snapStops.push(gridStops[i]);
+                }
+            }
+            if (snapStops.length) {
+                n = snapToNearestStop(n, snapStops, regionSnapThresholdSec(), opt);
             }
             return Math.max(0, n);
         }

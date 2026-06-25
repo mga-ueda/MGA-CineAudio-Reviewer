@@ -75,6 +75,12 @@
         'tooltip.exportIncludeAudio':
             'Export Review に追加音声（読み込み済みの全 Audio Track）を含める',
         'tooltip.videoClear': '動画だけをアンロード（追加音声・マーカーは残る場合あり）',
+        'tooltip.videoFrame': (h) =>
+            '映像プレビュー。ホイールでガンマ補正（明るくする方向のみ。セッション保存・Export Review に含む）。サムネ生成中はモーションブラー表示',
+        'tooltip.videoVizLane': (h) =>
+            '映像タイムライン（Video）。リージョンをドラッグで開始位置を変更。' +
+            h.regionMoveHeadToSeekbar +
+            ' で選択リージョンの頭をシークバーへ平行移動',
         'tooltip.videoAudioClear': 'Video Audio レーンは非表示にできません（最後の1トラック）',
         'tooltip.markerClearAll': 'すべてのマーカーを削除',
         'tooltip.seekBar': '再生ヘッド位置をシーク',

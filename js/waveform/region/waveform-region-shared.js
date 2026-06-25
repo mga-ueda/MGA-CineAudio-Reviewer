@@ -29,6 +29,7 @@
     var regionOutDragStartMasterSec = NaN;
     var regionOutDragStartScrubW = NaN;
     var regionOutDragStartScrubRatio = NaN;
+    var regionOutDragStartPointerSec = NaN;
     var regionOutDragExtentSec = NaN;
     /** リージョン平行移動ドラッグ中の表示用マスター尺（ドラッグ中は縮まない／右延長時のみ拡大） */
     var regionOffsetDragMasterFreezeSec = NaN;

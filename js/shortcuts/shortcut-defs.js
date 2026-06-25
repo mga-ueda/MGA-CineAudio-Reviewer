@@ -807,6 +807,8 @@
         if (exportAudioChk) setElementTitle(exportAudioChk.closest('label'), exportAudioTitle);
 
         setElementTitle(document.getElementById('videoClearBtn'), msg('tooltip.videoClear'));
+        setElementTitle(document.getElementById('frameMain'), msg('tooltip.videoFrame', h));
+        setElementTitle(document.getElementById('videoVizLane'), msg('tooltip.videoVizLane', h));
         setElementTitle(document.getElementById('videoAudioClearBtn'), msg('tooltip.videoAudioClear'));
         setElementTitle(document.getElementById('markerClearAllBtn'), msg('tooltip.markerClearAll'));
         setElementTitle(document.getElementById('seekBar'), msg('tooltip.seekBar'));

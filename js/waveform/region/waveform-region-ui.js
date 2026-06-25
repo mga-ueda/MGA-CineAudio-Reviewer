@@ -2411,6 +2411,7 @@
         regionOutDragStartMasterSec = NaN;
         regionOutDragStartScrubW = NaN;
         regionOutDragStartScrubRatio = NaN;
+        regionOutDragStartPointerSec = NaN;
         regionOutDragExtentSec = NaN;
         if (regionOutDragExtendSlot < 0) return;
         regionOutDragExtendSlot = -1;
@@ -2467,23 +2468,21 @@
     }
 
     function transportSecFromRegionOutDragDelta(clientX) {
-        if (
-            !Number.isFinite(regionOutDragStartOutTransportSec) ||
-            !Number.isFinite(regionOutDragStartScrubRatio) ||
-            !(regionOutDragStartScrubW > 0) ||
-            !(regionOutDragStartMasterSec > 0)
-        ) {
+        if (!Number.isFinite(regionOutDragStartOutTransportSec)) {
             return typeof transportSecFromClientX === 'function'
                 ? transportSecFromClientX(clientX)
                 : 0;
         }
-        const ratioNow = scrubRatioUnclampedFromClientX(
-            clientX,
-            regionOutDragStartScrubW,
-        );
-        let sec =
-            regionOutDragStartOutTransportSec +
-            (ratioNow - regionOutDragStartScrubRatio) * regionOutDragStartMasterSec;
+        const pointerSecNow =
+            typeof transportSecUnclampedFromClientX === 'function'
+                ? transportSecUnclampedFromClientX(clientX)
+                : typeof transportSecFromClientX === 'function'
+                  ? transportSecFromClientX(clientX)
+                  : 0;
+        const pointerSecStart = Number.isFinite(regionOutDragStartPointerSec)
+            ? regionOutDragStartPointerSec
+            : regionOutDragStartOutTransportSec;
+        let sec = regionOutDragStartOutTransportSec + (pointerSecNow - pointerSecStart);
         if (regionHandleDragTrack && regionHandleDragSegmentIndex >= 0) {
             const playbackStart = getSegmentPlaybackTimelineStart(
                 regionHandleDragTrack,
@@ -2837,12 +2836,17 @@
                 ev.clientX,
                 scrubW,
             );
+            regionOutDragStartPointerSec =
+                typeof transportSecUnclampedFromClientX === 'function'
+                    ? transportSecUnclampedFromClientX(ev.clientX)
+                    : regionOutDragStartOutTransportSec;
             beginRegionOutDragTimelineExtend();
         } else {
             regionOutDragStartOutTransportSec = NaN;
             regionOutDragStartMasterSec = NaN;
             regionOutDragStartScrubW = NaN;
             regionOutDragStartScrubRatio = NaN;
+            regionOutDragStartPointerSec = NaN;
         }
     }
 

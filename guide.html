@@ -42,6 +42,7 @@
                     <a href="#video" class="guide-nav__chapter">映像パネル</a>
                     <ol class="guide-nav__sublist">
                         <li><a href="#video-playback">再生とタイムコード</a></li>
+                        <li><a href="#video-gamma">ガンマ補正とサムネ生成</a></li>
                         <li><a href="#video-sync">同期の考え方</a></li>
                         <li><a href="#video-clear">Clear</a></li>
                     </ol>
@@ -64,7 +65,8 @@
                     <ol class="guide-nav__sublist">
                         <li><a href="#audio-sidebar">左サイドバー</a></li>
                         <li><a href="#audio-timeline">波形タイムライン</a></li>
-                        <li><a href="#audio-regions">再生リージョン</a></li>
+                        <li><a href="#audio-video-track">Video Track（映像タイムライン）</a></li>
+                        <li><a href="#audio-regions">Audio Track の再生リージョン</a></li>
                         <li><a href="#audio-rehearsal-overlay">Rehearsal 表示オーバーレイ</a></li>
                         <li><a href="#audio-range-loop">範囲ループ</a></li>
                         <li><a href="#audio-mix-keys">波形上のミックス操作</a></li>
@@ -162,7 +164,7 @@
                             <strong>音声波形エリア</strong> — 左サイドバーと右の波形タイムラインの2列構成。ファイルのドロップはページ内どこでも可能で、ここへドロップしたときは波形枠がハイライト表示されます。
                             <ul>
                                 <li><strong>左サイドバー</strong>：各レーンの名前、S（Solo）/ M（Mute）/ ×（クリア）、レベルメーター、音量フェーダー、+ Add Track。Audio Track には ▲/▼（表示順の入れ替え）もあります。</li>
-                                <li><strong>右（広い）</strong>：Video Audio と各 Audio Track の波形、再生ヘッド（赤い縦線）、マーカー表示、範囲ループのハイライト。</li>
+                                <li><strong>右（広い）</strong>：Musical トラック（Rehearsal Mark / Tempo / Signature / Measure）、動画読み込み後の <strong>Video</strong>（映像タイムライン）、Video Audio と各 Audio Track の波形、再生ヘッド（赤い縦線）、マーカー表示、範囲ループのハイライト。</li>
                             </ul>
                         </li>
                         <li>
@@ -213,7 +215,7 @@
 
                 <h3 class="docs-heading-box--sub" id="load-individual">個別に読み込む</h3>
                 <ul>
-                    <li><strong>動画</strong> — 対応拡張子のファイルをページ内へドロップ（先頭1件を Video パネルへ読み込み）。</li>
+                    <li><strong>動画</strong> — 対応拡張子のファイルをページ内へドロップ（先頭1件を Video パネルへ読み込み）。新しい動画を読み込むと Tempo/Sig 表示（<kbd>T</kbd>）を自動で ON にします（セッション復元・Import Review での復元時は保存状態を優先）。</li>
                     <li><strong>追加音声</strong> — 対応拡張子のファイルをページ内へドロップ。空いている Audio Track に入ります。</li>
                     <li>読み込み済みの <strong>Audio Track レーン上</strong>へドロップすると、<strong>同じトラックに別クリップとして追加</strong>されます（1トラックあたり複数ファイル可）。</li>
                 </ul>
@@ -270,6 +272,13 @@
                     <li>コメント欄に入力していると、再生中に映像上へコメントが短時間オーバーレイ表示されます（ポイント用と範囲用で別表示）。</li>
                 </ul>
 
+                <h3 class="docs-heading-box--sub" id="video-gamma">ガンマ補正とサムネ生成</h3>
+                <ul>
+                    <li>動画読み込み後、映像フレーム上で<strong>ホイール</strong>を回すとプレビューの<strong>ガンマ補正</strong>を調整できます（<strong>明るくする方向のみ</strong>。暗くする方向には動きません）。画面上部に短時間 γ 値が表示されます。</li>
+                    <li>ガンマ設定は<strong>セッション保存</strong>および <strong>Export Review</strong> / <strong>Import Review</strong>（.mgacr）に含まれます。映像タイムラインの filmstrip サムネイル生成中は、プレビューにモーションブラーをかけ、完了後に解除してガンマ補正を復元します。生成中は映像フレームと映像タイムラインに読み込み表示が出ます。</li>
+                    <li>ガンマ補正は<strong>ブラウザ内プレビュー専用</strong>です。<strong>Export WebM</strong> の焼き込み映像には反映されません。</li>
+                </ul>
+
                 <h3 class="docs-heading-box--sub" id="video-sync">同期の考え方</h3>
                 <ul>
                     <li>再生位置の基準は<strong>音声（マスター）</strong>です。波形上の赤い再生ヘッドと、トランスポートの現在時刻が一致します。映像は通常は自然再生に任せ、大きくズレたときだけ補正します（カクつき防止）。</li>
@@ -289,8 +298,8 @@
                 <p>マーカーの位置は、<strong>フレーム番号ではなく秒（トランスポート上の秒）</strong>として記録されます。<strong>Export Review</strong>（<code>.mgacr</code>）やブラウザ内のセッション保存も同じ形式です。画面上の In / Out 列や映像上のタイムコードは、記録した秒から<strong>現在の FPS に基づいてフレーム表記（<code>HH:MM:SS:FF</code>）へ変換して表示しています</strong>。</p>
                 <ul>
                     <li>表に見える TC と記録した秒は、常に同じ意味のフレーム境界を指すとは限りません。表示 TC は記録秒を最も近いフレームへ丸めた結果です。</li>
-                    <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、原則として<strong>その時点の再生位置（秒）をそのまま記録</strong>します。ただし<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong>かつ<strong>再生中</strong>に <kbd>Ins</kbd> だけで確定したポイント位置、および範囲マーカーの In / Out は、Tempo/Sig 定義に基づき<strong>4分音符単位</strong>へ丸めます（<kbd>[</kbd>/<kbd>]</kbd>、停止中、Rehearsal 表示 OFF では丸めません）。フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>−</kbd> による ±1 フレーム調整を使ってください。</li>
-                    <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）または波形上のシークバー付近のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>−</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
+                    <li><kbd>Ins</kbd>・<kbd>[</kbd>/<kbd>]</kbd>・行クリックでの<strong>新規配置</strong>は、原則として<strong>その時点の再生位置（秒）をそのまま記録</strong>します。ただし<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong>かつ<strong>再生中</strong>に <kbd>Ins</kbd> だけで確定したポイント位置、および範囲マーカーの In / Out は、Tempo/Sig 定義に基づき<strong>4分音符単位</strong>へ丸めます（<kbd>[</kbd>/<kbd>]</kbd>、停止中、Rehearsal 表示 OFF では丸めません）。フレーム境界に揃える必要がある場合は、後から In / Out 欄で <kbd>+</kbd>/<kbd>-</kbd> による ±1 フレーム調整を使ってください。</li>
+                    <li>既存マーカーの In / Out を<strong>フレーム単位より細かく調整</strong>したい場合は、<strong>波形上のマーカー（点・範囲の端や帯）または波形上のシークバー付近のマーカーをマウスでドラッグ</strong>する操作のみが該当します。ポインタ位置から秒へ直接変換して保存します（<kbd>Alt</kbd> 押下中は他マーカー・リージョンへのスナップを抑制できます）。TC 欄の <kbd>+</kbd>/<kbd>-</kbd>（±1 フレーム / ±1 秒）や <strong>Paste</strong> はフレーム境界を経由するため、このより細かい刻みでは動きません。</li>
                     <li>TC 欄の ±1 フレーム微調整は、いったんフレーム位置へ変換してから<strong>再び秒として保存</strong>されます。</li>
                     <li><strong>Copy</strong> は記録秒から求めた<strong>ミリ秒表記</strong>（<code>00:00:00.000</code>）を出力します。<strong>Paste</strong> はそのミリ秒 TC を読み取り、<strong>現在読み込まれている FPS</strong> で最も近いフレーム位置に合わせてから秒として配置します。DAW 側の TC と 1 フレームずれることがあります。</li>
                     <li>素材の FPS が異なると、同じ記録秒でも画面上のフレーム TC や Length 列のフレーム数が変わることがあります。</li>
@@ -323,7 +332,7 @@
                     <li>波形上のマーカー区間の端（ハンドル）をドラッグして In / Out を調整できます。帯の中央付近をドラッグすると In / Out を同時に移動します（クリックのみのときはその位置へシーク）。</li>
                     <li>Audio Track 上でリージョンを <kbd>Ctrl</kbd>+クリックで<strong>選択</strong>したうえで <kbd>Alt</kbd>+ホイールによる音量補正を行うと、そのリージョン幅の範囲マーカーが自動付与され、Markers パネルの <strong>Comment</strong> 列に補正内容（<code>3.0dB 上げる</code>/<code>-3.0dB 下げる</code> 等）が入ります（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。補正が <code>0.0dB</code> に戻ったときは、同じ In/Out の自動付与マーカーを削除します（手動で付けた範囲マーカーと In/Out が一致している場合も同じ行を更新/削除します）。</li>
                     <li><strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> でリージョンを選択し <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイールでキーを変更すると、同様に範囲マーカーが自動付与され、Comment 列に <code>キーを +1 する</code> 等が入ります（-12〜+12 半音。<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。<strong>Key 0</strong> に戻したときは同じ In/Out の自動付与マーカーを削除します。複数選択時はまとめて同じ半音数だけ変更されます。</li>
-                    <li>表の In / Out 列をクリックするとタイムコードを直接編集できます。<kbd>+</kbd> / <kbd>−</kbd> で ±1フレーム、<kbd>Shift</kbd>+<kbd>+</kbd> / <kbd>−</kbd> で ±1秒の微調整ができます（Out が空のときは In を起点に Out を設定）。Out 列を編集中に <kbd>Del</kbd> で Out をクリアすると範囲マーカーが点マーカーになります。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で編集取消です。</li>
+                    <li>表の In / Out 列をクリックするとタイムコードを直接編集できます。<kbd>+</kbd> / <kbd>-</kbd> で ±1フレーム、<kbd>Shift</kbd>+<kbd>+</kbd> / <kbd>-</kbd> で ±1秒の微調整ができます（Out が空のときは In を起点に Out を設定）。Out 列を編集中に <kbd>Del</kbd> で Out をクリアすると範囲マーカーが点マーカーになります。<kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で編集取消です。</li>
                     <li>波形上の範囲マーカーを<strong>ダブルクリック</strong>すると、32×で範囲中央を画面中央に表示します。再生位置は範囲の中央へ移動します。既に32×のときは全体表示（1×）に戻します。</li>
                 </ul>
 
@@ -362,7 +371,7 @@
 
             <section class="guide-section" id="audio">
                 <h2 class="docs-heading-box">音声波形・ミックス</h2>
-                <p><strong>音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Video Audio、Audio Track 1、Audio Track 2、… の順でレーンが並びます（表示されているレーンのみ。追加音声は最大16本まで）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio anywhere on the page</em> と控えめに表示されます（背景色なし）。</p>
+                <p><strong>音声波形エリア</strong>は、左のコントロール列と右のタイムライン列で構成されています。上から下へ Musical トラック（Rehearsal Mark / Tempo / Signature / Measure）、動画読み込み後の <strong>Video</strong>（映像タイムライン）、Video Audio、Audio Track 1、Audio Track 2、… の順でレーンが並びます（表示されているレーンのみ。追加音声は最大16本まで）。追加音声がまだ無いときは、波形枠の上からおよそ25%の位置に <em>Drop extra audio anywhere on the page</em> と控えめに表示されます（背景色なし）。</p>
 
                 <h3 class="docs-heading-box--sub" id="audio-sidebar">左サイドバー（各レーン）</h3>
                 <ul>
@@ -387,18 +396,30 @@
                     <li><kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> で表示中要素の優先順に従い次/前へ移動します（マーカー表示中（Hide でない）＞小節/Rehearsal 区間（Tempo/Sig または Rehearsal 表示。拍線は含まない）＞リージョン）。時間が進む方向が <kbd>→</kbd> で、再生中は押下中一度停止し、キーを離すと再生再開します（詳細は「マーカー」参照）。</li>
                 </ul>
 
+                <h3 class="docs-heading-box--sub" id="audio-video-track">Video Track（映像タイムライン）</h3>
+                <p>動画を読み込むと、Measure トラックの直下に <strong>Video</strong> レーン（映像タイムライン）が表示されます。左サイドバーのラベルは <strong>Video</strong> です。動画全体の尺に合わせた<strong>映像リージョン</strong>が表示され、区間内に filmstrip 形式のサムネイルが並びます（生成完了まで時間がかかることがあります）。</p>
+                <ul>
+                    <li>リージョンの<strong>上をクリック</strong>するとその位置へシークします。</li>
+                    <li>リージョンを<strong>ドラッグ</strong>すると、映像クリップの<strong>タイムライン上の開始位置</strong>をずらせます（Audio Track と同様。他リージョン・動画終端・マーカーへスナップ。ドラッグ中は磁石吸着、離すと確定）。平行移動中はサムネイルの再生成を抑止し、枠だけ追従します。</li>
+                    <li>リージョン端の<strong>In / Out ハンドル</strong>で映像の再生範囲を調整できます。Tempo/Sig 表示（<kbd>T</kbd>）ON 時は小節線/拍線へスナップ（<kbd>Alt</kbd> 押下中は抑制）。隣接区間があるときはスプリットハンドルとして動きます（Audio Track と同様）。</li>
+                    <li><kbd>X</kbd> でスプリット（リージョン上のポインタ直下、またはシークバー位置）。<kbd>Enter</kbd> でシークバー直下のリージョンを既存の選択に追加（Audio Track と同列の優先順位）。</li>
+                    <li><kbd>Scroll Lock</kbd> / <kbd>Pause</kbd> / <kbd>Break</kbd> で、選択中リージョンの<strong>頭をシークバー位置へ平行移動</strong>します（グループ選択時はメンバー全体）。</li>
+                    <li>映像リージョンの開始位置・In/Out は<strong>セッション保存</strong>および <strong>Export Review</strong> / <strong>Import Review</strong> に含まれます。動画の差し替え・Clear 時はリージョン表示をリセットします。</li>
+                    <li>音量補正・キー変更・フェード・グループ化・コピー/ペースト・Rehearsal 区間の入れ替え（<kbd>E</kbd>）は<strong>Audio Track 専用</strong>です（Video Track では利用できません）。</li>
+                </ul>
+
                 <h3 class="docs-heading-box--sub" id="audio-regions">Audio Track の再生リージョン</h3>
                 <p>追加音声を読み込むと、波形上に半透明の<strong>リージョン</strong>（クリップ範囲）が表示されます。</p>
                 <ul>
                     <li>リージョンの<strong>上をクリック</strong>するとその位置へシークします。</li>
-                    <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。他リージョン・動画終端・マーカーへスナップします。ドラッグ中は磁石吸着でスナップ位置へ引き寄せ、離すと確定します。リージョン同士が重なると、重なり区間は等パワー・クロスフェードで再生されます。平行移動中も隣接境界のスプリットハンドル（縦線）は表示されます。</li>
-                    <li>リージョン端の<strong>ハンドル</strong>（ソース In/Out）をドラッグすると、クリップ内の再生範囲を調整できます。隣接リージョンがあるときは境界が1本のスプリットハンドルとして動き、離すと各リージョンに In/Out ハンドルが現れます。<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> で隣接 Rehearsal 区間（例: A↔B）の境界にあるときは、小節線へスナップし Rehearsal 定義を更新します（着色帯上の境界ハンドルと同じ動作）。リージョン境界にポインタを置くと着色帯のハンドルは一時的に無効化され、リージョンハンドルで操作します。同一 Rehearsal 区間内の結合境界では、ソース上の分割点のみ動きます。<strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> では、タイムライン上でわずかに隙間や重なりがある隣接境界もスプリットハンドル（または境界付近のリージョン本体）でドラッグできます。</li>
+                    <li>リージョンを<strong>ドラッグ</strong>すると、クリップの<strong>タイムライン上の開始位置</strong>をずらせます（映像より遅れて入る音源の同期に使います）。他リージョン・動画終端・マーカーへスナップします。ドラッグ中は磁石吸着でスナップ位置へ引き寄せ、離すと確定します。リージョン同士が重なると、重なり区間は等パワー・クロスフェードで再生されます。平行移動中も隣接境界のスプリットハンドル（縦線）は表示されます（重なり区間では波形プレビューを描画）。</li>
+                    <li>リージョン端の<strong>ハンドル</strong>（ソース In/Out）をドラッグすると、クリップ内の再生範囲を調整できます。Tempo/Sig 表示（<kbd>T</kbd>）ON 時は小節線/拍線へスナップします（<kbd>Alt</kbd> 押下中は抑制）。隣接リージョンがあるときは境界が1本のスプリットハンドルとして動き、離すと各リージョンに In/Out ハンドルが現れます。<strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> で隣接 Rehearsal 区間（例: A↔B）の境界にあるときは、小節線へスナップし Rehearsal 定義を更新します（着色帯上の境界ハンドルと同じ動作）。リージョン境界にポインタを置くと着色帯のハンドルは一時的に無効化され、リージョンハンドルで操作します。同一 Rehearsal 区間内の結合境界では、ソース上の分割点のみ動きます。<strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> では、タイムライン上でわずかに隙間や重なりがある隣接境界もスプリットハンドル（または境界付近のリージョン本体）でドラッグできます。</li>
                     <li>リージョン左上・右上の<strong>Fade In / Fade Out 三角</strong>を内側へドラッグすると、リージョン端のフェード長を調整できます（曲線表示付き）。<kbd>Alt</kbd>+<kbd>I</kbd>（Fade In）/<kbd>Alt</kbd>+<kbd>O</kbd>（Fade Out）でも、<strong>シークバー（再生ヘッド）の位置</strong>までフェードを伸ばせます（In＝リージョン頭から、Out＝末尾から）。対象は選択中のリージョン、またはポインタ下/アクティブトラック上のシークバー位置のリージョンです。再生中も即座に反映されます。</li>
                     <li><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd> / <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd> でリージョンの <strong>In / Out</strong> を <strong>1 拍</strong>ずつ調整できます（クリップ内容は動かさず、In ハンドル/Out ハンドルをドラッグしたのと同じ経路。<strong>Rehearsal 表示（<kbd>R</kbd>）</strong>の ON / OFF に関わらず利用可）。移動量は参照位置の Tempo/Sig 定義に基づき、変拍子の各拍長に追従します（Tempo/Sig 未設定時は不可）。対象は選択中のリージョン、またはポインタ下/アクティブトラック上のシークバー位置のリージョンです。隣接リージョンと重なると等パワー・クロスフェードになり、Fade In / Fade Out 三角で表示されます。波形が連続している境界では操作できません。</li>
                     <li>リージョンを <kbd>Ctrl</kbd>+クリックで<strong>選択</strong>したうえで <kbd>Alt</kbd>+ホイールすると ±1dB刻みで音量補正（中央に赤いdB表示）。複数選択時はまとめて同じ dB だけ変更されます。補正のたびに、リージョンの In〜Out に合わせた<strong>範囲マーカー</strong>が自動付与され、Markers パネルの <strong>Comment</strong> 列に補正内容（例: <code>3.0dB 上げる</code>、<code>-1.0dB 下げる</code>）が入ります（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。<strong>0.0dB</strong>に戻すとその範囲マーカーは削除されます。同じ範囲のマーカーが既にある場合は In/Out と Comment 列を更新します。セッション保存・Export/Import Review に含まれます。</li>
                     <li><strong>Rehearsal 表示（<kbd>R</kbd>）ON</strong> のとき、リージョンを <kbd>Ctrl</kbd>+クリックで<strong>選択</strong>したうえで <kbd>Alt</kbd>+<kbd>Shift</kbd>+ホイールすると ±1 半音刻みでキーを変更（-12〜+12。リージョン中央に <code>Key +1</code> などの表示。リージョン尺は変えずタイムストレッチで再生）。複数選択時はまとめて同じ半音数だけ変更されます。補正のたびに In〜Out の範囲マーカーが自動付与され、Comment 列に <code>キーを +1 する</code> 等が入ります（<strong>WAV 埋め込み Comment の取り込みとは別</strong>）。<strong>Key 0</strong>（変更なし）に戻すとその範囲マーカーは削除されます。セッション保存・Export/Import Review に含まれます。</li>
                     <li>リージョン情報（ソース In/Out・音量補正 dB・キー設定など）は、<kbd>Ctrl</kbd>+クリックでリージョンを<strong>選択</strong>（シアン枠）したうえで <kbd>Ctrl</kbd>+<kbd>C</kbd> でコピーし、<kbd>Ctrl</kbd>+<kbd>V</kbd> で同じ Audio Track の<strong>コピー元リージョンの直後</strong>にペーストできます。直後にちょうど収まる隙間があればそこへ配置し、足りなければ後続リージョンを後ろへずらします。</li>
-                    <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。<kbd>Ctrl</kbd>+<kbd>A</kbd> で<strong>対象 Audio Track</strong>（アクティブ/ポインタ下）の全リージョンをまとめて選択できます（他トラックの選択は解除。無音スロットは含みません）。<kbd>Enter</kbd> でアクティブな Audio Track の<strong>シークバー直下</strong>のリージョンを既存の選択に<strong>追加</strong>します。範囲ループ指定中はその区間に属するリージョンを追加します（境界のみの区間や、リージョンへの重なりがわずかな場合は除外）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でもまとめて結合できます。<kbd>Ctrl</kbd> なしでリージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>のやや太い枠で示されます。</li>
+                    <li><strong>複数選択</strong> — <kbd>Ctrl</kbd>+クリック（Mac は <kbd>Cmd</kbd>）でリージョンを追加/解除します。<kbd>Ctrl</kbd>+<kbd>A</kbd> で<strong>対象 Audio Track</strong>（アクティブ/ポインタ下）の全リージョンをまとめて選択できます（他トラックの選択は解除。無音スロットは含みません）。<kbd>Enter</kbd> でアクティブなトラック（Video Track または Audio Track。トラック名が赤いもの、または映像/Video Audio/Audio Track レーン上のポインタ位置）の<strong>シークバー直下</strong>のリージョンを既存の選択に<strong>追加</strong>します。範囲ループ指定中はその区間に属するリージョンを追加します（境界のみの区間や、リージョンへの重なりがわずかな場合は除外）。<kbd>Scroll Lock</kbd> / <kbd>Pause</kbd> / <kbd>Break</kbd> で選択中リージョンの<strong>頭をシークバー位置へ平行移動</strong>します（グループ選択時はメンバー全体。Video Track / Audio Track 共通）。<strong>隙間なく連続するリージョン</strong>（件数不限）を選んで <kbd>B</kbd> でもまとめて結合できます。<kbd>Ctrl</kbd> なしでリージョン以外をクリックすると選択は解除されます。すでに<strong>グループ化</strong>されているリージョンの1つを選ぶと、グループの全メンバー（他の Audio Track を含む）がまとめて選択されます（もう一度選ぶとグループ全体の選択を解除）。選択中は<strong>シークバーと同じシアン色</strong>の枠で示されます。</li>
                     <li><strong>グループ化</strong> — 2つ以上選択した状態で <kbd>G</kbd>。Audio Track をまたいで可。成功するとメンバー全員の枠が一度黄色に発光します。通常時の見た目は通常リージョンと同じで、<strong>ホバー時</strong>にグループの全メンバーが黄色枠になります。グループ内のいずれかを<strong>ドラッグ</strong>すると、メンバー全体が同じ時間差で平行移動します（開始位置が異なる場合でも、いずれかがタイムライン先頭に達したらそこでグループ全体が止まります）。グループ化が成立しないときは小節ジャンプダイアログが開きます（「シーク・ジャンプ」参照）。</li>
                     <li><strong>グループ解除</strong> — グループ内のリージョンを選択して <kbd>G</kbd>（グループ化と同じキー）。</li>
                     <li><strong>入れ替え</strong> — <strong>Rehearsal 表示（<kbd>R</kbd>）が ON のときだけ</strong>、同一 Audio Track 上で<strong>2 リージョン</strong>を <kbd>Ctrl</kbd>+クリックで選択して <kbd>E</kbd>（<strong>E</strong>xchange の頭文字）を押すと、タイムライン上の順序（Rehearsal 区間の並び）を入れ替えます（<strong>隣接していなくても可</strong>）。成功時は交差スライドアニメーションで位置を入れ替え、確定直後に波形へ反映されます。各リージョンの<strong>元の長さ</strong>を保ち、先の位置に収まらない場合は後続を後ろへずらして空け、短くなった側では余った隙間を詰めます。無音スロットとの入れ替えはできません。入れ替え不能なときは赤いトーストで通知されます。</li>
@@ -419,7 +440,7 @@
                     <li><strong>Rehearsal 区間境界</strong> — 隣接リージョン境界にポインタを置くと、着色帯上の境界ハンドルは一時的に無効化され、リージョン In/Out・スプリットハンドルでRehearsal 区間境界を調整できます（「Rehearsal 区間の編集」の境界ドラッグ参照）。</li>
                     <li><strong>アウフタクト（head pad）</strong> — Rehearsal Mark トラック上でリハーサル名（A / B / C …）の付かない先頭区間。本編の A から始める弱起扱いです。</li>
                 </ul>
-                <p><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> のときは、リハーサル名オーバーレイと Tempo/Sig メタは非表示です（リージョン操作自体は従来どおり可能）。</p>
+                <p><strong>Rehearsal 表示（<kbd>R</kbd>）OFF</strong> のときは、リハーサル名オーバーレイと Tempo/Sig メタは非表示です（リージョン操作自体は従来どおり可能）。波形トラック左下のリハーサルマーク表示も非表示になります。</p>
 
                 <h3 class="docs-heading-box--sub" id="audio-range-loop">範囲ループ（波形上）</h3>
                 <ul>
@@ -432,7 +453,7 @@
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="audio-mix-keys">波形上からのミックス操作</h3>
-                <p>ポインタを置いたレーン（Video Audio/Audio Track）では <kbd>S</kbd>（ソロ）・<kbd>M</kbd>（ミュート）・<kbd>+</kbd>/<kbd>−</kbd>（±1dB、テンキー可）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。<kbd>S</kbd> は対象トラックだけをソロにし他トラックのソロを解除します（対象がミュート中なら自動で解除）。すでにソロ中のトラックで再度押すとソロを解除します。<kbd>Alt</kbd>+<kbd>M</kbd> は読み込み済み全トラックのミュートを解除します。</p>
+                <p>ポインタを置いたレーン（Video Audio/Audio Track）では <kbd>S</kbd>（ソロ）・<kbd>M</kbd>（ミュート）・<kbd>+</kbd>/<kbd>-</kbd>（±1dB、テンキー可）が使えます。左サイドバーのボタン・フェーダーと同じ効果です。<kbd>S</kbd> は対象トラックだけをソロにし他トラックのソロを解除します（対象がミュート中なら自動で解除）。すでにソロ中のトラックで再度押すとソロを解除します。<kbd>Alt</kbd>+<kbd>M</kbd> は読み込み済み全トラックのミュートを解除します。</p>
                 <p>波形レーンは <kbd>Tab</kbd> でフォーカスできます。フォーカス中は <kbd>Ctrl</kbd>+<kbd>Home</kbd>/<kbd>End</kbd> で先頭/末尾へ、<kbd>Home</kbd>/<kbd>End</kbd> で小節線へ（<strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> 時）、<kbd>←</kbd>/<kbd>→</kbd> で1フレームシークできます。停止点ナビ（マーカー・Rehearsal 等）は <kbd>Ctrl</kbd>+<kbd>←</kbd>/<kbd>→</kbd> のみです。次の Audio Track 枠を出すショートカット <kbd>Ctrl</kbd>+<kbd>N</kbd> も使えます（<strong>+ Add Track</strong> ボタンと同じ）。</p>
                 <p>表示されているレーンの数に合わせて波形パネルの高さが変わります。空の Audio Track 枠は非表示にできます。</p>
             </section>
@@ -455,10 +476,10 @@
                     <li><strong>All Clear</strong> — 動画・追加音声・マーカー・保存セッションをまとめてクリア（<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>Del</kbd>、Mac では <kbd>Cmd</kbd> も可）。押すと再生中なら<strong>いったん停止</strong>してから確認ダイアログが出ます。</li>
                     <li><strong>Play</strong> — 再生/停止（<kbd>Space</kbd>）。<kbd>Ctrl</kbd>+<kbd>Space</kbd> はシークバー位置の1秒前から<strong>プリロール再生</strong>（1秒未満の場合は現在位置から）。<kbd>Alt</kbd>+<kbd>Enter</kbd> は直近の再生開始位置から再生し直します（一度も再生していない場合は無効）。右端。初回再生時は Video/Markers 行が見える位置へ自動スクロールします。</li>
                 </ul>
-                <p><strong>現在時刻 − 総尺</strong>と<strong>Playback Drift</strong>は、映像パネル内の表示を参照してください。</p>
+                <p><strong>現在時刻 - 総尺</strong>と<strong>Playback Drift</strong>は、映像パネル内の表示を参照してください。</p>
 
                 <h3 class="docs-heading-box--sub" id="transport-options-top">Musical トラック（波形左）</h3>
-                <p>波形タイムライン左端に <strong>Rehearsal Mark</strong> / <strong>Tempo</strong> / <strong>Signature</strong> / <strong>Measure</strong> の4行があります。Tempo/Sig グリッド表示（<kbd>T</kbd>）と Rehearsal 着色表示（<kbd>R</kbd>）はキーボードでも切り替えられます。</p>
+                <p>波形タイムライン左端に <strong>Rehearsal Mark</strong> / <strong>Tempo</strong> / <strong>Signature</strong> / <strong>Measure</strong> の4行があります。Tempo/Sig グリッド表示（<kbd>T</kbd>）と Rehearsal 着色表示（<kbd>R</kbd>）はキーボードでも切り替えられます。<strong>Tempo/Sig（<kbd>T</kbd>）と Rehearsal 表示（<kbd>R</kbd>）の ON/OFF はプロジェクト設定としてセッション保存・Export/Import Review に含まれます。</strong>ブラウザのユーザー設定（localStorage）と値が異なるときは、<strong>プロジェクト側（セッション・.mgacr）を優先</strong>して復元します。</p>
                 <ul>
                     <li><strong>Rehearsal Mark</strong> — リハーサル名（A / B / C …）の位置。セグメントのダブルクリックで編集、空き部分のダブルクリックで追加。<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> でシークバー位置にリハーサルマークを追加（小節線へスナップ）。先頭のリハーサル名なし区間はアウフタクト（head pad）です。</li>
                     <li><strong>Tempo / Signature</strong> — BPM と拍子定義。各セグメントを<strong>ダブルクリック</strong>して編集（空き部分のダブルクリックで新規追加も可）。
@@ -470,10 +491,10 @@
                             <li><strong><code>+</code> と <code>:</code> の併用</strong> — 1 つの BPM-拍子定義内では併用不可。混在入力は <kbd>Enter</kbd> / <kbd>Esc</kbd> 確定時に直前の有効値へ戻ります。</li>
                             <li><strong>編集中の ↑/↓</strong> — Tempo 入力中は BPM を ±1（<kbd>Shift</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> で ±10）。Signature 入力中はカーソル位置の分子・分母を ±1（Shift で ±10）。末尾では <code>,120-4/4</code> を追加。</li>
                             <li><kbd>Enter</kbd> で確定、<kbd>Esc</kbd> で取消。</li>
-                            <li><strong>小節番号</strong> — Measure トラック ON 時（<kbd>T</kbd>）は Audio Track リージョン内の小節線横に 1 始まりの番号が表示され、<kbd>G</kbd> または <kbd>Shift</kbd>+数字でその番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。</li>
+                            <li><strong>小節番号</strong> — Measure トラック ON 時（<kbd>T</kbd>）は Measure トラック上にタイムライン全体の小節番号（1 始まり）が表示されます。<kbd>G</kbd> でその番号へジャンプ、<kbd>Shift</kbd>+数字でリージョン内またはリハーサルマーク区間内の小節番号へジャンプできます（詳細は「シーク・ジャンプ」参照）。Audio Track リージョン内の小節線横にも、リージョン／Rehearsal 区間基準の番号が表示されます。</li>
                         </ul>
                     </li>
-                    <li><strong>Rehearsal 表示</strong> — <kbd>R</kbd> で Audio Track 上の Rehearsal 着色とリハーサル名オーバーレイを切替。Rehearsal 区間の小節数は Tempo/Sig 表示中のキー操作・境界ドラッグ・インポートで更新され、セッション保存の対象です。</li>
+                    <li><strong>Rehearsal 表示</strong> — <kbd>R</kbd> で Audio Track 上の Rehearsal 着色とリハーサル名オーバーレイを切替。Rehearsal 区間の小節数は Tempo/Sig 表示中のキー操作・境界ドラッグ・インポートで更新され、セッション保存の対象です。ON/OFF はプロジェクト設定として Export/Import Review にも含まれます。</li>
                 </ul>
 
                 <h3 class="docs-heading-box--sub" id="transport-rehearsal-edit">Rehearsal 区間の編集（Tempo/Sig 表示中）</h3>
@@ -518,7 +539,7 @@
                     <li><kbd>Home</kbd>/<kbd>End</kbd>：<strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> 時のみ。修飾キーなしで前後の<strong>小節線</strong>へ（Rehearsal 境界・マーカー・リージョンは含まない。キーリピート有効。再生中は押下中一度停止し、キーを離すと再生再開）</li>
                     <li><kbd>0</kbd>〜<kbd>9</kbd>（上段数字キーは <kbd>Shift</kbd> なし / テンキー）：尺の0〜90% へジャンプ（<kbd>9</kbd> は 90%）</li>
                     <li><kbd>Shift</kbd>+<kbd>0</kbd>〜<kbd>9</kbd>（上段数字キー）/ <kbd>0</kbd>〜<kbd>9</kbd>（テンキー）：Tempo/Sig（<kbd>T</kbd>）ON かつ Audio Track にリージョンがあるとき、現在地がリハーサルマーク区間内ならその区間の小節番号（1始まり）、それ以外はシークバー位置のリージョン内の小節番号へ。連続入力で2桁・3桁（300ms以内）。テンキーは条件不成立時は尺の10分割ジャンプ（上記）へ。再生中はシーク後に再生を再開</li>
-                    <li><kbd>G</kbd>：Tempo/Sig（<kbd>T</kbd>）ON かつ現在地が Audio Track リージョン内のとき、小節番号入力ダイアログを開き、リージョン内の小節番号（波形上に表示される 1 始まりの番号）へジャンプ。リージョンを 2 つ以上選択している場合はグループ化が優先。再生中はシーク後に再生を再開</li>
+                    <li><kbd>G</kbd>：<strong>Tempo/Sig（<kbd>T</kbd>）ON</strong> かつリージョンを 2 つ以上選択していないとき、Measure トラックの小節番号入力ダイアログ（Go to Measure）を開き、<strong>Measure トラック上に表示されるタイムライン全体の小節番号</strong>（1 始まり）へジャンプ。リージョンを 2 つ以上選択している場合はグループ化が優先。再生中はシーク後に再生を再開</li>
                     <li><kbd>Shift</kbd>+<kbd>A</kbd>〜<kbd>Z</kbd>：Tempo/Sig・Rehearsal 定義が有効で Audio Track にリージョンがあるとき、リハーサルマーク名の<strong>先頭の英字</strong>と一致する名前へジャンプ（例: <kbd>Shift</kbd>+<kbd>I</kbd>=Intro）。同名が複数あるとき、区間外は時系列で早い方へ、区間内では次の該当へ（繰り返しで行き来）。Rehearsal 表示（<kbd>R</kbd>）の ON / OFF は不要</li>
                 </ul>
                 <p>シーク時には画面中央付近に大きなタイムコード表示（シークフラッシュ）が一瞬出ることがあります。</p>
@@ -538,7 +559,7 @@
                 <ul>
                     <li><strong>Include in export</strong> の <strong>Video</strong> がオンなら、動画は <strong>.mgacr 内に埋め込まれ</strong>ます。</li>
                     <li><strong>Audio</strong> がオンなら、追加音声（読み込み済みの全 Audio Track）を<strong>すべて</strong> .mgacr に同梱します（Mute / Solo 状態は影響しません）。</li>
-                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、Musical トラック定義（Tempo / Signature / Rehearsal Mark）、再生位置、表示設定など。</li>
+                    <li>含まれる主な内容：選択した動画・追加音声、ファイル名、<strong>マーカー</strong>（In/Out/Comment）、<strong>Additional Comments</strong>、各トラックのミックス（Solo/Mute/音量）、Audio Track 上のリージョンの位置（リージョンの<strong>グループ化</strong>情報を含む）、<strong>Video Track（映像リージョン）の位置・In/Out</strong>、映像プレビューの<strong>ガンマ補正</strong>、Musical トラック定義（Tempo / Signature / Rehearsal Mark）および <strong>Tempo/Sig（<kbd>T</kbd>）・Rehearsal 表示（<kbd>R</kbd>）の ON/OFF</strong>、再生位置、表示設定など。</li>
                     <li>出力ファイルの拡張子は <strong>.mgacr</strong> です。ファイル共有サービスやメール等で渡し、相手は Import するだけでレビュー環境を再現できます。</li>
                 </ul>
 
@@ -594,8 +615,9 @@
             <section class="guide-section" id="storage">
                 <h2 class="docs-heading-box">データの保存と復元</h2>
                 <ul>
-                    <li>読み込んだ動画は<strong>ブラウザ内</strong>にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン・ミックスなどもセッションに含まれます。</li>
+                    <li>読み込んだ動画は<strong>ブラウザ内</strong>にコピーされ、次回ページを開いたときに復元されます（F5 リロード時は<strong>自動再生しません</strong>）。マーカー・追加音声・リージョン（Audio Track / Video Track）・ミックス・映像ガンマ補正などもセッションに含まれます。</li>
                     <li>編集内容は即座ではなく、短い待ち時間のあと自動保存されます。オプションバー下段の <strong>SAVED / SAVING</strong> インジケーター（「トランスポート」章参照）で状態を確認できます。</li>
+                    <li><strong>Tempo/Sig（<kbd>T</kbd>）と Rehearsal 表示（<kbd>R</kbd>）の ON/OFF</strong>はプロジェクト設定としてセッション・.mgacr に保存されます。ブラウザのユーザー設定（localStorage）と競合するときは<strong>プロジェクト側を優先</strong>して復元します。</li>
                     <li>Loop のオン/オフ、Click、Analyze、タイムコードオーバーレイの表示・位置、レーンの表示状態、<kbd>F10</kbd> の診断ログ・操作帯デバッグ描画・タイムストレッチ検証オプションなどは <strong>localStorage</strong> に保存されます。ログ欄の <strong>W/E Only</strong> / <strong>Actions</strong> は保存されず、再読み込みで OFF になります。</li>
                     <li>元ファイルを DAW 等で書き出し直しても、本アプリは<strong>自動では再読み込みしません</strong>。最新版を反映するには、ページ内のどこへでも再度ドロップしてください。</li>
                     <li>ブラウザのストレージ整理で保存データが消えると、前回のセッションは復元できません。</li>

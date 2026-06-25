@@ -762,6 +762,96 @@
         return { slot, track: videoTrack, segmentIndex };
     }
 
+    function resolveVideoRegionEnterTarget() {
+        if (typeof getVideoTrackRef !== 'function') return null;
+        const videoTrack = getVideoTrackRef();
+        if (!isTrackRegionActive(videoTrack)) return null;
+        const slot =
+            typeof getTrackOffsetDragSlot === 'function'
+                ? getTrackOffsetDragSlot(videoTrack)
+                : typeof VIDEO_WAVEFORM_OFFSET_DRAG_SLOT !== 'undefined'
+                  ? VIDEO_WAVEFORM_OFFSET_DRAG_SLOT
+                  : -2;
+        return { slot, track: videoTrack };
+    }
+
+    function resolveRegionEnterPointerClientY() {
+        if (typeof getWaveformLanesPointerClientY === 'function') {
+            const y = getWaveformLanesPointerClientY();
+            if (Number.isFinite(y)) return y;
+        }
+        if (typeof getWaveformPointerClientY === 'function') {
+            const y = getWaveformPointerClientY();
+            if (Number.isFinite(y)) return y;
+        }
+        return null;
+    }
+
+    function isVideoMixLaneMetaActiveFromDom() {
+        const panel = typeof audioWaveformPanel !== 'undefined' ? audioWaveformPanel : null;
+        if (
+            panel &&
+            !panel.hidden &&
+            panel.classList.contains('audio-waveform-lane-meta--active')
+        ) {
+            return true;
+        }
+        const vizMeta = typeof videoVizMeta !== 'undefined' ? videoVizMeta : null;
+        return !!(
+            vizMeta &&
+            !vizMeta.hidden &&
+            vizMeta.classList.contains('audio-waveform-lane-meta--active')
+        );
+    }
+
+    /** Video / Ex を同列に扱い、Enter 対象レーンを決める（ポインタ → DOM → シークバー上の候補） */
+    function resolveActiveRegionEnterLaneKind(extraTarget, videoPointTarget) {
+        const clientY = resolveRegionEnterPointerClientY();
+        if (Number.isFinite(clientY)) {
+            if (
+                typeof isPointerOverVideoVizLane === 'function' &&
+                isPointerOverVideoVizLane(clientY)
+            ) {
+                return 'video';
+            }
+            if (
+                typeof isPointerOverVideoAudioLane === 'function' &&
+                isPointerOverVideoAudioLane(clientY)
+            ) {
+                return 'video';
+            }
+            if (typeof waveformExtraLaneSlotFromClientY === 'function') {
+                const pointerSlot = waveformExtraLaneSlotFromClientY(clientY);
+                if (pointerSlot >= 0) {
+                    const pointerTrack = { type: 'extra', slot: pointerSlot };
+                    if (isTrackRegionActive(pointerTrack)) return 'extra';
+                }
+            }
+        }
+
+        if (isVideoMixLaneMetaActiveFromDom()) return 'video';
+
+        if (extraTarget) {
+            if (typeof getActiveMixExtraSlotFromDom === 'function') {
+                const domSlot = getActiveMixExtraSlotFromDom();
+                if (domSlot >= 0 && domSlot === extraTarget.slot) return 'extra';
+            }
+            if (typeof getWaveformTargetExtraSlot === 'function') {
+                const wfSlot = getWaveformTargetExtraSlot();
+                if (wfSlot >= 0 && wfSlot === extraTarget.slot) return 'extra';
+            }
+        }
+
+        if (videoPointTarget) return 'video';
+        if (extraTarget) return 'extra';
+
+        if (typeof getVideoTrackRef === 'function') {
+            const videoTrack = getVideoTrackRef();
+            if (isTrackRegionActive(videoTrack)) return 'video';
+        }
+        return null;
+    }
+
     function resolveActiveExtraRegionEnterTarget() {
         const slot = resolveActiveExtraSlotForRegionEnter();
         if (slot < 0) return null;
@@ -834,17 +924,24 @@
         const rangeActive =
             typeof isRangeLoopPlaybackActive === 'function' &&
             isRangeLoopPlaybackActive();
-        if (!rangeActive) {
-            const videoTarget = resolveVideoRegionEnterTargetAtSeekbar();
-            if (videoTarget) {
-                return applySelection(videoTarget.slot, [videoTarget.segmentIndex]);
-            }
-        }
 
         const extraTarget = resolveActiveExtraRegionEnterTarget();
-        if (!extraTarget) return false;
-        const slot = extraTarget.slot;
-        const track = extraTarget.track;
+        const videoPointTarget = !rangeActive ? resolveVideoRegionEnterTargetAtSeekbar() : null;
+        const laneKind = resolveActiveRegionEnterLaneKind(extraTarget, videoPointTarget);
+
+        let slot;
+        let track;
+        if (laneKind === 'video') {
+            const videoBase = videoPointTarget || resolveVideoRegionEnterTarget();
+            if (!videoBase) return false;
+            slot = videoBase.slot;
+            track = videoBase.track;
+        } else if (laneKind === 'extra' && extraTarget) {
+            slot = extraTarget.slot;
+            track = extraTarget.track;
+        } else {
+            return false;
+        }
 
         if (rangeActive) {
             const inSec =

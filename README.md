@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.21 |
+| **バージョン** | v0.22 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,17 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.22 - 2026年6月25日
+
+- 映像タイムラインレーン（Video Track）を追加。動画読み込み後、Measure トラック直下に filmstrip サムネイル付きの映像リージョンを表示。In/Out・スプリット・平行移動・セッション保存をサポート。
+- 動画プレビューにガンマ補正（映像フレーム上ホイール・明る化のみ）を追加。セッション保存・Import/Export Review に含む。サムネ生成中はモーションブラー、完了後に解除してガンマを復元。
+- Scroll Lock / Pause / Break で選択リージョンの頭をシークバー位置へ平行移動（Video Track / Audio Track 共通）。
+- Enter で Video Track と Audio Track を同列に扱いシークバー直下のリージョンを追加選択。G キーの小節ジャンプを Measure トラック番号専用に分離（Shift+数字はリージョン内／リハーサル区間内）。
+- Tempo/Sig（T）と Rehearsal 表示（R）をプロジェクト設定としてセッション・.mgacr に保存。ユーザー設定（localStorage）と競合時はプロジェクト側を優先。新しい動画読み込み時は T を自動 ON（セッション復元時は保存状態を優先）。
+- 動画リージョンの再生同期・In/Out 幾何・差し替え後オフセット・平行移動位置の永続化を改善。リージョン平行移動のドラッグ中スナップ・Out トリム後のタイムライン尺を修正。
+- グループ化クロスフェードの平行移動幾何・複数トラック同時移動後の大波形描画・Ex トラック入れ替え後のリージョン永続化を修正。リージョンカーソル縦線の全トラックホバー検出、マーカー非表示時の動画終端スナップを改善。
+- Rehearsal 着色 OFF 時に波形トラック左下のリハーサルマークを非表示。Alt+Shift+I/O の 1 拍 nudge と Shift+数字の小節ジャンプを整理。使い方・ショートカット一覧を更新。
 
 ### v0.21 - 2026年6月23日
 

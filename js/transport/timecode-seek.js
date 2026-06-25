@@ -1834,6 +1834,9 @@
 
     function loadVideoFile(f, opt) {
         const fromSessionRestore = !!(opt && opt.playbackRegion);
+        if (!fromSessionRestore && typeof setMusicalGridVisible === 'function') {
+            setMusicalGridVisible(true, { silent: true });
+        }
         if (!fromSessionRestore) {
             if (typeof setPendingPlaybackRegionRestore === 'function') {
                 setPendingPlaybackRegionRestore(null);

@@ -425,6 +425,19 @@
         return transportRatioFromClientX(clientX) * getMasterTransportDurationSec();
     }
 
+    /** Out ドラッグなど 0–1 クランプしない transport 秒（マスター延長中もポインタと一致） */
+    function transportSecUnclampedFromClientX(clientX) {
+        const lanes = waveformScrubTargetEl();
+        const m = waveformTimelineMetrics(lanes);
+        const master = getMasterTransportDurationSec();
+        if (!m || !(m.scrubW > 0) || !(master > 0) || !Number.isFinite(clientX)) {
+            return transportSecFromClientX(clientX);
+        }
+        const xInViewport = clientX - m.contentLeft;
+        const xInScrub = xInViewport + (m.scrollable ? m.scrollLeft : 0);
+        return (xInScrub / m.scrubW) * master;
+    }
+
     function notifyWaveformTimelineZoomChanged() {
         if (typeof drawSeekPlaybackTrail === 'function') drawSeekPlaybackTrail();
         if (typeof refreshWaveformTimelineVisualAfterZoomChange === 'function') {
@@ -1177,6 +1190,7 @@
     window.waveformTimelineInnerEl = waveformTimelineInnerEl;
     window.transportRatioFromClientX = transportRatioFromClientX;
     window.transportSecFromClientX = transportSecFromClientX;
+    window.transportSecUnclampedFromClientX = transportSecUnclampedFromClientX;
     window.scrollLeftToCenterTransportSec = scrollLeftToCenterTransportSec;
     window.scrollLeftForTransportSec = scrollLeftForTransportSec;
     window.getWaveformTimelineVisibleSecRange = getWaveformTimelineVisibleSecRange;
