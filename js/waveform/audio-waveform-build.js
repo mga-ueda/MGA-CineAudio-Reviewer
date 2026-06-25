@@ -802,9 +802,15 @@
                     ? trackRefFromWaveformOffsetDragSlot(slot)
                     : { type: 'extra', slot };
             waveformOffsetDragGroupMembers =
-                typeof collectRegionGroupMembers === 'function'
-                    ? collectRegionGroupMembers(track, waveformOffsetDragSegmentIndex)
-                    : [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }];
+                typeof collectRegionOffsetDragMembers === 'function'
+                    ? collectRegionOffsetDragMembers(
+                          track,
+                          waveformOffsetDragSegmentIndex,
+                          slot,
+                      )
+                    : typeof collectRegionGroupMembers === 'function'
+                      ? collectRegionGroupMembers(track, waveformOffsetDragSegmentIndex)
+                      : [{ slot, segmentIndex: waveformOffsetDragSegmentIndex }];
             waveformOffsetDragGroupStartTimelineByKey = {};
             waveformOffsetDragGroupStartAnchorByKey = {};
             waveformOffsetDragGroupStartRegionInByKey = {};

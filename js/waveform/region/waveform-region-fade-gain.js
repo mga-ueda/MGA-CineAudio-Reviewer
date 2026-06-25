@@ -361,6 +361,60 @@
         return 0;
     }
 
+    /** フェード In/Out — リージョン端（In / Out）から transport までの距離（秒） */
+    function resolveFadeDistanceFromTransport(track, segmentIndex, kind, transportSec) {
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return 0;
+        if (kind === 'fade-in') {
+            const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+            const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+            const maxStored = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
+            const leadGap = Math.max(0, playbackStart - regionIn);
+            const maxDist = maxStored > 0.0005 ? maxStored + leadGap : 0;
+            if (!(maxDist > 0.0005)) return 0;
+            return Math.max(0, Math.min(maxDist, t - regionIn));
+        }
+        if (kind === 'fade-out') {
+            const regionOut = getSegmentRegionTimelineOut(track, segmentIndex);
+            const maxStored = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
+            if (!(maxStored > 0.0005)) return 0;
+            return Math.max(0, Math.min(maxStored, regionOut - t));
+        }
+        return 0;
+    }
+
+    /** リージョン端からの距離（秒）をフェード長として適用 */
+    function applyFadeDistanceFromEdge(track, segmentIndex, kind, distanceSec, opt) {
+        if (kind === 'fade-in') {
+            const regionIn = getSegmentRegionTimelineIn(track, segmentIndex);
+            const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
+            const leadGap = Math.max(0, playbackStart - regionIn);
+            const stored = Math.max(0, (Number(distanceSec) || 0) - leadGap);
+            const maxStored = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
+            if (!(maxStored > 0.0005) && stored <= 0.0005) return false;
+            return setSegmentFadeDurationSec(
+                track,
+                segmentIndex,
+                'in',
+                Math.min(maxStored, stored),
+                opt || {},
+            );
+        }
+        if (kind === 'fade-out') {
+            const maxStored = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
+            const stored = Math.max(0, Number(distanceSec) || 0);
+            if (!(maxStored > 0.0005) && stored <= 0.0005) return false;
+            return setSegmentFadeDurationSec(
+                track,
+                segmentIndex,
+                'out',
+                Math.min(maxStored, stored),
+                opt || {},
+            );
+        }
+        return false;
+    }
+
     function getSegmentFadeDurationSec(track, segmentIndex, kind) {
         const raw = getRawSegmentEntry(track, segmentIndex);
         if (!raw) return 0;

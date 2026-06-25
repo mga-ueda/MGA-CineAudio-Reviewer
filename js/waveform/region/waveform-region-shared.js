@@ -24,6 +24,8 @@
     var regionHandleDragCaptureEl = null;
     var regionHandleDragDocMove = null;
     var regionHandleDragDocUp = null;
+    /** fade-in/out ドラッグ — 複数選択時の対象リージョン */
+    var regionHandleDragFadeTargets = null;
     var regionOutDragExtendSlot = -1;
     var regionOutDragStartOutTransportSec = NaN;
     var regionOutDragStartMasterSec = NaN;

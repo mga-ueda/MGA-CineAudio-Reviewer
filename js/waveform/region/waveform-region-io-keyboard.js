@@ -133,7 +133,6 @@
         if (!matchUserShortcut(e, 'regionFadeIn')) return false;
         if (e.repeat) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
-        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         applyRegionFadeAtSeekbar('fade-in');
         return true;
@@ -143,7 +142,6 @@
         if (!matchUserShortcut(e, 'regionFadeOut')) return false;
         if (e.repeat) return false;
         if (!guardRegionShortcutKeydown(e)) return false;
-        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         e.preventDefault();
         applyRegionFadeAtSeekbar('fade-out');
         return true;

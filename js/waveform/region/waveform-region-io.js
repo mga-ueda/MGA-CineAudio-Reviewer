@@ -247,6 +247,7 @@
     window.silentGapDeleteDiagSnapshotTrack = silentGapDeleteDiagSnapshotTrack;
     window.clearRegionSelection = clearRegionSelection;
     window.collectRegionGroupMembers = collectRegionGroupMembers;
+    window.collectRegionOffsetDragMembers = collectRegionOffsetDragMembers;
     window.flashRegionGroupMembers = flashRegionGroupMembers;
     window.collectRegionGroupMemberIndices = collectRegionGroupMemberIndices;
     window.handlePlaybackRegionMixKeydown = handlePlaybackRegionMixKeydown;

@@ -372,23 +372,47 @@
         return regionSelectionEntries.length;
     }
 
-    /** 対象 Audio Track（アクティブ/ポインタ下）の全リージョンを選択 */
+    /** アクティブトラック（Video / Ex）の全リージョンを選択 */
     function selectAllRegionsOnTargetTrack() {
-        if (typeof resolveTargetExtraSlot !== 'function') return false;
-        const slot = resolveTargetExtraSlot();
-        if (slot < 0) {
+        const extraTarget = resolveActiveExtraRegionEnterTarget();
+        const videoPointTarget = resolveVideoRegionEnterTargetAtSeekbar();
+        const laneKind = resolveActiveRegionEnterLaneKind(extraTarget, videoPointTarget);
+
+        let slot;
+        let track;
+        let trackLabel;
+
+        if (laneKind === 'video') {
+            const videoBase = videoPointTarget || resolveVideoRegionEnterTarget();
+            if (!videoBase) {
+                if (typeof writeLog === 'function') {
+                    writeLog('Playback region: no target Video Track for select all');
+                }
+                if (typeof flashSeekHint === 'function') {
+                    flashSeekHint('Region', 'No target track', 'notice');
+                }
+                return false;
+            }
+            slot = videoBase.slot;
+            track = videoBase.track;
+            trackLabel = 'Video';
+        } else if (laneKind === 'extra' && extraTarget) {
+            slot = extraTarget.slot;
+            track = extraTarget.track;
+            trackLabel = 'Ex' + (slot + 1);
+        } else {
             if (typeof writeLog === 'function') {
-                writeLog('Playback region: no target Audio Track for select all');
+                writeLog('Playback region: no target track for select all');
             }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'No target track', 'notice');
             }
             return false;
         }
-        const track = { type: 'extra', slot };
+
         if (!isTrackRegionActive(track)) {
             if (typeof writeLog === 'function') {
-                writeLog('Playback region: target Audio Track has no regions');
+                writeLog('Playback region: target track has no regions');
             }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'No regions', 'notice');
@@ -398,13 +422,14 @@
         const count = getSegmentCount(track);
         if (count < 1) {
             if (typeof writeLog === 'function') {
-                writeLog('Playback region: target Audio Track has no regions');
+                writeLog('Playback region: target track has no regions');
             }
             if (typeof flashSeekHint === 'function') {
                 flashSeekHint('Region', 'No regions', 'notice');
             }
             return false;
         }
+        slot = canonicalRegionSelectionDragSlot(slot);
         regionSelectionEntries.length = 0;
         for (let i = 0; i < count; i++) {
             regionSelectionEntries.push({ slot, segmentIndex: i });
@@ -414,8 +439,8 @@
             writeLog(
                 'Playback region: selected all ' +
                     count +
-                    ' region(s) on Ex' +
-                    (slot + 1),
+                    ' region(s) on ' +
+                    trackLabel,
             );
         }
         return true;
@@ -449,6 +474,29 @@
             }
         }
         return out;
+    }
+
+    /** 平行移動ドラッグの対象 — 複数選択中かつドラッグ元が選択内なら選択全体、否则はグループまたは単体 */
+    function collectRegionOffsetDragMembers(track, segmentIndex, slot) {
+        const canonicalSlot =
+            typeof normalizeVideoLinkedOffsetDragSlot === 'function'
+                ? normalizeVideoLinkedOffsetDragSlot(slot)
+                : slot;
+        const segEntries = regionSelectionEntries.filter((e) => e.segmentIndex >= 0);
+        if (
+            segEntries.length > 1 &&
+            typeof isRegionEntrySelected === 'function' &&
+            isRegionEntrySelected(canonicalSlot, segmentIndex)
+        ) {
+            const fromSelection = expandRegionSegmentEditTargetsFromSelection();
+            if (fromSelection.length > 1) {
+                return fromSelection;
+            }
+        }
+        if (typeof collectRegionGroupMembers === 'function') {
+            return collectRegionGroupMembers(track, segmentIndex);
+        }
+        return [{ slot: canonicalSlot, segmentIndex }];
     }
 
     function selectionHasGroupedRegions() {

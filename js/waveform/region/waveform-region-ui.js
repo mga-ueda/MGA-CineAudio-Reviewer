@@ -1100,29 +1100,14 @@
         const segments = getTrackSegments(track).map((s) => ({ ...s }));
         if (!segments[segmentIndex]) return;
         const seg = segments[segmentIndex];
-        if (kind === 'fade-in') {
-            const playbackStart = getSegmentPlaybackTimelineStart(track, segmentIndex);
-            const maxDur = getSegmentFadeDurationLimit(track, segmentIndex, 'in');
-            if (!(maxDur > 0.0005)) return;
-            const t = Math.max(playbackStart, Math.min(playbackStart + maxDur, Number(transportSec) || 0));
-            const skipUndo = !opt || opt.skipUndo !== false;
-            setSegmentFadeDurationSec(track, segmentIndex, 'in', t - playbackStart, {
-                skipUndo,
-                geometryOnly: !!(opt && opt.geometryOnly),
-            });
-            return;
-        }
-        if (kind === 'fade-out') {
-            const playbackEnd = getSegmentTimelineEnd(track, segmentIndex);
-            const maxDur = getSegmentFadeDurationLimit(track, segmentIndex, 'out');
-            if (!(maxDur > 0.0005)) return;
-            const minT = playbackEnd - maxDur;
-            const t = Math.max(minT, Math.min(playbackEnd, Number(transportSec) || 0));
-            const skipUndo = !opt || opt.skipUndo !== false;
-            setSegmentFadeDurationSec(track, segmentIndex, 'out', playbackEnd - t, {
-                skipUndo,
-                geometryOnly: !!(opt && opt.geometryOnly),
-            });
+        if (kind === 'fade-in' || kind === 'fade-out') {
+            const distanceSec = resolveFadeDistanceFromTransport(
+                track,
+                segmentIndex,
+                kind,
+                transportSec,
+            );
+            applyFadeDistanceFromEdge(track, segmentIndex, kind, distanceSec, opt || {});
             return;
         }
         const clipDur = getSegmentSourceDurationSec(track, seg);
@@ -2607,6 +2592,7 @@
         regionHandleDragStartRegionOutSec = NaN;
         regionHandleDragDidMove = false;
         regionHandleDragCaptureEl = null;
+        regionHandleDragFadeTargets = null;
         detachRegionHandleDragDocListeners();
         const lanes =
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
@@ -2837,6 +2823,18 @@
             typeof waveformScrubTargetEl === 'function' ? waveformScrubTargetEl() : null;
         if (lanes) lanes.classList.add('audio-waveform-composite__lanes--region-drag');
         beginRegionUndoGesture();
+        if (kind === 'fade-in' || kind === 'fade-out') {
+            const dragSlot =
+                typeof getTrackOffsetDragSlot === 'function'
+                    ? getTrackOffsetDragSlot(track)
+                    : track.slot;
+            regionHandleDragFadeTargets =
+                typeof collectRegionOffsetDragMembers === 'function'
+                    ? collectRegionOffsetDragMembers(track, segmentIndex, dragSlot)
+                    : [{ slot: dragSlot, segmentIndex }];
+        } else {
+            regionHandleDragFadeTargets = null;
+        }
         if (kind === 'in' || kind === 'out') {
             const segs = getTrackSegments(track);
             const startSeg = segs[segmentIndex];
@@ -2931,6 +2929,49 @@
         }
     }
 
+    function applyRegionFadeHandleFromTransportToTargets(kind, transportSec, opt) {
+        if (kind !== 'fade-in' && kind !== 'fade-out') return;
+        const targets =
+            regionHandleDragFadeTargets && regionHandleDragFadeTargets.length
+                ? regionHandleDragFadeTargets
+                : regionHandleDragTrack && regionHandleDragSegmentIndex >= 0
+                  ? [
+                        {
+                            slot:
+                                typeof getTrackOffsetDragSlot === 'function'
+                                    ? getTrackOffsetDragSlot(regionHandleDragTrack)
+                                    : regionHandleDragTrack.slot,
+                            segmentIndex: regionHandleDragSegmentIndex,
+                        },
+                    ]
+                  : [];
+        const multi =
+            targets.length > 1 &&
+            regionHandleDragTrack &&
+            regionHandleDragSegmentIndex >= 0;
+        let sharedDistanceSec = NaN;
+        if (multi) {
+            sharedDistanceSec = resolveFadeDistanceFromTransport(
+                regionHandleDragTrack,
+                regionHandleDragSegmentIndex,
+                kind,
+                transportSec,
+            );
+        }
+        for (let i = 0; i < targets.length; i++) {
+            const { slot, segmentIndex } = targets[i];
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(slot)
+                    : { type: 'extra', slot };
+            if (!track || !isTrackRegionActive(track)) continue;
+            const distanceSec = multi
+                ? sharedDistanceSec
+                : resolveFadeDistanceFromTransport(track, segmentIndex, kind, transportSec);
+            applyFadeDistanceFromEdge(track, segmentIndex, kind, distanceSec, opt || {});
+        }
+    }
+
     function onRegionHandlePointerDown(ev, track, segmentIndex, kind, opt) {
         const segments = getTrackSegments(track);
         if (!segments[segmentIndex]) return;
@@ -2988,13 +3029,21 @@
                     : typeof transportSecFromClientX === 'function'
                       ? transportSecFromClientX(e.clientX)
                       : 0;
-            setSegmentHandleFromTransport(
-                regionHandleDragTrack,
-                regionHandleDragSegmentIndex,
-                regionHandleDragKind,
-                transportSec,
-                { geometryOnly: true },
-            );
+            if (regionHandleDragKind === 'fade-in' || regionHandleDragKind === 'fade-out') {
+                applyRegionFadeHandleFromTransportToTargets(
+                    regionHandleDragKind,
+                    transportSec,
+                    { geometryOnly: true, skipUndo: true },
+                );
+            } else {
+                setSegmentHandleFromTransport(
+                    regionHandleDragTrack,
+                    regionHandleDragSegmentIndex,
+                    regionHandleDragKind,
+                    transportSec,
+                    { geometryOnly: true },
+                );
+            }
         };
         regionHandleDragDocUp = (e) => {
             if (!regionHandleDragActive || e.pointerId !== regionHandleDragPointerId) return;
@@ -3030,6 +3079,19 @@
             if (regionHandleDragRehearsalBoundary) {
                 finalizeRehearsalBoundaryDragFromRegion(false);
             } else if (
+                regionHandleDragKind === 'fade-in' ||
+                regionHandleDragKind === 'fade-out'
+            ) {
+                const transportSec =
+                    typeof transportSecFromClientX === 'function'
+                        ? transportSecFromClientX(e.clientX)
+                        : 0;
+                applyRegionFadeHandleFromTransportToTargets(
+                    regionHandleDragKind,
+                    transportSec,
+                    { skipUndo: true },
+                );
+            } else if (
                 (regionHandleDragKind === 'in' || regionHandleDragKind === 'out') &&
                 regionHandleDragTrack &&
                 regionHandleDragSegmentIndex >= 0
@@ -3061,10 +3123,11 @@
         const fromSelection = expandRegionSegmentEditTargetsFromSelection();
         if (fromSelection.length) return fromSelection;
 
-        const slot = resolveSplitTargetExtraSlot();
-        if (slot < 0 || !isExtraSlotUsableForRegion(slot)) return [];
-        const track = { type: 'extra', slot };
-        if (!isTrackRegionActive(track)) return [];
+        let track = null;
+        if (typeof resolveSplitTargetPlaybackRegionTrack === 'function') {
+            track = resolveSplitTargetPlaybackRegionTrack();
+        }
+        if (!track || !isTrackRegionActive(track)) return [];
 
         const { clientX, clientY } = waveformPointerClientXY();
         let segmentIndex = resolveRegionSegmentIndexAtPointer(track, clientX, clientY);
@@ -3083,17 +3146,20 @@
             const key = regionGroupMemberKey(m.slot, m.segmentIndex);
             if (seen.has(key)) continue;
             seen.add(key);
-            const mTrack = { type: 'extra', slot: m.slot };
-            if (!isTrackRegionActive(mTrack)) continue;
+            const mTrack =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(m.slot)
+                    : { type: 'extra', slot: m.slot };
+            if (!mTrack || !isTrackRegionActive(mTrack)) continue;
             out.push({ slot: m.slot, segmentIndex: m.segmentIndex });
         }
         return out;
     }
 
     function applyRegionFadeAtSeekbar(kind) {
-        if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
         const targets = resolveRegionFadeTargets();
         if (!targets.length) {
+            if (suppressInvalidRegionOpNoticeForVideoAudio()) return false;
             writeLog(
                 'Playback region fade: hover/select a region, then Alt+' +
                     (kind === 'fade-in' ? 'I' : 'O'),
@@ -3114,10 +3180,20 @@
 
         for (let i = 0; i < targets.length; i++) {
             const { slot, segmentIndex } = targets[i];
-            const track = { type: 'extra', slot };
+            const track =
+                typeof trackRefFromWaveformOffsetDragSlot === 'function'
+                    ? trackRefFromWaveformOffsetDragSlot(slot)
+                    : { type: 'extra', slot };
+            if (!track || !isTrackRegionActive(track)) continue;
             const fadeKind = kind === 'fade-in' ? 'in' : 'out';
             const before = getSegmentFadeDurationSec(track, segmentIndex, fadeKind);
-            setSegmentHandleFromTransport(track, segmentIndex, kind, transportSec, {
+            const distanceSec = resolveFadeDistanceFromTransport(
+                track,
+                segmentIndex,
+                kind,
+                transportSec,
+            );
+            applyFadeDistanceFromEdge(track, segmentIndex, kind, distanceSec, {
                 skipUndo: true,
             });
             const after = getSegmentFadeDurationSec(track, segmentIndex, fadeKind);
