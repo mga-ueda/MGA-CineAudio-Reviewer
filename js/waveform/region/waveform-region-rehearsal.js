@@ -1062,7 +1062,15 @@
         }
         noteRegionShrinkPersistIntent(track.slot);
 
-        if (!o.silent && typeof writeLog === 'function') {
+        if (!o.silent && typeof logRegionAction === 'function') {
+            logRegionAction(
+                'Ex' +
+                    (track.slot + 1) +
+                    ' laid out to Rehearsal (' +
+                    nextSegments.length +
+                    ' region(s))',
+            );
+        } else if (!o.silent && typeof writeLog === 'function') {
             writeLog(
                 'Ex ' +
                     (track.slot + 1) +

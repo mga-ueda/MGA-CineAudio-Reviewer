@@ -90,16 +90,27 @@
 
         if (!(opt && opt.silent)) {
             if (isVideoTrackRef(track)) {
-                writeLog('Video split: ' + segments.length + ' region(s)');
+                const splitMsg = 'video split: ' + segments.length + ' region(s)';
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(splitMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog('Video split: ' + segments.length + ' region(s)');
+                }
                 flashSeekHint('Video', segments.length + ' regions', 'notice');
             } else {
-                writeLog(
-                    'Ex ' +
-                        (track.slot + 1) +
-                        ' split: ' +
-                        segments.length +
-                        ' region(s)',
-                );
+                const splitMsg =
+                    'split Ex' + (track.slot + 1) + ': ' + segments.length + ' region(s)';
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(splitMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog(
+                        'Ex ' +
+                            (track.slot + 1) +
+                            ' split: ' +
+                            segments.length +
+                            ' region(s)',
+                    );
+                }
                 flashSeekHint('Ex ' + (track.slot + 1), segments.length + ' regions', 'notice');
             }
         }
@@ -177,7 +188,12 @@
             noteRegionShrinkPersistIntent(track.slot);
             redrawAfterRegionChange(track.slot);
             if (!(opt && opt.silent)) {
-                writeLog('Ex ' + (track.slot + 1) + ' regions: off');
+                const offMsg = 'Ex' + (track.slot + 1) + ' regions: off';
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(offMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog('Ex ' + (track.slot + 1) + ' regions: off');
+                }
             }
             if (typeof schedulePersistSession === 'function') schedulePersistSession();
         }

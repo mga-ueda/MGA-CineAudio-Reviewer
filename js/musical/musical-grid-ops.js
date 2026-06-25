@@ -58,6 +58,16 @@
                 textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
         }
+        if (typeof logRehearsalAction === 'function') {
+            logRehearsalAction(
+                'swapped rehearsal spec ' +
+                    (loIdx + 1) +
+                    '↔' +
+                    (hiIdx + 1) +
+                    ': ' +
+                    musicalGridRehearsalText,
+            );
+        }
         return true;
     }
     /**
@@ -150,6 +160,16 @@
                 textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
         }
+        if (typeof logRehearsalAction === 'function') {
+            logRehearsalAction(
+                'swapped rehearsal blocks ' +
+                    (a0 + 1) +
+                    '↔' +
+                    (b0 + 1) +
+                    ': ' +
+                    musicalGridRehearsalText,
+            );
+        }
         return true;
     }
     /** 展開済み Rehearsal グループ lo / hi の小節数定義を入れ替える（リージョン入れ替え E 用）。 */
@@ -206,6 +226,16 @@
                 after: musicalGridRehearsalText,
                 textUnchanged: rehearsalBefore === musicalGridRehearsalText,
             });
+        }
+        if (typeof logRehearsalAction === 'function') {
+            logRehearsalAction(
+                'swapped rehearsal groups ' +
+                    (loIdx + 1) +
+                    '↔' +
+                    (hiIdx + 1) +
+                    ': ' +
+                    musicalGridRehearsalText,
+            );
         }
         return true;
     }
@@ -605,6 +635,11 @@
             drawMusicalGridOverlay();
             updateRehearsalBoundaryOverlay();
         }
+        if (!o.silent && typeof logRegionAction === 'function') {
+            logRegionAction(
+                'rehearsal boundary adjusted: ' + musicalGridRehearsalText,
+            );
+        }
         return true;
     }
     function cancelRehearsalBoundaryDragPreview() {
@@ -684,6 +719,18 @@
             before: rehearsalBefore,
             after: musicalGridRehearsalText,
         });
+        if (!(o.silent) && typeof logRegionAction === 'function') {
+            logRegionAction(
+                'joined Ex' +
+                    ((track.slot | 0) + 1) +
+                    ' R' +
+                    (first + 1) +
+                    '–R' +
+                    (last + 1) +
+                    ' rehearsal boundaries: ' +
+                    musicalGridRehearsalText,
+            );
+        }
         return true;
     }
     /** Rehearsal 着色 ON — リージョン境界ボンドで counts 更新＋構成どおりに切り直し */
@@ -741,8 +788,8 @@
                     right +
                     ' joined at region boundary: ' +
                     musicalGridRehearsalText;
-                if (typeof logRehearsalAction === 'function') {
-                    logRehearsalAction(joinMsg);
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(joinMsg);
                 } else if (typeof writeLog === 'function') {
                     writeLog('Rehearsal ' + joinMsg);
                 }
@@ -1564,7 +1611,46 @@
             }
             endRehearsalBoundaryDrag();
             if (finalCounts && finalCounts.length) {
-                if (typeof writeLog === 'function') {
+                if (typeof logRegionAction === 'function') {
+                    const mergedCount =
+                        startCounts && startCounts.length > finalCounts.length
+                            ? startCounts.length - finalCounts.length
+                            : 0;
+                    if (
+                        mergedCount > 0 &&
+                        wasLeftRehearsalAbsorbedIntoRight(startCounts, finalCounts, boundaryIdx)
+                    ) {
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
+                        const right = rehearsalGroupLabelForIndex(boundaryIdx + 1);
+                        logRegionAction(
+                            left +
+                                ' absorbed into ' +
+                                right +
+                                ': ' +
+                                musicalGridRehearsalText,
+                        );
+                    } else if (mergedCount > 0) {
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
+                        logRegionAction(
+                            left +
+                                ' merged ' +
+                                mergedCount +
+                                ' rehearsal(s): ' +
+                                musicalGridRehearsalText,
+                        );
+                    } else {
+                        const left = rehearsalGroupLabelForIndex(boundaryIdx);
+                        const right = rehearsalGroupLabelForIndex(boundaryIdx + 1);
+                        logRegionAction(
+                            'rehearsal boundary ' +
+                                left +
+                                '/' +
+                                right +
+                                ': ' +
+                                musicalGridRehearsalText,
+                        );
+                    }
+                } else if (typeof writeLog === 'function') {
                     const mergedCount =
                         startCounts && startCounts.length > finalCounts.length
                             ? startCounts.length - finalCounts.length
@@ -1938,6 +2024,7 @@
     window.collectRehearsalGroupRangesFromBarCounts = collectRehearsalGroupRangesFromBarCounts;
     window.formatRehearsalTextFromGroupBarCounts = formatRehearsalTextFromGroupBarCounts;
     window.captureRehearsalUndoSnapshot = captureRehearsalUndoSnapshot;
+    window.dispatchRehearsalHistoryStep = dispatchRehearsalHistoryStep;
     window.restoreRehearsalUndoSnapshot = restoreRehearsalUndoSnapshot;
 
     initMusicalGridUi();

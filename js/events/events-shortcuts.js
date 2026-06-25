@@ -396,12 +396,8 @@
         if (
             dispatchShortcutHandlers(
                 [
-                    'handleMusicalTrackUndoKeydown',
-                    'handleMusicalTrackRedoKeydown',
-                    'handleMusicalGridRehearsalUndoKeydown',
-                    'handleMusicalGridRehearsalRedoKeydown',
-                    'handlePlaybackRegionUndoKeydown',
-                    'handlePlaybackRegionRedoKeydown',
+                    'handleAppUndoKeydown',
+                    'handleAppRedoKeydown',
                     'handlePlaybackRegionCopyKeydown',
                     'handlePlaybackRegionPasteKeydown',
                     'handlePlaybackRegionFadeInKeydown',

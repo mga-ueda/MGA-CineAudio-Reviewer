@@ -424,7 +424,12 @@
             optimize: true,
         });
         if (typeof writeLog === 'function' && before !== musicalGridRehearsalText) {
-            writeLog('Rehearsal: compressed ' + before + ' -> ' + musicalGridRehearsalText);
+            const msg = 'compressed ' + before + ' -> ' + musicalGridRehearsalText;
+            if (typeof logRehearsalAction === 'function') {
+                logRehearsalAction(msg);
+            } else {
+                writeLog('Rehearsal: ' + msg);
+            }
         }
         return before !== musicalGridRehearsalText;
     }

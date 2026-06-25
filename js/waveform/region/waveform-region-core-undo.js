@@ -136,12 +136,18 @@
                 : 0;
         if (!(master > 0)) return 0;
         let removed = 0;
-        for (let i = regionUndoStack.length - 1; i >= 0; i--) {
-            if (regionUndoSnapshotDurationScaleCompatible(regionUndoStack[i], master)) {
-                continue;
+        if (typeof window.pruneAppUndoRegionEntries === 'function') {
+            removed = window.pruneAppUndoRegionEntries((snap) =>
+                regionUndoSnapshotDurationScaleCompatible(snap, master),
+            );
+        } else {
+            for (let i = regionUndoStack.length - 1; i >= 0; i--) {
+                if (regionUndoSnapshotDurationScaleCompatible(regionUndoStack[i], master)) {
+                    continue;
+                }
+                regionUndoStack.splice(i, 1);
+                removed++;
             }
-            regionUndoStack.splice(i, 1);
-            removed++;
         }
         if (removed > 0) {
             const msg =
@@ -159,6 +165,12 @@
             }
         }
         return removed;
+    }
+    function setRegionUndoPaused(value) {
+        regionUndoPaused = !!value;
+        if (typeof window.setAppUndoHistoryPaused === 'function') {
+            window.setAppUndoHistoryPaused(regionUndoPaused);
+        }
     }
     function restoredPlaybackHasUsableTimelineSlots(playbackRegions) {
         const slots =
@@ -328,11 +340,16 @@
         );
     }
     function clearRegionRedoStack() {
-        regionRedoStack.length = 0;
+        /* redo は undo-history.js の単一 redoStack で管理 */
     }
     function noteRegionUndoActionLabel(label) {
         const text = label != null ? String(label).trim() : '';
-        if (!text || !regionUndoStack.length) return;
+        if (!text) return;
+        if (typeof window.noteAppUndoActionLabel === 'function') {
+            window.noteAppUndoActionLabel(text, { kind: 'region' });
+            return;
+        }
+        if (!regionUndoStack.length) return;
         regionUndoStack[regionUndoStack.length - 1].actionLabel = text;
     }
     window.noteRegionUndoActionLabel = noteRegionUndoActionLabel;
@@ -342,16 +359,29 @@
             window.clearRegionSwapHistoryAnimHint();
         }
         const snap = captureRegionUndoSnapshot(opt);
+        const forceCapture = !!(opt && opt.forceCapture);
+        if (typeof window.pushAppUndoEntry === 'function') {
+            window.pushAppUndoEntry({ kind: 'region', snap }, { forceCapture });
+            return;
+        }
         const top = regionUndoStack.length
             ? regionUndoStack[regionUndoStack.length - 1]
             : null;
-        const forceCapture = !!(opt && opt.forceCapture);
         if (!forceCapture && top && regionUndoSnapshotsEqual(top, snap)) return;
         regionUndoStack.push(snap);
-        clearRegionRedoStack();
     }
     function attachRegionSwapAnimHintToUndoStackTop(hint) {
         if (regionUndoPaused || !hint || !hint.swapAnim) return;
+        const topEntry =
+            typeof window.getAppUndoStackTop === 'function'
+                ? window.getAppUndoStackTop()
+                : null;
+        if (topEntry && topEntry.kind === 'region') {
+            if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
+                topEntry.regionSwapAnimHint = window.cloneRegionSwapHistoryAnimHint(hint);
+            }
+            return;
+        }
         if (!regionUndoStack.length) return;
         const top = regionUndoStack[regionUndoStack.length - 1];
         if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
@@ -360,9 +390,18 @@
     }
     /** head pad swap — undo スタック先頭へスワップ前 mark 列を固定（plan 内 ripple 後の上書き防止） */
     function attachHeadPadSwapPreMarksToUndoStackTop(marks, counts) {
-        if (regionUndoPaused || !regionUndoStack.length) return;
-        if (!Array.isArray(marks) || !marks.length) return;
-        const top = regionUndoStack[regionUndoStack.length - 1];
+        if (regionUndoPaused) return;
+        const topEntry =
+            typeof window.getAppUndoStackTop === 'function'
+                ? window.getAppUndoStackTop()
+                : null;
+        const top =
+            topEntry && topEntry.kind === 'region'
+                ? topEntry.snap
+                : regionUndoStack.length
+                  ? regionUndoStack[regionUndoStack.length - 1]
+                  : null;
+        if (!top || !Array.isArray(marks) || !marks.length) return;
         const clonedMarks = marks.map((e) => ({
             sec: Number(e.sec),
             label: e.label != null ? String(e.label) : '',
@@ -436,7 +475,7 @@
     }
     function restoreRegionUndoSnapshot(snap, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        regionUndoPaused = true;
+        setRegionUndoPaused(true);
         const normalized = normalizeRegionUndoSnapshot(snap);
         const n = getExtraTrackCount();
         for (let i = 0; i < n; i++) {
@@ -603,7 +642,7 @@
         if (!o.deferRedraw && !o.skipPersist && typeof schedulePersistSession === 'function') {
             schedulePersistSession();
         }
-        regionUndoPaused = false;
+        setRegionUndoPaused(false);
     }
     function trackUndoEntryFingerprint(entry) {
         if (!entry) {
@@ -735,7 +774,7 @@
         return intervals;
     }
     function finishDeferredRegionHistoryRestore(targetSnap, onDone, swapHint, restoreOpt) {
-        regionUndoPaused = false;
+        setRegionUndoPaused(false);
         const ro = restoreOpt && typeof restoreOpt === 'object' ? restoreOpt : {};
         restoreRegionUndoSnapshot(targetSnap, Object.assign({ swapHint: swapHint }, ro));
         if (typeof onDone === 'function') onDone();
@@ -911,7 +950,7 @@
     }
 
     function beginDeferredRegionHistoryRestore(targetSnap, onDone, swapHint, restoreOpt) {
-        regionUndoPaused = true;
+        setRegionUndoPaused(true);
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 tryAnimateRegionHistoryRestore(targetSnap, onDone, swapHint, 0, restoreOpt);
@@ -921,122 +960,86 @@
     function captureRegionUndoSnapshotForHistory() {
         return captureRegionUndoSnapshot({ includeRehearsal: true });
     }
-    function undoPlaybackRegion() {
-        if (!regionUndoStack.length) return false;
-        const current = captureRegionUndoSnapshotForHistory();
-        const prev = regionUndoStack.pop();
-        const undoActionLabel = prev && prev.actionLabel ? String(prev.actionLabel) : '';
-        const normalizedPrev = normalizeRegionUndoSnapshot(prev);
-        let swapHintForRestore = null;
-        if (prev.regionSwapAnimHint && prev.regionSwapAnimHint.swapAnim) {
-            swapHintForRestore = prev.regionSwapAnimHint;
-            if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
-                current.regionSwapAnimHint =
-                    window.cloneRegionSwapHistoryAnimHint(prev.regionSwapAnimHint);
-            }
-        } else {
-            const globalHint =
-                typeof window.regionSwapHistoryAnimHint !== 'undefined'
-                    ? window.regionSwapHistoryAnimHint
-                    : null;
-            if (
-                globalHint &&
-                typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
-                window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalizedPrev)
-            ) {
-                swapHintForRestore = globalHint;
-                if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
-                    current.regionSwapAnimHint =
-                        window.cloneRegionSwapHistoryAnimHint(globalHint);
-                }
-            }
+    function resolveRegionHistorySwapHint(entry, direction) {
+        const snap = entry && entry.snap ? entry.snap : entry;
+        const normalized = normalizeRegionUndoSnapshot(snap);
+        if (entry && entry.regionSwapAnimHint && entry.regionSwapAnimHint.swapAnim) {
+            const hint = entry.regionSwapAnimHint;
+            if (direction === 'redo') delete entry.regionSwapAnimHint;
+            return hint;
         }
+        const globalHint =
+            typeof window.regionSwapHistoryAnimHint !== 'undefined'
+                ? window.regionSwapHistoryAnimHint
+                : null;
+        if (
+            globalHint &&
+            typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
+            window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalized)
+        ) {
+            return globalHint;
+        }
+        return null;
+    }
+    function enrichRegionHistoryRedoEntry(current, prevEntry) {
+        if (!current || !prevEntry) return;
+        const undoActionLabel =
+            prevEntry.actionLabel ||
+            (prevEntry.snap && prevEntry.snap.actionLabel
+                ? String(prevEntry.snap.actionLabel)
+                : '');
+        if (undoActionLabel) current.actionLabel = undoActionLabel;
+        const normalizedPrev = normalizeRegionUndoSnapshot(prevEntry.snap);
+        if (prevEntry.regionSwapAnimHint && prevEntry.regionSwapAnimHint.swapAnim) {
+            if (typeof window.cloneRegionSwapHistoryAnimHint === 'function') {
+                current.regionSwapAnimHint = window.cloneRegionSwapHistoryAnimHint(
+                    prevEntry.regionSwapAnimHint,
+                );
+            }
+            return;
+        }
+        const globalHint = resolveRegionHistorySwapHint(prevEntry, 'undo');
+        if (
+            globalHint &&
+            typeof window.cloneRegionSwapHistoryAnimHint === 'function'
+        ) {
+            current.regionSwapAnimHint = window.cloneRegionSwapHistoryAnimHint(globalHint);
+        }
+    }
+    function dispatchRegionHistoryStep(entry, direction, onDone) {
+        if (!entry || !entry.snap) return false;
+        const targetSnap = entry.snap;
+        const swapHintForRestore = resolveRegionHistorySwapHint(entry, direction);
         if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
             window.clearRegionSwapHistoryAnimHint();
         }
-        if (undoActionLabel) current.actionLabel = undoActionLabel;
-        regionRedoStack.push(current);
         beginDeferredRegionHistoryRestore(
-            prev,
-            () => {
-            const undoMsg =
-                typeof formatRegionHistoryActionMessage === 'function'
-                    ? formatRegionHistoryActionMessage('undo', undoActionLabel)
-                    : undoActionLabel
-                      ? 'undo — ' + undoActionLabel
-                      : 'undo';
-            if (typeof actionLog === 'function') {
-                actionLog('Region', undoMsg);
-            } else if (typeof writeActionLog === 'function') {
-                writeActionLog('Region', undoMsg);
-            } else {
-                writeLog('Playback region: ' + undoMsg);
-            }
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Undo', 'notice');
-            }
-        },
+            targetSnap,
+            onDone,
             swapHintForRestore,
-            { historyRestoreDirection: 'undo' },
+            { historyRestoreDirection: direction },
         );
         return true;
+    }
+    function undoPlaybackRegion() {
+        if (typeof window.undoAppHistory === 'function') {
+            return window.undoAppHistory();
+        }
+        return false;
     }
     function redoPlaybackRegion() {
-        if (!regionRedoStack.length) return false;
-        const current = captureRegionUndoSnapshotForHistory();
-        const next = regionRedoStack.pop();
-        const redoActionLabel = next && next.actionLabel ? String(next.actionLabel) : '';
-        let swapHintForRestore = null;
-        if (next.regionSwapAnimHint && next.regionSwapAnimHint.swapAnim) {
-            swapHintForRestore = next.regionSwapAnimHint;
-            delete next.regionSwapAnimHint;
-        } else {
-            const normalizedNext = normalizeRegionUndoSnapshot(next);
-            const globalHint =
-                typeof window.regionSwapHistoryAnimHint !== 'undefined'
-                    ? window.regionSwapHistoryAnimHint
-                    : null;
-            if (
-                globalHint &&
-                typeof window.regionSwapHistoryAnimHintMatchesTarget === 'function' &&
-                window.regionSwapHistoryAnimHintMatchesTarget(globalHint, normalizedNext)
-            ) {
-                swapHintForRestore = globalHint;
-            }
+        if (typeof window.redoAppHistory === 'function') {
+            return window.redoAppHistory();
         }
-        if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
-            window.clearRegionSwapHistoryAnimHint();
-        }
-        if (redoActionLabel) current.actionLabel = redoActionLabel;
-        regionUndoStack.push(current);
-        beginDeferredRegionHistoryRestore(
-            next,
-            () => {
-            const redoMsg =
-                typeof formatRegionHistoryActionMessage === 'function'
-                    ? formatRegionHistoryActionMessage('redo', redoActionLabel)
-                    : redoActionLabel
-                      ? 'redo — ' + redoActionLabel
-                      : 'redo';
-            if (typeof actionLog === 'function') {
-                actionLog('Region', redoMsg);
-            } else if (typeof writeActionLog === 'function') {
-                writeActionLog('Region', redoMsg);
-            } else {
-                writeLog('Playback region: ' + redoMsg);
-            }
-            if (typeof flashSeekHint === 'function') {
-                flashSeekHint('Region', 'Redo', 'notice');
-            }
-        },
-            swapHintForRestore,
-            { historyRestoreDirection: 'redo' },
-        );
-        return true;
+        return false;
     }
     function clearRegionUndoStack() {
-        regionUndoStack.length = 0;
-        clearRegionRedoStack();
+        if (typeof window.clearAppUndoHistory === 'function') {
+            window.clearAppUndoHistory();
+        } else {
+            regionUndoStack.length = 0;
+            regionRedoStack.length = 0;
+        }
         regionUndoDragSnap = null;
         if (typeof window.clearRegionSwapHistoryAnimHint === 'function') {
             window.clearRegionSwapHistoryAnimHint();
@@ -1053,8 +1056,11 @@
         if (regionUndoPaused || !regionUndoDragSnap) return;
         const current = captureRegionUndoSnapshot(regionUndoCaptureOptions());
         if (!regionUndoSnapshotsEqual(regionUndoDragSnap, current)) {
-            regionUndoStack.push(regionUndoDragSnap);
-            clearRegionRedoStack();
+            if (typeof window.pushAppUndoEntry === 'function') {
+                window.pushAppUndoEntry({ kind: 'region', snap: regionUndoDragSnap });
+            } else {
+                regionUndoStack.push(regionUndoDragSnap);
+            }
         }
         regionUndoDragSnap = null;
     }
@@ -1323,3 +1329,7 @@
             regionSwapDiagDumpTrack({ type: 'extra', slot }, label);
         }
     }
+    window.regionUndoSnapshotsEqual = regionUndoSnapshotsEqual;
+    window.captureRegionUndoSnapshotForHistory = captureRegionUndoSnapshotForHistory;
+    window.dispatchRegionHistoryStep = dispatchRegionHistoryStep;
+    window.enrichRegionHistoryRedoEntry = enrichRegionHistoryRedoEntry;

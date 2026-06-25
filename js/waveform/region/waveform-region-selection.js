@@ -507,13 +507,17 @@
         if (typeof flashRegionGroupMembers === 'function') {
             flashRegionGroupMembers(groupedMembers);
         }
-        writeLog(
-            'Regions grouped across ' +
-                unique.size +
-                ' region(s) on ' +
-                touchedSlots.size +
-                ' track(s)',
-        );
+        const groupMsg =
+            'grouped ' +
+            unique.size +
+            ' region(s) on ' +
+            touchedSlots.size +
+            ' track(s)';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(groupMsg);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Regions ' + groupMsg);
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Grouped', 'notice');
         }
@@ -575,7 +579,12 @@
             }
         }
         if (ungrouped) {
-            writeLog('Region group cleared (' + gids.size + ' group(s))');
+            const ungroupMsg = 'ungrouped ' + gids.size + ' group(s)';
+            if (typeof logRegionAction === 'function') {
+                logRegionAction(ungroupMsg);
+            } else if (typeof writeLog === 'function') {
+                writeLog('Region group cleared (' + gids.size + ' group(s))');
+            }
         }
         if (!ungrouped) {
             writeLog('Playback region: selection is not in a group');

@@ -685,6 +685,17 @@
         }
         cancelRehearsalTrackEdit();
         refreshRehearsalTrack();
+        const tc =
+            typeof formatTimecodeForTransport === 'function'
+                ? formatTimecodeForTransport(sec)
+                : String(sec);
+        if (typeof logRehearsalMarkAction === 'function') {
+            logRehearsalMarkAction(
+                isNew
+                    ? 'inserted rehearsal mark ' + label + ' @ ' + tc
+                    : 'renamed rehearsal mark to ' + label + ' @ ' + tc,
+            );
+        }
     }
 
     function deleteRehearsalEventAtIndex(eventIndex, meterSpec, durationSec) {
@@ -730,10 +741,17 @@
         if (!o.skipUndo && typeof requestMusicalTrackUndoCapture === 'function') {
             requestMusicalTrackUndoCapture();
         }
+        const headLabel =
+            events[headIdx] && events[headIdx].label
+                ? String(events[headIdx].label)
+                : '?';
         const ok = deleteRehearsalEventAtIndex(headIdx, meterSpec, master);
         if (ok) {
             selectedRehearsalEventIndex = -1;
             refreshRehearsalTrack();
+            if (!o.silent && typeof logRehearsalMarkAction === 'function') {
+                logRehearsalMarkAction('deleted rehearsal mark ' + headLabel + ' at transport head');
+            }
         }
         return ok;
     }
@@ -743,10 +761,20 @@
         const settings = rehearsalTrackEditSettings();
         const master = rehearsalMasterDurationSec();
         if (!(master > 0)) return false;
+        const meterSpec = settings && settings.meterSpec;
+        const eventsBefore =
+            typeof getRehearsalMarkTrackEvents === 'function'
+                ? getRehearsalMarkTrackEvents(meterSpec, master)
+                : [];
+        const deletedLabel =
+            selectedRehearsalEventIndex >= 0 &&
+            eventsBefore[selectedRehearsalEventIndex] &&
+            eventsBefore[selectedRehearsalEventIndex].label
+                ? String(eventsBefore[selectedRehearsalEventIndex].label)
+                : '?';
         if (typeof requestMusicalTrackUndoCapture === 'function') {
             requestMusicalTrackUndoCapture();
         }
-        const meterSpec = settings && settings.meterSpec;
         const ok = deleteRehearsalEventAtIndex(
             selectedRehearsalEventIndex,
             meterSpec,
@@ -755,6 +783,9 @@
         if (ok) {
             selectedRehearsalEventIndex = -1;
             refreshRehearsalTrack();
+            if (typeof logRehearsalMarkAction === 'function') {
+                logRehearsalMarkAction('deleted rehearsal mark ' + deletedLabel);
+            }
         }
         return ok;
     }
@@ -999,6 +1030,19 @@
                         }
                         if (typeof commitMusicalTrackUndoGesture === 'function') {
                             commitMusicalTrackUndoGesture();
+                        }
+                        if (typeof logRehearsalMarkAction === 'function') {
+                            const movedLabel =
+                                idx >= 0 && idx < list.length && list[idx].label
+                                    ? String(list[idx].label)
+                                    : '?';
+                            const tc =
+                                typeof formatTimecodeForTransport === 'function'
+                                    ? formatTimecodeForTransport(movedNewSec)
+                                    : String(movedNewSec);
+                            logRehearsalMarkAction(
+                                'moved rehearsal mark ' + movedLabel + ' to ' + tc,
+                            );
                         }
                     } else if (typeof cancelMusicalTrackUndoGesture === 'function') {
                         cancelMusicalTrackUndoGesture();
@@ -1277,7 +1321,12 @@
                 typeof formatTimecodeForTransport === 'function'
                     ? formatTimecodeForTransport(snapped)
                     : String(snapped);
-            if (typeof writeLog === 'function') {
+            const msg = 'inserted rehearsal mark ' + label + ' @ ' + tc;
+            if (typeof logRehearsalMarkAction === 'function') {
+                logRehearsalMarkAction(msg);
+            } else if (typeof logMusicalGridAction === 'function') {
+                logMusicalGridAction(msg);
+            } else if (typeof writeLog === 'function') {
                 writeLog('Rehearsal mark: ' + label + ' @ ' + tc);
             }
             if (typeof flashSeekHint === 'function') {

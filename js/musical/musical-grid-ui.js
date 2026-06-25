@@ -769,7 +769,6 @@
                 hasKey: Object.prototype.hasOwnProperty.call(s, 'rehearsalMarkTrackEvents'),
             });
         }
-        clearRehearsalUndoStack();
         syncMusicalGridVisibilityUi();
         if (typeof tryApplyPendingRehearsalMarkTrackEvents === 'function') {
             tryApplyPendingRehearsalMarkTrackEvents();

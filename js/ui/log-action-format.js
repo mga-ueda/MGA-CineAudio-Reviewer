@@ -90,7 +90,9 @@
 
     function logRegionAction(message, opt) {
         const msg = message != null ? String(message) : '';
-        if (typeof window.noteRegionUndoActionLabel === 'function') {
+        if (typeof window.noteAppUndoActionLabel === 'function') {
+            window.noteAppUndoActionLabel(msg, { kind: 'region' });
+        } else if (typeof window.noteRegionUndoActionLabel === 'function') {
             window.noteRegionUndoActionLabel(msg);
         }
         actionLog('Region', msg, opt);
@@ -101,7 +103,28 @@
     }
 
     function logRehearsalAction(message, opt) {
-        actionLog('Rehearsal', message, opt);
+        const msg = message != null ? String(message) : '';
+        if (msg && typeof window.noteAppUndoActionLabel === 'function') {
+            window.noteAppUndoActionLabel(msg, { kind: 'rehearsal' });
+        }
+        actionLog('Rehearsal', msg, opt);
+    }
+
+    function logMusicalGridAction(message, opt) {
+        const msg = message != null ? String(message) : '';
+        if (msg && typeof window.noteAppUndoActionLabel === 'function') {
+            window.noteAppUndoActionLabel(msg, { kind: 'musicalTrack' });
+        }
+        actionLog('MusicalGrid', msg, opt);
+    }
+
+    /** Rehearsal マーク列 — undo kind は musicalTrack、表示 category は Rehearsal */
+    function logRehearsalMarkAction(message, opt) {
+        const msg = message != null ? String(message) : '';
+        if (msg && typeof window.noteAppUndoActionLabel === 'function') {
+            window.noteAppUndoActionLabel(msg, { kind: 'musicalTrack' });
+        }
+        actionLog('Rehearsal', msg, opt);
     }
 
     function logExAudioAction(message, opt) {
@@ -164,6 +187,8 @@
     window.logRegionAction = logRegionAction;
     window.logMarkerAction = logMarkerAction;
     window.logRehearsalAction = logRehearsalAction;
+    window.logMusicalGridAction = logMusicalGridAction;
+    window.logRehearsalMarkAction = logRehearsalMarkAction;
     window.logExAudioAction = logExAudioAction;
     window.logMixAction = logMixAction;
     window.logVideoAction = logVideoAction;

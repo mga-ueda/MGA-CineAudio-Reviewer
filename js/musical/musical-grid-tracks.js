@@ -53,6 +53,10 @@
         if (musicalTrackUndoPaused) return;
         const snap = captureMusicalTrackUndoSnapshot();
         if (!snap) return;
+        if (typeof window.pushAppUndoEntry === 'function') {
+            window.pushAppUndoEntry({ kind: 'musicalTrack', snap });
+            return;
+        }
         const top = musicalTrackUndoStack.length
             ? musicalTrackUndoStack[musicalTrackUndoStack.length - 1]
             : null;
@@ -70,8 +74,12 @@
         if (musicalTrackUndoPaused || !trackDragUndoSnap) return;
         const current = captureMusicalTrackUndoSnapshot();
         if (!musicalTrackSnapshotsEqual(trackDragUndoSnap, current)) {
-            musicalTrackUndoStack.push(trackDragUndoSnap);
-            musicalTrackRedoStack.length = 0;
+            if (typeof window.pushAppUndoEntry === 'function') {
+                window.pushAppUndoEntry({ kind: 'musicalTrack', snap: trackDragUndoSnap });
+            } else {
+                musicalTrackUndoStack.push(trackDragUndoSnap);
+                musicalTrackRedoStack.length = 0;
+            }
         }
         trackDragUndoSnap = null;
     }
@@ -83,6 +91,9 @@
     function restoreMusicalTrackUndoSnapshot(snap) {
         if (!snap || typeof applyMusicalGridPersistSnapshot !== 'function') return;
         musicalTrackUndoPaused = true;
+        if (typeof window.setAppUndoHistoryPaused === 'function') {
+            window.setAppUndoHistoryPaused(true);
+        }
         selectedTrackEvent = null;
         cancelMusicalTrackEdit();
         if (typeof clearRehearsalTrackOnMusicalUndoRestore === 'function') {
@@ -95,54 +106,47 @@
             refreshMusicalGridTracks();
         }
         musicalTrackUndoPaused = false;
+        if (typeof window.setAppUndoHistoryPaused === 'function') {
+            window.setAppUndoHistoryPaused(false);
+        }
+    }
+
+    function dispatchMusicalTrackHistoryStep(snap) {
+        restoreMusicalTrackUndoSnapshot(snap);
+    }
+
+    function isMusicalTrackEditBlockingUndo() {
+        if (activeEdit) return true;
+        if (tempoBoundaryDragActive || sigBoundaryDragActive) return true;
+        return false;
     }
 
     function undoMusicalTrackEdit() {
-        if (!musicalTrackUndoStack.length) return false;
-        const current = captureMusicalTrackUndoSnapshot();
-        const prev = musicalTrackUndoStack.pop();
-        if (current) musicalTrackRedoStack.push(current);
-        restoreMusicalTrackUndoSnapshot(prev);
-        return true;
+        if (typeof window.undoAppHistory === 'function') {
+            return window.undoAppHistory();
+        }
+        return false;
     }
 
     function redoMusicalTrackEdit() {
-        if (!musicalTrackRedoStack.length) return false;
-        const current = captureMusicalTrackUndoSnapshot();
-        const next = musicalTrackRedoStack.pop();
-        if (current) musicalTrackUndoStack.push(current);
-        restoreMusicalTrackUndoSnapshot(next);
-        return true;
+        if (typeof window.redoAppHistory === 'function') {
+            return window.redoAppHistory();
+        }
+        return false;
     }
 
     function handleMusicalTrackUndoKeydown(e) {
-        if (typeof matchUserShortcut !== 'function' || !matchUserShortcut(e, 'regionUndo')) {
-            return false;
+        if (typeof window.handleAppUndoKeydown === 'function') {
+            return window.handleAppUndoKeydown(e);
         }
-        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
-        if (activeEdit) return false;
-        if (tempoBoundaryDragActive || sigBoundaryDragActive) return false;
-        if (typeof isRehearsalBoundaryDragActive === 'function' && isRehearsalBoundaryDragActive()) {
-            return false;
-        }
-        if (!undoMusicalTrackEdit()) return false;
-        e.preventDefault();
-        return true;
+        return false;
     }
 
     function handleMusicalTrackRedoKeydown(e) {
-        if (typeof matchUserShortcut !== 'function' || !matchUserShortcut(e, 'regionRedo')) {
-            return false;
+        if (typeof window.handleAppRedoKeydown === 'function') {
+            return window.handleAppRedoKeydown(e);
         }
-        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) return false;
-        if (activeEdit) return false;
-        if (tempoBoundaryDragActive || sigBoundaryDragActive) return false;
-        if (typeof isRehearsalBoundaryDragActive === 'function' && isRehearsalBoundaryDragActive()) {
-            return false;
-        }
-        if (!redoMusicalTrackEdit()) return false;
-        e.preventDefault();
-        return true;
+        return false;
     }
 
     function handleMusicalTrackDeleteKeydown(e) {
@@ -270,6 +274,9 @@
                 master,
                 { skipUndo: true },
             );
+            if (ok && typeof logMusicalGridAction === 'function') {
+                logMusicalGridAction('deleted tempo event');
+            }
         } else if (selectedTrackEvent.field === 'signature') {
             ok = deleteSignatureEventAtIndex(
                 selectedTrackEvent.eventIndex,
@@ -277,6 +284,9 @@
                 master,
                 { skipUndo: true },
             );
+            if (ok && typeof logMusicalGridAction === 'function') {
+                logMusicalGridAction('deleted signature event');
+            }
         }
         if (ok) {
             clearTrackEventSelection();
@@ -1044,6 +1054,9 @@
                     }
                     persistSignatureTrackEvents(list, settingsNow.meterSpec, masterNow);
                     commitMusicalTrackUndoGesture();
+                    if (typeof logMusicalGridAction === 'function') {
+                        logMusicalGridAction('moved signature change');
+                    }
                     refreshMusicalGridTracks();
                 } else {
                     cancelMusicalTrackUndoGesture();
@@ -1106,6 +1119,15 @@
         }
         persistSignatureTrackEvents(events, meterSpec, durationSec);
         syncSignatureTrackVisuals(meterSpec, durationSec);
+        if (typeof logMusicalGridAction === 'function') {
+            const sigText =
+                sig.beatsPerBar != null && sig.beatUnit != null
+                    ? sig.beatsPerBar + '/' + sig.beatUnit
+                    : String(raw || '').trim();
+            logMusicalGridAction(
+                isNew ? 'added signature ' + sigText : 'changed signature to ' + sigText,
+            );
+        }
     }
 
     function syncSignatureTrackVisuals(meterSpec, durationSec) {
@@ -1622,6 +1644,9 @@
                 if (didMove && list && settingsNow && settingsNow.meterSpec && masterNow > 0) {
                     persistTempoTrackEvents(list, settingsNow.meterSpec, masterNow);
                     commitMusicalTrackUndoGesture();
+                    if (typeof logMusicalGridAction === 'function') {
+                        logMusicalGridAction('moved tempo change');
+                    }
                     refreshMusicalGridTracks();
                 } else {
                     cancelMusicalTrackUndoGesture();
@@ -1733,7 +1758,14 @@
 
     function commitTempoTrackEdit() {
         if (!activeEdit || activeEdit.field !== 'tempo') return;
+        const isNew = !!activeEdit.isNew;
+        const bpm = Number(String(activeEdit.input ? activeEdit.input.value : '').trim());
         applyTempoTrackEditLive();
+        if (typeof logMusicalGridAction === 'function' && bpm > 0) {
+            logMusicalGridAction(
+                isNew ? 'added tempo ' + bpm + ' BPM' : 'changed tempo to ' + bpm + ' BPM',
+            );
+        }
         cancelMusicalTrackEdit();
         refreshMusicalGridTracks();
     }
@@ -2484,6 +2516,9 @@
     window.handleMusicalTrackDeleteKeydown = handleMusicalTrackDeleteKeydown;
     window.selectMusicalTrackEvent = selectTrackEvent;
     window.requestMusicalTrackUndoCapture = requestMusicalTrackUndoCapture;
+    window.captureMusicalTrackUndoSnapshot = captureMusicalTrackUndoSnapshot;
+    window.dispatchMusicalTrackHistoryStep = dispatchMusicalTrackHistoryStep;
+    window.isMusicalTrackEditBlockingUndo = isMusicalTrackEditBlockingUndo;
     window.beginMusicalTrackUndoGesture = beginMusicalTrackUndoGesture;
     window.commitMusicalTrackUndoGesture = commitMusicalTrackUndoGesture;
     window.cancelMusicalTrackUndoGesture = cancelMusicalTrackUndoGesture;

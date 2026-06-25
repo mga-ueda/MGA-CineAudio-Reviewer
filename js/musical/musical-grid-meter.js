@@ -60,6 +60,10 @@
     function requestRehearsalUndoCapture() {
         if (rehearsalUndoPaused) return;
         const snap = captureRehearsalUndoSnapshot();
+        if (typeof window.pushAppUndoEntry === 'function') {
+            window.pushAppUndoEntry({ kind: 'rehearsal', snap });
+            return;
+        }
         const top = rehearsalUndoStack.length
             ? rehearsalUndoStack[rehearsalUndoStack.length - 1]
             : null;
@@ -70,6 +74,9 @@
     function restoreRehearsalUndoSnapshot(rehearsal, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         rehearsalUndoPaused = true;
+        if (typeof window.setAppUndoHistoryPaused === 'function') {
+            window.setAppUndoHistoryPaused(true);
+        }
         clearRehearsalGroupBarCountsOverride();
         musicalGridRehearsalText = normalizeMusicalGridRehearsalText(rehearsal);
         persistMusicalGridAndRedraw({
@@ -80,62 +87,36 @@
         });
         updateRehearsalBoundaryOverlay();
         rehearsalUndoPaused = false;
+        if (typeof window.setAppUndoHistoryPaused === 'function') {
+            window.setAppUndoHistoryPaused(false);
+        }
+    }
+    function dispatchRehearsalHistoryStep(rehearsal) {
+        restoreRehearsalUndoSnapshot(rehearsal);
     }
     function undoRehearsalDefinition() {
-        if (!rehearsalUndoStack.length) return false;
-        const current = captureRehearsalUndoSnapshot();
-        const prev = rehearsalUndoStack.pop();
-        rehearsalRedoStack.push(current);
-        restoreRehearsalUndoSnapshot(prev);
-        if (typeof writeLog === 'function') {
-            if (typeof logRehearsalAction === 'function') {
-                logRehearsalAction('undo → ' + musicalGridRehearsalText);
-            } else {
-                writeLog('Rehearsal: undo -> ' + musicalGridRehearsalText);
-            }
+        if (typeof window.undoAppHistory === 'function') {
+            return window.undoAppHistory();
         }
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Rehearsal', 'Undo', 'notice');
-        }
-        return true;
+        return false;
     }
     function redoRehearsalDefinition() {
-        if (!rehearsalRedoStack.length) return false;
-        const current = captureRehearsalUndoSnapshot();
-        const next = rehearsalRedoStack.pop();
-        rehearsalUndoStack.push(current);
-        restoreRehearsalUndoSnapshot(next);
-        if (typeof writeLog === 'function') {
-            if (typeof logRehearsalAction === 'function') {
-                logRehearsalAction('redo → ' + musicalGridRehearsalText);
-            } else {
-                writeLog('Rehearsal: redo -> ' + musicalGridRehearsalText);
-            }
+        if (typeof window.redoAppHistory === 'function') {
+            return window.redoAppHistory();
         }
-        if (typeof flashSeekHint === 'function') {
-            flashSeekHint('Rehearsal', 'Redo', 'notice');
-        }
-        return true;
+        return false;
     }
     function handleMusicalGridRehearsalUndoKeydown(e) {
-        if (!matchUserShortcut(e, 'regionUndo')) return false;
-        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
-            return false;
+        if (typeof window.handleAppUndoKeydown === 'function') {
+            return window.handleAppUndoKeydown(e);
         }
-        if (rehearsalBoundaryDragActive) return false;
-        if (!undoRehearsalDefinition()) return false;
-        e.preventDefault();
-        return true;
+        return false;
     }
     function handleMusicalGridRehearsalRedoKeydown(e) {
-        if (!matchUserShortcut(e, 'regionRedo')) return false;
-        if (typeof isTypingTarget === 'function' && isTypingTarget(e.target)) {
-            return false;
+        if (typeof window.handleAppRedoKeydown === 'function') {
+            return window.handleAppRedoKeydown(e);
         }
-        if (rehearsalBoundaryDragActive) return false;
-        if (!redoRehearsalDefinition()) return false;
-        e.preventDefault();
-        return true;
+        return false;
     }
     const BAR_GROUP_FILL_A = 'rgba(200, 48, 58, 0.14)';
     const BAR_GROUP_FILL_B = 'rgba(48, 110, 220, 0.14)';

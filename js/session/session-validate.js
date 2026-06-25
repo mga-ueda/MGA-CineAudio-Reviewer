@@ -352,6 +352,12 @@
                 ) {
                     return { valid: false, reason: 'invalid prefs.devConstants.tempoStretchSkipApply' };
                 }
+                if (
+                    'actionLogWindowOpen' in prefs.devConstants &&
+                    typeof prefs.devConstants.actionLogWindowOpen !== 'boolean'
+                ) {
+                    return { valid: false, reason: 'invalid prefs.devConstants.actionLogWindowOpen' };
+                }
             }
         }
 

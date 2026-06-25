@@ -55,6 +55,20 @@
         return entries;
     }
 
+    function getActionLogWindowEntries() {
+        let entries = logLines;
+        if (isDiagLogUiSuppressed()) {
+            entries = entries.filter((e) => !isLogEntryDiagTier(e));
+        }
+        return entries.filter(
+            typeof window.isLogEntryVisibleInOpsFilter === 'function'
+                ? window.isLogEntryVisibleInOpsFilter
+                : (e) => e && e.tier === 'action',
+        );
+    }
+
+    window.getActionLogWindowEntries = getActionLogWindowEntries;
+
     /** @typedef {'info'|'warn'|'error'} LogLevel */
 
     /**
@@ -154,6 +168,9 @@
         const max = getEffectiveLogMaxLines();
         if (max > 0 && logLines.length > max) {
             logLines.splice(0, logLines.length - max);
+            if (typeof window.notifyActionLogWindowResync === 'function') {
+                window.notifyActionLogWindowResync();
+            }
         }
     }
 
@@ -250,6 +267,9 @@
             logLines = [];
         }
         syncLogEl();
+        if (typeof window.notifyActionLogWindowResync === 'function') {
+            window.notifyActionLogWindowResync();
+        }
     }
 
     window.seedLogLines = seedLogLines;
@@ -372,6 +392,9 @@
         if (!logEl) return;
         logEl.replaceChildren();
         logEl.scrollTop = 0;
+        if (typeof window.notifyActionLogWindowClear === 'function') {
+            window.notifyActionLogWindowClear();
+        }
     }
 
     async function copyLogToClipboard() {
@@ -447,6 +470,9 @@
         trimLogLinesToMax();
         if (!isDiagLogUiSuppressed() || !isLogEntryDiagTier(entry)) {
             syncLogEl();
+        }
+        if (typeof window.notifyActionLogWindowEntry === 'function') {
+            window.notifyActionLogWindowEntry(entry);
         }
         return entry;
     }

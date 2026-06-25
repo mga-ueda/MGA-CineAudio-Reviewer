@@ -1053,15 +1053,18 @@
                     typeof isVideoLinkedOffsetDragSlot === 'function' &&
                     isVideoLinkedOffsetDragSlot(slot)
                         ? 'Video'
-                        : 'Ex ' + (slot + 1);
-                writeLog(
-                    'Waveform: ' +
-                        laneLabel +
-                        ' region ' +
-                        (releasedSegmentIndex + 1) +
-                        ' at ' +
-                        tc,
-                );
+                        : 'Ex' + (slot + 1);
+                const moveMsg =
+                    laneLabel +
+                    ' R' +
+                    (releasedSegmentIndex + 1) +
+                    ' moved to ' +
+                    tc;
+                if (typeof logRegionAction === 'function') {
+                    logRegionAction(moveMsg);
+                } else if (typeof writeLog === 'function') {
+                    writeLog('Waveform: ' + moveMsg);
+                }
                 if (typeof flashSeekHint === 'function') {
                     flashSeekHint('Region start', tc);
                 }

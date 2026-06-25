@@ -110,6 +110,7 @@
     let open = false;
     let checkboxByKey = new Map();
     let skipApplyCheckbox = null;
+    let actionLogWindowCheckbox = null;
 
     function ensureTempoStretchVerify() {
         if (!window.TEMPO_STRETCH_VERIFY || typeof window.TEMPO_STRETCH_VERIFY !== 'object') {
@@ -188,6 +189,9 @@
         window.REGION_HANDLE_HIT_DEBUG = false;
         window.FADE_TRIANGLE_HIT_DEBUG = false;
         setTempoStretchSkipApply(false, { silent: true });
+        if (typeof window.setActionLogWindowOpen === 'function') {
+            window.setActionLogWindowOpen(false, { silent: true });
+        }
         syncCheckboxesFromState();
         applyDebugLogSideEffects();
         persistDevConstantsPrefs();
@@ -262,6 +266,40 @@
         return block.section;
     }
 
+    function buildActionLogWindowSection() {
+        const block = buildSection(
+            'Action ログ',
+            'メインログの Actions フィルタと同じ行（tier=action および Warning/Error）を別ウィンドウに表示。設定は localStorage に保存。',
+            null,
+        );
+
+        const row = document.createElement('label');
+        row.className = 'dev-constants-panel__row dev-constants-panel__row--verify';
+
+        actionLogWindowCheckbox = document.createElement('input');
+        actionLogWindowCheckbox.type = 'checkbox';
+        actionLogWindowCheckbox.className = 'dev-constants-panel__checkbox';
+        actionLogWindowCheckbox.addEventListener('change', () => {
+            if (typeof window.setActionLogWindowOpen === 'function') {
+                window.setActionLogWindowOpen(actionLogWindowCheckbox.checked);
+            }
+        });
+
+        const text = document.createElement('span');
+        text.className = 'dev-constants-panel__row-text';
+        text.innerHTML =
+            '<span class="dev-constants-panel__row-head">' +
+            '<span class="dev-constants-panel__row-label">別ウィンドウで Action ログを表示</span>' +
+            '<span class="dev-constants-panel__row-tag">popup</span></span>' +
+            '<span class="dev-constants-panel__row-desc">操作・Undo/Redo などの Action 行のみを追従表示。ウィンドウを閉じるとオフ。</span>';
+
+        row.appendChild(actionLogWindowCheckbox);
+        row.appendChild(text);
+        block.list.appendChild(row);
+
+        return block.section;
+    }
+
     function syncCheckboxesFromState() {
         checkboxByKey.forEach((input, key) => {
             if (key === 'REGION_HANDLE_HIT_DEBUG') {
@@ -280,7 +318,16 @@
         if (skipApplyCheckbox) {
             skipApplyCheckbox.checked = !!ensureTempoStretchVerify().skipApply;
         }
+        if (actionLogWindowCheckbox && typeof window.isActionLogWindowEnabled === 'function') {
+            actionLogWindowCheckbox.checked = window.isActionLogWindowEnabled();
+        }
     }
+
+    window.syncActionLogWindowCheckbox = function syncActionLogWindowCheckbox() {
+        if (actionLogWindowCheckbox && typeof window.isActionLogWindowEnabled === 'function') {
+            actionLogWindowCheckbox.checked = window.isActionLogWindowEnabled();
+        }
+    };
 
     function buildSection(title, note, listClass) {
         const section = document.createElement('section');
@@ -381,6 +428,7 @@
         );
         bodyEl.appendChild(drawBlock.section);
 
+        bodyEl.appendChild(buildActionLogWindowSection());
         bodyEl.appendChild(buildVerifySection());
     }
 

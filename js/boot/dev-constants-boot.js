@@ -30,6 +30,10 @@
                     ? window.isRegionHandleHitDebugEnabled()
                     : !!window.REGION_HANDLE_HIT_DEBUG,
             tempoStretchSkipApply: !!(verify && verify.skipApply),
+            actionLogWindowOpen:
+                typeof window.isActionLogWindowEnabled === 'function'
+                    ? window.isActionLogWindowEnabled()
+                    : false,
         };
     }
 
@@ -55,6 +59,16 @@
                 window.TEMPO_STRETCH_VERIFY = { skipApply: false };
             }
             window.TEMPO_STRETCH_VERIFY.skipApply = block.tempoStretchSkipApply;
+        }
+
+        if (
+            typeof block.actionLogWindowOpen === 'boolean' &&
+            typeof window.setActionLogWindowOpen === 'function'
+        ) {
+            window.setActionLogWindowOpen(block.actionLogWindowOpen, {
+                silent: true,
+                skipPersist: true,
+            });
         }
 
         applyDevConstantsRuntimeSideEffects();

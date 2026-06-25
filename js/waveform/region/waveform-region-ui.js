@@ -1632,16 +1632,18 @@
             finalizeRegionOffsetDragPresentation(changedMembers);
         }
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
-        if (typeof writeLog === 'function') {
-            writeLog(
-                'Region move to seekbar: ' +
-                    formatTimecodeForTransport(targetSec) +
-                    ' (' +
-                    units.length +
-                    ' unit' +
-                    (units.length === 1 ? '' : 's') +
-                    ')',
-            );
+        const moveMsg =
+            'moved to seekbar ' +
+            formatTimecodeForTransport(targetSec) +
+            ' (' +
+            units.length +
+            ' unit' +
+            (units.length === 1 ? '' : 's') +
+            ')';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(moveMsg);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Region move to seekbar: ' + moveMsg.slice(11));
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', 'Moved to ' + formatTimecodeForTransport(targetSec), 'notice');
@@ -2540,6 +2542,36 @@
             cancelRegionUndoGesture();
         } else {
             commitRegionUndoGesture();
+            if (
+                didMove &&
+                !cancelled &&
+                typeof logRegionAction === 'function' &&
+                dragTrack &&
+                isExtraTrackRef(dragTrack)
+            ) {
+                let handleMsg = 'adjusted region';
+                if (dragKind === 'in' || dragKind === 'out') {
+                    handleMsg =
+                        'moved region ' +
+                        dragKind +
+                        ' on Ex' +
+                        (dragTrack.slot + 1) +
+                        ' R' +
+                        (dragSegmentIndex + 1);
+                } else if (dragKind === 'fade-in' || dragKind === 'fade-out') {
+                    handleMsg =
+                        dragKind +
+                        ' on Ex' +
+                        (dragTrack.slot + 1) +
+                        ' R' +
+                        (dragSegmentIndex + 1);
+                } else if (wasSplitBoundary) {
+                    handleMsg =
+                        'moved split boundary on Ex' +
+                        (dragTrack.slot + 1);
+                }
+                logRegionAction(handleMsg);
+            }
         }
         setHoveredPlaybackRegion(null);
         endRegionOutDragTimelineExtend();
@@ -3091,18 +3123,21 @@
         if (typeof schedulePersistSession === 'function') schedulePersistSession();
 
         const label = kind === 'fade-in' ? 'Fade In' : 'Fade Out';
-        writeLog(
-            'Playback region ' +
-                label +
-                ' at seekbar ' +
-                transportSec.toFixed(3) +
-                's (' +
-                targets.length +
-                ' region' +
-                (targets.length === 1 ? '' : 's') +
-                (anyChanged ? '' : ', unchanged') +
-                ')',
-        );
+        const fadeMsg =
+            label +
+            ' at seekbar ' +
+            transportSec.toFixed(3) +
+            's (' +
+            targets.length +
+            ' region' +
+            (targets.length === 1 ? '' : 's') +
+            (anyChanged ? '' : ', unchanged') +
+            ')';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(fadeMsg);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Playback region ' + fadeMsg);
+        }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint('Region', label, anyChanged ? 'notice' : 'error');
         }
@@ -3326,6 +3361,7 @@
 
         if (
             !o.skipUndo &&
+            !o.silent &&
             !regionUndoPaused &&
             typeof requestRegionUndoCapture === 'function'
         ) {

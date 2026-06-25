@@ -37,19 +37,17 @@
     }
 
     function handlePlaybackRegionUndoKeydown(e) {
-        if (!matchUserShortcut(e, 'regionUndo')) return false;
-        if (!guardRegionShortcutKeydown(e)) return false;
-        if (!undoPlaybackRegion()) return false;
-        e.preventDefault();
-        return true;
+        if (typeof window.handleAppUndoKeydown === 'function') {
+            return window.handleAppUndoKeydown(e);
+        }
+        return false;
     }
 
     function handlePlaybackRegionRedoKeydown(e) {
-        if (!matchUserShortcut(e, 'regionRedo')) return false;
-        if (!guardRegionShortcutKeydown(e)) return false;
-        if (!redoPlaybackRegion()) return false;
-        e.preventDefault();
-        return true;
+        if (typeof window.handleAppRedoKeydown === 'function') {
+            return window.handleAppRedoKeydown(e);
+        }
+        return false;
     }
 
     function handlePlaybackRegionDeleteKeydown(e) {
@@ -199,21 +197,22 @@
         const keyLabel = regionEdgeNudgeKeyLabel(kind);
         const ms = Math.round(Math.max(0, Number(deltaSec) || 0) * 1000);
         const amountLabel = '1 beat (' + ms + 'ms)';
-        if (typeof writeLog === 'function') {
-            writeLog(
-                'Region ' +
-                    edgeLabel +
-                    ' nudge (' +
-                    keyLabel +
-                    '): ' +
-                    (kind === 'in' ? '-' : '+') +
-                    amountLabel +
-                    ' (' +
-                    count +
-                    ' region' +
-                    (count === 1 ? '' : 's') +
-                    ')',
-            );
+        const msg =
+            edgeLabel +
+            ' nudge (' +
+            keyLabel +
+            '): ' +
+            (kind === 'in' ? '-' : '+') +
+            amountLabel +
+            ' (' +
+            count +
+            ' region' +
+            (count === 1 ? '' : 's') +
+            ')';
+        if (typeof logRegionAction === 'function') {
+            logRegionAction(msg);
+        } else if (typeof writeLog === 'function') {
+            writeLog('Region ' + msg);
         }
         if (typeof flashSeekHint === 'function') {
             flashSeekHint(
