@@ -2806,6 +2806,36 @@
         return t < holdEnd - 0.0005;
     }
 
+    /** スプリット後のリージョン間ギャップ（映像なし区間） */
+    function isTransportInVideoSegmentGap(transportSec) {
+        const track = getVideoTrackRef();
+        if (typeof isTrackRegionActive !== 'function' || !isTrackRegionActive(track)) {
+            return false;
+        }
+        const count = typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
+        if (count < 2) return false;
+        const t = Number(transportSec);
+        if (!Number.isFinite(t)) return false;
+        const mapForPlayback =
+            typeof mapTransportToSegmentForPlayback === 'function'
+                ? mapTransportToSegmentForPlayback
+                : null;
+        if (mapForPlayback && mapForPlayback(track, t)) return false;
+        if (isTransportInVideoPreRollHoldZone(t)) return false;
+        const lastIdx = count - 1;
+        const segTimelineEnd =
+            typeof getSegmentTimelineEnd === 'function'
+                ? getSegmentTimelineEnd(track, lastIdx)
+                : 0;
+        const regionOut =
+            typeof getSegmentRegionTimelineOut === 'function'
+                ? getSegmentRegionTimelineOut(track, lastIdx)
+                : segTimelineEnd;
+        if (t >= segTimelineEnd - 0.0005 && t < regionOut + 0.0005) return false;
+        if (t >= regionOut - 0.0005) return false;
+        return true;
+    }
+
     /** 単一セグメント — regionIn 以降は transport と映像秒が 1:1 */
     function videoRegionMappingIsOneToOneAfterIn() {
         const track = getVideoTrackRef();
@@ -2820,6 +2850,7 @@
     window.getVideoRegionPreRollHoldEndSec = getVideoRegionPreRollHoldEndSec;
     window.isTransportBeforeVideoRegionIn = isTransportBeforeVideoRegionIn;
     window.isTransportInVideoPreRollHoldZone = isTransportInVideoPreRollHoldZone;
+    window.isTransportInVideoSegmentGap = isTransportInVideoSegmentGap;
     window.videoRegionMappingIsOneToOneAfterIn = videoRegionMappingIsOneToOneAfterIn;
 
     function videoRegionTailSourceSec(track, segmentIndex) {

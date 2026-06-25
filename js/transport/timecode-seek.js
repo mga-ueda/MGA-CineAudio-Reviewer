@@ -1131,6 +1131,9 @@
             regionTransportSync &&
             typeof isTransportInVideoPreRollHoldZone === 'function' &&
             isTransportInVideoPreRollHoldZone(startT);
+        const videoGapAtStart =
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            isTransportInVideoSegmentGap(startT);
         if (
             typeof applyVideoTimeForTransportSec === 'function' &&
             !(
@@ -1140,7 +1143,7 @@
         ) {
             applyVideoTimeForTransportSec(startT, { force: true });
         }
-        if (!videoPreRollAtStart) {
+        if (!videoPreRollAtStart && !videoGapAtStart) {
             const playPromise = videoMain.play();
             if (playPromise && typeof playPromise.then === 'function') {
                 await playPromise;
@@ -1672,22 +1675,42 @@
 
     function beginExtraTransportTailIfNeeded() {
         if (typeof enterPostVideoTransportTail !== 'function') return false;
+        const t =
+            typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
+        const vd =
+            typeof getVideoContentEndOnTransportSec === 'function'
+                ? getVideoContentEndOnTransportSec()
+                : typeof getVideoTransportDurationSec === 'function'
+                  ? getVideoTransportDurationSec()
+                  : 0;
+        const eps =
+            typeof masterTransportTailEpsilonSec === 'function'
+                ? masterTransportTailEpsilonSec()
+                : 0.02;
+        if (
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync() &&
+            Number.isFinite(t) &&
+            vd > 0 &&
+            t < vd - eps &&
+            isTransportInVideoSegmentGap(t)
+        ) {
+            return false;
+        }
         if (
             typeof hasMasterTransportTailBeyondVideo === 'function' &&
             hasMasterTransportTailBeyondVideo()
         ) {
+            if (!(vd > 0 && Number.isFinite(t) && t >= vd - eps)) {
+                return false;
+            }
             return enterPostVideoTransportTail();
         }
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : 0;
-        const t =
-            typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
-        const eps =
-            typeof masterTransportTailEpsilonSec === 'function'
-                ? masterTransportTailEpsilonSec()
-                : 0.02;
         if (
             master > 0 &&
             Number.isFinite(t) &&

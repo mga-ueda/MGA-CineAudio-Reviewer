@@ -476,4 +476,122 @@ console.log(
     fixed.fitRate.toFixed(4),
 );
 
+console.log('\n=== 10. スプリット2本 + タイムラインギャップ（carlog_20260626035738） ===');
+function isTransportInVideoSegmentGapSim(track, transportSec) {
+    const count = track.segments.length;
+    if (count < 2) return false;
+    const t = Number(transportSec);
+    if (!Number.isFinite(t)) return false;
+    for (let i = 0; i < count; i++) {
+        const seg = track.segments[i];
+        const start = seg.timelineStartSec;
+        const end = start + (seg.sourceOutSec - seg.sourceInSec);
+        if (t >= start - 0.0005 && t < end + 0.0005) return false;
+    }
+    const last = track.segments[count - 1];
+    const segTimelineEnd =
+        last.timelineStartSec + (last.sourceOutSec - last.sourceInSec);
+    const regionOut = last.regionTimelineOutSec || segTimelineEnd;
+    if (t >= segTimelineEnd - 0.0005 && t < regionOut + 0.0005) return false;
+    if (t >= regionOut - 0.0005) return false;
+    return true;
+}
+
+function videoSecForTransportSim(track, transportSec) {
+    const t = Number(transportSec);
+    for (let i = 0; i < track.segments.length; i++) {
+        const seg = track.segments[i];
+        const start = seg.timelineStartSec;
+        const end = start + (seg.sourceOutSec - seg.sourceInSec);
+        if (t >= start - 0.0005 && t < end + 0.0005) {
+            return seg.sourceInSec + (t - start);
+        }
+    }
+    if (isTransportInVideoSegmentGapSim(track, t)) return NaN;
+    const last = track.segments[track.segments.length - 1];
+    const segTimelineEnd =
+        last.timelineStartSec + (last.sourceOutSec - last.sourceInSec);
+    const regionOut = last.regionTimelineOutSec || segTimelineEnd;
+    if (t >= segTimelineEnd - 0.0005 && t < regionOut + 0.0005) {
+        return last.sourceOutSec - 1 / 24;
+    }
+    return NaN;
+}
+
+const splitTrack = {
+    segments: [
+        { timelineStartSec: 0, sourceInSec: 0, sourceOutSec: 6, regionTimelineOutSec: 6 },
+        {
+            timelineStartSec: 8,
+            sourceInSec: 6,
+            sourceOutSec: 21.7167,
+            regionTimelineOutSec: 23.7166,
+        },
+    ],
+};
+assert(Math.abs(videoSecForTransportSim(splitTrack, 3) - 3) < 0.001, 'seg0 maps 1:1');
+assert(Number.isNaN(videoSecForTransportSim(splitTrack, 7)), 'gap at 7s must not map to tail');
+assert(
+    isTransportInVideoSegmentGapSim(splitTrack, 7),
+    'transport 7s is a segment gap',
+);
+assert(
+    Math.abs(videoSecForTransportSim(splitTrack, 9) - 7) < 0.001,
+    'seg1 at 9s maps to source 7',
+);
+assert(!isTransportInVideoSegmentGapSim(splitTrack, 3), 'inside seg0 is not a gap');
+assert(isTransportInVideoSegmentGapSim(splitTrack, 6.5), 'between seg0 and seg1 is a gap');
+console.log('OK split gap: 7s→blackout, 9s→source 7');
+
+function isPastAllVideoPlaybackEndsSim(contentEndTransportSec, transportSec, eps) {
+    const t = Number(transportSec);
+    const vd = Number(contentEndTransportSec);
+    return vd > 0 && t >= vd - eps;
+}
+
+const splitContentEnd = 23.7166;
+assert(
+    !isPastAllVideoPlaybackEndsSim(splitContentEnd, 6.5, 0.02),
+    'gap mid-playback must not count as past all track ends',
+);
+assert(
+    !isPastAllVideoPlaybackEndsSim(splitContentEnd, 6, 0.02),
+    'seg0 end must not count as past all track ends',
+);
+assert(
+    isPastAllVideoPlaybackEndsSim(splitContentEnd, 23.72, 0.02),
+    'master content end should count as past all track ends',
+);
+console.log('OK split gap: end detection uses transport content end, not seg0 boundary');
+
+console.log('\n=== 11. ギャップ中 video ended — テール誤進入防止（carlog_20260626042620） ===');
+function shouldBeginExtraTransportTailSim(t, vd, inGap) {
+    const eps = 0.02;
+    if (inGap && t < vd - eps) return false;
+    if (vd > 0 && t < vd - eps) return false;
+    return true;
+}
+
+function handoffTailTransportSim(barT, fromMix) {
+    if (fromMix != null && Number.isFinite(fromMix)) {
+        return Math.max(barT, fromMix);
+    }
+    return barT;
+}
+
+const carlogVd = 45.7166;
+assert(
+    !shouldBeginExtraTransportTailSim(27.6, carlogVd, true),
+    'gap playback at 27.6s must not enter post-video tail',
+);
+assert(
+    shouldBeginExtraTransportTailSim(45.8, carlogVd, false),
+    'past video content end should allow tail entry',
+);
+assert(
+    Math.abs(handoffTailTransportSim(27.6, 26.02) - 27.6) < 0.0001,
+    'tail handoff must not rewind transport behind bar clock',
+);
+console.log('OK gap ended: no tail before video content end, handoff never rewinds');
+
 console.log('\nAll simulations passed.');

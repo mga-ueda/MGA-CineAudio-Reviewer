@@ -163,7 +163,13 @@
                         shouldKeepPlayingPastVideoEnd())
                 ) {
                     pendingRestoreTime = null;
-                    if (typeof parkVideoAtTransportTail === 'function') parkVideoAtTransportTail();
+                    if (
+                        typeof shouldParkVideoAtMasterTailOnPause === 'function' &&
+                        shouldParkVideoAtMasterTailOnPause() &&
+                        typeof parkVideoAtTransportTail === 'function'
+                    ) {
+                        parkVideoAtTransportTail();
+                    }
                     if (typeof forceTransportRafLoop === 'function') forceTransportRafLoop();
                     else if (!rafId && typeof tick === 'function') rafId = requestAnimationFrame(tick);
                     if (typeof updateSeekUiFromVideo === 'function') updateSeekUiFromVideo();
@@ -357,18 +363,50 @@
     });
 
     async function onVideoEnded() {
-        if (
-            typeof beginExtraTransportTailIfNeeded === 'function' &&
-            beginExtraTransportTailIfNeeded()
-        ) {
-            return;
-        }
         const master =
             typeof getMasterTransportDurationSec === 'function'
                 ? getMasterTransportDurationSec()
                 : getDuration(videoMain);
         const t =
             typeof getTransportSec === 'function' ? getTransportSec() : videoMain.currentTime || 0;
+        const regionSync =
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync();
+        const contentEnd =
+            typeof getVideoContentEndOnTransportSec === 'function'
+                ? getVideoContentEndOnTransportSec()
+                : master;
+        const endGate = Math.max(master, contentEnd) - 0.05;
+        const inVideoSegmentGap =
+            regionSync &&
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            isTransportInVideoSegmentGap(t);
+        if (
+            inVideoSegmentGap &&
+            t < contentEnd - 0.05 &&
+            typeof isTransportPlaying === 'function' &&
+            isTransportPlaying()
+        ) {
+            return;
+        }
+        if (
+            typeof beginExtraTransportTailIfNeeded === 'function' &&
+            beginExtraTransportTailIfNeeded()
+        ) {
+            return;
+        }
+        if (regionSync && t < endGate) {
+            if (typeof isTransportPlaying === 'function' && isTransportPlaying()) {
+                if (!inVideoSegmentGap) {
+                    if (typeof applyVideoTimeForTransportSec === 'function') {
+                        applyVideoTimeForTransportSec(t, { force: true });
+                    } else if (typeof forceTransportRafLoop === 'function') {
+                        forceTransportRafLoop();
+                    }
+                }
+            }
+            return;
+        }
         if (t < master - 0.05) {
             return;
         }

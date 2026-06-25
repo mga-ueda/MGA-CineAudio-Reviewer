@@ -189,12 +189,18 @@
         }
         if (any) return true;
         if (typeof videoReady === 'function' && videoReady()) {
-            const vd =
-                typeof getVideoPlaybackEndSec === 'function'
-                    ? getVideoPlaybackEndSec()
-                    : typeof getVideoTransportDurationSec === 'function'
-                      ? getVideoTransportDurationSec()
-                      : 0;
+            let vd =
+                typeof getVideoContentEndOnTransportSec === 'function'
+                    ? getVideoContentEndOnTransportSec()
+                    : 0;
+            if (!(vd > 0)) {
+                vd =
+                    typeof getVideoPlaybackEndSec === 'function'
+                        ? getVideoPlaybackEndSec()
+                        : typeof getVideoTransportDurationSec === 'function'
+                          ? getVideoTransportDurationSec()
+                          : 0;
+            }
             return vd > 0 && t >= vd - eps;
         }
         return false;
@@ -828,7 +834,7 @@
         if (ctx) {
             const fromMix = getTransportSecFromActiveExtraMix(ctx);
             if (fromMix != null && Number.isFinite(fromMix)) {
-                return fromMix;
+                return Math.max(barT, fromMix);
             }
         }
         const startAt = vd > 0 ? Math.max(barT, vd) : barT;

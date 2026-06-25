@@ -19,6 +19,8 @@
     let videoParkedForTransportTail = false;
     /** Video リージョン In より前 — 暗転中は映像要素を pause して毎 tick シークしない */
     let videoPreRollHoldActive = false;
+    /** スプリット間ギャップ — 暗転中は pause。退出時に 1 回だけシーク＋再生再開 */
+    let videoSegmentGapHoldActive = false;
     /** regionIn 前の音声ゲート状態（境界通過時に Review mix 音量を即更新） */
     let videoRegionAudioGateMuted = null;
     /** 映像 currentTime の自動補正。false が既定（Playback Drift は表示のみ、補正は行わない）。 */
@@ -336,13 +338,27 @@
         if (videoMain.ended) {
             const end = videoMain.currentTime || 0;
             const coalescingKeyboardSeek = transportExplicitSeekFinalizeTimer !== 0;
-            if (coalescingKeyboardSeek) {
-                const barT =
-                    typeof getTransportSec === 'function'
-                        ? getTransportSec()
-                        : typeof transportPlaybackSec === 'number'
-                          ? transportPlaybackSec
-                          : end;
+            const barT =
+                typeof getTransportSec === 'function'
+                    ? getTransportSec()
+                    : typeof transportPlaybackSec === 'number'
+                      ? transportPlaybackSec
+                      : end;
+            const contentEnd =
+                typeof getVideoContentEndOnTransportSec === 'function'
+                    ? getVideoContentEndOnTransportSec()
+                    : 0;
+            const regionSync =
+                typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+                videoRegionPlaybackRequiresTransportSync();
+            if (
+                regionSync &&
+                contentEnd > 0 &&
+                Number.isFinite(barT) &&
+                barT < contentEnd - masterTransportTailEpsilonSec()
+            ) {
+                /* スプリット区間境界の ended はマスター終端ではない */
+            } else if (coalescingKeyboardSeek) {
                 let ignoreEndedSnap = false;
                 if (end > 0 && meta > 0 && Number.isFinite(barT)) {
                     const expected =
@@ -383,8 +399,15 @@
     }
 
     function shouldHoldTransportPastVideoPause() {
-        if (!hasMasterTransportTailBeyondVideo()) return false;
         if (isTransportPlaying()) return true;
+        if (
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            typeof getTransportSec === 'function' &&
+            isTransportInVideoSegmentGap(getTransportSec())
+        ) {
+            return true;
+        }
+        if (!hasMasterTransportTailBeyondVideo()) return false;
         if (
             typeof extraAudioSourcesActive === 'function' &&
             extraAudioSourcesActive()
@@ -403,6 +426,61 @@
         const master = getMasterTransportDurationSec();
         const eps = Math.max(masterTransportTailEpsilonSec() * 2, 0.01);
         return t < master - eps;
+    }
+
+    /** 意図的 pause 時に映像をマスター終端フレームへパークするか（ギャップ中は false） */
+    function shouldParkVideoAtMasterTailOnPause() {
+        if (!shouldHoldTransportPastVideoPause()) return false;
+        if (transportTailPlaybackActive) return true;
+        if (
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            typeof getTransportSec === 'function' &&
+            isTransportInVideoSegmentGap(getTransportSec())
+        ) {
+            return false;
+        }
+        let t =
+            typeof getTransportSec === 'function'
+                ? getTransportSec()
+                : typeof transportPlaybackSec === 'number'
+                  ? transportPlaybackSec
+                  : NaN;
+        if (!Number.isFinite(t)) return false;
+        const vd = getVideoContentEndOnTransportSec();
+        const eps = masterTransportTailEpsilonSec();
+        if (!(vd > 0)) return false;
+        if (
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync() &&
+            t < vd - eps
+        ) {
+            return false;
+        }
+        return t >= vd - eps;
+    }
+
+    function videoSourceSecForSegmentGapHold(transportSec) {
+        const track = typeof getVideoTrackRef === 'function' ? getVideoTrackRef() : null;
+        if (
+            !track ||
+            typeof getSegmentCount !== 'function' ||
+            typeof getSegmentTimelineEnd !== 'function' ||
+            typeof getSegmentTimelineStart !== 'function' ||
+            typeof videoSecForTransportSec !== 'function'
+        ) {
+            return NaN;
+        }
+        const count = getSegmentCount(track);
+        const t = Number(transportSec);
+        if (!Number.isFinite(t) || count < 2) return NaN;
+        for (let i = 0; i < count - 1; i++) {
+            const segEnd = getSegmentTimelineEnd(track, i);
+            const nextStart = getSegmentTimelineStart(track, i + 1);
+            if (t >= segEnd - 0.0005 && t < nextStart - 0.0005) {
+                return videoSecForTransportSec(Math.max(0, segEnd - 0.001));
+            }
+        }
+        return NaN;
     }
 
     function shouldStartMasterTransportTailPlayback(t) {
@@ -431,6 +509,17 @@
         const eps = masterTransportTailEpsilonSec();
         const barT =
             typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
+        if (
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync() &&
+            Number.isFinite(barT) &&
+            vd > 0 &&
+            barT < vd - eps &&
+            isTransportInVideoSegmentGap(barT)
+        ) {
+            return false;
+        }
         return (
             videoMain &&
             (videoMain.ended ||
@@ -500,6 +589,12 @@
         ) {
             return true;
         }
+        if (
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            isTransportInVideoSegmentGap(transportSec)
+        ) {
+            return true;
+        }
         return shouldBlackoutVideoForTransport(transportSec);
     }
 
@@ -542,6 +637,9 @@
     window.isTransportTailPlaybackActive = isTransportTailPlaybackActive;
     window.isVideoParkedForTransportTail = isVideoParkedForTransportTail;
     window.refreshVideoPastEndBlackoutUi = refreshVideoPastEndBlackoutUi;
+    window.shouldHoldTransportPastVideoPause = shouldHoldTransportPastVideoPause;
+    window.shouldKeepPlayingPastVideoEnd = shouldKeepPlayingPastVideoEnd;
+    window.shouldParkVideoAtMasterTailOnPause = shouldParkVideoAtMasterTailOnPause;
 
     /**
      * 全トラックの BufferSource 終了後（特に映像なし）にマスター終端処理へ進める。
@@ -580,6 +678,26 @@
         if (!Number.isFinite(t) && typeof getTransportSec === 'function') {
             t = getTransportSec();
         }
+        if (
+            Number.isFinite(t) &&
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            isTransportInVideoSegmentGap(t)
+        ) {
+            return false;
+        }
+        const contentEnd =
+            typeof getVideoContentEndOnTransportSec === 'function'
+                ? getVideoContentEndOnTransportSec()
+                : 0;
+        if (
+            contentEnd > 0 &&
+            Number.isFinite(t) &&
+            t < contentEnd - eps &&
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync()
+        ) {
+            return false;
+        }
         const atMaster = master > 0 && Number.isFinite(t) && t >= master - eps;
         const pastAll =
             typeof isPastAllLoadedTrackPlaybackEnds === 'function' &&
@@ -611,7 +729,17 @@
         } else {
             tailT = Math.max(tailT, vd);
         }
-        transportPlaybackSec = Number.isFinite(tailT) ? tailT : Math.max(tailT, vd);
+        const barBeforeTail =
+            typeof getTransportPlaybackClockSec === 'function'
+                ? getTransportPlaybackClockSec()
+                : typeof getTransportSec === 'function'
+                  ? getTransportSec()
+                  : transportPlaybackSec;
+        const resolvedTail = Number.isFinite(tailT) ? tailT : Math.max(tailT, vd);
+        transportPlaybackSec = Math.max(
+            Number.isFinite(barBeforeTail) ? barBeforeTail : 0,
+            resolvedTail,
+        );
         transportPlaybackLastTs = performance.now();
         if (typeof parkVideoAtTransportTail === 'function') parkVideoAtTransportTail();
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
@@ -739,6 +867,12 @@
                 }
                 return Math.max(0, mapped);
             }
+            if (
+                typeof isTransportInVideoSegmentGap === 'function' &&
+                isTransportInVideoSegmentGap(x)
+            ) {
+                return NaN;
+            }
             const track = typeof getVideoTrackRef === 'function' ? getVideoTrackRef() : null;
             if (
                 track &&
@@ -748,8 +882,19 @@
                 const count =
                     typeof getSegmentCount === 'function' ? getSegmentCount(track) : 0;
                 if (count > 0 && typeof videoRegionTailSourceSec === 'function') {
-                    const tail = videoRegionTailSourceSec(track, count - 1);
-                    if (Number.isFinite(tail)) return tail;
+                    const lastIdx = count - 1;
+                    const segTimelineEnd =
+                        typeof getSegmentTimelineEnd === 'function'
+                            ? getSegmentTimelineEnd(track, lastIdx)
+                            : 0;
+                    const regionOut =
+                        typeof getSegmentRegionTimelineOut === 'function'
+                            ? getSegmentRegionTimelineOut(track, lastIdx)
+                            : segTimelineEnd;
+                    if (x >= segTimelineEnd - 0.0005 && x < regionOut + 0.0005) {
+                        const tail = videoRegionTailSourceSec(track, lastIdx);
+                        if (Number.isFinite(tail)) return tail;
+                    }
                 }
             }
         }
@@ -773,6 +918,7 @@
 
     function clearVideoPreRollHold() {
         videoPreRollHoldActive = false;
+        videoSegmentGapHoldActive = false;
         videoRegionAudioGateMuted = null;
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
@@ -827,6 +973,8 @@
         if (typeof refreshVideoPastEndBlackoutUi === 'function') refreshVideoPastEndBlackoutUi();
     }
 
+    window.parkVideoAtTransportTail = parkVideoAtTransportTail;
+
     function applyVideoTimeForTransportSec(audioSec, opt) {
         if (!videoReady()) return false;
         if (
@@ -847,23 +995,82 @@
         }
         clearVideoParkedForTail();
         let target = videoSecForTransportSec(x);
-        if (typeof clampVideoElementSeekSec === 'function') {
-            target = clampVideoElementSeekSec(videoMain, target);
-        }
-        const cur = videoMain.currentTime || 0;
-        const drift = Math.abs(cur - target);
         const playing =
             typeof isTransportPlaying === 'function' && isTransportPlaying();
         const regionTransportSync =
             typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
             videoRegionPlaybackRequiresTransportSync();
+        const inVideoSegmentGap =
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            isTransportInVideoSegmentGap(x);
+        if (!Number.isFinite(target) || inVideoSegmentGap) {
+            if (inVideoSegmentGap) {
+                const enteringGap = !videoSegmentGapHoldActive;
+                videoSegmentGapHoldActive = true;
+                if (enteringGap) {
+                    const hold = videoSourceSecForSegmentGapHold(x);
+                    if (Number.isFinite(hold)) {
+                        const gapCur = videoMain.currentTime || 0;
+                        if (Math.abs(gapCur - hold) > 0.03) {
+                            try {
+                                videoMain.currentTime = hold;
+                            } catch (_) {}
+                        }
+                    }
+                }
+            }
+            if (playing && !videoMain.paused) {
+                try {
+                    videoMain.pause();
+                } catch (_) {}
+            }
+            if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+                refreshVideoPastEndBlackoutUi();
+            }
+            if (typeof window.videoRegionDiagLogTransportMap === 'function') {
+                window.videoRegionDiagLogTransportMap(x, null, {
+                    force,
+                    regionTransportSync,
+                    inVideoSegmentGap: true,
+                    playing,
+                    applied: false,
+                });
+            }
+            return false;
+        }
+        if (typeof clampVideoElementSeekSec === 'function') {
+            target = clampVideoElementSeekSec(videoMain, target);
+        }
+        const cur = videoMain.currentTime || 0;
+        const drift = Math.abs(cur - target);
+        let justExitedSegmentGap = false;
+        if (videoSegmentGapHoldActive) {
+            justExitedSegmentGap = true;
+            videoSegmentGapHoldActive = false;
+        }
+        const beforeRegionIn =
+            regionTransportSync &&
+            typeof isTransportInVideoPreRollHoldZone === 'function' &&
+            isTransportInVideoPreRollHoldZone(x);
+        const oneToOneAfterIn =
+            regionTransportSync &&
+            typeof videoRegionMappingIsOneToOneAfterIn === 'function' &&
+            videoRegionMappingIsOneToOneAfterIn();
+        const inActiveVideoSegment =
+            regionTransportSync && !oneToOneAfterIn && !beforeRegionIn && Number.isFinite(target);
+        const spuriousSegmentEnded =
+            videoMain.ended &&
+            inActiveVideoSegment &&
+            Number.isFinite(target) &&
+            drift <= VIDEO_STEADY_FOLLOW_DRIFT_SEC;
         const steadyNativePlayback =
             !force &&
-            !regionTransportSync &&
             playing &&
             !videoMain.seeking &&
             !videoMain.paused &&
-            !videoMain.ended;
+            (!videoMain.ended || spuriousSegmentEnded) &&
+            (!regionTransportSync ||
+                ((oneToOneAfterIn || inActiveVideoSegment) && !beforeRegionIn));
         if (steadyNativePlayback) {
             const signedDrift = sampleVideoDriftForPlayback(x);
             if (signedDrift != null) {
@@ -882,14 +1089,6 @@
             }
             return false;
         }
-        const beforeRegionIn =
-            regionTransportSync &&
-            typeof isTransportInVideoPreRollHoldZone === 'function' &&
-            isTransportInVideoPreRollHoldZone(x);
-        const oneToOneAfterIn =
-            regionTransportSync &&
-            typeof videoRegionMappingIsOneToOneAfterIn === 'function' &&
-            videoRegionMappingIsOneToOneAfterIn();
 
         if (playing) {
             const signed = sampleVideoDriftForPlayback(x, { force: !!force });
@@ -926,15 +1125,25 @@
             if (videoPreRollHoldActive) {
                 videoPreRollHoldActive = false;
             }
-            if (regionTransportSync && oneToOneAfterIn && playing && !force) {
-                const preRollExitSeek =
-                    justExitedPreRoll &&
+            if (
+                regionTransportSync &&
+                (oneToOneAfterIn || inActiveVideoSegment) &&
+                playing &&
+                !force
+            ) {
+                const boundaryExitSeek =
+                    (justExitedPreRoll || justExitedSegmentGap) &&
                     (videoMain.ended ||
                         !Number.isFinite(cur) ||
-                        Math.abs(cur - target) > VIDEO_STEADY_FOLLOW_DRIFT_SEC);
+                        drift > VIDEO_STEADY_FOLLOW_DRIFT_SEC);
+                const staleSegmentEnded =
+                    videoMain.ended &&
+                    inActiveVideoSegment &&
+                    !justExitedSegmentGap &&
+                    drift <= 0.02;
                 needs =
-                    preRollExitSeek ||
-                    videoMain.ended ||
+                    boundaryExitSeek ||
+                    (videoMain.ended && !staleSegmentEnded) ||
                     !Number.isFinite(cur) ||
                     drift > VIDEO_STEADY_FOLLOW_DRIFT_SEC;
             } else {
@@ -975,12 +1184,13 @@
                 oneToOneAfterIn,
                 preRollHold: videoPreRollHoldActive,
                 justExitedPreRoll,
+                justExitedSegmentGap,
                 playing,
                 drift,
                 applied: needs,
             });
         }
-        if (playing && !beforeRegionIn && videoMain.paused && !videoMain.ended) {
+        if (playing && !beforeRegionIn && videoMain.paused) {
             const startPlay = () => {
                 const p = videoMain.play();
                 if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -1345,9 +1555,24 @@
         if (isSeeking) return;
         if (!isTransportUiClockActive()) return;
         const master = getMasterTransportDurationSec();
+        const barTForTail =
+            typeof getTransportSec === 'function' ? getTransportSec() : transportPlaybackSec;
+        const vdForTail = getVideoContentEndOnTransportSec();
+        const tailEps = masterTransportTailEpsilonSec();
+        const inSegmentGapBeforeVideoEnd =
+            typeof isTransportInVideoSegmentGap === 'function' &&
+            typeof videoRegionPlaybackRequiresTransportSync === 'function' &&
+            videoRegionPlaybackRequiresTransportSync() &&
+            Number.isFinite(barTForTail) &&
+            vdForTail > 0 &&
+            barTForTail < vdForTail - tailEps &&
+            isTransportInVideoSegmentGap(barTForTail);
         const inTail =
             transportPlaybackIsInMasterTail() ||
-            (videoMain && videoMain.ended && hasMasterTransportTailBeyondVideo());
+            (videoMain &&
+                videoMain.ended &&
+                hasMasterTransportTailBeyondVideo() &&
+                !inSegmentGapBeforeVideoEnd);
         if (inTail) {
             advanceTransportTailPlaybackClock(master);
             syncReviewMixPlaybackIfNeeded();
