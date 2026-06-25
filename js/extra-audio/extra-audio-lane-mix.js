@@ -646,7 +646,9 @@
             !usesPitchSlice &&
             !(opt && opt.disableLivePitchStretch) &&
             typeof isSignalsmithPitchStretchAvailable === 'function' &&
-            isSignalsmithPitchStretchAvailable();
+            isSignalsmithPitchStretchAvailable() &&
+            typeof canUsePitchStretchWorklet === 'function' &&
+            canUsePitchStretchWorklet();
         if (playbackBuffer !== clip.buffer) {
             remain = Math.min(
                 remain,

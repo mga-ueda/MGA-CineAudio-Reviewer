@@ -48,7 +48,10 @@
         reconcileContainerSampleCountForSide('main');
         updatePanelInfoLine();
         if (typeof applyVideoPreviewGamma === 'function') {
-            applyVideoPreviewGamma();
+            applyVideoPreviewGamma({ force: true });
+        }
+        if (typeof refreshVideoPreviewGammaPanelStat === 'function') {
+            refreshVideoPreviewGammaPanelStat();
         }
         if (typeof applyReviewMixVideoGain === 'function') {
             applyReviewMixVideoGain();
@@ -64,11 +67,13 @@
         ) {
             applyPendingPlaybackRegionRestore();
         }
-        if (typeof ensureVideoFilmstripLoadingOverlay === 'function') {
-            ensureVideoFilmstripLoadingOverlay();
-        }
         if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
-            scheduleVideoTrackFilmstripBuild();
+            const restoreBusy =
+                typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress();
+            if (!restoreBusy) {
+                scheduleVideoTrackFilmstripBuild();
+            }
         }
         if (typeof syncVideoTrackRegionsPresentation === 'function') {
             const restoreBusy =
@@ -263,6 +268,9 @@
             { signal: sig },
         );
         el.addEventListener('ended', onVideoEnded, { signal: sig });
+        if (typeof bindVideoPreviewGammaVideoListeners === 'function') {
+            bindVideoPreviewGammaVideoListeners(el);
+        }
     }
 
     window.rebindVideoMainListeners = bindVideoMainElementListeners;

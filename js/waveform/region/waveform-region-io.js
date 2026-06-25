@@ -258,6 +258,10 @@
     window.getPendingPlaybackRegionRestoreVideoEntry =
         getPendingPlaybackRegionRestoreVideoEntry;
     window.applyPendingPlaybackRegionRestore = applyPendingPlaybackRegionRestore;
+    window.tryApplyPendingVideoPlaybackRegionRestore = tryApplyPendingVideoPlaybackRegionRestore;
+    window.restoreVideoPlaybackRegionFromPersistEntry =
+        restoreVideoPlaybackRegionFromPersistEntry;
+    window.isVideoPlaybackRegionRestoreApplied = isVideoPlaybackRegionRestoreApplied;
     window.applyPlaybackRegionSegmentsRaw = applyPlaybackRegionSegmentsRaw;
     window.finalizePlaybackRegionsForExtraSlot = finalizePlaybackRegionsForExtraSlot;
     window.finalizeAllPlaybackRegionsAfterSessionRestore =

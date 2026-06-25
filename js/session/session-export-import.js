@@ -184,6 +184,20 @@
         return { musicalGridVisible, musicalGridRehearsalFillVisible };
     }
 
+    function metronomeClickPrefsForExport(prefs, sessionRow) {
+        if (sessionRow && typeof sessionRow.metronomeClickEnabled === 'boolean') {
+            return sessionRow.metronomeClickEnabled;
+        }
+        if (typeof getMetronomeClickEnabled === 'function') {
+            return getMetronomeClickEnabled();
+        }
+        const p = prefs && typeof prefs === 'object' ? prefs : {};
+        if (typeof p.metronomeClickEnabled === 'boolean') {
+            return p.metronomeClickEnabled;
+        }
+        return false;
+    }
+
     function describeMusicalGridVisibilityPrefs(p) {
         const pref = p && typeof p === 'object' ? p : {};
         const tempo =
@@ -219,6 +233,24 @@
             typeof setMusicalGridRehearsalFillVisible === 'function'
         ) {
             setMusicalGridRehearsalFillVisible(pref.musicalGridRehearsalFillVisible, importOpt);
+        }
+    }
+
+    function applyMetronomeClickPrefs(p) {
+        if (typeof applyMetronomeClickFromProjectSource === 'function') {
+            applyMetronomeClickFromProjectSource(p, {
+                persist: false,
+                skipSessionPersist: true,
+            });
+            return;
+        }
+        const pref = p && typeof p === 'object' ? p : {};
+        if (typeof pref.metronomeClickEnabled === 'boolean' && typeof setMetronomeClickEnabled === 'function') {
+            setMetronomeClickEnabled(pref.metronomeClickEnabled, {
+                silent: true,
+                persist: false,
+                skipSessionPersist: true,
+            });
         }
     }
 
@@ -682,6 +714,7 @@
             musicalGrid: row.musicalGrid,
             musicalGridVisible: row.musicalGridVisible,
             musicalGridRehearsalFillVisible: row.musicalGridRehearsalFillVisible,
+            metronomeClickEnabled: row.metronomeClickEnabled,
             mName: row.mName,
             mLastModified: row.mLastModified,
             markers: row.markers,
@@ -777,6 +810,7 @@
         }
         const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
         const gridVisibility = musicalGridVisibilityPrefsForExport(prefs, sessionRow);
+        const metronomeClickEnabled = metronomeClickPrefsForExport(prefs, sessionRow);
         /* マーカー HIDE 状態はエクスポートしない（表示のオンオフはセッション内のみ） */
         const manifest = {
             format: EXPORT_FORMAT,
@@ -795,6 +829,7 @@
                           : prefs.musicalGrid,
                 musicalGridVisible: gridVisibility.musicalGridVisible,
                 musicalGridRehearsalFillVisible: gridVisibility.musicalGridRehearsalFillVisible,
+                metronomeClickEnabled,
             },
             monitorPrefs: reviewMonitorPrefsForExport(),
             timecodeOverlay:
@@ -882,6 +917,7 @@
             musicalGrid: sess.musicalGrid,
             musicalGridVisible: sess.musicalGridVisible,
             musicalGridRehearsalFillVisible: sess.musicalGridRehearsalFillVisible,
+            metronomeClickEnabled: sess.metronomeClickEnabled,
             mName: sess.mName,
             mLastModified: sess.mLastModified,
             markers: sess.markers,
@@ -1009,6 +1045,7 @@
             applyMusicalGridPersistSnapshot(mgWithoutVisibility);
         }
         applyMusicalGridVisibilityPrefs(p);
+        applyMetronomeClickPrefs(p);
         if (typeof drawMusicalGridOverlay === 'function') {
             drawMusicalGridOverlay();
         } else if (typeof updateRehearsalBoundaryOverlay === 'function') {

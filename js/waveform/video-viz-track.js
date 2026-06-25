@@ -830,6 +830,10 @@
 
     let videoTrackFilmstripBuildQueued = false;
 
+    let videoTrackFilmstripBuildNeedsRetry = false;
+
+    let videoTrackFilmstripDecodeRetryListener = null;
+
     let videoFilmstripLoadingActive = false;
 
     /** サムネ生成中の水平モーションブラー上限（stdDeviation X）。E キー入れ替えとは独立した値 */
@@ -917,21 +921,19 @@
 
             typeof videoMain !== 'undefined' ? videoMain : document.getElementById('videoMain');
 
-        if (v) {
-
-            v.style.filter = show ? 'url(#videoFilmstripMotionBlurFilter)' : '';
-
-        }
-
-        if (typeof videoVizLane !== 'undefined' && videoVizLane) {
+        if (videoVizLane) {
 
             videoVizLane.classList.toggle('video-viz-lane--filmstrip-loading', show);
 
         }
 
-        if (!show && typeof applyVideoPreviewGamma === 'function') {
+        if (typeof applyVideoPreviewGamma === 'function') {
 
-            applyVideoPreviewGamma();
+            applyVideoPreviewGamma({ force: true });
+
+        } else if (v) {
+
+            v.style.filter = show ? 'url(#videoFilmstripMotionBlurFilter)' : '';
 
         }
 
@@ -1011,6 +1013,7 @@
 
 
     window.ensureVideoFilmstripLoadingOverlay = ensureVideoFilmstripLoadingOverlay;
+    window.ensureVideoFilmstripMotionBlurFilter = ensureVideoFilmstripMotionBlurFilter;
 
 
 
@@ -1055,6 +1058,18 @@
         videoTrackFilmstripFrames = [];
 
         videoTrackFilmstripGen++;
+
+        videoTrackFilmstripBuildNeedsRetry = false;
+
+        if (videoTrackFilmstripDecodeRetryListener && videoMain) {
+
+            videoMain.removeEventListener('loadeddata', videoTrackFilmstripDecodeRetryListener);
+
+            videoMain.removeEventListener('canplay', videoTrackFilmstripDecodeRetryListener);
+
+            videoTrackFilmstripDecodeRetryListener = null;
+
+        }
 
         resetVideoFilmstripLoadingOverlay();
 
@@ -1185,17 +1200,50 @@
         if (!isVideoVizLaneShown()) return false;
 
         const o = opt && typeof opt === 'object' ? opt : {};
-        const pendingVideo =
+        let pendingVideo =
             typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
                 ? getPendingPlaybackRegionRestoreVideoEntry()
                 : null;
 
-        if (!pendingVideo) {
-            ensureDefaultVideoTrackRegion({ silent: true });
+        const track = getVideoTrackRef();
+        let state = getVideoTrackState().playbackRegions;
+        const needsRegionApply =
+            !state || !state.active || !state.segments || !state.segments.length;
+
+        if (
+            needsRegionApply &&
+            pendingVideo &&
+            typeof applyPendingPlaybackRegionRestore === 'function'
+        ) {
+            applyPendingPlaybackRegionRestore();
+            pendingVideo =
+                typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
+                    ? getPendingPlaybackRegionRestoreVideoEntry()
+                    : null;
+            state = getVideoTrackState().playbackRegions;
         }
 
-        const track = getVideoTrackRef();
-        const state = getVideoTrackState().playbackRegions;
+        if (
+            (!state || !state.segments || !state.segments.length) &&
+            pendingVideo &&
+            typeof tryApplyPendingVideoPlaybackRegionRestore === 'function'
+        ) {
+            tryApplyPendingVideoPlaybackRegionRestore({ silent: true, entry: pendingVideo });
+            pendingVideo =
+                typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
+                    ? getPendingPlaybackRegionRestoreVideoEntry()
+                    : null;
+            state = getVideoTrackState().playbackRegions;
+        }
+
+        if (
+            (!state || !state.segments || !state.segments.length) &&
+            !pendingVideo
+        ) {
+            ensureDefaultVideoTrackRegion({ silent: true });
+            state = getVideoTrackState().playbackRegions;
+        }
+
         if (!state || !state.active || !state.segments || !state.segments.length) {
             return false;
         }
@@ -1443,8 +1491,6 @@
 
         resetVideoTrackState();
 
-        ensureVideoFilmstripLoadingOverlay();
-
         refreshVideoVizLaneVisibility({ skipInit: true });
 
         if (!pendingVideo && getVideoTrackSourceDurationSec() > 0) {
@@ -1453,7 +1499,15 @@
 
         }
 
-        scheduleVideoTrackFilmstripBuild(opt);
+        const restoreBusy =
+
+            typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress();
+
+        if (!restoreBusy) {
+
+            scheduleVideoTrackFilmstripBuild(opt);
+
+        }
 
     }
 
@@ -1530,6 +1584,98 @@
         }
 
         return times;
+
+    }
+
+
+
+    function waitForVideoDecodedFrame(maxMs) {
+
+        return new Promise((resolve) => {
+
+            if (!videoMain) {
+
+                resolve(false);
+
+                return;
+
+            }
+
+            if (
+
+                videoMain.readyState >= 2 &&
+
+                videoMain.videoWidth > 0 &&
+
+                videoMain.videoHeight > 0
+
+            ) {
+
+                resolve(true);
+
+                return;
+
+            }
+
+            if (typeof videoMain.requestVideoFrameCallback === 'function') {
+
+                try {
+
+                    videoMain.requestVideoFrameCallback(() => {
+
+                        finish(
+
+                            videoMain.videoWidth > 0 && videoMain.videoHeight > 0,
+
+                        );
+
+                    });
+
+                } catch (_) {}
+
+            }
+
+            let done = false;
+
+            const finish = (ok) => {
+
+                if (done) return;
+
+                done = true;
+
+                videoMain.removeEventListener('loadeddata', onReady);
+
+                videoMain.removeEventListener('canplay', onReady);
+
+                videoMain.removeEventListener('error', onErr);
+
+                clearTimeout(timer);
+
+                resolve(ok);
+
+            };
+
+            const onReady = () =>
+
+                finish(videoMain.videoWidth > 0 && videoMain.videoHeight > 0);
+
+            const onErr = () => finish(false);
+
+            const timer = setTimeout(
+
+                () => finish(videoMain.videoWidth > 0 && videoMain.videoHeight > 0),
+
+                maxMs > 0 ? maxMs : 8000,
+
+            );
+
+            videoMain.addEventListener('loadeddata', onReady, { once: true });
+
+            videoMain.addEventListener('canplay', onReady, { once: true });
+
+            videoMain.addEventListener('error', onErr, { once: true });
+
+        });
 
     }
 
@@ -1619,7 +1765,15 @@
 
         ctx.drawImage(videoMain, 0, 0, thumbW, h);
 
-        return canvas.toDataURL('image/jpeg', 0.65);
+        try {
+
+            return canvas.toDataURL('image/jpeg', 0.65);
+
+        } catch (_) {
+
+            return '';
+
+        }
 
     }
 
@@ -1633,6 +1787,12 @@
 
             if (typeof refreshVideoPastEndBlackoutUi === 'function') {
                 refreshVideoPastEndBlackoutUi();
+            }
+
+            if (typeof reapplyVideoPreviewGammaIfPending === 'function') {
+                reapplyVideoPreviewGammaIfPending();
+            } else if (typeof applyVideoPreviewGamma === 'function') {
+                applyVideoPreviewGamma({ force: true });
             }
 
         };
@@ -1682,6 +1842,10 @@
 
         try {
 
+            await waitForVideoDecodedFrame();
+
+            if (gen !== videoTrackFilmstripGen) return false;
+
             if (
 
                 times[0] <= 0.001 &&
@@ -1701,6 +1865,10 @@
                 const t = times[i];
 
                 if (!(i === 0 && times[0] <= 0.001)) {
+
+                    await waitVideoSeek(t);
+
+                } else if (!videoMain.videoWidth || !videoMain.videoHeight) {
 
                     await waitVideoSeek(t);
 
@@ -1731,6 +1899,12 @@
             videoTrackFilmstripFrames = frames;
 
             renderVideoVizFilmstrip();
+
+            if (!frames.length) {
+
+                scheduleVideoTrackFilmstripBuildRetryAfterDecode();
+
+            }
 
             return frames.length > 0;
 
@@ -1772,13 +1946,195 @@
 
 
 
+    /** メタデータ／フレームデコード後に filmstrip を構築（セッション復元・リロード向け） */
+    async function ensureVideoTrackFilmstripAfterMediaReady(opt) {
+
+        const o = opt && typeof opt === 'object' ? opt : {};
+
+        if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return true;
+
+        if (!videoMain || typeof videoReady !== 'function' || !videoReady()) return false;
+
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
+
+        if (typeof isVideoVizLaneShown === 'function' && !isVideoVizLaneShown()) {
+            return false;
+        }
+
+        await waitForVideoDecodedFrame(o.decodeTimeoutMs);
+
+        if (typeof showFirstVideoFrame === 'function') {
+            await showFirstVideoFrame();
+        }
+
+        if (typeof syncVideoTrackRegionsPresentation === 'function') {
+            syncVideoTrackRegionsPresentation();
+        }
+
+        if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return true;
+
+        return buildVideoTrackFilmstrip(o);
+
+    }
+
+
+
+    window.ensureVideoTrackFilmstripAfterMediaReady = ensureVideoTrackFilmstripAfterMediaReady;
+
+
+
+    /** セッション復元完了後 — 映像リージョン適用と filmstrip を再試行（Chrome file:// 向け） */
+    async function finalizeVideoTrackPresentationAfterSessionRestore(opt) {
+
+        const o = opt && typeof opt === 'object' ? opt : {};
+
+        if (!(typeof fileMain !== 'undefined' && fileMain)) return false;
+
+        if (typeof refreshVideoVizLaneVisibility === 'function') {
+            refreshVideoVizLaneVisibility({ skipInit: true });
+        }
+
+        if (
+            typeof waitForVideoDecodedFrame === 'function' &&
+            !(typeof videoReadyForSessionRestorePresentation === 'function' &&
+                videoReadyForSessionRestorePresentation())
+        ) {
+            await waitForVideoDecodedFrame(o.decodeTimeoutMs);
+        }
+
+        if (
+            typeof tryApplyPendingVideoPlaybackRegionRestore === 'function' &&
+            !(
+                typeof isVideoPlaybackRegionRestoreApplied === 'function' &&
+                isVideoPlaybackRegionRestoreApplied()
+            )
+        ) {
+            tryApplyPendingVideoPlaybackRegionRestore({
+                silent: true,
+                entry: o.videoEntry,
+            });
+        } else if (
+            typeof getPendingPlaybackRegionRestoreVideoEntry === 'function' &&
+            getPendingPlaybackRegionRestoreVideoEntry() &&
+            typeof applyPendingPlaybackRegionRestore === 'function'
+        ) {
+            applyPendingPlaybackRegionRestore();
+        }
+
+        if (typeof syncVideoTrackRegionsPresentation === 'function') {
+            syncVideoTrackRegionsPresentation({ force: true });
+        }
+
+        const segCount =
+            typeof isVideoPlaybackRegionRestoreApplied === 'function' &&
+            isVideoPlaybackRegionRestoreApplied()
+                ? getVideoTrackState().playbackRegions.segments.length
+                : 0;
+        const frameCount = videoTrackFilmstripFrames.length;
+
+        let filmstripOk = false;
+        if (typeof ensureVideoTrackFilmstripAfterMediaReady === 'function') {
+            filmstripOk = await ensureVideoTrackFilmstripAfterMediaReady({
+                skipIfFrames: o.skipIfFrames !== false,
+                decodeTimeoutMs: o.decodeTimeoutMs,
+            });
+        }
+
+        if (typeof writeLog === 'function') {
+            writeLog(
+                'Session: video presentation finalize (regions=' +
+                    segCount +
+                    ', filmstrip=' +
+                    (videoTrackFilmstripFrames.length || frameCount) +
+                    (filmstripOk ? ', ok' : '') +
+                    ')',
+            );
+        }
+
+        if (typeof reapplyVideoPreviewGammaIfPending === 'function') {
+            reapplyVideoPreviewGammaIfPending();
+        } else if (typeof applyVideoPreviewGamma === 'function') {
+            applyVideoPreviewGamma({ force: true });
+        }
+
+        return !!(segCount || videoTrackFilmstripFrames.length || filmstripOk);
+
+    }
+
+
+
+    window.finalizeVideoTrackPresentationAfterSessionRestore =
+        finalizeVideoTrackPresentationAfterSessionRestore;
+
+
+
+    function scheduleVideoTrackFilmstripBuildRetryAfterDecode() {
+
+        if (!videoMain || videoTrackFilmstripFrames.length) return;
+
+        const attemptRetry = () => {
+
+            if (videoTrackFilmstripDecodeRetryListener) {
+
+                videoMain.removeEventListener('loadeddata', videoTrackFilmstripDecodeRetryListener);
+
+                videoMain.removeEventListener('canplay', videoTrackFilmstripDecodeRetryListener);
+
+                videoTrackFilmstripDecodeRetryListener = null;
+
+            }
+
+            if (videoTrackFilmstripFrames.length) return;
+
+            if (typeof ensureVideoTrackFilmstripAfterMediaReady === 'function') {
+                void ensureVideoTrackFilmstripAfterMediaReady();
+            } else {
+                scheduleVideoTrackFilmstripBuild();
+            }
+
+        };
+
+        if (
+
+            videoMain.readyState >= 2 &&
+
+            videoMain.videoWidth > 0 &&
+
+            videoMain.videoHeight > 0
+
+        ) {
+
+            attemptRetry();
+
+            return;
+
+        }
+
+        if (videoTrackFilmstripDecodeRetryListener) return;
+
+        videoTrackFilmstripDecodeRetryListener = attemptRetry;
+
+        videoMain.addEventListener('loadeddata', attemptRetry, { once: true });
+
+        videoMain.addEventListener('canplay', attemptRetry, { once: true });
+
+    }
+
+
+
     function scheduleVideoTrackFilmstripBuild(opt) {
 
         if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return;
 
-        ensureVideoFilmstripLoadingOverlay();
+        if (videoTrackFilmstripBuildQueued) {
 
-        if (videoTrackFilmstripBuildQueued) return;
+            videoTrackFilmstripBuildNeedsRetry = true;
+
+            return;
+
+        }
 
         videoTrackFilmstripBuildQueued = true;
 
@@ -1786,7 +2142,17 @@
 
             videoTrackFilmstripBuildQueued = false;
 
-            void buildVideoTrackFilmstrip(opt);
+            void buildVideoTrackFilmstrip(opt).finally(() => {
+
+                if (videoTrackFilmstripBuildNeedsRetry) {
+
+                    videoTrackFilmstripBuildNeedsRetry = false;
+
+                    scheduleVideoTrackFilmstripBuild(opt);
+
+                }
+
+            });
 
         });
 

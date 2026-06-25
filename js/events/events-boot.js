@@ -26,6 +26,18 @@
                 ]);
             }
         } catch (_) {}
+        if (
+            typeof fileMain !== 'undefined' &&
+            fileMain &&
+            typeof finalizeVideoTrackPresentationAfterSessionRestore === 'function'
+        ) {
+            try {
+                await finalizeVideoTrackPresentationAfterSessionRestore();
+            } catch (_) {}
+        }
+        if (typeof applyVideoPreviewGamma === 'function') {
+            applyVideoPreviewGamma({ force: true });
+        }
         if (typeof updateSessionAllClearButton === 'function') {
             updateSessionAllClearButton();
         }

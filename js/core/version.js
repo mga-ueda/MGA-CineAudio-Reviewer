@@ -1,10 +1,19 @@
 /**
  * version.js — アプリ版番号・表示ラベル・changelog（About 表示用）。
  */
-    const APP_VERSION = '0.22';
+    const APP_VERSION = '0.23';
     const APP_VERSION_LABEL = 'v' + APP_VERSION;
 
     const APP_CHANGELOG = [
+        {
+            version: '0.23',
+            date: '2026年6月25日',
+            items: [
+                '動画プレビュー — ガンマ補正の表示を Playback Drift 横（Gamma=…）へ移動（映像フレーム上のオーバーレイ表示を廃止）。一時停止中のガンマ反映を改善。',
+                '映像パネルのメタ情報行で、コンテナ FPS が 30 / 29.97 / 60 / 59.94 以外のとき fps 値を原色オレンジで表示。',
+                '使い方・ショートカット一覧・ツールチップを更新。',
+            ],
+        },
         {
             version: '0.22',
             date: '2026年6月25日',

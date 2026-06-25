@@ -76,7 +76,7 @@
             'Export Review に追加音声（読み込み済みの全 Audio Track）を含める',
         'tooltip.videoClear': '動画だけをアンロード（追加音声・マーカーは残る場合あり）',
         'tooltip.videoFrame': (h) =>
-            '映像プレビュー。ホイールでガンマ補正（明るくする方向のみ。セッション保存・Export Review に含む）。サムネ生成中はモーションブラー表示',
+            '映像プレビュー。ホイールでガンマ補正（明るくする方向のみ。既定以外は Playback Drift 横に Gamma=… 表示。セッション保存・Export Review に含む）。サムネ生成中はモーションブラー表示',
         'tooltip.videoVizLane': (h) =>
             '映像タイムライン（Video）。リージョンをドラッグで開始位置を変更。' +
             h.regionMoveHeadToSeekbar +

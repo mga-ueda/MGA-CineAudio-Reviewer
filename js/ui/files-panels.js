@@ -109,6 +109,34 @@
         }
     }
 
+    function isStandardPanelInfoFps(fps) {
+        if (!(typeof fps === 'number' && fps > 0)) return true;
+        if (Math.abs(fps - 30) < 0.06) return true;
+        if (Math.abs(fps - 30000 / 1001) < 0.04) return true;
+        if (Math.abs(fps - 60) < 0.06) return true;
+        if (Math.abs(fps - 60000 / 1001) < 0.04) return true;
+        return false;
+    }
+
+    function renderInfoMainMetaLine(mod, fpsStr, fpsValue, totalF) {
+        if (!infoMainMeta) {
+            setInfoMainMetaText(mod + ' · ' + fpsStr + ' · Total: ' + totalF + ' f');
+            return;
+        }
+        const highlight =
+            fpsValue != null && fpsValue > 0 && !isStandardPanelInfoFps(fpsValue);
+        const fpsClass = highlight ? ' panel-info-line__fps--nonstandard' : '';
+        infoMainMeta.innerHTML =
+            mod +
+            ' · <span class="panel-info-line__fps' +
+            fpsClass +
+            '">' +
+            fpsStr +
+            '</span> · Total: ' +
+            totalF +
+            ' f';
+    }
+
     const DEFAULT_VIDEO_FRAME_ASPECT = '16 / 9';
 
     /** 実ピクセル比に合わせて枠を決め、object-fit: contain の上下黒帯を出さない */
@@ -169,7 +197,7 @@
             fpsStr = 'FPS n/a (~' + (typeof window.DISPLAY_FPS === 'number' ? window.DISPLAY_FPS : 60) + ' est.)';
         }
         infoMain.hidden = false;
-        setInfoMainMetaText(mod + ' · ' + fpsStr + ' · Total: ' + totalF + ' f');
+        renderInfoMainMetaLine(mod, fpsStr, c, totalF);
         if (typeof refreshVideoDriftPanelStat === 'function') {
             refreshVideoDriftPanelStat();
         }

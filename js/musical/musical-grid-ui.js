@@ -1786,9 +1786,11 @@
                 ? formatTimecodeForTransport(target)
                 : String(target);
         const hintTitle =
-            o.measureTrackHint && typeof musicalGridSeekToastPrimary === 'function'
-                ? musicalGridSeekToastPrimary(target)
-                : 'Measure ' + (localBar | 0);
+            o.localBarJumpHintTitle != null && String(o.localBarJumpHintTitle).trim() !== ''
+                ? String(o.localBarJumpHintTitle).trim()
+                : o.measureTrackHint && typeof musicalGridSeekToastPrimary === 'function'
+                  ? musicalGridSeekToastPrimary(target)
+                  : 'Measure ' + (localBar | 0);
         if (
             o.discreteStopNav !== false &&
             typeof applyDiscreteStopNavStep === 'function'
@@ -1889,8 +1891,71 @@
         return seekToRegionLocalBarSec(targetSec, n, seekOpt);
     }
 
-    /** Shift+数字 / テンキー — 練習番号区間内またはリージョン内のローカル小節番号へ */
+    function rehearsalLocalBarJumpGroupLabel(rehearsalRange) {
+        if (!rehearsalRange) return 'Rehearsal';
+        const fromMark =
+            typeof rehearsalRehearsalMarkFromRange === 'function'
+                ? rehearsalRehearsalMarkFromRange(rehearsalRange)
+                : '';
+        if (fromMark) return fromMark;
+        const rawLabel =
+            rehearsalRange.label != null ? String(rehearsalRange.label).trim() : '';
+        if (rawLabel) return rawLabel;
+        if (rehearsalRange.paletteIndex != null) {
+            return rehearsalGroupLabelForIndex(rehearsalRange.paletteIndex);
+        }
+        return 'Rehearsal';
+    }
+
+    function localBarJumpToastTitle(localBar, rehearsalRange, scope) {
+        const n = localBar | 0;
+        if (scope === 'rehearsal-mark') {
+            return rehearsalLocalBarJumpGroupLabel(rehearsalRange) + ' · ' + n;
+        }
+        if (scope === 'region') {
+            return 'M' + n;
+        }
+        return 'Measure ' + n;
+    }
+
+    function maxLocalBarNumberForRehearsalRange(rehearsalRange, barBoundaries) {
+        if (!rehearsalRange || !barBoundaries || !barBoundaries.length) return 0;
+        let maxLocal = 0;
+        for (let b = 1; b <= 999; b++) {
+            if (
+                Number.isFinite(
+                    secForRehearsalMarkLocalBarNumber(rehearsalRange, b, barBoundaries),
+                )
+            ) {
+                maxLocal = b;
+            } else {
+                break;
+            }
+        }
+        return maxLocal;
+    }
+
+    let regionBarJumpLastSkipDetail = null;
+
+    function buildRegionBarJumpSkipDetail(measureNumber, reason, rehearsalRange, barBoundaries) {
+        const n = measureNumber | 0;
+        if (reason === 'no-rehearsal-at-playhead') {
+            return { title: 'Rehearsal · ' + n, detail: 'No rehearsal here' };
+        }
+        if (rehearsalRange) {
+            const title = localBarJumpToastTitle(n, rehearsalRange, 'rehearsal-mark');
+            const maxLocal = maxLocalBarNumberForRehearsalRange(rehearsalRange, barBoundaries);
+            if (maxLocal > 0) {
+                return { title, detail: 'Out of range (1–' + maxLocal + ')' };
+            }
+            return { title, detail: 'Out of range' };
+        }
+        return { title: localBarJumpToastTitle(n, null, 'region'), detail: 'Unavailable' };
+    }
+
+    /** Shift+数字 / テンキー — Rehearsal 区間内、または Rehearsal 未定義時はリージョン内のローカル小節番号へ */
     function jumpToRegionLocalBarNumber(localBar, opt) {
+        regionBarJumpLastSkipDetail = null;
         if (!getMusicalGridVisible()) return false;
         const settings = musicalGridDrawSettings();
         if (!settings || !settings.meterSpec) return false;
@@ -1919,22 +1984,55 @@
                 : resolveRehearsalGroupRanges({ requireFillVisible: false });
         if (rehearsalRanges.length) {
             const rehearsalRange = rehearsalRangeAfterGridBoundarySec(t);
-            if (rehearsalRange) {
-                const rehearsalTargetSec = secForRehearsalMarkLocalBarNumber(
-                    rehearsalRange,
+            if (!rehearsalRange) {
+                regionBarJumpDiagLog('resolve/miss', {
                     measureNumber,
+                    transportSec: t,
+                    reason: 'no rehearsal at playhead',
+                    scope: 'rehearsal-mark',
+                });
+                regionBarJumpLastSkipDetail = buildRegionBarJumpSkipDetail(
+                    measureNumber,
+                    'no-rehearsal-at-playhead',
+                    null,
                     barBoundaries,
                 );
-                if (Number.isFinite(rehearsalTargetSec)) {
-                    regionBarJumpDiagLog('resolve/hit', {
-                        measureNumber,
-                        transportSec: t,
-                        targetSec: rehearsalTargetSec,
-                        scope: 'rehearsal-mark',
-                    });
-                    return seekToRegionLocalBarSec(rehearsalTargetSec, measureNumber, opt);
-                }
+                return false;
             }
+            const rehearsalTargetSec = secForRehearsalMarkLocalBarNumber(
+                rehearsalRange,
+                measureNumber,
+                barBoundaries,
+            );
+            if (Number.isFinite(rehearsalTargetSec)) {
+                regionBarJumpDiagLog('resolve/hit', {
+                    measureNumber,
+                    transportSec: t,
+                    targetSec: rehearsalTargetSec,
+                    scope: 'rehearsal-mark',
+                });
+                const seekOpt = Object.assign({}, opt || {}, {
+                    localBarJumpHintTitle: localBarJumpToastTitle(
+                        measureNumber,
+                        rehearsalRange,
+                        'rehearsal-mark',
+                    ),
+                });
+                return seekToRegionLocalBarSec(rehearsalTargetSec, measureNumber, seekOpt);
+            }
+            regionBarJumpDiagLog('resolve/miss', {
+                measureNumber,
+                transportSec: t,
+                reason: 'bar out of rehearsal range',
+                scope: 'rehearsal-mark',
+            });
+            regionBarJumpLastSkipDetail = buildRegionBarJumpSkipDetail(
+                measureNumber,
+                'bar out of rehearsal range',
+                rehearsalRange,
+                barBoundaries,
+            );
+            return false;
         }
         const span = resolvePlaybackRegionSpanAtSeekbar(spans, t, barBoundaries);
         if (!span) {
@@ -1943,6 +2041,12 @@
                 transportSec: t,
                 reason: 'no region at seekbar',
             });
+            regionBarJumpLastSkipDetail = buildRegionBarJumpSkipDetail(
+                measureNumber,
+                'no region at seekbar',
+                null,
+                barBoundaries,
+            );
             return false;
         }
         const targetSec = secForRegionLocalBarNumber(span, measureNumber, barBoundaries, spans);
@@ -1952,6 +2056,12 @@
                 transportSec: t,
                 reason: 'bar out of region range',
             });
+            regionBarJumpLastSkipDetail = buildRegionBarJumpSkipDetail(
+                measureNumber,
+                'bar out of region range',
+                null,
+                barBoundaries,
+            );
             return false;
         }
         regionBarJumpDiagLog('resolve/hit', {
@@ -1960,11 +2070,11 @@
             targetSec,
             scope: 'region',
         });
-        return seekToRegionLocalBarSec(targetSec, measureNumber, opt);
+        const seekOpt = Object.assign({}, opt || {}, {
+            localBarJumpHintTitle: localBarJumpToastTitle(measureNumber, null, 'region'),
+        });
+        return seekToRegionLocalBarSec(targetSec, measureNumber, seekOpt);
     }
-
-    const REGION_BAR_JUMP_SKIP_LOG_SUFFIX =
-        ' — grid off or measure number out of range';
 
     function logMeasureTrackJumpSkipped(barNum) {
         regionBarJumpDiagLog('resolve/skipped', {
@@ -1974,22 +2084,27 @@
         });
         if (typeof writeLog !== 'function') return;
         writeLog(
-            'Measure track jump skipped (Measure ' +
-                (barNum | 0) +
-                REGION_BAR_JUMP_SKIP_LOG_SUFFIX +
-                ')',
+            'Measure track jump skipped (Measure ' + (barNum | 0) + ' — out of timeline range)',
         );
     }
 
-    function logRegionBarJumpSkipped(barNum) {
+    function notifyRegionBarJumpSkipped(barNum, skipDetail) {
+        const n = barNum | 0;
+        const detail =
+            skipDetail && typeof skipDetail === 'object'
+                ? skipDetail
+                : buildRegionBarJumpSkipDetail(n, 'unknown', null, null);
         regionBarJumpDiagLog('resolve/skipped', {
-            measureNumber: barNum | 0,
-            reason: 'grid off or measure number out of range',
+            measureNumber: n,
+            reason: detail.detail,
+            title: detail.title,
         });
-        if (typeof writeLog !== 'function') return;
-        writeLog(
-            'Measure jump skipped (Measure ' + (barNum | 0) + REGION_BAR_JUMP_SKIP_LOG_SUFFIX + ')',
-        );
+        if (typeof writeLog === 'function') {
+            writeLog('Measure jump skipped: ' + detail.title + ' — ' + detail.detail);
+        }
+        if (typeof flashSeekHint === 'function') {
+            flashSeekHint(detail.title, detail.detail, 'error');
+        }
     }
 
     let regionBarJumpDigitBuf = '';
@@ -2008,7 +2123,7 @@
                 ? isTransportPlaying()
                 : typeof videoMain !== 'undefined' && videoMain && !videoMain.paused;
         if (!jumpToRegionLocalBarNumber(barNum, { resumeAfterSeek: wasPlaying })) {
-            logRegionBarJumpSkipped(barNum);
+            notifyRegionBarJumpSkipped(barNum, regionBarJumpLastSkipDetail);
         }
     }
 

@@ -3,20 +3,21 @@
  */
 (function videoPreviewGammaModule() {
     const FILTER_ID = 'videoPreviewGammaFilter';
+    const FILMSTRIP_BLUR_FILTER_ID = 'videoFilmstripMotionBlurFilter';
     const GAMMA_MIN = 0.52;
     const GAMMA_MAX = 1.0;
     const GAMMA_STEP = 0.04;
-    const GAMMA_NOTICE_HOLD_MS = 1800;
-    const GAMMA_NOTICE_FADE_MS = 1100;
 
     let videoPreviewGamma = GAMMA_MAX;
+    let pendingVideoPreviewGammaFromSession = null;
     let filterInstalled = false;
     let funcR = null;
     let funcG = null;
     let funcB = null;
-    let gammaNoticeHideTimer = 0;
-    let gammaNoticeShowGen = 0;
-    let pendingGammaNotice = false;
+    let pendingGammaFilterApply = false;
+    let gammaFilterRepaintGen = 0;
+    let gammaFilterNudgeDoneForUrl = '';
+    let gammaVideoListenersAbort = null;
 
     function ensureGammaFilter() {
         if (filterInstalled) return;
@@ -56,136 +57,255 @@
         return videoPreviewGamma < GAMMA_MAX - 1e-6;
     }
 
-    function getVideoPreviewGammaNoticeEl() {
-        return document.getElementById('videoPreviewGammaNotice');
+    function getVideoPreviewGammaPanelStatEl() {
+        return document.getElementById('videoPreviewGammaPanelStat');
     }
 
-    function getVideoPreviewGammaNoticeValueEl() {
-        return document.getElementById('videoPreviewGammaNoticeValue');
-    }
-
-    function hideVideoPreviewGammaNotice() {
-        clearTimeout(gammaNoticeHideTimer);
-        gammaNoticeHideTimer = 0;
-        gammaNoticeShowGen += 1;
-        const el = getVideoPreviewGammaNoticeEl();
+    function refreshVideoPreviewGammaPanelStat() {
+        const el = getVideoPreviewGammaPanelStatEl();
         if (!el) return;
-        el.classList.remove('video-frame__gamma-notice--visible');
-        el.hidden = true;
-        el.setAttribute('aria-hidden', 'true');
-    }
-
-    function showVideoPreviewGammaNotice() {
-        if (!isVideoPreviewGammaNonDefault()) {
-            hideVideoPreviewGammaNotice();
+        if (
+            !isVideoPreviewGammaNonDefault() ||
+            (typeof videoReady === 'function' && !videoReady())
+        ) {
+            el.hidden = true;
+            el.textContent = '';
+            el.setAttribute('aria-hidden', 'true');
             return;
         }
-        if (typeof videoReady !== 'function' || !videoReady()) return;
-        const el = getVideoPreviewGammaNoticeEl();
-        const valueEl = getVideoPreviewGammaNoticeValueEl();
-        if (!el || !valueEl) return;
-        clearTimeout(gammaNoticeHideTimer);
-        const gen = ++gammaNoticeShowGen;
-        valueEl.textContent = formatVideoPreviewGammaNoticeMessage(videoPreviewGamma);
+        el.textContent = formatVideoPreviewGammaPanelLabel(videoPreviewGamma);
         el.hidden = false;
         el.setAttribute('aria-hidden', 'false');
-        el.classList.remove('video-frame__gamma-notice--visible');
-        requestAnimationFrame(() => {
-            if (gen !== gammaNoticeShowGen) return;
-            el.classList.add('video-frame__gamma-notice--visible');
-        });
-        gammaNoticeHideTimer = setTimeout(() => {
-            if (gen !== gammaNoticeShowGen) return;
-            el.classList.remove('video-frame__gamma-notice--visible');
-            gammaNoticeHideTimer = setTimeout(() => {
-                if (gen !== gammaNoticeShowGen) return;
-                el.hidden = true;
-                el.setAttribute('aria-hidden', 'true');
-                gammaNoticeHideTimer = 0;
-            }, GAMMA_NOTICE_FADE_MS);
-        }, GAMMA_NOTICE_HOLD_MS);
-    }
-
-    function tryShowVideoPreviewGammaNotice() {
-        if (!pendingGammaNotice) return;
-        if (!isVideoPreviewGammaNonDefault()) {
-            pendingGammaNotice = false;
-            return;
-        }
-        if (typeof isVideoFilmstripLoadingActive === 'function' && isVideoFilmstripLoadingActive()) {
-            return;
-        }
-        pendingGammaNotice = false;
-        showVideoPreviewGammaNotice();
-    }
-
-    function scheduleVideoPreviewGammaNotice() {
-        if (!isVideoPreviewGammaNonDefault()) {
-            pendingGammaNotice = false;
-            hideVideoPreviewGammaNotice();
-            return;
-        }
-        pendingGammaNotice = true;
-        tryShowVideoPreviewGammaNotice();
     }
 
     function notifyVideoPreviewPresentationReady() {
-        tryShowVideoPreviewGammaNotice();
+        applyVideoPreviewGamma({ force: true });
     }
 
-    function applyVideoPreviewGamma() {
-        const v = getVideoEl();
+    function buildVideoPreviewFilterString(includeMotionBlur) {
+        const parts = [];
+        if (videoPreviewGamma < GAMMA_MAX - 1e-6) {
+            ensureGammaFilter();
+            const exp = String(videoPreviewGamma);
+            funcR.setAttribute('exponent', exp);
+            funcG.setAttribute('exponent', exp);
+            funcB.setAttribute('exponent', exp);
+            parts.push('url(#' + FILTER_ID + ')');
+        }
+        if (includeMotionBlur) {
+            if (typeof ensureVideoFilmstripMotionBlurFilter === 'function') {
+                ensureVideoFilmstripMotionBlurFilter();
+            }
+            parts.push('url(#' + FILMSTRIP_BLUR_FILTER_ID + ')');
+        }
+        return parts.join(' ');
+    }
+
+    /** 一時停止中 video への SVG filter が環境によって描画されない問題への対処 */
+    function setVideoFilterWithRepaint(v, filterStr) {
         if (!v) return;
-        if (
+        const next = filterStr || '';
+        const prev = v.style.filter || '';
+        if (next === prev) {
+            if (!next) return;
+            v.style.filter = 'none';
+            requestAnimationFrame(() => {
+                if (getVideoEl() !== v) return;
+                v.style.filter = next;
+            });
+            return;
+        }
+        v.style.filter = next;
+    }
+
+    function nudgeVideoCompositorForGammaFilter(v) {
+        if (!v || !v.paused || v.readyState < 2) return false;
+        const url =
+            typeof urlMain !== 'undefined' && urlMain
+                ? urlMain
+                : v.currentSrc || v.src || '';
+        if (url && gammaFilterNudgeDoneForUrl === url) return false;
+        const t0 = v.currentTime || 0;
+        const cap =
+            typeof getPlaybackCapSec === 'function'
+                ? getPlaybackCapSec(v)
+                : v.duration && isFinite(v.duration)
+                  ? v.duration
+                  : 0;
+        if (!cap) return false;
+        const step = Math.max(
+            typeof masterFrameSec !== 'undefined' && masterFrameSec > 0 ? masterFrameSec : 1 / 24,
+            0.001,
+        );
+        const kick = Math.min(Math.max(step * 2, 0.02), Math.max(cap - step, step));
+        if (kick <= 0 || t0 >= kick * 0.5) {
+            if (url) gammaFilterNudgeDoneForUrl = url;
+            return false;
+        }
+        if (url) gammaFilterNudgeDoneForUrl = url;
+        let restored = false;
+        const finish = () => {
+            if (restored) return;
+            restored = true;
+            applyVideoPreviewGamma({ force: true, skipRepaintSchedule: true });
+        };
+        const restore = () => {
+            if (Math.abs((v.currentTime || 0) - kick) < 0.05) {
+                const ct = v.currentTime || 0;
+                if (Math.abs(ct - t0) >= 0.0001) {
+                    v.addEventListener('seeked', finish, { once: true });
+                    try {
+                        v.currentTime = t0;
+                    } catch (_) {
+                        finish();
+                    }
+                } else {
+                    finish();
+                }
+            } else {
+                finish();
+            }
+        };
+        v.addEventListener('seeked', restore, { once: true });
+        setTimeout(finish, 600);
+        try {
+            v.currentTime = kick;
+        } catch (_) {
+            finish();
+        }
+        return true;
+    }
+
+    function scheduleVideoPreviewGammaFilterRepaint(v) {
+        if (!isVideoPreviewGammaNonDefault()) return;
+        v = v || getVideoEl();
+        if (!v) return;
+        const gen = ++gammaFilterRepaintGen;
+        const reapply = () => {
+            if (gen !== gammaFilterRepaintGen) return;
+            applyVideoPreviewGamma({ force: true, skipRepaintSchedule: true });
+        };
+        requestAnimationFrame(reapply);
+        if (typeof v.requestVideoFrameCallback === 'function') {
+            try {
+                v.requestVideoFrameCallback(reapply);
+            } catch (_) {}
+        }
+        v.addEventListener('seeked', reapply, { once: true });
+        v.addEventListener('loadeddata', reapply, { once: true });
+        if (v.paused) {
+            nudgeVideoCompositorForGammaFilter(v);
+        }
+    }
+
+    function applyVideoPreviewGamma(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        const v = getVideoEl();
+        if (!v) {
+            if (isVideoPreviewGammaNonDefault()) {
+                pendingGammaFilterApply = true;
+            }
+            return;
+        }
+        pendingGammaFilterApply = false;
+        const includeMotionBlur =
             typeof isVideoFilmstripLoadingActive === 'function' &&
-            isVideoFilmstripLoadingActive()
+            isVideoFilmstripLoadingActive();
+        setVideoFilterWithRepaint(v, buildVideoPreviewFilterString(includeMotionBlur));
+        if (!o.skipRepaintSchedule && isVideoPreviewGammaNonDefault() && !includeMotionBlur) {
+            scheduleVideoPreviewGammaFilterRepaint(v);
+        }
+    }
+
+    function reapplyVideoPreviewGammaIfPending() {
+        if (
+            pendingGammaFilterApply ||
+            (isVideoPreviewGammaNonDefault() &&
+                typeof isVideoFilmstripLoadingActive === 'function' &&
+                !isVideoFilmstripLoadingActive())
         ) {
-            return;
+            applyVideoPreviewGamma({ force: true });
         }
-        if (videoPreviewGamma >= GAMMA_MAX - 1e-6) {
-            v.style.filter = '';
-            return;
-        }
-        ensureGammaFilter();
-        const exp = String(videoPreviewGamma);
-        funcR.setAttribute('exponent', exp);
-        funcG.setAttribute('exponent', exp);
-        funcB.setAttribute('exponent', exp);
-        v.style.filter = 'url(#' + FILTER_ID + ')';
     }
 
     function setVideoPreviewGammaValue(gamma, opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
         let next = typeof gamma === 'number' && isFinite(gamma) ? gamma : GAMMA_MAX;
         next = Math.max(GAMMA_MIN, Math.min(GAMMA_MAX, next));
-        if (Math.abs(next - videoPreviewGamma) < 1e-6) return false;
+        const unchanged = Math.abs(next - videoPreviewGamma) < 1e-6;
+        if (unchanged) {
+            if (o.forceApply) {
+                applyVideoPreviewGamma({ force: true });
+                refreshVideoPreviewGammaPanelStat();
+            }
+            return !!o.forceApply;
+        }
         videoPreviewGamma = next;
-        applyVideoPreviewGamma();
-        if (!o.skipPersist && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+        applyVideoPreviewGamma({ force: !!o.forceApply });
+        refreshVideoPreviewGammaPanelStat();
+        if (!o.skipPersist) {
+            if (typeof flushPersistSessionNow === 'function') {
+                void flushPersistSessionNow();
+            } else if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
         }
         return true;
     }
 
     function resetVideoPreviewGamma(opt) {
         const o = opt && typeof opt === 'object' ? opt : {};
-        pendingGammaNotice = false;
-        hideVideoPreviewGammaNotice();
         const changed = Math.abs(videoPreviewGamma - GAMMA_MAX) >= 1e-6;
         videoPreviewGamma = GAMMA_MAX;
-        applyVideoPreviewGamma();
-        if (changed && !o.skipPersist && typeof schedulePersistSession === 'function') {
-            schedulePersistSession();
+        pendingGammaFilterApply = false;
+        applyVideoPreviewGamma({ force: true });
+        refreshVideoPreviewGammaPanelStat();
+        if (changed && !o.skipPersist) {
+            if (typeof flushPersistSessionNow === 'function') {
+                void flushPersistSessionNow();
+            } else if (typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
         }
     }
 
+    function setPendingVideoPreviewGammaFromSession(gamma) {
+        if (typeof gamma !== 'number' || !isFinite(gamma)) return false;
+        pendingVideoPreviewGammaFromSession = Math.max(
+            GAMMA_MIN,
+            Math.min(GAMMA_MAX, gamma),
+        );
+        return true;
+    }
+
+    function applyPendingVideoPreviewGammaFromSession() {
+        if (pendingVideoPreviewGammaFromSession == null) return false;
+        const g = pendingVideoPreviewGammaFromSession;
+        setVideoPreviewGammaValue(g, { skipPersist: true, forceApply: true });
+        return true;
+    }
+
+    function clearPendingVideoPreviewGammaFromSession() {
+        pendingVideoPreviewGammaFromSession = null;
+    }
+
+    function isSessionRestoreGammaBusy() {
+        return (
+            (typeof isSessionRestoreInProgress === 'function' &&
+                isSessionRestoreInProgress()) ||
+            (typeof isSessionRestoreTeardownPending === 'function' &&
+                isSessionRestoreTeardownPending())
+        );
+    }
+
     function applyVideoPreviewGammaFromSession(gamma) {
-        if (typeof gamma !== 'number' || !isFinite(gamma)) {
-            resetVideoPreviewGamma({ skipPersist: true });
+        if (typeof gamma === 'number' && isFinite(gamma)) {
+            setPendingVideoPreviewGammaFromSession(gamma);
+            setVideoPreviewGammaValue(gamma, { skipPersist: true, forceApply: true });
             return;
         }
-        setVideoPreviewGammaValue(gamma, { skipPersist: true });
-        scheduleVideoPreviewGammaNotice();
+        if (isSessionRestoreGammaBusy()) return;
+        resetVideoPreviewGamma({ skipPersist: true });
     }
 
     function getVideoPreviewGammaPersistSnapshot() {
@@ -199,8 +319,9 @@
         return 'γ ' + gamma.toFixed(2);
     }
 
-    function formatVideoPreviewGammaNoticeMessage(gamma) {
-        return 'Gamma set to ' + formatVideoPreviewGammaToast(gamma);
+    function formatVideoPreviewGammaPanelLabel(gamma) {
+        if (typeof gamma !== 'number' || !isFinite(gamma)) return '';
+        return 'Gamma=' + gamma.toFixed(2);
     }
 
     function adjustVideoPreviewGamma(wheelDir) {
@@ -252,14 +373,45 @@
         );
     }
 
+    function bindVideoPreviewGammaVideoListeners(el) {
+        if (gammaVideoListenersAbort) {
+            gammaVideoListenersAbort.abort();
+        }
+        if (!el) return;
+        gammaVideoListenersAbort = new AbortController();
+        const sig = gammaVideoListenersAbort.signal;
+        el.addEventListener(
+            'loadedmetadata',
+            () => {
+                gammaFilterNudgeDoneForUrl = '';
+            },
+            { signal: sig },
+        );
+        const onFrame = () => {
+            if (!isVideoPreviewGammaNonDefault()) return;
+            applyVideoPreviewGamma({ force: true, skipRepaintSchedule: true });
+        };
+        el.addEventListener('seeked', onFrame, { signal: sig });
+        el.addEventListener('loadeddata', onFrame, { signal: sig });
+        el.addEventListener('playing', onFrame, { signal: sig });
+    }
+
     window.resetVideoPreviewGamma = resetVideoPreviewGamma;
     window.applyVideoPreviewGamma = applyVideoPreviewGamma;
     window.applyVideoPreviewGammaFromSession = applyVideoPreviewGammaFromSession;
+    window.setPendingVideoPreviewGammaFromSession = setPendingVideoPreviewGammaFromSession;
+    window.applyPendingVideoPreviewGammaFromSession = applyPendingVideoPreviewGammaFromSession;
+    window.clearPendingVideoPreviewGammaFromSession = clearPendingVideoPreviewGammaFromSession;
     window.getVideoPreviewGammaPersistSnapshot = getVideoPreviewGammaPersistSnapshot;
     window.notifyVideoPreviewPresentationReady = notifyVideoPreviewPresentationReady;
+    window.reapplyVideoPreviewGammaIfPending = reapplyVideoPreviewGammaIfPending;
+    window.bindVideoPreviewGammaVideoListeners = bindVideoPreviewGammaVideoListeners;
+    window.refreshVideoPreviewGammaPanelStat = refreshVideoPreviewGammaPanelStat;
     window.getVideoPreviewGamma = function getVideoPreviewGamma() {
         return videoPreviewGamma;
     };
 
     bindVideoPreviewGammaWheel();
+    bindVideoPreviewGammaVideoListeners(getVideoEl());
+    refreshVideoPreviewGammaPanelStat();
 })();

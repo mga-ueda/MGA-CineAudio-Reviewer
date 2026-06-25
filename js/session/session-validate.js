@@ -23,6 +23,7 @@
         'musicalGridVisible',
         'musicalGridRehearsalFillVisible',
         'loopPlayback',
+        'metronomeClickEnabled',
         'mName',
         'mLastModified',
         'mBlob',
@@ -273,6 +274,9 @@
         ) {
             return { valid: false, reason: 'invalid musicalGridRehearsalFillVisible' };
         }
+        if ('metronomeClickEnabled' in row && typeof row.metronomeClickEnabled !== 'boolean') {
+            return { valid: false, reason: 'invalid metronomeClickEnabled' };
+        }
 
         if (Array.isArray(row.extraTracks)) {
             for (let i = 0; i < row.extraTracks.length; i++) {
@@ -329,6 +333,9 @@
                 typeof prefs.musicalGridRehearsalFillVisible !== 'boolean'
             ) {
                 return { valid: false, reason: 'invalid prefs.musicalGridRehearsalFillVisible' };
+            }
+            if ('metronomeClickEnabled' in prefs && typeof prefs.metronomeClickEnabled !== 'boolean') {
+                return { valid: false, reason: 'invalid prefs.metronomeClickEnabled' };
             }
             if (prefs.devConstants != null) {
                 if (typeof prefs.devConstants !== 'object') {

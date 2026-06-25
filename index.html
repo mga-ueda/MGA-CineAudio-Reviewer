@@ -119,9 +119,6 @@
                                 <span class="audio-waveform-lane__loading-ellipsis" aria-hidden="true"></span>
                             </span>
                         </div>
-                        <div class="video-frame__gamma-notice" id="videoPreviewGammaNotice" hidden aria-live="polite">
-                            <span class="video-frame__gamma-notice-text" id="videoPreviewGammaNoticeValue">Gamma set to γ 1.00</span>
-                        </div>
                         <div class="video-timecode video-timecode--idle" id="timecodeOverlayMain" aria-hidden="true"><span class="video-timecode__text">00:00:00:00</span></div>
                         <div class="marker-comment-overlay marker-comment-overlay--video" id="markerCommentOverlayRange" hidden aria-hidden="true"></div>
                     </div>
@@ -132,10 +129,13 @@
                         <span class="transport-time-row__sep" aria-hidden="true">-</span>
                         <span class="time-display transport-opt-value" id="totalTime">00:00:00:00</span>
                     </div>
-                    <div class="transport-opt-box transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
-                        <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
-                            <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> f</span>
-                        </span>
+                    <div class="video-panel__status-drift-row">
+                        <div class="transport-opt-box transport-opt-box--video-drift" id="videoDriftTransportBox" hidden>
+                            <span class="transport-drift-display" id="videoDriftPanelStat" aria-live="polite">
+                                <span class="transport-drift-prefix">Playback Drift - </span><span class="transport-drift-ms transport-drift-ms--safe">0000</span><span class="transport-drift-suffix"> f</span>
+                            </span>
+                        </div>
+                        <span class="transport-drift-gamma" id="videoPreviewGammaPanelStat" hidden aria-hidden="true"></span>
                     </div>
                 </div>
             </div>

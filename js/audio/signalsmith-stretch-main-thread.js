@@ -197,14 +197,21 @@
         };
     }
 
-    function canUsePitchStretchWorklet() {
+    function isFileProtocolDocument() {
         return (
-            typeof window !== 'undefined' &&
-            window.isSecureContext &&
-            typeof AudioWorkletNode !== 'undefined'
+            typeof location !== 'undefined' &&
+            String(location.protocol || '').toLowerCase() === 'file:'
         );
+    }
+
+    function canUsePitchStretchWorklet() {
+        if (typeof window === 'undefined') return false;
+        if (typeof AudioWorkletNode === 'undefined') return false;
+        if (isFileProtocolDocument()) return false;
+        return !!window.isSecureContext;
     }
 
     window.renderSignalsmithStretchMainThread = renderSignalsmithStretchMainThread;
     window.canUsePitchStretchWorklet = canUsePitchStretchWorklet;
+    window.isFileProtocolDocument = isFileProtocolDocument;
 })();

@@ -504,6 +504,71 @@
         row.playbackRegion.video = deepCloneForPersist(prevRow.playbackRegion.video);
     }
 
+    function attachVideoPreviewGammaToRow(row) {
+        if (!row || typeof row !== 'object') return;
+        if (
+            typeof fileMain !== 'undefined' &&
+            fileMain &&
+            typeof getVideoPreviewGammaPersistSnapshot === 'function'
+        ) {
+            row.videoPreviewGamma = getVideoPreviewGammaPersistSnapshot();
+        }
+    }
+
+    /** ライブ snapshot に gamma が無いとき、同一動画なら直前 IDB 行の値を維持 */
+    function mergeVideoPreviewGammaOnPersist(row, prevRow) {
+        if (!row || typeof row !== 'object') return;
+        attachVideoPreviewGammaToRow(row);
+        if (
+            typeof row.videoPreviewGamma === 'number' &&
+            isFinite(row.videoPreviewGamma)
+        ) {
+            return;
+        }
+        if (
+            prevRow &&
+            typeof prevRow.videoPreviewGamma === 'number' &&
+            isFinite(prevRow.videoPreviewGamma) &&
+            !sessionMainVideoFileChanged(row, prevRow)
+        ) {
+            row.videoPreviewGamma = prevRow.videoPreviewGamma;
+        }
+    }
+
+    function stashVideoPreviewGammaFromSessionRow(row) {
+        const g = row && row.videoPreviewGamma;
+        if (
+            typeof g === 'number' &&
+            isFinite(g) &&
+            typeof setPendingVideoPreviewGammaFromSession === 'function'
+        ) {
+            setPendingVideoPreviewGammaFromSession(g);
+        }
+    }
+
+    function applyVideoPreviewGammaFromSessionRow(row) {
+        const g = row && row.videoPreviewGamma;
+        if (typeof applyVideoPreviewGammaFromSession === 'function') {
+            if (typeof g === 'number' && isFinite(g)) {
+                applyVideoPreviewGammaFromSession(g);
+            } else if (
+                typeof applyPendingVideoPreviewGammaFromSession === 'function' &&
+                !applyPendingVideoPreviewGammaFromSession()
+            ) {
+                applyVideoPreviewGammaFromSession(g);
+            }
+        } else if (
+            typeof applyPendingVideoPreviewGammaFromSession === 'function'
+        ) {
+            applyPendingVideoPreviewGammaFromSession();
+        }
+        if (typeof reapplyVideoPreviewGammaIfPending === 'function') {
+            reapplyVideoPreviewGammaIfPending();
+        } else if (typeof applyVideoPreviewGamma === 'function') {
+            applyVideoPreviewGamma({ force: true });
+        }
+    }
+
     function getPinnedRegionBySlot(row, slot) {
         if (!row || !row.__regionPinnedBySlot || !(slot >= 0)) return null;
         const key = String(slot);
@@ -704,6 +769,30 @@
                             );
                         }
                     }
+                    if (
+                        typeof fileMain !== 'undefined' &&
+                        fileMain &&
+                        typeof finalizeVideoTrackPresentationAfterSessionRestore ===
+                            'function'
+                    ) {
+                        try {
+                            await finalizeVideoTrackPresentationAfterSessionRestore({
+                                skipIfFrames: true,
+                            });
+                        } catch (_) {}
+                        applyVideoPreviewGammaFromSessionRow(lastSessionRowSnapshot);
+                    } else if (
+                        typeof fileMain !== 'undefined' &&
+                        fileMain &&
+                        typeof syncVideoTrackRegionsPresentation === 'function'
+                    ) {
+                        try {
+                            syncVideoTrackRegionsPresentation({ force: true });
+                        } catch (_) {}
+                        if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
+                            scheduleVideoTrackFilmstripBuild();
+                        }
+                    }
                 }
             }
         });
@@ -871,6 +960,7 @@
         if (typeof getMixPersistSnapshot === 'function') {
             row.mix = getMixPersistSnapshot();
         }
+        attachVideoPreviewGammaToRow(row);
         if (typeof getWaveformLaneUiPersistSnapshot === 'function') {
             row.laneUi = getWaveformLaneUiPersistSnapshot();
         }
@@ -984,6 +1074,7 @@
             }
         }
         attachMarkersDisplayHiddenToRow(row);
+        attachVideoPreviewGammaToRow(row);
         let persistedRegionSegments = 0;
         if (typeof getPlaybackRegionPersistSnapshot === 'function') {
             upsertPlaybackRegionVideoFromSnapshot(row);
@@ -1211,6 +1302,7 @@
         if (typeof getMixPersistSnapshot === 'function') {
             row.mix = getMixPersistSnapshot();
         }
+        attachVideoPreviewGammaToRow(row);
         if (typeof getExtraTracksPersistSnapshot === 'function') {
             const extra = getExtraTracksPersistSnapshot();
             if (extra && extra.length > 0) {
@@ -1228,6 +1320,9 @@
             loopPlayback: getLoopPlaybackEnabled(),
         };
         attachMarkersDisplayHiddenToRow(row);
+        if (typeof getMetronomeClickEnabled === 'function') {
+            row.metronomeClickEnabled = getMetronomeClickEnabled();
+        }
         if (typeof getMusicalGridPersistSnapshot === 'function') {
             row.musicalGrid = getMusicalGridPersistSnapshot();
         }
@@ -1283,9 +1378,6 @@
             row.mName = fileMain.name;
             row.mLastModified = fileMain.lastModified;
             row.mBlob = fileMain;
-            if (typeof getVideoPreviewGammaPersistSnapshot === 'function') {
-                row.videoPreviewGamma = getVideoPreviewGammaPersistSnapshot();
-            }
             await attachWaveformSessionFieldsToRow(row);
         } else {
             const extra =
@@ -1365,6 +1457,7 @@
         writeLog('Session: persist prev ' + formatRegionCountsForLog(prevRow));
         keepPreviousRegionsWhenNoNewRegionEdit(row, prevRow);
         mergeVideoPlaybackRegionFromPrevRow(row, prevRow);
+        mergeVideoPreviewGammaOnPersist(row, prevRow);
         protectRegionShrinkOnPersist(row, prevRow);
         enforceRegionPersistFloor(row);
         if (Array.isArray(row.extraTracks)) {
@@ -1761,8 +1854,32 @@
         if (typeof applyPendingPlaybackRegionRestore === 'function') {
             applyPendingPlaybackRegionRestore();
         }
-        if (typeof syncVideoTrackRegionsPresentation === 'function') {
+        if (
+            typeof tryApplyPendingVideoPlaybackRegionRestore === 'function' &&
+            row &&
+            row.playbackRegion &&
+            row.playbackRegion.video
+        ) {
+            tryApplyPendingVideoPlaybackRegionRestore({
+                silent: true,
+                entry: row.playbackRegion.video,
+            });
+        }
+        if (typeof finalizeVideoTrackPresentationAfterSessionRestore === 'function') {
+            await finalizeVideoTrackPresentationAfterSessionRestore({
+                videoEntry:
+                    row && row.playbackRegion && row.playbackRegion.video
+                        ? row.playbackRegion.video
+                        : undefined,
+            });
+        } else if (typeof syncVideoTrackRegionsPresentation === 'function') {
             syncVideoTrackRegionsPresentation({ force: true });
+            if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
+                scheduleVideoTrackFilmstripBuild();
+            }
+            if (typeof showFirstVideoFrame === 'function') {
+                void showFirstVideoFrame();
+            }
         }
         syncRegionPersistEpochSavedFromLiveState();
         if (typeof syncSeekMax === 'function') syncSeekMax();
@@ -1787,12 +1904,22 @@
         }
         if (typeof updateVideoClearButton === 'function') updateVideoClearButton();
         if (typeof updateSessionAllClearButton === 'function') updateSessionAllClearButton();
-        if (typeof fileMain !== 'undefined' && fileMain) {
-            if (typeof applyVideoPreviewGammaFromSession === 'function') {
-                applyVideoPreviewGammaFromSession(row && row.videoPreviewGamma);
+        applyVideoPreviewGammaFromSessionRow(row);
+        if (typeof clearPendingVideoPreviewGammaFromSession === 'function') {
+            clearPendingVideoPreviewGammaFromSession();
+        }
+        if (!(typeof fileMain !== 'undefined' && fileMain)) {
+            if (typeof resetVideoPreviewGamma === 'function') {
+                resetVideoPreviewGamma({ skipPersist: true });
             }
-        } else if (typeof resetVideoPreviewGamma === 'function') {
-            resetVideoPreviewGamma({ skipPersist: true });
+        } else if (
+            typeof row !== 'undefined' &&
+            row &&
+            typeof row.videoPreviewGamma === 'number' &&
+            isFinite(row.videoPreviewGamma) &&
+            typeof writeLog === 'function'
+        ) {
+            writeLog('Session: restored video gamma γ ' + row.videoPreviewGamma.toFixed(2));
         }
         if (typeof logSessionRestoreRegionRehearsalSnapshot === 'function') {
             requestAnimationFrame(() => {
@@ -1875,6 +2002,18 @@
         const o = opt && typeof opt === 'object' ? opt : {};
         if (!row || typeof row !== 'object') return false;
         if (typeof row.loopPlayback === 'boolean') applySavedLoopPlayback(row.loopPlayback);
+        if (typeof applyMetronomeClickFromProjectSource === 'function') {
+            applyMetronomeClickFromProjectSource(row, { persist: false });
+        } else if (
+            typeof row.metronomeClickEnabled === 'boolean' &&
+            typeof setMetronomeClickEnabled === 'function'
+        ) {
+            setMetronomeClickEnabled(row.metronomeClickEnabled, {
+                silent: true,
+                persist: false,
+                skipSessionPersist: true,
+            });
+        }
         if (row.musicalGrid && typeof applyMusicalGridPersistSnapshot === 'function') {
             if (typeof musicalTrackPersistDiagLog === 'function') {
                 const mg = row.musicalGrid;
@@ -1960,6 +2099,7 @@
 
         prepareLaneUiRestoreFromRow(row);
         applyPlaybackRegionRestoreFromRow(row);
+        stashVideoPreviewGammaFromSessionRow(row);
 
         const restoreTransportSec =
             typeof o.restoreTransportSec === 'number' && Number.isFinite(o.restoreTransportSec)
@@ -2008,7 +2148,24 @@
         return runSerializedSessionRestore(async () => {
             await applySessionPersistRow(row, opt);
             if (row && sessionRowHasRestorableContent(row) && window.indexedDB) {
-                await idbPut(IDB_KEY_LAST, row);
+                let persistRow = null;
+                if (typeof buildSessionPersistRow === 'function') {
+                    try {
+                        persistRow = await buildSessionPersistRow();
+                    } catch (_) {
+                        persistRow = null;
+                    }
+                }
+                if (!persistRow || typeof persistRow !== 'object') {
+                    persistRow = row;
+                    attachVideoPreviewGammaToRow(persistRow);
+                } else {
+                    mergeVideoPreviewGammaOnPersist(persistRow, row);
+                }
+                const nextStamp = sessionSaveStampSeq + 1;
+                persistRow.__saveStamp = nextStamp;
+                await idbPut(IDB_KEY_LAST, persistRow);
+                cacheLastSessionRow(persistRow);
             }
         });
     }
@@ -2037,6 +2194,7 @@
             }
             cacheLastSessionRow(row);
             updateRegionPersistFloorFromRow(row);
+            stashVideoPreviewGammaFromSessionRow(row);
             writeLog('Session: restore rgn ' + formatRegionCountsForLog(row));
             writeLog(
                 'Session: restore row stamp = ' +

@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **GitHub Pages** | [https://mga-ueda.github.io/MGA-CineAudio-Reviewer/](https://mga-ueda.github.io/MGA-CineAudio-Reviewer/) — ダウンロード不要ですぐに利用できます |
-| **バージョン** | v0.22 |
+| **バージョン** | v0.23 |
 | **ローカル起動** | リポジトリの `index.html` をブラウザで開く（ビルド不要・`file://` 可） |
 | **推奨ブラウザ** | Google Chrome |
 | **リポジトリ** | [mga-ueda/MGA-CineAudio-Reviewer](https://github.com/mga-ueda/MGA-CineAudio-Reviewer) |
@@ -58,6 +58,12 @@
 - **同梱サードパーティ**（いずれも MIT License）: Signalsmith Stretch（ピッチ／タイムストレッチ）、tiny-sjis-encoder（WAV マーカー日本語ラベルの CP932 エンコード）。一覧と著作権表示・ライセンス全文は [js/vendor/THIRD-PARTY-NOTICES.md](js/vendor/THIRD-PARTY-NOTICES.md) および `js/vendor/LICENSE-*.txt` を参照してください。**ソースを配布・フォークする場合**は、これらのファイルも配布物に含めてください。
 
 ## バージョン情報
+
+### v0.23 - 2026年6月25日
+
+- 動画プレビュー — ガンマ補正の表示を Playback Drift 横（Gamma=…）へ移動（映像フレーム上のオーバーレイ表示を廃止）。一時停止中のガンマ反映を改善。
+- 映像パネルのメタ情報行で、コンテナ FPS が 30 / 29.97 / 60 / 59.94 以外のとき fps 値を原色オレンジで表示。
+- 使い方・ショートカット一覧・ツールチップを更新。
 
 ### v0.22 - 2026年6月25日
 

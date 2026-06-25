@@ -7,6 +7,22 @@
                 extraCount: getExtraTrackCount(),
             });
         }
+        if (
+            typeof fileMain !== 'undefined' &&
+            fileMain &&
+            typeof getVideoTrackRef === 'function' &&
+            typeof isTrackRegionActive === 'function' &&
+            isTrackRegionActive(getVideoTrackRef())
+        ) {
+            try {
+                updateTrackRegionOverlays(getVideoTrackRef());
+            } catch (err) {
+                writeLog(
+                    'Video track: overlay update skipped — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        }
         const n = getExtraTrackCount();
         for (let i = 0; i < n; i++) {
             const track = { type: 'extra', slot: i };

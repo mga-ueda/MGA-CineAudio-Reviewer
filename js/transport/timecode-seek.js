@@ -101,11 +101,21 @@
 
     let firstFramePrimedForUrl = '';
 
-    /** セッション復元: 動画メタデータが揃ってから Ex 音声を復元する */
+    /** セッション復元: 動画の尺と先頭フレームデコードが揃ってから Ex 復元・リージョン適用へ進む */
+    function videoReadyForSessionRestorePresentation() {
+        if (!(typeof videoReady === 'function' && videoReady())) return false;
+        if (!videoMain) return false;
+        return (
+            videoMain.readyState >= 2 &&
+            videoMain.videoWidth > 0 &&
+            videoMain.videoHeight > 0
+        );
+    }
+
     function waitForVideoReadyForSessionRestore(timeoutMs) {
         const ms = timeoutMs > 0 ? timeoutMs : 15000;
         return new Promise((resolve) => {
-            if (typeof videoReady === 'function' && videoReady()) {
+            if (videoReadyForSessionRestorePresentation()) {
                 resolve(true);
                 return;
             }
@@ -115,27 +125,30 @@
                 settled = true;
                 videoMain.removeEventListener('loadedmetadata', onReady);
                 videoMain.removeEventListener('loadeddata', onReady);
+                videoMain.removeEventListener('canplay', onReady);
                 videoMain.removeEventListener('durationchange', onReady);
                 videoMain.removeEventListener('error', onErr);
                 clearTimeout(timer);
                 resolve(!!ok);
             };
             const onReady = () => {
-                finish(typeof videoReady === 'function' && videoReady());
+                finish(videoReadyForSessionRestorePresentation());
             };
             const onErr = () => finish(false);
             videoMain.addEventListener('loadedmetadata', onReady);
             videoMain.addEventListener('loadeddata', onReady);
+            videoMain.addEventListener('canplay', onReady);
             videoMain.addEventListener('durationchange', onReady);
             videoMain.addEventListener('error', onErr, { once: true });
             const timer = setTimeout(
-                () => finish(typeof videoReady === 'function' && videoReady()),
+                () => finish(videoReadyForSessionRestorePresentation()),
                 ms,
             );
         });
     }
 
     window.waitForVideoReadyForSessionRestore = waitForVideoReadyForSessionRestore;
+    window.videoReadyForSessionRestorePresentation = videoReadyForSessionRestorePresentation;
 
     /** セッション復元後は常に先頭（シーク位置は記憶しない） */
     function applySessionTransportAtHead() {
@@ -265,43 +278,62 @@
 
     /** リロード直後の黒画面回避（軽いシークで1フレーム目を描画） */
     function showFirstVideoFrame() {
-        if (!videoMain || !videoReady()) return;
-        if (videoMain.readyState < 2) return;
-        if (firstFramePrimedForUrl && firstFramePrimedForUrl === urlMain) return;
+        if (!videoMain || !videoReady()) return Promise.resolve();
+        if (videoMain.readyState < 2) return Promise.resolve();
+        if (firstFramePrimedForUrl && firstFramePrimedForUrl === urlMain) return Promise.resolve();
         const cap =
             typeof getPlaybackCapSec === 'function' ? getPlaybackCapSec(videoMain) : 0;
-        if (!cap) return;
+        if (!cap) return Promise.resolve();
         const step = Math.max(masterFrameSec > 0 ? masterFrameSec : 1 / 24, 0.001);
         const kick = Math.min(0.08, Math.max(step * 2, 0.02), cap - step);
-        if (kick <= 0) return;
+        if (kick <= 0) return Promise.resolve();
         const t0 = videoMain.currentTime || 0;
         if (t0 >= kick * 0.5) {
             firstFramePrimedForUrl = urlMain || '';
-            return;
+            return Promise.resolve();
         }
         firstFramePrimedForUrl = urlMain || '';
-        const restore = () => {
-            const wireAfterPrime = () => {
-                if (typeof applyReviewMixVideoGain === 'function') {
-                    applyReviewMixVideoGain({ forceRecapture: true });
-                } else if (typeof tryWireReviewMixVideoAudioWhenReady === 'function') {
-                    tryWireReviewMixVideoAudioWhenReady();
-                }
+        return new Promise((resolve) => {
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                resolve();
             };
-            if (Math.abs((videoMain.currentTime || 0) - kick) < 0.05) {
-                const ct = videoMain.currentTime || 0;
-                if (Math.abs(ct - t0) >= 0.0001) {
-                    videoMain.addEventListener('seeked', wireAfterPrime, { once: true });
-                    videoMain.currentTime = t0;
+            const restore = () => {
+                const wireAfterPrime = () => {
+                    if (typeof applyReviewMixVideoGain === 'function') {
+                        applyReviewMixVideoGain({ forceRecapture: true });
+                    } else if (typeof tryWireReviewMixVideoAudioWhenReady === 'function') {
+                        tryWireReviewMixVideoAudioWhenReady();
+                    }
+                    if (typeof reapplyVideoPreviewGammaIfPending === 'function') {
+                        reapplyVideoPreviewGammaIfPending();
+                    } else if (typeof applyVideoPreviewGamma === 'function') {
+                        applyVideoPreviewGamma({ force: true });
+                    }
+                    finish();
+                };
+                if (Math.abs((videoMain.currentTime || 0) - kick) < 0.05) {
+                    const ct = videoMain.currentTime || 0;
+                    if (Math.abs(ct - t0) >= 0.0001) {
+                        videoMain.addEventListener('seeked', wireAfterPrime, { once: true });
+                        videoMain.currentTime = t0;
+                    } else {
+                        wireAfterPrime();
+                    }
                 } else {
                     wireAfterPrime();
                 }
-            } else {
-                wireAfterPrime();
+            };
+            videoMain.addEventListener('seeked', restore, { once: true });
+            setTimeout(finish, 600);
+            try {
+                videoMain.currentTime = kick;
+            } catch (_) {
+                finish();
             }
-        };
-        videoMain.addEventListener('seeked', restore, { once: true });
-        videoMain.currentTime = kick;
+        });
     }
 
     function logVideoTransportState(tag) {
@@ -1870,9 +1902,6 @@
         if (typeof beginVideoLoadLock === 'function') {
             beginVideoLoadLock(f && f.name ? f.name : '');
         }
-        if (typeof ensureVideoFilmstripLoadingOverlay === 'function') {
-            ensureVideoFilmstripLoadingOverlay();
-        }
         videoMain.src = urlMain;
         videoMain.load();
         if (typeof resetTransportPlaybackClock === 'function') {
@@ -1934,8 +1963,16 @@
                 if (typeof refreshVideoVizLaneVisibility === 'function') {
                     refreshVideoVizLaneVisibility({ skipInit: true });
                 }
-                if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
+                const restoreBusy =
+                    typeof isSessionRestoreInProgress === 'function' &&
+                    isSessionRestoreInProgress();
+                if (!restoreBusy && typeof scheduleVideoTrackFilmstripBuild === 'function') {
                     scheduleVideoTrackFilmstripBuild();
+                } else if (
+                    restoreBusy &&
+                    typeof ensureVideoTrackFilmstripAfterMediaReady === 'function'
+                ) {
+                    void ensureVideoTrackFilmstripAfterMediaReady({ skipIfFrames: true });
                 }
             })
             .catch(() => {

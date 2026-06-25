@@ -171,6 +171,16 @@
                 );
             }
         }
+        if (typeof tryApplyPendingVideoPlaybackRegionRestore === 'function') {
+            try {
+                if (tryApplyPendingVideoPlaybackRegionRestore({ silent: true })) any = true;
+            } catch (err) {
+                writeLog(
+                    'Session: video region finalize incomplete — ' +
+                        (err && err.message ? err.message : String(err)),
+                );
+            }
+        }
         if (typeof window.regionRestoreDiagLog === 'function') {
             window.regionRestoreDiagLog('finalizeAll/done', { any });
         }
@@ -316,6 +326,8 @@
             return { ok: false, deferred: false };
         }
         const videoLoaded =
+            (typeof videoReadyForSessionRestorePresentation === 'function' &&
+                videoReadyForSessionRestorePresentation()) ||
             (typeof getVideoTrackSourceDurationSec === 'function' &&
                 getVideoTrackSourceDurationSec() > 0) ||
             (typeof videoReady === 'function' && videoReady());
@@ -581,11 +593,82 @@
     window.getPendingPlaybackRegionRestoreVideoEntry =
         getPendingPlaybackRegionRestoreVideoEntry;
 
+    function isVideoPlaybackRegionRestoreApplied() {
+        if (typeof getVideoTrackRef !== 'function' || typeof getPlaybackRegionsState !== 'function') {
+            return false;
+        }
+        const state = getPlaybackRegionsState(getVideoTrackRef());
+        return !!(state && state.active && state.segments && state.segments.length);
+    }
+
+    function clearPendingVideoPlaybackRegionAfterRestore() {
+        if (!pendingPlaybackRegionRestore || !pendingPlaybackRegionRestore.video) return;
+        if (!isVideoPlaybackRegionRestoreApplied()) return;
+        delete pendingPlaybackRegionRestore.video;
+        const pr = pendingPlaybackRegionRestore;
+        const hasExtra = Array.isArray(pr.extra) && pr.extra.length > 0;
+        const hasLegacyIn =
+            Number.isFinite(pr.inSec) && Number.isFinite(pr.outSec) && !pr.extra;
+        if (!hasExtra && !hasLegacyIn) {
+            pendingPlaybackRegionRestore = null;
+        }
+    }
+
+    /** 映像リージョンのみ再試行（Ex 復元済みで pending が残る Chrome 向け） */
+    function tryApplyPendingVideoPlaybackRegionRestore(opt) {
+        const o = opt && typeof opt === 'object' ? opt : {};
+        if (isVideoPlaybackRegionRestoreApplied()) {
+            clearPendingVideoPlaybackRegionAfterRestore();
+            return true;
+        }
+        const entry =
+            o.entry ||
+            (typeof getPendingPlaybackRegionRestoreVideoEntry === 'function'
+                ? getPendingPlaybackRegionRestoreVideoEntry()
+                : null);
+        if (!entry) return false;
+        const result = restoreVideoPlaybackRegionFromPersistEntry(
+            entry,
+            Object.assign({ silent: true }, o),
+        );
+        if (result.ok) {
+            clearPendingVideoPlaybackRegionAfterRestore();
+            return true;
+        }
+        return !!result.deferred;
+    }
+
+    window.tryApplyPendingVideoPlaybackRegionRestore = tryApplyPendingVideoPlaybackRegionRestore;
+    window.restoreVideoPlaybackRegionFromPersistEntry =
+        restoreVideoPlaybackRegionFromPersistEntry;
+    window.isVideoPlaybackRegionRestoreApplied = isVideoPlaybackRegionRestoreApplied;
+
     function applyPendingPlaybackRegionRestore() {
         if (!pendingPlaybackRegionRestore) return false;
         const data = pendingPlaybackRegionRestore;
         const ok = restorePlaybackRegionFromPersist(data, { silent: true });
-        if (ok && data.video && typeof writeLog === 'function') {
+        let videoApplied = isVideoPlaybackRegionRestoreApplied();
+        if (!videoApplied && data.video) {
+            tryApplyPendingVideoPlaybackRegionRestore({ silent: true, entry: data.video });
+            videoApplied = isVideoPlaybackRegionRestoreApplied();
+        }
+        const finalOk = ok || videoApplied;
+        if (finalOk && videoApplied) {
+            clearPendingVideoPlaybackRegionAfterRestore();
+            if (
+                pendingPlaybackRegionRestore &&
+                (!pendingPlaybackRegionRestore.extra ||
+                    !pendingPlaybackRegionRestore.extra.length) &&
+                !pendingPlaybackRegionRestore.video
+            ) {
+                pendingPlaybackRegionRestore = null;
+            } else if (ok) {
+                pendingPlaybackRegionRestore = null;
+            }
+        } else if (ok) {
+            pendingPlaybackRegionRestore = null;
+        }
+        if (finalOk && data.video && typeof writeLog === 'function') {
             let inSec = Number.isFinite(data.video.regionTimelineInSec)
                 ? data.video.regionTimelineInSec
                 : null;
@@ -598,7 +681,7 @@
                 writeLog('Session: video region restored (in=' + inSec.toFixed(2) + 's)');
             }
         }
-        if (!ok && data.video && typeof writeLog === 'function') {
+        if (!finalOk && data.video && typeof writeLog === 'function') {
             let inSec = Number.isFinite(data.video.regionTimelineInSec)
                 ? data.video.regionTimelineInSec
                 : null;
@@ -612,7 +695,6 @@
                     (Number.isFinite(inSec) ? ' (in=' + inSec.toFixed(2) + 's)' : ''),
             );
         }
-        if (ok) pendingPlaybackRegionRestore = null;
-        return ok;
+        return finalOk;
     }
 

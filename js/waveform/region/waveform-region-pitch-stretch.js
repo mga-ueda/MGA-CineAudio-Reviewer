@@ -924,6 +924,12 @@
 
     function markPitchStretchWarmSkipped(reason) {
         pitchStretchWorkletWarmPromise = null;
+        if (
+            typeof isFileProtocolDocument === 'function' &&
+            isFileProtocolDocument()
+        ) {
+            return;
+        }
         if (typeof writeLog === 'function') {
             writeLog(
                 '[KeyPlayback] stretch warmup skipped: ' +

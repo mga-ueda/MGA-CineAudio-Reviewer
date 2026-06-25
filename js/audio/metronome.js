@@ -904,7 +904,12 @@
         } else {
             stopMetronome();
         }
-        if (o.persist !== false && typeof writePrefs === 'function') writePrefs();
+        if (o.persist !== false) {
+            if (typeof writePrefs === 'function') writePrefs();
+            if (!o.skipSessionPersist && typeof schedulePersistSession === 'function') {
+                schedulePersistSession();
+            }
+        }
         if (!o.silent) {
             if (typeof writeLog === 'function') {
                 writeLog('Click: ' + (metronomeClickEnabled ? 'ON' : 'OFF'));
@@ -940,6 +945,18 @@
         return true;
     }
 
+    /** プロジェクト設定（セッション行・Import manifest）から Click ON/OFF を適用。 */
+    function applyMetronomeClickFromProjectSource(src, opt) {
+        const s = src && typeof src === 'object' ? src : {};
+        if (typeof s.metronomeClickEnabled !== 'boolean') return;
+        const o = opt && typeof opt === 'object' ? opt : {};
+        setMetronomeClickEnabled(s.metronomeClickEnabled, {
+            silent: true,
+            persist: o.persist !== false,
+            skipSessionPersist: true,
+        });
+    }
+
     function initMetronomeClickUi() {
         try {
             const prefs = typeof readPrefs === 'function' ? readPrefs() : {};
@@ -962,5 +979,6 @@
     window.getMetronomeClickEnabled = getMetronomeClickEnabled;
     window.setMetronomeClickEnabled = setMetronomeClickEnabled;
     window.toggleMetronomeClickEnabled = toggleMetronomeClickEnabled;
+    window.applyMetronomeClickFromProjectSource = applyMetronomeClickFromProjectSource;
     window.handleMetronomeClickShortcutKeydown = handleMetronomeClickShortcutKeydown;
 })();
