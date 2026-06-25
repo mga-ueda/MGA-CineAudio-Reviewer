@@ -379,4 +379,101 @@ for (const targetIn of [19.0, 18.0]) {
 }
 console.log('OK sequential left drag to 18s');
 
+console.log('\n=== 10. スプリット後半をド頭へ — regionTimelineOutSec 追従（carlog_20260625102237） ===');
+// 再現: split @ 2.233 → 前半削除 → 後半を 00:00:00:00 へ平行移動
+// t0 固定の applyParallelRegionOffsetDragViaTrackTimeline 確定で Out が追従しないと
+// region-timeline-fit が 40.002/42.235 ≈ 0.947 倍速（ピッチ低下）になる。
+const splitAtSec = 2.23333333333333;
+const fullTimelineOut = 42.235416666666666;
+const sourceSpanAfterSplit = fullTimelineOut - splitAtSec;
+const regionInBeforeHeadMove = splitAtSec;
+
+function simulateShiftSegmentRegionTimelineOutByDelta(seg, delta) {
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.00001) return;
+    if (seg && Number.isFinite(seg.regionTimelineOutSec)) {
+        seg.regionTimelineOutSec = Math.max(0, seg.regionTimelineOutSec + delta);
+    }
+}
+
+function simulateParallelTrackTimelineCommit(state, seg, proposedHeadSec, headPad, oldT0, opt) {
+    const headBeforeApply = regionInBeforeHeadMove;
+    const finalRegionIn = Math.max(0, proposedHeadSec);
+    const newT0 = Math.max(0, proposedHeadSec - headPad);
+    const finalT0 = newT0;
+    state.headPadSec = Math.max(0, finalRegionIn - finalT0);
+    if (state.headPadSec > 0.00001) {
+        state.regionTimelineInSec = finalRegionIn;
+    } else {
+        delete state.regionTimelineInSec;
+    }
+    const regionMoveDelta = finalRegionIn - headBeforeApply;
+    if (
+        !(opt && opt.skipOutShift) &&
+        Math.abs(regionMoveDelta) > 0.00001 &&
+        Math.abs(finalT0 - oldT0) < 0.00001
+    ) {
+        simulateShiftSegmentRegionTimelineOutByDelta(seg, regionMoveDelta);
+    }
+    return {
+        playbackStart: finalRegionIn,
+        regionOut: seg.regionTimelineOutSec,
+        fitRate:
+            seg.regionTimelineOutSec - finalRegionIn > sourceSpanAfterSplit + 0.001
+                ? sourceSpanAfterSplit / (seg.regionTimelineOutSec - finalRegionIn)
+                : 1,
+    };
+}
+
+const headMoveBuggyState = { headPadSec: regionInBeforeHeadMove, regionTimelineInSec: regionInBeforeHeadMove };
+const headMoveBuggySeg = {
+    sourceInSec: splitAtSec,
+    sourceOutSec: fullTimelineOut,
+    regionTimelineOutSec: fullTimelineOut,
+};
+const buggy = simulateParallelTrackTimelineCommit(
+    headMoveBuggyState,
+    { ...headMoveBuggySeg },
+    0,
+    regionInBeforeHeadMove,
+    0,
+    { skipOutShift: true },
+);
+assert(
+    Math.abs(buggy.regionOut - fullTimelineOut) < 0.001,
+    `buggy out should stay stale at ${fullTimelineOut}, got ${buggy.regionOut}`,
+);
+assert(
+    Math.abs(buggy.fitRate - sourceSpanAfterSplit / fullTimelineOut) < 0.001,
+    `buggy fitRate expected ~0.947, got ${buggy.fitRate}`,
+);
+console.log(
+    'OK buggy reproduce: playbackStart=',
+    buggy.playbackStart.toFixed(4),
+    'regionOut=',
+    buggy.regionOut.toFixed(4),
+    'fitRate≈',
+    buggy.fitRate.toFixed(4),
+);
+
+const headMoveFixedState = { headPadSec: regionInBeforeHeadMove, regionTimelineInSec: regionInBeforeHeadMove };
+const headMoveFixedSeg = {
+    sourceInSec: splitAtSec,
+    sourceOutSec: fullTimelineOut,
+    regionTimelineOutSec: fullTimelineOut,
+};
+const fixed = simulateParallelTrackTimelineCommit(headMoveFixedState, headMoveFixedSeg, 0, regionInBeforeHeadMove, 0);
+assert(
+    Math.abs(fixed.regionOut - sourceSpanAfterSplit) < 0.001,
+    `fixed out expected ${sourceSpanAfterSplit}, got ${fixed.regionOut}`,
+);
+assert(Math.abs(fixed.fitRate - 1) < 0.001, `fixed fitRate should be 1, got ${fixed.fitRate}`);
+console.log(
+    'OK fixed head move: playbackStart=',
+    fixed.playbackStart.toFixed(4),
+    'regionOut=',
+    fixed.regionOut.toFixed(4),
+    'fitRate=',
+    fixed.fitRate.toFixed(4),
+);
+
 console.log('\nAll simulations passed.');

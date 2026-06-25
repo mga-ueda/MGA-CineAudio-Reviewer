@@ -1809,6 +1809,16 @@
         } else {
             delete state.regionTimelineInSec;
         }
+        // t0 だけ動く場合は shiftTrackAbsoluteRegionInsByDelta が Out も追従。
+        // t0 固定で In だけ動くと絶対 regionTimelineOutSec が古い位置のまま残り、
+        // region-timeline-fit で低速再生（ピッチ低下）になる。
+        const regionMoveDelta = finalRegionIn - headBeforeApply;
+        if (
+            Math.abs(regionMoveDelta) > 0.00001 &&
+            Math.abs(finalT0 - oldT0) < 0.00001
+        ) {
+            shiftSegmentRegionTimelineOutByDelta(track, 0, regionMoveDelta);
+        }
         // sync は regionIn>t0 を raw.timelineStartSec へ昇格させ波形(t0)と枠がずれるため呼ばない
 
         if (typeof bumpRegionPersistEpoch === 'function') {
