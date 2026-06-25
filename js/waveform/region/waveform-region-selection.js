@@ -159,8 +159,24 @@
         return false;
     }
 
+    function pruneInvalidRegionSelectionEntries() {
+        for (let i = regionSelectionEntries.length - 1; i >= 0; i--) {
+            const e = regionSelectionEntries[i];
+            if (e.segmentIndex < 0) continue;
+            const track = trackRefFromRegionSelectionDragSlot(e.slot);
+            if (!track || !isTrackRegionActive(track)) {
+                regionSelectionEntries.splice(i, 1);
+                continue;
+            }
+            if (e.segmentIndex >= getSegmentCount(track)) {
+                regionSelectionEntries.splice(i, 1);
+            }
+        }
+    }
+
     function syncRegionSelectionClasses() {
         pruneInvalidSilentGapSelectionEntries();
+        pruneInvalidRegionSelectionEntries();
         document
             .querySelectorAll('.audio-waveform-lane__playback-silent-gap')
             .forEach((el) => {

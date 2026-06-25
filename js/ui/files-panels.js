@@ -371,6 +371,9 @@
                 : function () {};
 
         diagLog('allClear/begin', null);
+        if (typeof clearRegionSelection === 'function') {
+            clearRegionSelection();
+        }
         await diagRunAsync('allClear/releaseRestoreLock', () =>
             releaseWaveformRestoreLockIfActive(),
         );

@@ -699,6 +699,9 @@
         const workToken = sessionRestoreWorkToken;
         const run = async () => {
             if (isSessionRestoreWorkCancelled(workToken)) return;
+            if (typeof clearRegionSelection === 'function') {
+                clearRegionSelection();
+            }
             sessionRestoreListenersArmed = false;
             sessionRestoreActiveWorkToken = workToken;
             currentSessionRestoreWorkToken = workToken;
