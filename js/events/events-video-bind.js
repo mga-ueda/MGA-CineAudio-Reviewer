@@ -67,14 +67,6 @@
         ) {
             applyPendingPlaybackRegionRestore();
         }
-        if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
-            const restoreBusy =
-                typeof isSessionRestoreInProgress === 'function' &&
-                isSessionRestoreInProgress();
-            if (!restoreBusy) {
-                scheduleVideoTrackFilmstripBuild();
-            }
-        }
         if (typeof syncVideoTrackRegionsPresentation === 'function') {
             const restoreBusy =
                 typeof isSessionRestoreInProgress === 'function' &&

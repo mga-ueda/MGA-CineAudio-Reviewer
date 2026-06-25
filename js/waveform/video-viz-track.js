@@ -6,6 +6,22 @@
 
     const VIDEO_TRACK_REF = { type: 'video' };
 
+    /** filmstrip キャプチャ高さ（100% 表示 ≒ 32px × 4 = 128px。表示は CSS でレーン高に合わせて縮小） */
+    const VIDEO_VIZ_FILMSTRIP_THUMB_HEIGHT_BASE_PX = 32;
+    const VIDEO_VIZ_FILMSTRIP_CAPTURE_HEIGHT_PX =
+        VIDEO_VIZ_FILMSTRIP_THUMB_HEIGHT_BASE_PX * 4;
+
+    /** 表示時の最大拡大率（自然幅 = レーン高 × アスペクト比）。枚数間引きの下限に使用 */
+    const VIDEO_VIZ_FILMSTRIP_MAX_DISPLAY_SCALE = 4;
+
+    /**
+     * filmstrip 表示制約（ユーザー指定）:
+     * - 縦横比を変えない
+     * - レターボックス（黒帯）を出さない
+     * - サムネイル同士の間に隙間を開けない（セルは常に右端まで連続。時間軸はスロットで概ね追随）
+     * - 上下で見切れない（高さ 100%・幅はアスペクト比に追随、横のみクリップ可）
+     */
+
     /** 波形 offset ドラッグ・スプリット解決で Video レーンを指すスロット番号 */
 
     const VIDEO_WAVEFORM_OFFSET_DRAG_SLOT = -2;
@@ -830,7 +846,7 @@
 
     let videoTrackFilmstripBuildQueued = false;
 
-    let videoTrackFilmstripBuildNeedsRetry = false;
+    let videoTrackFilmstripBuildInFlight = false;
 
     let videoTrackFilmstripDecodeRetryListener = null;
 
@@ -1013,6 +1029,7 @@
 
 
     window.ensureVideoFilmstripLoadingOverlay = ensureVideoFilmstripLoadingOverlay;
+
     window.ensureVideoFilmstripMotionBlurFilter = ensureVideoFilmstripMotionBlurFilter;
 
 
@@ -1059,7 +1076,9 @@
 
         videoTrackFilmstripGen++;
 
-        videoTrackFilmstripBuildNeedsRetry = false;
+        videoTrackFilmstripBuildQueued = false;
+
+        videoTrackFilmstripBuildInFlight = false;
 
         if (videoTrackFilmstripDecodeRetryListener && videoMain) {
 
@@ -1257,6 +1276,7 @@
         renderVideoVizFilmstrip();
 
         if (
+            !o.skipFilmstripBuild &&
             !videoTrackFilmstripFrames.length &&
             typeof scheduleVideoTrackFilmstripBuild === 'function'
         ) {
@@ -1493,17 +1513,21 @@
 
         refreshVideoVizLaneVisibility({ skipInit: true });
 
-        if (!pendingVideo && getVideoTrackSourceDurationSec() > 0) {
-
-            syncVideoTrackRegionsPresentation();
-
-        }
-
         const restoreBusy =
 
             typeof isSessionRestoreInProgress === 'function' && isSessionRestoreInProgress();
 
-        if (!restoreBusy) {
+        if (!pendingVideo && getVideoTrackSourceDurationSec() > 0) {
+
+            syncVideoTrackRegionsPresentation();
+
+        } else if (
+
+            !restoreBusy &&
+
+            typeof scheduleVideoTrackFilmstripBuild === 'function'
+
+        ) {
 
             scheduleVideoTrackFilmstripBuild(opt);
 
@@ -1563,9 +1587,9 @@
 
         if (!(durationSec > 0)) return [0];
 
-        const maxFrames = 72;
+        const maxFrames = 144;
 
-        const targetIntervalSec = 2;
+        const targetIntervalSec = 1;
 
         let count = Math.max(2, Math.ceil(durationSec / targetIntervalSec) + 1);
 
@@ -1743,7 +1767,7 @@
 
         if (!videoMain) return '';
 
-        const h = thumbH || 32;
+        const h = thumbH || VIDEO_VIZ_FILMSTRIP_CAPTURE_HEIGHT_PX;
 
         const w = videoMain.videoWidth;
 
@@ -1822,6 +1846,12 @@
 
     async function buildVideoTrackFilmstrip(opt) {
 
+        const o = opt && typeof opt === 'object' ? opt : {};
+
+        if (videoTrackFilmstripBuildInFlight) return false;
+
+        if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return true;
+
         if (!videoMain || !videoReady || !videoReady()) return false;
 
         if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return false;
@@ -1831,6 +1861,8 @@
         if (!duration) return false;
 
         ensureVideoFilmstripLoadingOverlay();
+
+        videoTrackFilmstripBuildInFlight = true;
 
         const gen = ++videoTrackFilmstripGen;
 
@@ -1876,22 +1908,21 @@
 
                 if (gen !== videoTrackFilmstripGen) return false;
 
-                const dataUrl = await captureVideoFrameDataUrl(t, 32);
+                const dataUrl = await captureVideoFrameDataUrl(
+                    t,
+                    VIDEO_VIZ_FILMSTRIP_CAPTURE_HEIGHT_PX,
+                );
 
                 if (!dataUrl) continue;
 
                 frames.push({ sourceSec: t, dataUrl: dataUrl });
 
-                if (i % 3 === 0 || i === times.length - 1) {
+                videoTrackFilmstripFrames = frames.slice();
 
-                    videoTrackFilmstripFrames = frames.slice();
+                renderVideoVizFilmstrip();
 
-                    renderVideoVizFilmstrip();
-
-                    if (typeof refreshVideoPastEndBlackoutUi === 'function') {
-                        refreshVideoPastEndBlackoutUi();
-                    }
-
+                if (typeof refreshVideoPastEndBlackoutUi === 'function') {
+                    refreshVideoPastEndBlackoutUi();
                 }
 
             }
@@ -1914,6 +1945,8 @@
 
         } finally {
 
+            videoTrackFilmstripBuildInFlight = false;
+
             if (gen === videoTrackFilmstripGen) {
 
                 setVideoFilmstripLoadingOverlay(false);
@@ -1921,7 +1954,10 @@
                 restoreVideoPresentationAfterFilmstripBuild();
 
                 if (typeof syncVideoTrackRegionsPresentation === 'function') {
-                    syncVideoTrackRegionsPresentation({ force: true });
+                    syncVideoTrackRegionsPresentation({
+                        force: true,
+                        skipFilmstripBuild: true,
+                    });
                 }
 
                 if (!wasPaused) {
@@ -1970,7 +2006,7 @@
         }
 
         if (typeof syncVideoTrackRegionsPresentation === 'function') {
-            syncVideoTrackRegionsPresentation();
+            syncVideoTrackRegionsPresentation({ skipFilmstripBuild: true });
         }
 
         if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return true;
@@ -2024,7 +2060,7 @@
         }
 
         if (typeof syncVideoTrackRegionsPresentation === 'function') {
-            syncVideoTrackRegionsPresentation({ force: true });
+            syncVideoTrackRegionsPresentation({ force: true, skipFilmstripBuild: true });
         }
 
         const segCount =
@@ -2128,13 +2164,11 @@
 
         if (shouldSkipHeavyVideoVizRefreshDuringOffsetDrag()) return;
 
-        if (videoTrackFilmstripBuildQueued) {
+        const o = opt && typeof opt === 'object' ? opt : {};
 
-            videoTrackFilmstripBuildNeedsRetry = true;
+        if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return;
 
-            return;
-
-        }
+        if (videoTrackFilmstripBuildInFlight || videoTrackFilmstripBuildQueued) return;
 
         videoTrackFilmstripBuildQueued = true;
 
@@ -2142,17 +2176,11 @@
 
             videoTrackFilmstripBuildQueued = false;
 
-            void buildVideoTrackFilmstrip(opt).finally(() => {
+            if (videoTrackFilmstripBuildInFlight) return;
 
-                if (videoTrackFilmstripBuildNeedsRetry) {
+            if (o.skipIfFrames && videoTrackFilmstripFrames.length > 0) return;
 
-                    videoTrackFilmstripBuildNeedsRetry = false;
-
-                    scheduleVideoTrackFilmstripBuild(opt);
-
-                }
-
-            });
+            void buildVideoTrackFilmstrip(o);
 
         });
 
@@ -2194,6 +2222,288 @@
 
 
 
+    function getVideoFilmstripAspectRatio() {
+
+        if (
+
+            videoMain &&
+
+            videoMain.videoWidth > 0 &&
+
+            videoMain.videoHeight > 0
+
+        ) {
+
+            return videoMain.videoWidth / videoMain.videoHeight;
+
+        }
+
+        return 16 / 9;
+
+    }
+
+
+
+    function getFilmstripThumbMetrics(laneHeightPx, regionWidthPx) {
+
+        const laneH = Math.max(1, laneHeightPx | 0);
+
+        const regionW = Math.max(0, regionWidthPx | 0);
+
+        const naturalThumbW = Math.max(1, Math.round(laneH * getVideoFilmstripAspectRatio()));
+
+        const maxThumbW = Math.max(
+
+            naturalThumbW,
+
+            Math.round(naturalThumbW * VIDEO_VIZ_FILMSTRIP_MAX_DISPLAY_SCALE),
+
+        );
+
+        return { naturalThumbW: naturalThumbW, maxThumbW: maxThumbW, regionW: regionW };
+
+    }
+
+
+
+    function pickFramesForTimeSlots(sourceFrames, inSec, outSec, slotCount) {
+
+        if (!sourceFrames.length || slotCount < 1) return [];
+
+        const duration = Math.max(0.001, outSec - inSec);
+
+        const sorted = sourceFrames
+
+            .slice()
+
+            .sort((a, b) => (a.sourceSec || 0) - (b.sourceSec || 0));
+
+        const picked = [];
+
+        for (let i = 0; i < slotCount; i++) {
+
+            const wStart = inSec + (i / slotCount) * duration;
+
+            const wEnd = inSec + ((i + 1) / slotCount) * duration;
+
+            const center = (wStart + wEnd) / 2;
+
+            let best = sorted[0];
+
+            let bestDist = Infinity;
+
+            for (let j = 0; j < sorted.length; j++) {
+
+                const f = sorted[j];
+
+                const inWindow = f.sourceSec >= wStart - 0.001 && f.sourceSec < wEnd + 0.001;
+
+                const dist = Math.abs(f.sourceSec - center);
+
+                if (inWindow && dist < bestDist) {
+
+                    best = f;
+
+                    bestDist = dist;
+
+                }
+
+            }
+
+            if (bestDist === Infinity) {
+
+                for (let j = 0; j < sorted.length; j++) {
+
+                    const dist = Math.abs(sorted[j].sourceSec - center);
+
+                    if (dist < bestDist) {
+
+                        best = sorted[j];
+
+                        bestDist = dist;
+
+                    }
+
+                }
+
+            }
+
+            picked.push(best);
+
+        }
+
+        return picked;
+
+    }
+
+
+
+    function planFilmstripTimelineLayout(
+        sourceFrames,
+        inSec,
+        outSec,
+        regionWidthPx,
+        laneHeightPx,
+        settled,
+    ) {
+
+        if (!sourceFrames || !sourceFrames.length) return [];
+
+        const { naturalThumbW, regionW } = getFilmstripThumbMetrics(
+
+            laneHeightPx,
+
+            regionWidthPx,
+
+        );
+
+        if (regionW <= 0) return [];
+
+        const maxFit = Math.max(1, Math.ceil(regionW / naturalThumbW));
+
+        let cellCount;
+
+        let displayFrames;
+
+        if (settled) {
+
+            cellCount = maxFit;
+
+            displayFrames = pickFramesForTimeSlots(
+
+                sourceFrames,
+
+                inSec,
+
+                outSec,
+
+                cellCount,
+
+            );
+
+        } else {
+
+            cellCount = sourceFrames.length;
+
+            displayFrames = sourceFrames
+
+                .slice()
+
+                .sort((a, b) => (a.sourceSec || 0) - (b.sourceSec || 0));
+
+        }
+
+        if (!cellCount || !displayFrames.length) return [];
+
+        const placements = [];
+
+        let cursorPx = 0;
+
+        for (let i = 0; i < cellCount; i++) {
+
+            const widthPx =
+
+                i === cellCount - 1
+
+                    ? Math.max(1, regionW - cursorPx)
+
+                    : Math.max(1, Math.round(regionW / cellCount));
+
+            placements.push({
+
+                frame: displayFrames[i],
+
+                leftPx: cursorPx,
+
+                widthPx: widthPx,
+
+            });
+
+            cursorPx += widthPx;
+
+        }
+
+        return placements;
+
+    }
+
+
+
+    /**
+     * 生成中: キャプチャ済み枚数で尺を等分割して右端まで覆う（1 枚ずつ細分化）。
+     * 完了後: 自然幅が収まる枚数で時間スロットごとに割当て、隙間なく右端まで。
+     */
+    function planFilmstripLayout(
+        sourceFrames,
+        inSec,
+        outSec,
+        regionWidthPx,
+        laneHeightPx,
+        settled,
+    ) {
+
+        return planFilmstripTimelineLayout(
+
+            sourceFrames,
+
+            inSec,
+
+            outSec,
+
+            regionWidthPx,
+
+            laneHeightPx,
+
+            settled,
+
+        );
+
+    }
+
+
+
+    function applyFilmstripCellFrame(cell, dataUrl, layout) {
+
+        const leftPx = layout && Number.isFinite(layout.leftPx) ? layout.leftPx : 0;
+
+        const widthPx =
+
+            layout && Number.isFinite(layout.widthPx) ? layout.widthPx : 0;
+
+        let img = cell.querySelector('.video-viz-lane__filmstrip-cell__img');
+
+        if (!img) {
+
+            img = document.createElement('img');
+
+            img.className = 'video-viz-lane__filmstrip-cell__img';
+
+            img.alt = '';
+
+            img.decoding = 'async';
+
+            img.draggable = false;
+
+            cell.replaceChildren(img);
+
+        }
+
+        cell.style.left = Math.round(leftPx) + 'px';
+
+        cell.style.width = Math.max(0, Math.round(widthPx)) + 'px';
+
+        if (img.getAttribute('src') !== dataUrl) {
+
+            img.removeAttribute('src');
+
+            img.setAttribute('src', dataUrl);
+
+        }
+
+    }
+
+
+
     function renderRegionFilmstrip(regionEl, sourceInSec, sourceOutSec) {
 
         let filmstrip = regionEl.querySelector('.video-viz-lane__filmstrip');
@@ -2220,9 +2530,37 @@
 
         );
 
-        filmstrip.hidden = !frames.length;
+        const regionW = Math.max(0, regionEl.clientWidth | 0);
 
-        if (!frames.length) {
+        const laneH = Math.max(1, regionEl.clientHeight | 0);
+
+        if (regionW < 1 || laneH < 1) {
+
+            filmstrip.hidden = true;
+
+            return;
+
+        }
+
+        const placements = planFilmstripLayout(
+
+            frames,
+
+            inSec,
+
+            outSec,
+
+            regionW,
+
+            laneH,
+
+            !videoTrackFilmstripBuildInFlight,
+
+        );
+
+        filmstrip.hidden = !placements.length;
+
+        if (!placements.length) {
 
             filmstrip.textContent = '';
 
@@ -2232,27 +2570,61 @@
 
         const existing = filmstrip.querySelectorAll('.video-viz-lane__filmstrip-cell');
 
-        if (existing.length === frames.length) {
+        if (existing.length === placements.length) {
 
-            for (let i = 0; i < frames.length; i++) {
+            let unchanged = true;
 
-                existing[i].style.backgroundImage = 'url("' + frames[i].dataUrl + '")';
+            for (let i = 0; i < placements.length; i++) {
+
+                const cell = existing[i];
+
+                const placement = placements[i];
+
+                const expectedLeft = Math.round(placement.leftPx) + 'px';
+
+                const expectedWidth = Math.max(0, Math.round(placement.widthPx)) + 'px';
+
+                if ((cell.style.left || '0') !== expectedLeft) {
+
+                    unchanged = false;
+
+                    break;
+
+                }
+
+                if ((cell.style.width || '0') !== expectedWidth) {
+
+                    unchanged = false;
+
+                    break;
+
+                }
+
+                const img = cell.querySelector('.video-viz-lane__filmstrip-cell__img');
+
+                if (!img || img.getAttribute('src') !== placement.frame.dataUrl) {
+
+                    unchanged = false;
+
+                    break;
+
+                }
 
             }
 
-            return;
+            if (unchanged) return;
 
         }
 
         filmstrip.textContent = '';
 
-        for (let i = 0; i < frames.length; i++) {
+        for (let i = 0; i < placements.length; i++) {
 
             const cell = document.createElement('div');
 
             cell.className = 'video-viz-lane__filmstrip-cell';
 
-            cell.style.backgroundImage = 'url("' + frames[i].dataUrl + '")';
+            applyFilmstripCellFrame(cell, placements[i].frame.dataUrl, placements[i]);
 
             filmstrip.appendChild(cell);
 

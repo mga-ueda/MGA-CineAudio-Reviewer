@@ -461,6 +461,9 @@
     const WAVEFORM_LANE_HEIGHT_SCALE_MIN = 1;
     const WAVEFORM_LANE_HEIGHT_SCALE_MAX = 4;
     const WAVEFORM_LANE_HEIGHT_SCALE_STEP = 0.25;
+    /** 映像トラック: 100%→1×、400%→2×（基準 20px、最大 40px） */
+    const VIDEO_VIZ_LANE_HEIGHT_BASE_PX = 20;
+    const VIDEO_VIZ_LANE_HEIGHT_SCALE_MAX = 2;
     let waveformLaneHeightScale = 1;
 
     function clampWaveformLaneHeightScale(scale) {
@@ -490,6 +493,22 @@
 
     function getWaveformLaneHeightCss() {
         return Math.max(1, Math.round(WAVEFORM_LANE_HEIGHT_BASE_PX * waveformLaneHeightScale));
+    }
+
+    function getVideoVizLaneHeightScale() {
+        const waveSpan = WAVEFORM_LANE_HEIGHT_SCALE_MAX - WAVEFORM_LANE_HEIGHT_SCALE_MIN;
+        const raw =
+            WAVEFORM_LANE_HEIGHT_SCALE_MIN +
+            ((waveformLaneHeightScale - WAVEFORM_LANE_HEIGHT_SCALE_MIN) / waveSpan) *
+                (VIDEO_VIZ_LANE_HEIGHT_SCALE_MAX - WAVEFORM_LANE_HEIGHT_SCALE_MIN);
+        return Math.min(VIDEO_VIZ_LANE_HEIGHT_SCALE_MAX, raw);
+    }
+
+    function getVideoVizLaneHeightCss() {
+        return Math.max(
+            1,
+            Math.round(VIDEO_VIZ_LANE_HEIGHT_BASE_PX * getVideoVizLaneHeightScale()),
+        );
     }
 
     function getMusicalLaneHeightCss() {
@@ -626,11 +645,11 @@
 
         requestAnimationFrame(() => {
             const laneH = getWaveformLaneHeightCss();
-            const musicalLaneH =
-                typeof getMusicalLaneHeightCss === 'function'
-                    ? getMusicalLaneHeightCss()
-                    : 20;
-            const audioLaneH = videoVizCount * musicalLaneH + waveCount * laneH;
+            const videoVizLaneH =
+                typeof getVideoVizLaneHeightCss === 'function'
+                    ? getVideoVizLaneHeightCss()
+                    : VIDEO_VIZ_LANE_HEIGHT_BASE_PX;
+            const audioLaneH = videoVizCount * videoVizLaneH + waveCount * laneH;
             const laneIds = ['videoVizLane', 'audioWaveformLaneVideo'];
             for (let i = 0; i < extraTrackSlotCount(); i++) {
                 laneIds.push('extraAudioLane' + i);
@@ -650,6 +669,9 @@
                 }
                 if (typeof renderAudioWaveformMarkers === 'function') {
                     renderAudioWaveformMarkers();
+                }
+                if (typeof refreshVideoVizRegionThumbnails === 'function') {
+                    refreshVideoVizRegionThumbnails();
                 }
             };
             refreshLaneOverlays();
@@ -710,6 +732,7 @@
     window.refreshWaveformCompositeLaneLayout = refreshWaveformCompositeLaneLayout;
     window.getWaveformLaneHeightScale = getWaveformLaneHeightScale;
     window.getWaveformLaneHeightCss = getWaveformLaneHeightCss;
+    window.getVideoVizLaneHeightCss = getVideoVizLaneHeightCss;
     window.setWaveformLaneHeightScale = setWaveformLaneHeightScale;
     window.stepWaveformLaneHeightScale = stepWaveformLaneHeightScale;
     window.applyUserWaveformLaneHeightFromStorage = applyUserWaveformLaneHeightFromStorage;

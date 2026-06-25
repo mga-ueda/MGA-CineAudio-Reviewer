@@ -789,9 +789,6 @@
                         try {
                             syncVideoTrackRegionsPresentation({ force: true });
                         } catch (_) {}
-                        if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
-                            scheduleVideoTrackFilmstripBuild();
-                        }
                     }
                 }
             }
@@ -1874,9 +1871,6 @@
             });
         } else if (typeof syncVideoTrackRegionsPresentation === 'function') {
             syncVideoTrackRegionsPresentation({ force: true });
-            if (typeof scheduleVideoTrackFilmstripBuild === 'function') {
-                scheduleVideoTrackFilmstripBuild();
-            }
             if (typeof showFirstVideoFrame === 'function') {
                 void showFirstVideoFrame();
             }
